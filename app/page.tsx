@@ -405,7 +405,7 @@ export default function Home() {
       }
     } catch {
       setMessages([...baseMessages, { raw: "Echo: LOCAL SERVER CONNECTION ERROR" }]);
-    } finally {
+    }  {
       setTimeout(() => setEchoState("idle"), 10000);
     }
   };
