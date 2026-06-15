@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "../app/lib/supabase"; 
 
-// 🚀 Typer explicitement le dictionnaire pour que l'indexation dynamique translations[lang] ne bloque pas
 export const translations: Record<"fr" | "en", {
   sidebar: {
     home: string;
@@ -45,7 +44,6 @@ export const translations: Record<"fr" | "en", {
   },
 };
 
-// Types pour TypeScript
 type LangType = "fr" | "en";
 type ThemeType = "dark" | "light";
 type UserTierType = "free" | "basic" | "premium" | "ultra" | "founder";
@@ -57,6 +55,7 @@ type AppContextType = {
   toggleTheme: () => void;
   t: typeof translations.fr; 
   userTier: UserTierType;     
+  setUserTier: (tier: UserTierType) => void; // ⚡ AJOUTÉ : Le type du setter est maintenant exposé !
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -87,7 +86,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .single();
       
       if (profile?.user_tier) {
-        setUserTierState(profile.user_tier as UserTierType);
+        setUserTierState(profile.user_tier.toLowerCase().trim() as UserTierType);
       }
     } catch (err) {
       console.error("Erreur de synchronisation du forfait global :", err);
@@ -136,11 +135,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     applyTheme(newTheme);
   };
 
-  // 🚀 L'indexation dynamique fonctionne maintenant sans erreur grâce au type explicite appliqué sur translations
+  // ⚡ AJOUTÉ : La fonction pour permettre à n'importe quelle page de modifier le forfait globalement
+  const setUserTier = (newTier: UserTierType) => {
+    setUserTierState(newTier);
+  };
+
   const t = translations[lang];
 
   return (
-    <AppContext.Provider value={{ lang, setLang, theme, toggleTheme, t, userTier }}>
+    <AppContext.Provider value={{ lang, setLang, theme, toggleTheme, t, userTier, setUserTier }}>
       {children}
     </AppContext.Provider>
   );
