@@ -23,6 +23,9 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
 
   try {
+    console.log("WEBHOOK SECRET EXISTS:", !!process.env.STRIPE_WEBHOOK_SECRET);
+    console.log("WEBHOOK SECRET LENGTH:", process.env.STRIPE_WEBHOOK_SECRET?.length);
+    console.log("SIGNATURE EXISTS:", !!signature);
     event = stripe.webhooks.constructEvent(
       payload,
       signature,
