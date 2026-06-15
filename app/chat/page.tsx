@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import Image from "next/image"; 
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength } from "../../utils/quota";
 import LangDropdown from "../components/LangDropdown";
@@ -289,11 +288,9 @@ export default function ChatPage() {
     const calendarEvents = JSON.parse(localStorage.getItem(userId ? getStorageKey(userId) : "echo-calendar-v2") || "{}");
 
     try {
-      const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-const response = await fetch(`${API_URL}/chat`, {
+      const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -350,8 +347,9 @@ const response = await fetch(`${API_URL}/chat`, {
       }
     } catch {
       setMessages([...baseMessages, { raw: "Echo: Unable to connect to backend server." }]);
+    } finally {
+      setTimeout(() => setEchoState("idle"), 10000);
     }
-    setTimeout(() => setEchoState("idle"), 10000);
   };
 
   const isMatrixLockedBySurprise = isSurpriseActive;
@@ -361,7 +359,7 @@ const response = await fetch(`${API_URL}/chat`, {
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* SIDEBAR GAUCHE PROPRE AVEC BOUTON SURPRISE INTÉGRÉ AU-DESSUS DE ULTRA */}
+        {/* SIDEBAR GAUCHE */}
         <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
@@ -380,7 +378,6 @@ const response = await fetch(`${API_URL}/chat`, {
           </div>
           
           <div className="flex flex-col gap-4">
-            {/* ── 💎 LE BOUTON SURPRISE PREND SA PLACE PARFAITE AU-DESSUS DU STATUT ── */}
             <button
               onMouseDown={() => { if (!selectedButtons.filter(b => b !== "surprise").length) setIsPressingSurprise(true); }}
               onMouseUp={() => setIsPressingSurprise(false)}
@@ -408,12 +405,12 @@ const response = await fetch(`${API_URL}/chat`, {
           </div>
         </aside>
 
-        {/* ── INTERFACE CENTRALE : LE CHAT ── */}
+        {/* LE CHAT */}
         <section className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-black transition-colors duration-200 min-w-0">
           
           <div className="flex-1 flex flex-row overflow-hidden min-h-0 w-full">
             
-            {/* ZONE DE MESSAGES GAUCHE RESPIRANTE */}
+            {/* ZONE DE MESSAGES */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-white dark:bg-black">
               {messages.length === 0 && (
                 <div className="h-full flex items-center justify-center">
@@ -434,12 +431,13 @@ const response = await fetch(`${API_URL}/chat`, {
                     return (
                       <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 max-w-3xl">
                         <div className="flex items-center gap-6">
-                          <div className={`shrink-0 border-2 border-zinc-200 dark:border-zinc-800 rounded-full shadow-md overflow-hidden ${
+                          <div className={`w-24 h-24 shrink-0 border-2 border-zinc-200 dark:border-zinc-800 rounded-full shadow-md overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center ${
                             isLastEcho
                               ? echoState === "thinking" ? "echo-thinking" : echoState === "speaking" ? "echo-speaking" : "echo-idle"
                               : "echo-idle"
                           }`}>
-                            <Image src="/echo.png" alt="Echo Avatar" width={96} height={96} className="object-cover rounded-full" />
+                            {/* 🤖 CORRECTION : Changement de <Image> par une balise img HTML native et correction de casse pour /Echo.png */}
+                            <img src="/Echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
                           </div>
                           <div className="flex flex-col">
                             <span className="text-zinc-500 dark:text-zinc-300 text-sm font-mono uppercase tracking-widest font-bold">Echo</span>
@@ -482,10 +480,8 @@ const response = await fetch(`${API_URL}/chat`, {
               </div>
             </div>
 
-            {/* ── COLONNE DE DROITE : SANS LE TITRE POUR ÉVITER TOUT OVERFLOW ── */}
+            {/* COLONNE DE DROITE */}
             <div className="w-64 shrink-0 border-l border-zinc-100 dark:border-zinc-900/60 flex flex-col bg-zinc-50/20 dark:bg-zinc-950/10 overflow-hidden h-full">
-              
-              {/* PANNEAU LANGUE & THÈME */}
               <div className="p-4 border-b border-zinc-100 dark:border-zinc-900/80 bg-transparent flex gap-3 items-center justify-between shadow-sm shrink-0">
                 <LangDropdown />
                 <button onClick={toggleTheme} className="font-bold text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 transition-colors bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 py-1.5 px-2.5 rounded-lg">
@@ -493,7 +489,6 @@ const response = await fetch(`${API_URL}/chat`, {
                 </button>
               </div>
 
-              {/* LISTE PURIFIÉE DES BOUTONS DE LA MATRIX (AUCUNE SCROLL BAR) */}
               <div className="flex-1 p-4 overflow-hidden flex flex-col gap-2 justify-start">
                 {buttonsOrder.map((id) => {
                   const isSelected = selectedButtons.includes(id);
@@ -538,13 +533,12 @@ const response = await fetch(`${API_URL}/chat`, {
                   );
                 })}
               </div>
-
             </div>
 
           </div>
 
-          {/* INPUT COMPOSANT */}
-          <div className="border-t border-zinc-200 dark:border-zinc-900 px-6 py-5 shrink-0 bg-zinc-50 dark:bg-black transition-colors duration-200">
+          {/* BARRE DE SAISIE */}
+          <div className="border-t border-zinc-200 dark:border-zinc-900 px-6 py-5 shrink-0 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-200">
             <div className="max-w-4xl mx-auto flex flex-col gap-3">
 
               {selectedImage && (
@@ -562,7 +556,7 @@ const response = await fetch(`${API_URL}/chat`, {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                   placeholder={t.chat.placeholder}
-                  className="flex-1 bg-white dark:bg-zinc-950 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 resize-y min-h-[136px] max-h-[220px] text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400 dark:placeholder-zinc-700 transition-colors leading-relaxed shadow-inner"
+                  className="flex-1 bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 resize-y min-h-[136px] max-h-[220px] text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400 dark:placeholder-zinc-700 transition-colors leading-relaxed shadow-inner"
                 />
 
                 <div className="flex sm:flex-col gap-2 sm:w-40 shrink-0 sm:h-[136px]">
