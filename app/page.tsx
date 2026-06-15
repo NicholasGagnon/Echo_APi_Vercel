@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "./lib/supabase";
 import { checkQuota, getMessageMaxLength } from "../utils/quota"; 
@@ -212,6 +211,7 @@ export default function Home() {
         const savedConvo = localStorage.getItem(getConversationKey(uid));
         setMessages(savedConvo ? deserializeMsgs(JSON.parse(savedConvo)) : []);
         setCalendarEvents(localStorage.getItem(getStorageKey(uid)) ? JSON.parse(localStorage.getItem(getStorageKey(uid))!) : {});
+        // ⚡ FIX : fallback en tableau vide [] (et non {}) pour éviter "stickies.map is not a function"
         setStickies(localStorage.getItem(getStickyKey(uid)) ? JSON.parse(localStorage.getItem(getStickyKey(uid))!) : []);
         
         setUserTier(await fetchUserTier(uid));
@@ -336,10 +336,10 @@ export default function Home() {
 
     try {
       const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000";
+        process.env.NEXT_PUBLIC_API_URL ||
+        "http://localhost:5000";
 
-const response = await fetch(`${API_URL}/chat`, {
+      const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -539,7 +539,7 @@ const response = await fetch(`${API_URL}/chat`, {
           
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
             
-            {/* ── INTERFACE 10 BOUTONS MATRIX EXACTEMENT SELON TES RÈGLES DE VERROUILLAGE ── */}
+            {/* ── INTERFACE 10 BOUTONS MATRIX ── */}
             <div className="w-full bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg">
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
                 {buttonsData.map((btn) => {
@@ -591,12 +591,11 @@ const response = await fetch(`${API_URL}/chat`, {
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center">
                   <div className={echoState === "idle" ? "echo-idle" : echoState === "thinking" ? "echo-thinking" : "echo-speaking"}>
-                    <Image
-                      src="/echo.png"
+                    {/* ⚡ FIX : balise <img> classique + chemin "/Echo.png" (E majuscule, sensible à la casse sur Vercel) */}
+                    <img
+                      src="/Echo.png"
                       alt="Echo Core"
-                      width={350}
-                      height={350}
-                      className="object-cover rounded-full border border-zinc-200 dark:border-zinc-900 shadow-lg"
+                      className="w-[350px] h-[350px] object-cover rounded-full border border-zinc-200 dark:border-zinc-900 shadow-lg"
                     />
                     <span className="text-zinc-400 dark:text-zinc-600 text-[10px] block mt-4 tracking-widest uppercase font-mono">
                       System Hub Status: {echoState}
@@ -618,8 +617,9 @@ const response = await fetch(`${API_URL}/chat`, {
                       return (
                         <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 min-w-0">
                           <div className="flex items-center gap-4">
+                            {/* ⚡ FIX : chemin "/Echo.png" (E majuscule) */}
                             <img
-                              src="/echo.png"
+                              src="/Echo.png"
                               alt="Echo"
                               className={`w-14 h-14 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-800 shadow-md ${
                                 isLastEcho ? echoState === "thinking" ? "echo-thinking" : echoState === "speaking" ? "echo-speaking" : "echo-idle" : "echo-idle"
