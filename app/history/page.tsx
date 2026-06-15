@@ -92,6 +92,7 @@ export default function HistoryPage() {
 
   const resizePanel = (e: MouseEvent) => {
     if (!isResizing.current) return;
+    // On restreint les limites pour ne pas écraser l'un des deux panneaux (entre 300px et 800px)
     const newWidth = Math.max(300, Math.min(800, e.clientX - 224)); // 224px correspond à la sidebar de gauche
     setLeftWidth(newWidth);
   };
@@ -190,9 +191,11 @@ export default function HistoryPage() {
     const calendarEvents = JSON.parse(localStorage.getItem(activeStorageKey) || "{}");
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:5000";
 
-      const response = await fetch(`${API_URL}/chat`, {
+const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -309,7 +312,7 @@ export default function HistoryPage() {
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200">
       
-      {/* 🌐 MENU SUPÉRIEUR DROIT */}
+      {/* 🌐 INTERFACE MENU SUPÉRIEUR DROIT ALIGNÉ */}
       <div className="absolute top-4 right-4 z-50 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 p-2 rounded-xl text-xs flex gap-3 items-center shadow-md">
         <LangDropdown />
         <span className="text-zinc-300 dark:text-zinc-700">|</span>
@@ -320,7 +323,7 @@ export default function HistoryPage() {
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* SIDEBAR GAUCHE */}
+        {/* SIDEBAR GAUCHE (FIXE) */}
         <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
@@ -356,7 +359,7 @@ export default function HistoryPage() {
           </div>
         ) : (
           <>
-            {/* ARCHIVES GAUCHE */}
+            {/* COMPARTIMENT ARCHIVES GAUCHE (LARGEUR MUTABLE) */}
             <div 
               style={{ width: `${leftWidth}px` }}
               className="shrink-0 p-4 flex flex-col overflow-hidden bg-white dark:bg-black transition-colors duration-200"
@@ -397,13 +400,13 @@ export default function HistoryPage() {
               </div>
             </div>
 
-            {/* SPLITTER INTERACTIF */}
+            {/* ── LE SPLITTER INTERACTIF (LE RAIL SUR LEQUEL ON APPUIE POUR GLISSER) ── */}
             <div 
               onMouseDown={startResizing}
               className="w-1.5 shrink-0 bg-zinc-200 dark:bg-zinc-800 cursor-col-resize hover:bg-cyan-500 dark:hover:bg-cyan-500 transition-colors duration-150 h-full relative z-10 before:content-[''] before:absolute before:inset-y-0 before:-left-1 before:w-4"
             />
 
-            {/* DISCUSSION DROITE */}
+            {/* COMPARTIMENT DISCUSSION PRINCIPALE DROITE */}
             <section className="flex-1 flex flex-col overflow-hidden min-w-0 bg-white dark:bg-black transition-colors duration-200">
               <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 shrink-0 shadow-sm">
                 <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-2">
@@ -426,8 +429,7 @@ export default function HistoryPage() {
                     <div key={index} className="whitespace-pre-wrap">
                       {isEcho ? (
                         <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 shadow-sm">
-                          {/* 🤖 CORRECTION : Alignement de l'avatar avec /Echo.png (majuscule et img standard) */}
-                          <img src="/Echo.png" alt="Echo Avatar" className="w-8 h-8 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-700 mt-0.5" />
+                          <img src="/echo.png" alt="Echo Avatar" className="w-8 h-8 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-700 mt-0.5" />
                           <div className="flex-1 min-w-0 break-words text-zinc-800 dark:text-zinc-100 text-[14px] font-medium leading-relaxed">
                             <span className="text-cyan-600 dark:text-cyan-400 font-extrabold block mb-1 text-[10px] uppercase tracking-wider">Echo:</span>
                             {msg.replace(/^Echo\s*:\s*/i, "")}
@@ -435,7 +437,7 @@ export default function HistoryPage() {
                         </div>
                       ) : isUser ? (
                         <div className="p-3.5 break-words text-zinc-700 dark:text-zinc-300 text-[14px] font-medium bg-zinc-50/50 dark:bg-zinc-900/50 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-inner">
-                          <span className="text-cyan-600 dark:text-cyan-400 font-bold">You:</span> {msg.replace(/^(You|Toi)\s*:/i, "")}
+                          <span className="text-cyan-600 dark:text-cyan-400 font-bold">You:</span> {msg.replace(/^(You|Toi)\s*:\s*/i, "")}
                         </div>
                       ) : (
                         <div className="p-2 break-words text-xs italic text-zinc-400 dark:text-zinc-500">{msg}</div>
@@ -457,12 +459,11 @@ export default function HistoryPage() {
                     rows={3}
                     placeholder={lang === "fr" ? "Discuter avec Echo..." : "Talk to Echo..."}
                   />
-                  {/* 🤖 CORRECTION : Retrait des deux fusées 🚀 laides pour un style plus minimaliste */}
                   <button
                     onClick={() => sendMessage()}
-                    className="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded text-white font-bold text-xs transition-colors flex items-center justify-center sm:w-28 shadow-md uppercase tracking-wide"
+                    className="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded text-white font-bold text-xs transition-colors flex items-center justify-center sm:w-28 shadow-md"
                   >
-                    {t.chat.send}
+                    🚀 {t.chat.send}
                   </button>
                 </div>
               </div>
@@ -470,7 +471,7 @@ export default function HistoryPage() {
           </>
         )}
 
-        {/* OVERLAY VISIONNEUSE D'ARCHIVES */}
+        {/* COMPARTIMENT OVERLAY VISIONNEUSE D'ARCHIVES MODIFIÉ AVEC ENCADREMENT CYAN */}
         {viewingHistory && !isPageBlocked && (
           <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in duration-200"
@@ -488,6 +489,7 @@ export default function HistoryPage() {
                   <p className="text-zinc-400 dark:text-zinc-500 text-[11px] mt-1">Archived on {viewingHistory.date}</p>
                 </div>
 
+                {/* ── BOUTONS AVEC BORDURE CYAN ET GLOW NÉON CYBERPUNK ── */}
                 <div className="flex items-center gap-2.5">
                   <button
                     onClick={() => handleSendToChatBox(viewingHistory)}
@@ -542,7 +544,7 @@ export default function HistoryPage() {
 
       </div>
 
-      {/* MODAL DE LIMITES */}
+      {/* COMPARTIMENT LIMITS LIMIT MODAL */}
       {showLimitModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setShowLimitModal(false)}>
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
