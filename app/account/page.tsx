@@ -1,0 +1,682 @@
+"use client";
+
+import Link from "next/link";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
+import LangDropdown from "../components/LangDropdown";
+import { useApp } from "../../context/AppContext";
+
+// --- LOGOS & ICONS ---
+const MicrosoftLogo = () => (
+  <svg className="w-8 h-8 mx-auto" viewBox="0 0 23 23" fill="none">
+    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
+  </svg>
+);
+
+const GoogleLogo = () => (
+  <svg className="w-8 h-8 mx-auto" viewBox="0 0 24 24">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+  </svg>
+);
+
+const MailIcon = () => (
+  <svg className="w-8 h-8 mx-auto text-zinc-400 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+  </svg>
+);
+
+const UserPlusIcon = () => (
+  <svg className="w-8 h-8 mx-auto text-zinc-400 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="1.5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0zM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+  </svg>
+);
+
+const extractProviderTokenFromHash = (): string | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const hash = window.location.hash.substring(1);
+    if (!hash) return null;
+    return new URLSearchParams(hash).get("provider_token") ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const clearHash = () => {
+  if (typeof window !== "undefined") {
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+};
+
+export default function AccountPage() {
+  const { t, lang, theme, toggleTheme } = useApp();
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [showGoogleSyncPopup, setShowGoogleSyncPopup] = useState(false);
+
+  const [user, setUser] = useState<any>(null);
+  const [activeProvider, setActiveProvider] = useState<string | null>(null);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [userTier, setUserTier] = useState<"free" | "basic" | "premium" | "ultra" | "founder">("free");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signInSuccess, setSignInSuccess] = useState<string | null>(null);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
+  const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const saveGoogleTokenToDB = async (uid: string, token: string, refreshToken?: string | null) => {
+    await supabase.from("user_tokens").upsert(
+      {
+        id: uid,
+        google_access_token: token,
+        google_refresh_token: refreshToken ?? null,
+        user_tier: localStorage.getItem("echo-user-tier") || "free",
+        last_request_date: new Date().toISOString().split("T")[0],
+      },
+      { onConflict: "id" }
+    );
+    localStorage.setItem(`echo-google-token-${uid}`, token);
+  };
+
+  useEffect(() => {
+    const savedTier = localStorage.getItem("echo-user-tier");
+    if (savedTier) setUserTier(savedTier as any);
+
+    const resolveAndSaveToken = async (session: any) => {
+      if (!session?.user) return;
+      const uid = session.user.id;
+
+      const hashToken = extractProviderTokenFromHash();
+      if (hashToken) {
+        clearHash();
+        await saveGoogleTokenToDB(uid, hashToken, session.provider_refresh_token);
+        return;
+      }
+
+      if (session.provider_token) {
+        await saveGoogleTokenToDB(uid, session.provider_token, session.provider_refresh_token);
+        return;
+      }
+
+      const legacyToken = localStorage.getItem("echo-google-token");
+      if (legacyToken) {
+        await saveGoogleTokenToDB(uid, legacyToken);
+        localStorage.removeItem("echo-google-token");
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        setActiveProvider(session.user.app_metadata?.provider || "email");
+        resolveAndSaveToken(session);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        setActiveProvider(session.user.app_metadata?.provider || "email");
+        resolveAndSaveToken(session);
+      } else {
+        setUser(null);
+        setActiveProvider(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleMicrosoftConnect = async () => {
+    if (activeProvider === "azure") return;
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "azure",
+        options: {
+          redirectTo: `${window.location.origin}/account`,
+          scopes: "openid profile email User.Read",
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      showToast(err.message || "Authentication error", "error");
+    }
+  };
+
+  const handleGoogleConnectNormal = async () => {
+    if (activeProvider === "google") return;
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/account`,
+          scopes: "openid profile email", 
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      showToast(err.message || "Authentication error", "error");
+    }
+  };
+
+  const handleGoogleConnectWithSyncNewTab = async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/account`,
+          scopes: "openid profile email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly",
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, "_blank", "noopener,noreferrer");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Authentication error", "error");
+    }
+  };
+
+  const handleEmailSignIn = async () => {
+    setSignInError(null);
+    setSignInSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setSignInError(lang === "fr" ? "Veuillez entrer vos identifiants" : "Please enter your credentials");
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) {
+      setSignInError(error.message);
+    } else {
+      showToast(lang === "fr" ? "Connexion réussie" : "Logged in successfully", "success");
+      setShowSignInModal(false);
+      clearInputs();
+    }
+  };
+
+  const handleEmailSignUp = async () => {
+    setSignUpError(null);
+    setSignUpSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setSignUpError(lang === "fr" ? "Veuillez entrer un courriel et un mot de passe" : "Please enter an email and password");
+      return;
+    }
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/account` },
+    });
+    if (error) {
+      setSignUpError(error.message);
+    } else {
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setSignUpError(lang === "fr" ? "Un compte avec cet e-mail existe déjà." : "An account with this email already exists.");
+        return;
+      }
+      setSignUpSuccess(lang === "fr" ? "Inscription réussie ! Vérifiez votre boîte de réception." : "Registration success! Check your e-mail confirmation link.");
+      showToast(lang === "fr" ? "Lien envoyé !" : "Registration link transmitted!", "success");
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setSignInError(null);
+    setSignInSuccess(null);
+    if (!email.trim()) {
+      setSignInError(lang === "fr" ? "Veuillez entrer votre courriel d'abord." : "Please enter your email address first.");
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/account`,
+    });
+    if (error) {
+      setSignInError(error.message);
+    } else {
+      setSignInSuccess(lang === "fr" ? "Lien de réinitialisation envoyé !" : "Reset link dispatched!");
+      showToast(lang === "fr" ? "Lien envoyé !" : "Reset link sent!", "success");
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setActiveProvider(null);
+    showToast(lang === "fr" ? "Déconnexion sécurisée effectuée." : "Disconnected safely.", "info");
+  };
+
+  const clearInputs = () => {
+    setEmail("");
+    setPassword("");
+    setSignInError(null);
+    setSignInSuccess(null);
+    setSignUpError(null);
+    setSignUpSuccess(null);
+  };
+
+  return (
+    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
+
+      {/* TOP-RIGHT MENU */}
+      <div className="absolute top-4 right-4 z-50 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 p-2 rounded-xl text-xs flex gap-3 items-center shadow-md">
+        <LangDropdown />
+        <span className="text-zinc-300 dark:text-zinc-700">|</span>
+        <button onClick={toggleTheme} className="font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 transition-colors">
+          {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
+        </button>
+      </div>
+
+      {/* TOAST */}
+      {toast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className={`px-5 py-3 rounded-xl border text-xs font-medium tracking-wide shadow-2xl backdrop-blur-md flex items-center gap-3 ${
+            toast.type === "success"
+              ? "bg-emerald-50 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-500 text-emerald-700 dark:text-emerald-400"
+              : toast.type === "error"
+              ? "bg-red-50 dark:bg-red-950/80 border-red-300 dark:border-red-500 text-red-700 dark:text-red-400"
+              : "bg-zinc-100 dark:bg-zinc-900/90 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${toast.type === "success" ? "bg-emerald-500" : "bg-zinc-400"}`} />
+            {toast.message}
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden min-h-0">
+
+        {/* SIDEBAR */}
+        <aside className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
+          <div className="space-y-20">
+            <h2 className="font-bold text-lg">
+              <Link href="/" className="hover:text-cyan-500 dark:hover:text-cyan-400">{t.sidebar.home}</Link>
+            </h2>
+            <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
+              <Link href="/chat" className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
+              <Link href="/notes" className="block hover:text-cyan-500">{t.sidebar.notes}</Link>
+              <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang === "fr" ? "Calendrier" : "Calendar"}</Link>
+              <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang === "fr" ? "Vitalité" : "Vitality"}</Link>
+              <Link href="/services" className="block hover:text-cyan-500">💎 {lang === "fr" ? "Services" : "Services"}</Link>
+              <Link href="/account" className="block text-cyan-600 dark:text-cyan-400 font-bold">👤 {lang === "fr" ? "Compte" : "Account"}</Link>
+              <hr className="border-zinc-200 dark:border-zinc-800 my-4" />
+              <Link href="/history" className="block hover:text-amber-500">⭐ {lang === "fr" ? "Historique" : "History"}</Link>
+            </div>
+          </div>
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
+            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier}</span>
+          </div>
+        </aside>
+
+        {/* MAIN */}
+        <section className="flex-1 flex flex-col items-center px-8 py-12 overflow-y-auto bg-white dark:bg-gradient-to-b dark:from-zinc-950 dark:via-black dark:to-black transition-colors duration-200">
+
+          <div className="text-center mb-12 shrink-0 w-full max-w-md">
+            <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-500 font-mono text-sm shadow-sm">
+              idx
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 mb-1.5">
+              {lang === "fr" ? "Passerelle de Compte" : "Account Gateway"}
+            </h1>
+            <p className="text-zinc-500 text-xs tracking-wide">
+              {lang === "fr"
+                ? "Orchestrez et synchronisez vos paramètres d'identité au sein de l'écosystème sécurisé."
+                : "Orchestrate and sync identity parameters within the secure ecosystem."}
+            </p>
+
+            {user?.email ? (
+              <div className="mt-5 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-3 inline-flex items-center gap-4 text-left shadow-sm animate-in fade-in duration-300">
+                <div>
+                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block uppercase tracking-wider font-mono">
+                    {lang === "fr" ? "Session Authentifiée" : "Authenticated Session"}
+                  </span>
+                  <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold font-mono">{user.email}</span>
+                </div>
+                <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800" />
+                <button onClick={handleSignOut} className="text-xs text-red-500 hover:text-red-600 font-bold transition-colors">
+                  {lang === "fr" ? "Se Déconnecter" : "Sign Out"}
+                </button>
+              </div>
+            ) : (
+              <p className="text-amber-600 dark:text-amber-500 text-xs font-semibold mt-4 bg-amber-500/5 border border-amber-200 dark:border-amber-500/10 rounded-xl py-1.5 px-3 inline-block">
+                ⚠️ {lang === "fr" ? "Aucune session active — Connectez-vous ci-dessous" : "No active session — Connect below"}
+              </p>
+            )}
+          </div>
+
+          {/* GATEWAY CARDS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-5xl shrink-0">
+
+            {/* MICROSOFT */}
+            <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
+              activeProvider === "azure"
+                ? "border-emerald-500 bg-emerald-50/10 dark:bg-zinc-900/50 shadow-lg"
+                : "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800"
+            }`}>
+              <div className="mt-4">
+                <MicrosoftLogo />
+                <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">Microsoft</h2>
+                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Outlook & Directories</p>
+              </div>
+              <button
+                onClick={handleMicrosoftConnect}
+                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                  activeProvider === "azure"
+                    ? "bg-emerald-600 text-white cursor-default"
+                    : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950"
+                }`}
+              >
+                {activeProvider === "azure" ? `✓ ${lang === "fr" ? "Connecté" : "Connected"}` : "Connexion"}
+              </button>
+            </div>
+
+            {/* GOOGLE CLASSIQUE */}
+            <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
+              activeProvider === "google"
+                ? "border-emerald-500 bg-emerald-50/10 dark:bg-zinc-900/50 shadow-lg"
+                : "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800"
+            }`}>
+              <div className="mt-4">
+                <GoogleLogo />
+                <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">Google</h2>
+                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Identity & Secure Nodes</p>
+              </div>
+              <button
+                onClick={handleGoogleConnectNormal}
+                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                  activeProvider === "google"
+                    ? "bg-emerald-600 text-white cursor-default"
+                    : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950"
+                }`}
+              >
+                {activeProvider === "google" ? `✓ ${lang === "fr" ? "Connecté" : "Connected"}` : "Connexion"}
+              </button>
+            </div>
+
+            {/* EMAIL SIGN IN */}
+            <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
+              activeProvider === "email"
+                ? "border-emerald-500 bg-emerald-50/10 dark:bg-zinc-900/50 shadow-lg"
+                : "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800"
+            }`}>
+              <div className="mt-4">
+                <MailIcon />
+                <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">
+                  {lang === "fr" ? "Connexion E-mail" : "Sign in Email"}
+                </h2>
+                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Access Existing Token</p>
+              </div>
+              <button
+                onClick={() => { if (activeProvider !== "email") setShowSignInModal(true); }}
+                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                  activeProvider === "email"
+                    ? "bg-emerald-600 text-white cursor-default"
+                    : "bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 hover:bg-zinc-300 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {activeProvider === "email" ? `✓ ${lang === "fr" ? "Connecté" : "Connected"}` : (lang === "fr" ? "Ouvrir la Session" : "Open Sign In")}
+              </button>
+            </div>
+
+            {/* CREATE ACCOUNT */}
+            <div className="bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800 rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm">
+              <div className="mt-4">
+                <UserPlusIcon />
+                <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">
+                  {lang === "fr" ? "Créer un Compte" : "Create Account"}
+                </h2>
+                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Initialize New Profile</p>
+              </div>
+              <button
+                disabled={activeProvider !== null}
+                onClick={() => setShowSignUpModal(true)}
+                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                  activeProvider !== null
+                    ? "bg-zinc-200 dark:bg-zinc-950 text-zinc-400 dark:text-zinc-700 border border-zinc-300 dark:border-zinc-900 cursor-not-allowed shadow-inner"
+                    : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950"
+                }`}
+              >
+                {activeProvider !== null ? (lang === "fr" ? "Session Verrouillée" : "Session Locked") : (lang === "fr" ? "S'inscrire" : "Open Sign Up")}
+              </button>
+            </div>
+
+          </div>
+
+          {/* BANDEROLE DE SYNCHRONISATION AGENDA GOOGLE */}
+          <div className="mt-10 w-full max-w-5xl border border-dashed border-cyan-500/30 bg-zinc-50 dark:bg-zinc-950 p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-900 shadow-sm">
+            <div className="flex items-center gap-4 text-center sm:text-left">
+              <div className="w-12 h-12 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shadow-inner shrink-0 mx-auto sm:mx-0">
+                <GoogleLogo />
+              </div>
+              <div>
+                <h4 className="text-sm font-black font-mono tracking-wide text-zinc-900 dark:text-zinc-100">Here For Google Connection With calendar Synch</h4>
+                <p className="text-zinc-500 text-xs mt-0.5">{lang === "fr" ? "Configurez les passerelles d'autorisations pour l'agent de liaison." : "Configure high-tier auth bridges for the core cloud connection."}</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowGoogleSyncPopup(true)}
+              className="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md shrink-0 w-full sm:w-auto text-center"
+            >
+              {lang === "fr" ? "Synchronisation Google Calendar" : "Google Calendar Synchronisation"}
+            </button>
+          </div>
+
+          {/* INFO FOOTER */}
+          <div className="mt-6 w-full max-w-5xl border border-cyan-500/20 bg-cyan-50/5 dark:bg-cyan-950/5 rounded-2xl p-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-center sm:text-left shadow-inner">
+            <div className="space-y-1">
+              <h4 className="text-xs font-bold font-mono tracking-widest text-cyan-600 dark:text-cyan-400 uppercase">🛡️ Agentic Architecture Protocol</h4>
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed max-w-2xl">
+                Please ensure a persistent passport node link is fully bound. An active profile session is strictly required to route automated background actions into your personal calendar stack and tracking matrix grid.
+              </p>
+            </div>
+            <div className="shrink-0 flex flex-col items-center sm:items-end font-mono">
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-600 uppercase tracking-widest block">System Build</span>
+              <span className="text-sm font-extrabold text-cyan-600 dark:text-cyan-400 filter drop-shadow-[0_0_8px_rgba(6,182,212,0.3)]">v10.0.10</span>
+            </div>
+          </div>
+
+        </section>
+      </div>
+
+      {/* 🌟 POP-UP MULTI-ÉCRAN ET ASSURÉ – NE SE FERME PLUS LORS DU CLIC DU BOUTON ET TEXTES AGRANDIS */}
+      {showGoogleSyncPopup && (
+        <div 
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-[999] p-4 backdrop-blur-md animate-in fade-in duration-200"
+          // Suppression de la fermeture sur clic d'arrière-plan pour éviter de perdre le guide par accident
+        >
+          <div 
+            className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 sm:p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-6 transform animate-in zoom-in-95 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* EN-TÊTE POP-UP */}
+            <div className="flex justify-between items-center border-b border-zinc-900 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6"><GoogleLogo /></div>
+                <h3 className="font-mono text-xs uppercase tracking-widest text-cyan-400 font-black">Google Advanced Synch</h3>
+              </div>
+              <button 
+                onClick={() => setShowGoogleSyncPopup(false)} 
+                className="text-zinc-500 hover:text-white font-mono text-sm p-1 transition"
+              >✕</button>
+            </div>
+
+            {/* DIRECTIVE PRINCIPALE SIMPLIFIÉE */}
+            <div className="space-y-6 text-white text-sm leading-relaxed font-sans">
+              <p className="text-[14px] text-white leading-relaxed font-medium">
+                Voici les étapes à suivre pour autoriser la synchronisation de votre calendrier Google.
+              </p>
+
+              {/* ENCADRÉ AVEC CONTENU AGRANDI ET ESPACEMENT FLUIDE */}
+              <div className="border border-zinc-800 p-5 sm:p-6 rounded-xl bg-zinc-900/30 space-y-6">
+                
+                {/* ÉCRAN DE PRÉPARATION PSYCHOLOGIQUE DE GOOGLE (CORRIGÉ & TEXTE AGRANDI) */}
+                <div className="flex items-start gap-3 bg-red-950/20 border border-red-500/20 p-4 rounded-xl text-white font-sans text-sm">
+                  <div className="text-red-500 text-2xl pt-0.5 select-none">⚠️</div>
+                  <div className="space-y-1">
+                    <p className="font-bold text-zinc-100 tracking-wide text-[14px]">Google n'a pas vérifié cette application</p>
+                    <p className="text-zinc-200 text-xs sm:text-sm leading-relaxed">Il est possible que Google affiche ce message.</p>
+                  </div>
+                </div>
+
+                
+                
+                <p className="text-zinc-200 text-sm">
+                  Voici la manipulation à faire :
+                </p>
+
+                {/* LES 3 ÉTAPES CONDENSÉES (TEXTES SECONDAIRES COMPLÈTEMENT AGRANDIS) */}
+                <div className="space-y-6 pt-2">
+                  
+                  {/* ÉTAPE 1 */}
+                  <div>
+                    <p className="text-zinc-300 font-bold font-mono uppercase tracking-wider text-xs mb-1">Étape 1</p>
+                    <p className="text-white text-sm font-medium">
+                      Tout en bas de la page de connexion Google, vous verrez le lien :
+                    </p>
+                    <p className="text-white font-bold underline mt-2 block tracking-wide text-sm sm:text-base select-none">
+                      Paramètres avancés
+                    </p>
+                  </div>
+
+                  {/* ÉTAPE 2 */}
+                  <div>
+                    <p className="text-zinc-300 font-bold font-mono uppercase tracking-wider text-xs mb-1">Étape 2</p>
+                    <p className="text-white text-sm font-medium">
+                      Un texte supplémentaire s'affichera. Repérez puis cliquez sur le tout dernier lien situé complètement au bas de la page :
+                    </p>
+                    <p className="text-white font-bold underline mt-2 block tracking-wide text-sm sm:text-base select-none">
+                      Accéder à l'application non sécurisée
+                    </p>
+                    <p className="text-zinc-300 text-xs sm:text-sm italic mt-2 block font-normal">
+                      Cette étape permettra d'autoriser la synchronisation de votre calendrier.
+                    </p>
+                  </div>
+
+                  {/* ÉTAPE 3 */}
+                  <div>
+                    <p className="text-zinc-300 font-bold font-mono uppercase tracking-wider text-xs mb-1">Étape 3</p>
+                    <p className="text-white text-sm font-medium">
+                      Acceptez ensuite les autorisations demandées par Google pour terminer la synchronisation.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* ZONE DES BOUTONS - LE POP-UP RESTE ENFIN OUVERT À DROITE POUR L'UTILISATEUR */}
+            <div className="flex flex-col gap-3 pt-2 border-t border-zinc-900">
+              <button 
+                onClick={handleGoogleConnectWithSyncNewTab} // Reste ouvert (Supabase s'occupe de l'autre onglet)
+                className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2"
+              >
+                <span>🌐 Aller à la page d'autorisation Google</span>
+              </button>
+              <button 
+                onClick={() => setShowGoogleSyncPopup(false)}
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 font-mono text-xs py-2.5 rounded-xl transition border border-zinc-800"
+              >
+                Retour
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SIGN IN MODAL */}
+      {showSignInModal && (
+        <div
+          className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={() => setShowSignInModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
+              <div>
+                <h2 className="text-base font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">
+                  🛸 {lang === "fr" ? "Accès Écosystème" : "Account Access"}
+                </h2>
+                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">
+                  {lang === "fr" ? "Entrez vos paramètres d'authentification pour synchroniser votre profil." : "Input your authorized encryption parameters to sync your profile."}
+                </p>
+              </div>
+              <button onClick={() => { setShowSignInModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
+            </div>
+            {signInError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signInError}</div>}
+            {signInSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signInSuccess}</div>}
+            <div className="space-y-4">
+              <div>
+                <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Adresse Courriel" : "Identity Node (Email)"}</label>
+                <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+              </div>
+              <div>
+                <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Mot de Passe" : "Access Token (Password)"}</label>
+                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+              </div>
+              <button onClick={handleForgotPassword} type="button" className="w-full py-3 rounded-xl text-xs font-mono font-bold border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/50 bg-zinc-50 dark:bg-zinc-900/30 transition-all shadow-sm">{lang === "fr" ? "Mot de passe oublié ? Réinitialiser" : "Forgot password? Reset access link"}</button>
+            </div>
+            <button onClick={handleEmailSignIn} className="w-full bg-cyan-600 hover:bg-cyan-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{lang === "fr" ? "Se connecter à votre compte" : "Login to your account"}</button>
+          </div>
+        </div>
+      )}
+
+      {/* SIGN UP MODAL */}
+      {showSignUpModal && (
+        <div
+          className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={() => setShowSignUpModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
+              <div>
+                <h2 className="text-base font-mono uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-bold">🛸 {lang === "fr" ? "Créer un Profil" : "Create Account"}</h2>
+                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Register your cryptographic access tokens within our decentralized network.</p>
+                <p className="text-amber-600 dark:text-amber-400/90 text-[11px] font-mono mt-2 bg-amber-500/5 border border-amber-200 dark:border-amber-500/10 rounded-lg py-1 px-3.5">{lang === "fr" ? "💡 Note : Pensez à vérifier votre dossier Courriers indésirables (Spam) si vous ne recevez pas le lien de validation." : "💡 Note: Please remember to check your Junk or Spam folders if you do not receive the verification link."}</p>
+              </div>
+              <button onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
+            </div>
+            {signUpError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signUpError}</div>}
+            {signUpSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-4 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signUpSuccess}</div>}
+            <div className="space-y-4">
+              <div>
+                <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">Target Email Address</label>
+                <input type="email" placeholder="nom@domaine.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" />
+              </div>
+              <div>
+                <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">Define Secure Security Key</label>
+                <input type="password" placeholder="Minimum 6 caractères" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" />
+              </div>
+            </div>
+            <button onClick={handleEmailSignUp} className="w-full bg-emerald-600 hover:bg-emerald-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{lang === "fr" ? "Créer le compte" : "Create Account"}</button>
+          </div>
+        </div>
+      )}
+
+    </main>
+  );
+}
