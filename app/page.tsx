@@ -684,7 +684,7 @@ export default function Home() {
                   <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2">
                     <span className="text-xl">✨</span>
                     <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
-                      {lang === "fr" ? "MESSAGE DE CONSCIENCE D'ECHO" : "ECHO'S AWAKENING MESSAGE"} (1/2)
+                      {lang === "fr" ? "ECHO AI" : "ECHO AI"} (1/2)
                     </h4>
                   </div>
 
