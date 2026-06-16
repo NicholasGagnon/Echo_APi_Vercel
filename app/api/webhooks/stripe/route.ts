@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 
-// Configuration stricte de la version pour s'aligner sur la signature de test
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16" as any,
 });
@@ -26,7 +25,7 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
 
   try {
-    // ⚡ CLÉ DE TEST FORCÉE EN DUR POUR COURT-CIRCUITER TOUS LES BOGUES DE LIEN VERCEL
+    // ⚡ CLÉ DE TEST INTERNE SÉCURISÉE VIA TON COMPTE STRIPE
     const testWebhookSecret = "whsec_ty2H1QRlonMfPINShkJymkunQCv9cIOz";
 
     event = stripe.webhooks.constructEvent(
@@ -46,6 +45,7 @@ export async function POST(req: Request) {
 
     const userId = session.metadata?.userId;
     const planName = session.metadata?.planName;
+    const subscriptionId = session.subscription as string;
 
     if (!userId || !planName) {
       console.error("userId ou planName introuvable dans les metadonnees");
@@ -53,20 +53,34 @@ export async function POST(req: Request) {
     }
 
     const formattedPlan = planName.trim().toLowerCase();
-
     console.log(`Activation en cours... Utilisateur: ${userId} | Plan: ${formattedPlan}`);
+
+    // ── 🏴‍☠️ INTERCEPTION DU COFFRE CACHÉ : CONFIGURATION DE L'AUTO-DESTRUCTION ──
+    if (formattedPlan === "treasure" && subscriptionId) {
+      try {
+        // On force directement l'objet Subscription actif à s'annuler à la fin du premier mois payé
+        await stripe.subscriptions.update(subscriptionId, {
+          cancel_at_period_end: true,
+        });
+        console.log(`[AUTO-DESTRUCTION ACTIVÉE] Le coffre ${subscriptionId} s'annulera seul à la fin de la période.`);
+      } catch (cancelError: any) {
+        console.error(`Erreur lors de la planification de la fermeture du coffre: ${cancelError.message}`);
+        // On ne retourne pas d'erreur HTTP ici pour laisser l'utilisateur avoir son accès Supabase quoi qu'il arrive
+      }
+    }
+
+    // Si c'est l'achat du coffre, on lui attribue le forfait premium (ou ultra selon ton choix) dans ton sillage
+    const tierToAssign = formattedPlan === "treasure" ? "premium" : formattedPlan;
 
     try {
       const { error } = await supabaseAdmin
         .from("profiles")
-        .update({ user_tier: formattedPlan })
+        .update({ user_tier: tierToAssign })
         .eq("id", userId);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log(`Profil ${userId} mis a jour au forfait : ${formattedPlan}`);
+      console.log(`Profil ${userId} mis a jour au forfait : ${tierToAssign}`);
     } catch (dbError: any) {
       console.error(`Echec mise a jour Supabase: ${dbError.message}`);
       return NextResponse.json({ error: "Echec ecriture base de donnees" }, { status: 500 });

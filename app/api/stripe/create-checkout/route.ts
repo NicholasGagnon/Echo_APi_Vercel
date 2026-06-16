@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-// Initialisation propre et simplifiée (sans accolades vides)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-// Le mapping sécurisé entre tes forfaits et tes Price IDs Stripe
+// ── LE MAPPING SÉCURISÉ INCLUANT TON ID DE COFFRE PROD ──
 const PRICE_IDS = {
   basic: process.env.STRIPE_BASIC_PRICE_ID!,
   premium: process.env.STRIPE_PREMIUM_PRICE_ID!,
   ultra: process.env.STRIPE_ULTRA_PRICE_ID!,
   founder: process.env.STRIPE_FOUNDER_PRICE_ID!,
+  treasure: process.env.STRIPE_TREASURE_PRICE_ID!, 
 } as const;
 
 export async function POST(req: Request) {
@@ -26,12 +26,13 @@ export async function POST(req: Request) {
     }
 
     const priceId = PRICE_IDS[plan as keyof typeof PRICE_IDS];
-
-    // --- SÉCURITÉ #2 : Gestion de l'URL de redirection ---
-    // Si l'origine est manquante, on utilise localhost par défaut pour ton dev
     const origin = req.headers.get("origin") ?? "http://localhost:3000";
 
-    // --- SÉCURITÉ #3 : Création de la session Checkout de Stripe ---
+    // --- SÉCURITÉ #2 : Configuration simplifiée pour le Checkout ---
+    // On laisse l'objet d'abonnement standard à la création pour éviter les bogues TypeScript
+    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {};
+
+    // --- SÉCURITÉ #3 : Création de la session Checkout ---
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "subscription",
@@ -42,17 +43,16 @@ export async function POST(req: Request) {
           quantity: 1,
         },
       ],
+      subscription_data: subscriptionData,
       success_url: `${origin}/services?success=true`,
       cancel_url: `${origin}/services?canceled=true`,
       
-      // Métadonnées cruciales pour l'activation dans Supabase plus tard
       metadata: {
         userId: userId,
-        planName: plan,
+        planName: plan, // Transmis au Webhook pour déclencher la suite
       },
     });
 
-    // On renvoie l'URL magique de Stripe au frontend
     return NextResponse.json({ url: session.url });
 
   } catch (error: any) {
