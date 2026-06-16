@@ -38,7 +38,6 @@ export const checkQuota = (
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
   // ── 📅 SYNCHRONISATION DU CYCLE UNIQUE DE 30 JOURS ──
-  // Si le tracker global n'a pas de date de départ ou que le mois est fini, on reset TOUT d'un coup
   if (!tracker.cycleStartTime || (now - tracker.cycleStartTime > THIRTY_DAYS)) {
     tracker = {
       cycleStartTime: now,
