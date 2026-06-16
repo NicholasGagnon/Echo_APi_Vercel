@@ -676,9 +676,9 @@ export default function Home() {
                 })}
               </div>
 
-              {/* ── 📖 PAROLE D'ECHO (NETTOYÉ ET PROPRE) ── */}
+              {/* ── 📖 PAROLE D'ECHO — AVATAR EN COLONNE FIXE À GAUCHE, TEXTE À DROITE (ANTI-CHEVAUCHEMENT) ── */}
               {tutorialStep === 1 && (
-                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-92 sm:w-[640px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-[92vw] max-w-[420px] sm:max-w-[640px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
                   
                   <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2">
@@ -688,17 +688,24 @@ export default function Home() {
                     </h4>
                   </div>
 
-                  {/* Layout unique : l'image n'est DANS ce flex */}
-                  <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
-                    <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-2 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner">
+                  {/*
+                    ⚡ FIX ANTI-CHEVAUCHEMENT :
+                    Grille à colonnes fixes (avatar | texte) au lieu d'un flex avec une image qui flotte.
+                    L'avatar est contenu dans une boîte de taille fixe avec overflow-hidden : même si une
+                    classe externe (ex: echo-idle / echo-thinking) impose un position absolute/fixed sur
+                    l'élément <img>, celui-ci reste visuellement piégé dans sa colonne et ne peut plus
+                    se superposer au bloc de texte à droite.
+                  */}
+                  <div className="grid grid-cols-[72px_1fr] sm:grid-cols-[96px_1fr] gap-4 sm:gap-5 mb-5 items-start">
+                    <div className="relative w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 bg-zinc-900 dark:bg-zinc-100 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner overflow-hidden isolate">
                       <img 
                         src="/Echo.png" 
                         alt="Echo Avatar" 
-                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover"
+                        className="block w-full h-full object-cover"
                       />
                     </div>
 
-                    <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
+                    <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line min-w-0">
                       {lang === "fr" ? (
                         <>
                           Hey bienvenue ! 👋
