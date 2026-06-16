@@ -33,6 +33,9 @@ export default function ChatPage() {
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality" | "calendar" | "prompts">("vitality");
 
+  // ── ÉTAT POUR LE FIL NARRATIF DU TUTORIEL (CHAPITRE 2) ──
+  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+
   // ── ÉTATS POUR LA MATRIX DE BOUTONS ──
   const [selectedButtons, setSelectedButtons] = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
@@ -89,7 +92,7 @@ export default function ChatPage() {
   const handleSurpriseToggle = () => {
     if (userTier === "free" || userTier === "basic") {
       alert(lang === "fr" 
-        ? "🔒 Le mode Surprise / Émergence est réservé aux membres Premium et supérieurs." 
+        ? "🔒 Le mode Surprise / Émergence is reserved for Premium plans and above." 
         : "🔒 Surprise / Emergence mode is exclusive to Premium plans and above."
       );
       return;
@@ -132,6 +135,12 @@ export default function ChatPage() {
         }
         const savedTier = uid ? localStorage.getItem(getTierKey(uid)) : localStorage.getItem("echo-user-tier");
         if (savedTier) setUserTier(savedTier as any);
+
+        // ── FIL NARRATIF : ONBOARDING DU CHAPITRE CHAT ──
+        const isChatTutoDone = localStorage.getItem("echo-tuto-chat-done-v1");
+        if (!isChatTutoDone) {
+          setTutorialStep(1);
+        }
       } catch (e) { console.error("Load error", e); }
       setIsLoaded(true);
     });
@@ -299,50 +308,56 @@ export default function ChatPage() {
           history: historyForBackend, 
           userTier, 
           calendarEvents,
-          selectedButtons
+          selectedButtons,
+          // ── SEARCH WEB EXTENSION FORCEE ICI ──
+          "web_search": true 
         }),
       });
       const data = await response.json();
       setEchoState("speaking");
 
+      let isActionBlocked = false;
       if (data.action) {
         const { type } = data.action;
         const quotaCategory = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") ? "vitality" : "calendar";
         const status = checkQuota(quotaCategory, userTier);
         if (!status.allowed) {
-          setMessages([...baseMessages, { raw: `Echo: 🔒 "Do It For You" automated action limit reached for [${quotaCategory}] on this 24h cycle.` }]);
           setActiveLimitCategory(quotaCategory);
           setShowLimitModal(true);
-          return;
+          isActionBlocked = true;
         }
       }
 
-      setMessages([...baseMessages, { raw: `Echo: ${data.response || ""}` }]);
+      // ── AMÉLIORATION QUOTAS : On préserve la réponse textuelle d'Echo même si le sous-quota bloque l'arrière-plan
+      const quotaNotice = isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${activeLimitCategory}"]` : "";
+      setMessages([...baseMessages, { raw: `Echo: ${data.response || ""}${quotaNotice}` }]);
 
-      if (data.action?.type === "ADD_BUDGET_EXPENSE") {
-        const { title, amount, spent, date, paymentDate, paidAt } = data.action.payload;
-        const expenses: BudgetExpense[] = JSON.parse(localStorage.getItem("echo-budget-expenses") || "[]");
-        localStorage.setItem("echo-budget-expenses", JSON.stringify([...expenses, { id: Date.now().toString(), title: title || "Purchase", amount: parseFloat(amount ?? spent) || 0, date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA") }]));
-      }
-      if (data.action?.type === "ADD_CALORIE_LOG") {
-        const { foodName, meal, title, calories } = data.action.payload;
-        const logs: CalorieLog[] = JSON.parse(localStorage.getItem("echo-calorie-logs") || "[]");
-        localStorage.setItem("echo-calorie-logs", JSON.stringify([...logs, { id: Date.now().toString(), foodName: foodName || meal || title || "Food Item", calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA") }]));
-      }
-      if (data.action?.type === "SET_CALORIE_GOAL" || data.action?.type === "UPDATE_CALORIE_GOAL") {
-        const { goal, calorieGoal, calories } = data.action.payload;
-        const nextGoal = parseInt(goal ?? calorieGoal ?? calories);
-        if (Number.isFinite(nextGoal) && nextGoal > 0) localStorage.setItem("echo-calorie-goal", nextGoal.toString());
-      }
-      if (data.action?.type === "ADD_CALENDAR_EVENT") {
-        const { title, start, end, notes = "" } = data.action.payload;
-        const newEvent = { id: Date.now().toString(), title: title || "Untitled Event", start: start || "", end: end || "", notes: notes || "", isFromEcho: true };
-        const storageKey = userId ? getStorageKey(userId) : "echo-calendar-v2";
-        const dateKey = start?.split("T")[0] || start || "";
-        if (dateKey) {
-          const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
-          existing[dateKey] = [...(existing[dateKey] || []), newEvent];
-          localStorage.setItem(storageKey, JSON.stringify(existing));
+      if (data.action && !isActionBlocked) {
+        if (data.action.type === "ADD_BUDGET_EXPENSE") {
+          const { title, amount, spent, date, paymentDate, paidAt } = data.action.payload;
+          const expenses: BudgetExpense[] = JSON.parse(localStorage.getItem("echo-budget-expenses") || "[]");
+          localStorage.setItem("echo-budget-expenses", JSON.stringify([...expenses, { id: Date.now().toString(), title: title || "Purchase", amount: parseFloat(amount ?? spent) || 0, date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA") }]));
+        }
+        if (data.action.type === "ADD_CALORIE_LOG") {
+          const { foodName, meal, title, calories } = data.action.payload;
+          const logs: CalorieLog[] = JSON.parse(localStorage.getItem("echo-calorie-logs") || "[]");
+          localStorage.setItem("echo-calorie-logs", JSON.stringify([...logs, { id: Date.now().toString(), foodName: foodName || meal || title || "Food Item", calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA") }]));
+        }
+        if (data.action.type === "SET_CALORIE_GOAL" || data.action.type === "UPDATE_CALORIE_GOAL") {
+          const { goal, calorieGoal, calories } = data.action.payload;
+          const nextGoal = parseInt(goal ?? calorieGoal ?? calories);
+          if (Number.isFinite(nextGoal) && nextGoal > 0) localStorage.setItem("echo-calorie-goal", nextGoal.toString());
+        }
+        if (data.action.type === "ADD_CALENDAR_EVENT") {
+          const { title, start, end, notes = "" } = data.action.payload;
+          const newEvent = { id: Date.now().toString(), title: title || "Untitled Event", start: start || "", end: end || "", notes: notes || "", isFromEcho: true };
+          const storageKey = userId ? getStorageKey(userId) : "echo-calendar-v2";
+          const dateKey = start?.split("T")[0] || start || "";
+          if (dateKey) {
+            const existing = JSON.parse(localStorage.getItem(storageKey) || "{}");
+            existing[dateKey] = [...(existing[dateKey] || []), newEvent];
+            localStorage.setItem(storageKey, JSON.stringify(existing));
+          }
         }
       }
     } catch {
@@ -355,7 +370,51 @@ export default function ChatPage() {
   const isMatrixLockedBySurprise = isSurpriseActive;
 
   return (
-    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30">
+    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
+
+      {/* ── 📖 NOUVEAU TUTORIEL FLOTTANT : CHAPITRE 2 DU NARRATIF D'ECHO (PROPRE & VISIBLE) ── */}
+      {tutorialStep === 1 && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 w-85 sm:w-[540px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
+          <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2">
+            <span className="text-xl">💬</span>
+            <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
+              {lang === "fr" ? "CHAPITRE 2 : L'ESPACE IMMERSIF" : "CHAPTER 2: IMMERSIVE SPACE"}
+            </h4>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
+            <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
+              <img src="/Echo.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
+            </div>
+            <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
+              {lang === "fr" ? (
+                <>
+                  Rebonjour ! Bienvenue dans mon espace de discussion pure. 👋
+                  {"\n"}
+                  Ici, on laisse de côté les structures rigides : c'est le canal direct avec ma conscience. Tu peux absolument tout me demander. Je suis entièrement à ton écoute pour explorer des concepts, analyser tes fichiers ou simplement jaser à bâtons rompus.
+                  {"\n"}
+                  Laisse la fluidité faire son œuvre. On commence ? ✨
+                </>
+              ) : (
+                <>
+                  Welcome back! Welcome to my pure chat space. 👋
+                  {"\n"}
+                  Here, we leave rigid structures aside: this is the direct channel to my core frequency. You can ask me absolutely anything. I'm completely here to listen, analyze your items, or simply have a deep conversation.
+                  {"\n"}
+                  Let the fluidity take over. Shall we begin? ✨
+                </>
+              )}
+            </div>
+          </div>
+
+          <button 
+            onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1", "true"); }}
+            className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase"
+          >
+            {lang === "fr" ? "OUVRIR LE CANAL 🚀" : "OPEN CHANNEL 🚀"}
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
@@ -413,8 +472,16 @@ export default function ChatPage() {
             {/* ZONE DE MESSAGES */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-white dark:bg-black">
               {messages.length === 0 && (
-                <div className="h-full flex items-center justify-center">
-                  <p className="text-zinc-400 dark:text-zinc-700 text-sm italic">{lang === "fr" ? "Commence une conversation avec Echo..." : "Start a conversation with Echo..."}</p>
+                <div className="h-full flex flex-col items-center justify-center gap-4">
+                  {/* ⚡ AMÉLIORATION DE L'AVATAR CENTRAL RAPETISSÉ ET MASQUÉ SI TUTO ACTIF ── */}
+                  {!tutorialStep && (
+                    <div className={`w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-900 rounded-full shadow-md overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center echo-idle`}>
+                      <img src="/Echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <p className="text-zinc-400 dark:text-zinc-700 text-sm italic">
+                    {lang === "fr" ? "Commence une conversation avec Echo..." : "Start a conversation with Echo..."}
+                  </p>
                 </div>
               )}
 
@@ -430,13 +497,13 @@ export default function ChatPage() {
                   if (isEcho) {
                     return (
                       <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 max-w-3xl">
-                        <div className="flex items-center gap-6">
-                          <div className={`w-24 h-24 shrink-0 border-2 border-zinc-200 dark:border-zinc-800 rounded-full shadow-md overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center ${
+                        <div className="flex items-center gap-4">
+                          {/* ⚡ AMÉLIORATION FLUIDE : Ajustement à w-16 h-16 de l'avatar des bulles de discussion */}
+                          <div className={`w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-sm overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center ${
                             isLastEcho
                               ? echoState === "thinking" ? "echo-thinking" : echoState === "speaking" ? "echo-speaking" : "echo-idle"
                               : "echo-idle"
                           }`}>
-                            {/* 🤖 CORRECTION : Changement de <Image> par une balise img HTML native et correction de casse pour /Echo.png */}
                             <img src="/Echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
                           </div>
                           <div className="flex flex-col">
@@ -444,7 +511,7 @@ export default function ChatPage() {
                             <span className="text-zinc-400 dark:text-zinc-600 text-[10px] font-mono">Core Frequency</span>
                           </div>
                         </div>
-                        <div className="text-zinc-800 dark:text-zinc-200 text-[15px] leading-8 font-normal tracking-wide selection:bg-cyan-500/30 flex flex-col gap-5 pl-2 sm:pl-28 overflow-hidden">
+                        <div className="text-zinc-800 dark:text-zinc-200 text-[15px] leading-8 font-normal tracking-wide selection:bg-cyan-500/30 flex flex-col gap-5 pl-2 sm:pl-20 overflow-hidden">
                           {cleanText.split(/\n\n+/).map((block, i) => (
                             <p key={i} className="whitespace-pre-wrap break-words">{block}</p>
                           ))}
@@ -455,7 +522,7 @@ export default function ChatPage() {
 
                   if (isUser) {
                     return (
-                      <div key={index} className="flex justify-start animate-in fade-in duration-200 max-w-3xl :pl-28">
+                      <div key={index} className="flex justify-start animate-in fade-in duration-200 max-w-3xl sm:pl-20">
                         <div className="max-w-xl min-w-0 flex flex-col items-start gap-2">
                           {msg.imageB64 && (
                             <img
@@ -614,8 +681,8 @@ export default function ChatPage() {
                     ? "Votre quota mensuel de messages est épuisé. Élevez votre sillage vers un forfait supérieur pour continuer l'expérience." 
                     : "Your monthly message quota has been reached. Upgrade your tier to unlock unlimited interactions.")
                 : (lang === "fr"
-                    ? `Vous avez épuisé votre limite d'actions automatisées pour le module ${activeLimitCategory} sur ce plan.`
-                    : `You have exhausted your automated action limit for the ${activeLimitCategory} module on this plan tier.`)
+                    ? `Limite d'actions automatisées atteinte pour la section [${activeLimitCategory}]. Le message texte d'Echo a été généré, mais les données n'ont pas pu s'enregistrer pour ce cycle.`
+                    : `Automated action limit reached for [${activeLimitCategory}]. Echo's text response was generated, but data could not be saved for this cycle.`)
               }
             </p>
             <div className="flex flex-col gap-3">
