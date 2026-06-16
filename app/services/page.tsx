@@ -597,12 +597,19 @@ export default function ServicesPage() {
             </p>
           </div>
 
-          {/* 🏴‍☠️ LE COFFRE AU TRÉSOR — ancré tout au fond du grand vide */}
-          <div className="shrink-0 w-full flex items-center justify-center pb-16">
+          {/* 🏴‍☠️ L'ESPACEUR GÉANT "LOIN LOIN" — Augmenté à 2200px pour forcer le défilement complet */}
+          <div className="shrink-0 w-full h-[2200px] flex items-end justify-center pb-10 px-4">
+            <p className="text-zinc-400 dark:text-zinc-700 text-[10px] font-mono uppercase tracking-widest text-center select-none">
+              {lang === "fr" ? "... continue de descendre ..." : "... keep scrolling down ..."}
+            </p>
+          </div>
+
+          {/* 🏴‍☠️ LE COFFRE AU TRÉSOR — Zone réactive agrandie pour faciliter le clic tout au fond */}
+          <div className="shrink-0 w-full flex items-center justify-center pb-32">
             <button 
               type="button"
               onClick={() => setShowTreasureModal(true)}
-              className="w-12 h-6 opacity-0 hover:opacity-40 cursor-pointer select-none text-[12px] transition-opacity duration-200"
+              className="w-24 h-12 opacity-0 hover:opacity-40 cursor-pointer select-none text-[14px] transition-all duration-200 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-center"
               title="..."
             >
               💎
