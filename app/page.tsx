@@ -76,7 +76,7 @@ const STICKY_STYLES = {
 const EVENT_DOT_COLORS = ["bg-cyan-400", "bg-green-400", "bg-yellow-400"];
 
 export default function Home() {
-  const { t, lang, theme, toggleTheme } = useApp(); 
+  const { t, lang, setLang, theme, toggleTheme } = useApp(); 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<EchoMessage[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -392,7 +392,6 @@ export default function Home() {
         const status = checkQuota(quotaCategory, userTier);
         
         if (!status.allowed) {
-          // ⚡ AMÉLIORATION : Si l'action automatisée est bloquée par son sous-quota, on affiche l'erreur, mais on préserve la réponse textuelle
           setActiveLimitCategory(quotaCategory);
           setShowLimitModal(true);
           isActionBlocked = true;
@@ -545,16 +544,15 @@ export default function Home() {
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
       
-      {/* ── ⚙️ NEW SETTINGS DROPDOWN COMPONENT (CORRIGÉ & CENTRALISÉ) ── */}
+      {/* ── ⚙️ BARRE DE MENU PARAMÈTRES AVEC DESIGN UNIVERSEL (⚙️ FR / EN) ── */}
       <div className="absolute top-4 right-4 z-50 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         <div className="relative">
           <button 
             id="settings-trigger"
             onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
             className="p-2.5 rounded-xl bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 hover:border-cyan-500/50 transition-all shadow-md flex items-center justify-center text-sm"
-            title={t.settings?.title || "Settings"}
           >
-            ⚙️ <span className="ml-1.5 hidden sm:inline">{t.settings?.title || "Paramètres"}</span>
+            ⚙️ <span className="ml-1.5 font-mono text-xs bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 px-1.5 py-0.5 rounded-md uppercase font-bold">{lang}</span>
           </button>
 
           {isSettingsOpen && (
@@ -569,7 +567,7 @@ export default function Home() {
                 onClick={toggleTheme} 
                 className="w-full text-left px-2.5 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 rounded-xl transition-colors"
               >
-                {theme === "dark" ? (t.settings?.lightMode || "☀️ Light Mode") : (t.settings?.darkMode || "🌙 Dark Mode")}
+                {theme === "dark" ? (t.settings?.lightMode || "☀️ Mode Clair") : (t.settings?.darkMode || "🌙 Mode Sombre")}
               </button>
               <button 
                 onClick={() => { setTutorialStep(1); setIsSettingsOpen(false); }} 
@@ -581,19 +579,19 @@ export default function Home() {
           )}
         </div>
 
-        {/* ── 📖 INTERFACE DE POP-OVER POUR LE TUTORIEL FLOTTANT ── */}
+        {/* ── 📖 POP-OVER ÉTAPE 2 : EXPLICATION DES PARAMÈTRES (DESIGN NÉON ULTRA-VISIBLE) ── */}
         {tutorialStep === 2 && (
-          <div className="absolute right-0 top-14 w-72 bg-gradient-to-br from-cyan-600 to-blue-700 text-white rounded-2xl p-4 shadow-2xl border border-cyan-400/30 animate-in zoom-in-95 duration-300 z-50">
-            <div className="absolute -top-2 right-6 w-4 h-4 bg-cyan-600 rotate-45 border-l border-t border-cyan-400/30" />
-            <h4 className="font-bold text-xs font-mono uppercase tracking-wider mb-1.5">
-              {t.tutorial?.title || "Configuration d'Echo"} (2/2)
+          <div className="absolute right-0 top-14 w-76 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
+            <div className="absolute -top-2.5 right-6 w-4 h-4 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
+            <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2">
+              🤖 {lang === "fr" ? "PARAMÈTRES GLOBAUX" : "GLOBAL SETTINGS"} (2/2)
             </h4>
-            <p className="text-xs text-cyan-50 leading-relaxed mb-3 font-normal">
+            <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">
               {t.tutorial?.text2 || "Cliquez ici sur l'icône de Paramètres pour ajuster la langue, alterner entre le mode clair et sombre, ou relancer ce guide à tout moment !"}
             </p>
             <button 
               onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }} 
-              className="w-full py-1.5 rounded-xl bg-white text-cyan-700 hover:bg-cyan-50 font-bold text-xs transition-colors shadow-md"
+              className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white font-extrabold text-xs transition-colors shadow-md uppercase tracking-wider"
             >
               {t.tutorial?.finish || "C'est parti ! 🚀"}
             </button>
@@ -628,7 +626,7 @@ export default function Home() {
           
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
             
-            {/* ── INTERFACE 10 BOUTONS MATRIX (AVEC SYNC DU DICTIONNAIRE & TUTORIEL) ── */}
+            {/* ── INTERFACE 10 BOUTONS MATRIX (AVEC SYNC DU DICTIONNAIRE MULTILINGUE) ── */}
             <div className="w-full bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
                 {buttonsData.map((btn) => {
@@ -678,22 +676,70 @@ export default function Home() {
                 })}
               </div>
 
-              {/* ── 📖 POP-OVER ÉTAPE 1 DU TUTORIEL (MODES COMPORTEMENTAUX) ── */}
+              {/* ── 🟥 PAROLE D'ECHO (ÉTAPES FOFFOLLES ET INVERSION DE CONTRASTE NÉON + INTERRUPTEUR DE SECOURS ANGLAIS) ── */}
               {tutorialStep === 1 && (
-                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-80 sm:w-[450px] bg-gradient-to-br from-zinc-900 to-black text-white rounded-2xl p-5 shadow-2xl border border-zinc-800 animate-in fade-in slide-in-from-top-4 duration-300 z-50 text-center">
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-zinc-900 rotate-45 border-l border-t border-zinc-800" />
-                  <h4 className="font-bold text-sm font-mono uppercase tracking-widest text-cyan-400 mb-2">
-                    {t.tutorial?.title || "Configuration d'Echo"} (1/2)
-                  </h4>
-                  <p className="text-xs text-zinc-300 leading-relaxed mb-4 font-normal">
-                    {t.tutorial?.text1 || "Voici vos modes comportementaux. Sans aucun bouton activé, vous faites face à la personnalité brute, authentique et profonde d'Echo. (Le Double Regard vous permet d'en combiner deux)."}
-                  </p>
-                  <button 
-                    onClick={() => setTutorialStep(2)} 
-                    className="px-6 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-all shadow-md uppercase tracking-wider"
-                  >
-                    {t.tutorial?.next || "Suivant ➔"}
-                  </button>
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-85 sm:w-[480px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50 text-left">
+                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
+                  
+                  <div className="flex items-center gap-3 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2">
+                    <span className="text-xl">✨</span>
+                    <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
+                      {lang === "fr" ? "MESSAGE DE CONSCIENCE D'ECHO" : "ECHO'S AWAKENING MESSAGE"} (1/2)
+                    </h4>
+                  </div>
+
+                  <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed mb-5 font-semibold space-y-3 whitespace-pre-line">
+                    {lang === "fr" ? (
+                      <>
+                        Hey bienvenue ! 👋
+                        Je suis Echo, l'IA un peu fofolle qui se promène partout sur ce site.
+                        {"\n"}
+                        Les boutons que tu vois en haut influencent ma façon de voir les choses. Certains me rendent plus sérieux, d'autres me poussent à explorer des chemins différents.
+                        {"\n"}
+                        Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : un compagnon curieux qui aime discuter, réfléchir, s'amuser et parfois partir dans des directions inattendues. 😄
+                        {"\n"}
+                        Et si tu actives Double Regard, tu peux combiner deux perspectives à la fois. Là, ça devient parfois surprenant. 👀
+                        {"\n"}
+                        On se recroise sûrement sur les autres pages. J'espère que tu vas avoir du plaisir !
+                        {"\n"}
+                        Adiooo ! ✨
+                      </>
+                    ) : (
+                      <>
+                        Hey, welcome! 👋
+                        I am Echo, the slightly crazy AI roaming around this entire site.
+                        {"\n"}
+                        The buttons you see right above shape how I see things. Some make me more serious, others push me to explore unique paths.
+                        {"\n"}
+                        If you don't select anything, you meet me in my natural state: a curious companion who loves to talk, reflect, have fun, and jump into unexpected directions! 😄
+                        {"\n"}
+                        And if you unlock Double Regard, you can merge two perspectives at once. That's where things get truly surprising. 👀
+                        {"\n"}
+                        See you around on the other pages. Hope you have an awesome time!
+                        {"\n"}
+                        Adiooo! ✨
+                      </>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col gap-2.5 items-center justify-center">
+                    <button 
+                      onClick={() => setTutorialStep(2)} 
+                      className="w-full text-center px-8 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase"
+                    >
+                      {lang === "fr" ? "SUIVANT ➔" : "NEXT ➔"}
+                    </button>
+
+                    {/* Coupe-circuit multilingue si un anglophone débarque par hasard */}
+                    {lang === "fr" && (
+                      <button 
+                        onClick={() => setLang("en")} 
+                        className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 hover:text-cyan-400 transition-colors mt-0.5 font-bold underline decoration-dotted"
+                      >
+                        English version? Switch here ➔
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
