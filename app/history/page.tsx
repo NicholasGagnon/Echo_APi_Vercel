@@ -14,9 +14,6 @@ type HistoryEntry = {
   messages: string[];
 };
 
-type BudgetExpense = { id: string; title: string; amount: number; date: string; };
-type CalorieLog = { id: string; foodName: string; calories: number; date: string; };
-
 export default function HistoryPage() {
   const { t, lang, theme, toggleTheme } = useApp();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -35,15 +32,14 @@ export default function HistoryPage() {
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality" | "calendar" | "prompts">("vitality");
 
   // ── GESTION DE LA LARGEUR DYNAMIQUE DU PANNEAU (RESIZABLE SPLITTER) ──
-  const [leftWidth, setLeftWidth] = useState(450); // Largeur par défaut en px
+  const [leftWidth, setLeftWidth] = useState(450); 
   const isResizing = useRef(false);
 
   const getConvoKey = (uid: string | null) => uid ? `echo-conversation-${uid}` : "echo-conversation";
   const getHistoryKey = (uid: string | null) => uid ? `echo-history-${uid}` : "echo-history";
   const getStorageKey = (uid: string) => `echo-calendar-v2-${uid}`;
-  const getTierKey = (uid: string) => `echo-user-tier-${uid}`;
 
-  const lastEchoIndex = chatMessages.findLastIndex((m) => /^Echo\s*:/i.test(m));
+  const lastEchoIndex = chatMessages ? chatMessages.findLastIndex((m) => /^Echo\s*:/i.test(m)) : -1;
 
   const fetchProfile = async (userId: string) => {
     const { data: profile } = await supabase
@@ -61,6 +57,7 @@ export default function HistoryPage() {
   };
 
   const checkAndSaveHistory = (msgs: string[], uid: string | null) => {
+    if (!msgs) return;
     const totalChars = msgs.join("").length;
     const threshold = Math.floor(totalChars / 2000) * 2000;
     if (threshold > lastSavedLength.current && threshold > 0) {
@@ -111,16 +108,15 @@ export default function HistoryPage() {
         const savedConversation = localStorage.getItem(getConvoKey(uid));
         if (savedConversation) {
           const parsed = JSON.parse(savedConversation);
-          setChatMessages(parsed);
-          const totalChars = parsed.join("").length;
+          setChatMessages(Array.isArray(parsed) ? parsed : []);
+          const totalChars = Array.isArray(parsed) ? parsed.join("").length : 0;
           lastSavedLength.current = Math.floor(totalChars / 2000) * 2000;
         } else {
           setChatMessages([]);
         }
 
         const savedHistory = localStorage.getItem(getHistoryKey(uid));
-        if (savedHistory) setHistory(JSON.parse(savedHistory));
-        else setHistory([]);
+        setHistory(savedHistory ? JSON.parse(savedHistory) : []);
       } else {
         setIsPageBlocked(true); 
       }
@@ -132,8 +128,12 @@ export default function HistoryPage() {
         const uid = session.user.id;
         setUser(session.user);
         await fetchProfile(uid);
-        setChatMessages(JSON.parse(localStorage.getItem(getConvoKey(uid)) || "[]"));
-        setHistory(JSON.parse(localStorage.getItem(getHistoryKey(uid)) || "[]"));
+        
+        const cachedConvo = localStorage.getItem(getConvoKey(uid));
+        setChatMessages(cachedConvo ? JSON.parse(cachedConvo) : []);
+        
+        const cachedHistory = localStorage.getItem(getHistoryKey(uid));
+        setHistory(cachedHistory ? JSON.parse(cachedHistory) : []);
       } else {
         setUser(null);
         setUserTier("free");
@@ -147,7 +147,7 @@ export default function HistoryPage() {
   }, []);
 
   useEffect(() => {
-    if (!isLoaded || !user) return;
+    if (!isLoaded || !user || !chatMessages) return;
     localStorage.setItem(getConvoKey(user.id), JSON.stringify(chatMessages));
     checkAndSaveHistory(chatMessages, user.id);
   }, [chatMessages, isLoaded, user]);
@@ -157,7 +157,7 @@ export default function HistoryPage() {
   }, [chatMessages]);
 
   const deleteEntry = (id: string) => {
-    const updated = history.filter(e => e.id !== id);
+    const updated = (history || []).filter(e => e.id !== id);
     setHistory(updated);
     localStorage.setItem(getHistoryKey(user?.id || null), JSON.stringify(updated));
     if (viewingHistory?.id === id) setViewingHistory(null);
@@ -173,13 +173,13 @@ export default function HistoryPage() {
         ? 'Echo: 🔒 Limite mensuelle de requêtes atteinte pour votre forfait. Passez au plan supérieur pour continuer à échanger.'
         : 'Echo: 🔒 Monthly prompt request limit reached for your plan. Please upgrade to continue chatting.';
       
-      setChatMessages((prev) => [...prev, lockMessage]);
+      setChatMessages((prev) => [...(prev || []), lockMessage]);
       setActiveLimitCategory("prompts");
       setShowLimitModal(true);
       return;
     }
 
-    let baseMessages = [...chatMessages];
+    let baseMessages = [...(chatMessages || [])];
     baseMessages.push(`You: ${textToSubmit}`);
 
     setChatMessages([...baseMessages, "Echo: ..."]);
@@ -204,24 +204,33 @@ export default function HistoryPage() {
       });
 
       const data = await response.json();
+      const echoText = data.response || (typeof data === "string" ? data : "");
 
+      // ── SYSTEM HYDRO-ISOLÉ CONTRE LE CRASH DES SOUS-QUOTAS ──
       if (data.action) {
         const { type } = data.action;
-        // 🤖 CORRECTION : Correction de la chaîne "ADD_BUBudget_EXPENSE" -> "ADD_BOTTOM_EXPENSE"
         const quotaCategory = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") ? "vitality" : "calendar";
-        const status = checkQuota(quotaCategory, userTier);
+        
+        // On effectue la consommation du sous-quota
+        const status = checkQuota(quotaCategory, userTier, true);
 
+        // Si le sous-quota est plein, on refuse l'action MAIS on affiche la réponse textuelle d'Echo !
         if (!status.allowed) {
-          setChatMessages([...baseMessages, `Echo: 🔒 Actions limited for [${quotaCategory}].`]);
+          const limitWarning = lang === "fr"
+            ? `\n\n⚠️ [Action Automatique Bloquée] : Limite atteinte pour la catégorie [${quotaCategory}].`
+            : `\n\n⚠️ [Automated Action Blocked] : Limit reached for category [${quotaCategory}].`;
+          
+          setChatMessages([...baseMessages, `Echo: ${echoText}${limitWarning}`]);
           setActiveLimitCategory(quotaCategory);
           setShowLimitModal(true);
           return;
         }
       }
 
-      const echoText = data.response || (typeof data === "string" ? data : "");
+      // Si tout est beau, on pousse la réponse normale
       setChatMessages([...baseMessages, `Echo: ${echoText}`]);
 
+      // Execution des actions dans le localStorage si autorisées
       if (data.action) {
         if (data.action.type === "ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt } = data.action.payload;
@@ -282,15 +291,15 @@ export default function HistoryPage() {
 
   const handleSendToEcho = (entry: HistoryEntry) => {
     const formattedContext = lang === "fr"
-      ? `[CONTEXTE HISTORIQUE ARCHIVÉ - ${entry.date}]\n${entry.messages.join("\n")}`
-      : `[ARCHIVED HISTORICAL CONTEXT - ${entry.date}]\n${entry.messages.join("\n")}`;
+      ? `[CONTEXTE HISTORIQUE ARCHIVÉ - ${entry.date}]\n${(entry.messages || []).join("\n")}`
+      : `[ARCHIVED HISTORICAL CONTEXT - ${entry.date}]\n${(entry.messages || []).join("\n")}`;
     
     setViewingHistory(null);
     sendMessage(formattedContext);
   };
 
   const handleSendToChatBox = (entry: HistoryEntry) => {
-    const cleanContent = entry.messages
+    const cleanContent = (entry.messages || [])
       .map(m => m.replace(/^(Echo|You|Toi)\s*:\s*/i, ""))
       .join("\n\n");
     
@@ -341,7 +350,7 @@ export default function HistoryPage() {
           </div>
         </aside>
 
-        {/* CONTENU ARCHIVES */}
+        {/* CONTENU SECURISE OU VERROUILLE */}
         {isPageBlocked ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-zinc-50 dark:bg-gradient-to-b dark:from-black dark:to-zinc-950 relative transition-colors duration-200">
             <div className="w-20 h-20 bg-amber-500/10 text-amber-500 border border-amber-300 dark:border-amber-500/30 rounded-full flex items-center justify-center text-4xl mb-6 shadow-md">🔒</div>
@@ -355,6 +364,7 @@ export default function HistoryPage() {
           </div>
         ) : (
           <>
+            {/* ARCHIVES GAUCHE */}
             <div 
               style={{ width: `${leftWidth}px` }}
               className="shrink-0 p-4 flex flex-col overflow-hidden bg-white dark:bg-black transition-colors duration-200"
@@ -364,10 +374,10 @@ export default function HistoryPage() {
                 <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">{lang === "fr" ? "Sauvegarde automatique tous les 2000 caractères" : "Automatic backup every 2000 characters"}</p>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {history.length === 0 && (
+                {(history || []).length === 0 && (
                   <p className="text-zinc-400 dark:text-zinc-500 text-xs italic">{lang === "fr" ? "Aucune conversation archivée." : "No saved conversations found."}</p>
                 )}
-                {history.map((entry) => (
+                {(history || []).map((entry) => (
                   <div
                     key={entry.id}
                     onClick={() => setViewingHistory(entry)}
@@ -382,7 +392,7 @@ export default function HistoryPage() {
                     </div>
                     <p className="text-zinc-400 dark:text-zinc-500 text-xs mb-2">📅 {entry.date}</p>
                     <p className="text-zinc-600 dark:text-zinc-400 text-xs line-clamp-2 leading-relaxed">
-                      {entry.messages.slice(0, 2).join(" • ")}
+                      {Array.isArray(entry.messages) ? entry.messages.slice(0, 2).join(" • ") : ""}
                     </p>
                     <button
                       onClick={(e) => { e.stopPropagation(); setViewingHistory(entry); }}
@@ -395,11 +405,13 @@ export default function HistoryPage() {
               </div>
             </div>
 
+            {/* SPLITTER INTERACTIF */}
             <div 
               onMouseDown={startResizing}
               className="w-1.5 shrink-0 bg-zinc-200 dark:bg-zinc-800 cursor-col-resize hover:bg-cyan-500 dark:hover:bg-cyan-500 transition-colors duration-150 h-full relative z-10 before:content-[''] before:absolute before:inset-y-0 before:-left-1 before:w-4"
             />
 
+            {/* DISCUSSION DROITE */}
             <section className="flex-1 flex flex-col overflow-hidden min-w-0 bg-white dark:bg-black transition-colors duration-200">
               <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 shrink-0 shadow-sm">
                 <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-2">
@@ -411,10 +423,10 @@ export default function HistoryPage() {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-4 p-4 min-h-0 bg-white dark:bg-black/10">
-                {chatMessages.length === 0 && (
+                {(chatMessages || []).length === 0 && (
                   <p className="text-zinc-400 dark:text-zinc-600 text-xs italic">{lang === "fr" ? "Aucune donnée de télémétrie." : "No operational telemetry messages logged."}</p>
                 )}
-                {chatMessages.map((msg, index) => {
+                {(chatMessages || []).map((msg, index) => {
                   const isEcho = /^Echo\s*:/i.test(msg);
                   const isUser = /^(You|Toi)\s*:/i.test(msg);
 
@@ -422,7 +434,6 @@ export default function HistoryPage() {
                     <div key={index} className="whitespace-pre-wrap">
                       {isEcho ? (
                         <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 shadow-sm">
-                          {/* 🤖 ALIGNEMENT : Utilisation uniforme du chemin en minuscule echo.png */}
                           <img src="/echo.png" alt="Echo Avatar" className="w-8 h-8 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-700 mt-0.5" />
                           <div className="flex-1 min-w-0 break-words text-zinc-800 dark:text-zinc-100 text-[14px] font-medium leading-relaxed">
                             <span className="text-cyan-600 dark:text-cyan-400 font-extrabold block mb-1 text-[10px] uppercase tracking-wider">Echo:</span>
@@ -431,7 +442,7 @@ export default function HistoryPage() {
                         </div>
                       ) : isUser ? (
                         <div className="p-3.5 break-words text-zinc-700 dark:text-zinc-300 text-[14px] font-medium bg-zinc-50/50 dark:bg-zinc-900/50 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-inner">
-                          <span className="text-cyan-600 dark:text-cyan-400 font-bold">You:</span> {msg.replace(/^(You|Toi)\s*:\s*/i, "")}
+                          <span className="text-cyan-600 dark:text-cyan-400 font-bold">You:</span> {msg.replace(/^(You|Toi)\s*:/i, "")}
                         </div>
                       ) : (
                         <div className="p-2 break-words text-xs italic text-zinc-400 dark:text-zinc-500">{msg}</div>
@@ -507,7 +518,7 @@ export default function HistoryPage() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-white dark:bg-black/10">
-                {viewingHistory.messages.map((msg, index) => {
+                {(viewingHistory.messages || []).map((msg, index) => {
                   const isEcho = /^Echo\s*:/i.test(msg);
                   const isUser = /^(You|Toi)\s*:/i.test(msg);
 

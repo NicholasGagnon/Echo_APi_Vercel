@@ -2,16 +2,11 @@ export type UserTier = "free" | "basic" | "premium" | "ultra" | "founder";
 
 /**
  * Retourne la limite stricte de caractères par message selon le forfait.
- * Multiplicateur x2 appliqué uniquement sur les forfaits payants.
- * Free = 1000, Basic = 10000 (5k x2), Premium/Ultra/Founder = 20000 (10k x2)
+ * Free = 1000, Basic = 10000, Premium/Ultra/Founder = 20000
  */
 export const getMessageMaxLength = (tier: UserTier): number => {
-  if (tier === "free") {
-    return 1000;
-  }
-  if (tier === "basic") {
-    return 10000;
-  }
+  if (tier === "free") return 1000;
+  if (tier === "basic") return 10000;
   return 20000;
 };
 
@@ -23,7 +18,7 @@ interface QuotaResult {
 }
 
 /**
- * Vérifie et gère les quotas d'utilisation d'un utilisateur.
+ * Vérifie et gère les quotas d'utilisation de l'écosystème Echo.
  * @param actionType La catégorie de l'action ('vitality' | 'calendar' | 'prompts')
  * @param tier Le forfait actuel de l'utilisateur
  * @param consume Si TRUE, déduit un crédit du quota. Si FALSE, effectue une simple lecture (ReadOnly).
@@ -38,20 +33,33 @@ export const checkQuota = (
   }
 
   const trackerRaw = localStorage.getItem('echo-usage-tracker');
-  const tracker = JSON.parse(trackerRaw || '{}');
+  let tracker = JSON.parse(trackerRaw || '{}');
   const now = Date.now();
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
-  if (!tracker[actionType] || !tracker[actionType].startTime || (now - tracker[actionType].startTime > THIRTY_DAYS)) {
-    tracker[actionType] = { count: 0, startTime: now };
+  // ── 📅 SYNCHRONISATION DU CYCLE UNIQUE DE 30 JOURS ──
+  // Si le tracker global n'a pas de date de départ ou que le mois est fini, on reset TOUT d'un coup
+  if (!tracker.cycleStartTime || (now - tracker.cycleStartTime > THIRTY_DAYS)) {
+    tracker = {
+      cycleStartTime: now,
+      prompts: { count: 0 },
+      calendar: { count: 0 },
+      vitality: { count: 0 }
+    };
   }
 
+  // Sécurité si une sous-structure de catégorie est absente dans le localStorage
+  if (!tracker[actionType]) {
+    tracker[actionType] = { count: 0 };
+  }
+
+  // ── 📊 CONFIGURATION DES LIMITES (BARÈME DE PROGRESSION STRICT) ──
   const limits: Record<UserTier, Record<'vitality' | 'calendar' | 'prompts', number>> = {
-    free: { vitality: 10, calendar: 5, prompts: 15 },
-    basic: { vitality: 40, calendar: 20, prompts: 60 },
-    premium: { vitality: 100, calendar: 50, prompts: 250 },
-    ultra: { vitality: 300, calendar: 150, prompts: 450 },
-    founder: { vitality: 9999, calendar: 9999, prompts: 99999 }
+    free: { vitality: 10, calendar: 5, prompts: 200 },           // Free fixe à 200 prompts
+    basic: { vitality: 40, calendar: 20, prompts: 2000 },        // Basic monte à 2000 prompts
+    premium: { vitality: 100, calendar: 50, prompts: 99999 },    // Illimité / Ouverture complète
+    ultra: { vitality: 300, calendar: 150, prompts: 99999 },     // Illimité
+    founder: { vitality: 9999, calendar: 9999, prompts: 99999 }  // Illimité
   };
 
   const limitConfig = limits[tier] || limits.free;
@@ -79,17 +87,3 @@ export const checkQuota = (
     max: maxAllowed
   };
 };
-
-/**
- * --- GUIDE D'INTÉGRATION FRONTEND ---
- * * 1. Pour afficher les compteurs (sans consommer) :
- * const state = checkQuota('prompts', userTier, false);
- * console.log(`Il te reste ${state.remaining} messages.`);
- * * 2. Pour valider et déduire le quota lors d'un envoi :
- * const status = checkQuota('prompts', userTier, true);
- * if (!status.allowed) {
- * // Alerte : "Limite atteinte"
- * } else {
- * // Envoi de la requête
- * }
- */
