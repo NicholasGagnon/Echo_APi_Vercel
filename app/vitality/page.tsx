@@ -27,7 +27,7 @@ type VitalityMessage = {
 };
 
 export default function VitalityPage() {
-  const { t, lang, theme, userTier } = useApp(); 
+  const { t, lang, theme, userTier, setLang } = useApp(); 
   const [isLoaded, setIsLoaded] = useState(false);
   const [userId, setUserId] = useState<string | null>(null); 
   const [inputEcho, setInputEcho] = useState("");
@@ -42,6 +42,9 @@ export default function VitalityPage() {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageName, setImageName]     = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── ÉTAT DU FIL NARRATIF VITALITÉ (CHAPITRE COMPATIBLE MULTI-ÉTAPES) ──
+  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
 
   const [expenses, setExpenses] = useState<BudgetExpense[]>([]);
   const [caloriesList, setCaloriesList] = useState<CalorieLog[]>([]);
@@ -90,8 +93,8 @@ export default function VitalityPage() {
       fluxFin: "📋 FINANCIAL FLOW",
       regVit: "🍏 VITALITY LOG",
       ctrlTitle: "🤖 ECHO VITALITY CONTROLLER",
-      noTrans: "No transactions recorded.",
-      noMeal: "No meals logged."
+      noTrans: "Aucune transaction enregistrée.",
+      noMeal: "Aucun repas enregistré."
     },
     en: {
       title: "Metabolic Configuration",
@@ -158,6 +161,12 @@ export default function VitalityPage() {
           setModalWeight(p.weight || "");
           setModalHeight(p.height || "");
         }
+
+        // ── INITIALISATION DU TUTORIEL VITALITÉ FLUIDE ──
+        const isVitalityTutoDone = localStorage.getItem("echo-tuto-vitality-done-v1");
+        if (!isVitalityTutoDone) {
+          setTutorialStep(1);
+        }
       } catch (e) { console.error("Init error", e); }
       setIsLoaded(true);
     });
@@ -205,7 +214,6 @@ export default function VitalityPage() {
   const calorieRemaining   = Math.max(calorieGoal - totalCaloriesEaten, 0);
 
   const handleSendEcho = async (forcedText?: string) => {
-    // 🚀 SÉCURITÉ ANTI-CONCURRENCE : Si l'IA est déjà en train de réfléchir, on bloque les requêtes dupliquées !
     if (echoState === "thinking") return;
 
     const textToSubmit = forcedText ?? inputEcho.trim();
@@ -213,7 +221,6 @@ export default function VitalityPage() {
 
     const quotaStatus = checkQuota("prompts", userTier || "free");
     if (!quotaStatus.allowed) {
-      // ... (Reste de ton code de quota inchangé)
       const lockMessage = lang === "fr"
         ? 'Echo: 🔒 Limite mensuelle de requêtes atteinte pour votre forfait. Passez au plan supérieur pour continuer à échanger.'
         : 'Echo: 🔒 Monthly prompt request limit reached for your plan. Please upgrade to continue chatting.';
@@ -250,11 +257,9 @@ export default function VitalityPage() {
     const historyForBackend = serializeMsgs(baseMessages);
 
     try {
-      const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-const response = await fetch(`${API_URL}/chat`, {
+      const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -268,26 +273,30 @@ const response = await fetch(`${API_URL}/chat`, {
           calorieGoal,
           vitalityProfile: { weight: userWeight, height: userHeight },
           source: "vitality",
+          // ── ACCELERATEUR WEB SEARCH CONNECTÉ EN ARRIÈRE-PLAN ──
+          "web_search": true,
         }),
       });
 
       const data = await response.json();
       setEchoState("speaking");
 
+      let isActionBlocked = false;
       if (data.action) {
         const quotaStatusAction = checkQuota("vitality", userTier || "free");
         if (!quotaStatusAction.allowed) {
-          setEchoMessages([...baseMessages, { raw: `Echo: 🔒 Limit reached for [vitality].` }]);
           setActiveLimitCategory("vitality");
           setShowLimitModal(true);
-          return;
+          isActionBlocked = true;
         }
       }
 
+      // ── FLUIDITÉ ACTIONS SÉCURISÉES : Echo répond par texte même si l'enregistrement s'interrompt
+      const quotaNotice = isActionBlocked ? `\n\n[🔒 Action automatique bloquée par quota Vitalité]` : "";
       const echoText = data.response || (typeof data === "string" ? data : "");
-      setEchoMessages([...baseMessages, { raw: `Echo: ${echoText}` }]);
+      setEchoMessages([...baseMessages, { raw: `Echo: ${echoText}${quotaNotice}` }]);
 
-      if (data.action) {
+      if (data.action && !isActionBlocked) {
         const { type, payload } = data.action;
 
         if (type === "ADD_BUDGET_EXPENSE") {
@@ -405,7 +414,7 @@ const response = await fetch(`${API_URL}/chat`, {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { alert("Speech recognition is not supported."); return; }
     const r = new SR();
-    r.lang = "fr-FR";
+    r.lang = lang === "fr" ? "fr-FR" : "en-US";
     r.onstart = () => setIsListening(true);
     r.onend   = () => setIsListening(false);
     r.onerror = () => setIsListening(false);
@@ -415,6 +424,115 @@ const response = await fetch(`${API_URL}/chat`, {
 
   return (
     <main className="vitality-page h-screen w-full bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans relative transition-colors duration-200 selection:bg-cyan-500/30">
+      
+      {/* ── 📖 BULLES FLOTTANTES NÉON NARRATIVES (ÉTAPES SUCCESSIVES PARFAITEMENT VISIBLES) ── */}
+      {tutorialStep === 1 && (
+        <div className="absolute top-44 left-6 sm:left-72 w-80 sm:w-[450px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in duration-300 z-50">
+          <div className="flex items-center gap-2.5 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2">
+            <span className="text-base">💸</span>
+            <h4 className="font-black text-xs sm:text-sm font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
+              {lang === "fr" ? "💸 ECHO BUDGET (1/2)" : "💸 ECHO BUDGET (1/2)"}
+            </h4>
+          </div>
+          <div className="text-xs sm:text-[13px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4 space-y-2 whitespace-pre-line">
+            {lang === "fr" ? (
+              <>
+                Hey! 👋 Je suis aussi là pour t'aider à garder le contrôle sur ton budget.
+                {"\n"}
+                Commence par définir ton objectif financier en haut de la page, pour la semaine ou pour le mois. Ensuite, tu peux simplement me parler dans le chat et je m'occupe du reste. ✨
+                {"\n\n"}
+                <span className="text-cyan-400 dark:text-cyan-600 font-mono text-[11px]">EXEMPLES :</span>
+                {"\n"}• 🧾 "Ajoute une facture d'électricité de 200$"
+                {"\n"}• 🛒 "Ajoute une épicerie de 145$"
+                {"\n"}• ⛽ "Ajoute 60$ d'essence"
+                {"\n"}• ☕ "Ajoute un café à 4,50$"
+                {"\n\n"}
+                J'analyserai ta demande, j'ajouterai automatiquement la dépense et je mettrai à jour ton budget restant. Tu préfères tout gérer toi-même? Aucun problème! Chaque élément peut également être ajouté ou modifié manuellement.
+                {"\n\n"}
+                Alors, qu'est-ce qu'on ajoute à ton budget aujourd'hui? 😄
+              </>
+            ) : (
+              <>
+                Hey! 👋 I'm also here to help you stay on track with your finances.
+                {"\n"}
+                Start by setting your financial goal at the top of the page. Then, simply tell me what you spent in the chat assistant window and I will parse it instantly! ✨
+                {"\n\n"}
+                <span className="text-cyan-400 dark:text-cyan-600 font-mono text-[11px]">EXAMPLES:</span>
+                {"\n"}• 🧾 "Add a 200$ electricity bill"
+                {"\n"}• 🛒 "Add 145$ groceries"
+                {"\n"}• ⛽ "Log 60$ for gas"
+                {"\n\n"}
+                I will calculate it automatically. Let's build your balance grid! 😄
+              </>
+            )}
+          </div>
+          <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800 dark:border-zinc-200">
+            <button 
+              onClick={() => setTutorialStep(2)}
+              className="w-full text-center py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md"
+            >
+              {lang === "fr" ? "SUIVANT ➔" : "NEXT ➔"}
+            </button>
+            {lang === "fr" && (
+              <button 
+                onClick={() => setLang("en")}
+                className="text-[10px] font-mono uppercase text-zinc-400 hover:text-cyan-400 text-center underline mt-1"
+              >
+                English version? Switch here ➔
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tutorialStep === 2 && (
+        <div className="absolute top-64 left-6 sm:left-[450px] w-80 sm:w-[450px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(16,185,129,0.5)] border-2 border-emerald-400 dark:border-emerald-500 animate-in fade-in duration-300 z-50">
+          <div className="flex items-center gap-2.5 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2">
+            <span className="text-base">🔥</span>
+            <h4 className="font-black text-xs sm:text-sm font-mono uppercase tracking-widest text-emerald-400 dark:text-emerald-600">
+              {lang === "fr" ? "🔥 ECHO CALORIES (2/2)" : "🔥 ECHO CALORIES (2/2)"}
+            </h4>
+          </div>
+          <div className="text-xs sm:text-[13px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4 space-y-2 whitespace-pre-line">
+            {lang === "fr" ? (
+              <>
+                Salut! 😋 Ici, chaque repas devient une donnée utile pour suivre ton énergie et tes objectifs.
+                {"\n"}
+                Et si tu souhaites suivre un déficit calorique, tu peux l'ajouter manuellement. Une fois enregistré, cette information me sera transmise afin que je puisse mieux comprendre tes objectifs et t'accompagner dans ton parcours. 🚀
+                {"\n\n"}
+                <span className="text-emerald-400 dark:text-emerald-600 font-mono text-[11px]">TU PEUX ME DEMANDER :</span>
+                {"\n"}• 🍟 "Fish & Chips, calcule les calories"
+                {"\n"}• 🍕 "Deux pointes de pizza"
+                {"\n"}• 💪 "Barre protéinée — 200 calories"
+                {"\n"}• 🥤 "Boisson gazeuse"
+                {"\n\n"}
+                Je calculerai automatiquement les calories consommées et je mettrai à jour ton suivi nutritionnel. Tu peux également ajouter tous tes aliments manuellement pour garder un contrôle complet sur ton journal alimentaire.
+                {"\n\n"}
+                Chaque repas raconte une histoire. Chaque donnée aide à construire la suivante. Alors... qu'est-ce qu'on mange aujourd'hui? 🍽️
+              </>
+            ) : (
+              <>
+                Hi! 😋 Here, every meal becomes useful fuel data to track your body architecture.
+                {"\n"}
+                If you wish to maintain a custom calorie deficit, configure your metabolic profiles above. Once locked, I will adjust to your metrics! 🚀
+                {"\n\n"}
+                <span className="text-emerald-400 dark:text-emerald-600 font-mono text-[11px]">YOU CAN TELL ME:</span>
+                {"\n"}• 🍟 "Fish & Chips, evaluate calories"
+                {"\n"}• 🍕 "Two pizza slices"
+                {"\n\n"}
+                I'll track it all seamlessly. What's on the menu today? 🍽️
+              </>
+            )}
+          </div>
+          <button 
+            onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-vitality-done-v1", "true"); }}
+            className="w-full text-center py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md"
+          >
+            {lang === "fr" ? "C'EST PARTI ! 🚀" : "LET'S LOG ! 🚀"}
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden min-h-0 w-full">
         
         {/* SIDEBAR GAUCHE */}
@@ -439,8 +557,8 @@ const response = await fetch(`${API_URL}/chat`, {
           </div>
         </aside>
 
-        {/* 🚀 GRILLE CENTRALISÉE RÉALIGNÉE AVEC CHAT MAXIMISÉ ([1fr_1fr_2.5fr]) */}
-        <div className="vitality-shell flex-1 grid grid-cols-1 xl:grid-cols-[1fr_1fr_2.5fr] overflow-hidden bg-white dark:bg-black transition-colors duration-200 h-full w-full">
+        {/* 🚀 GRILLE CENTRALISÉE RÉALIGNÉE AVEC CHAT MAXIMISÉ (AFFICHAGE x2.5 OPTIMISÉ) */}
+        <div className="vitality-shell flex-1 grid grid-cols-1 xl:grid-cols-[1.1fr_1.1fr_2.8fr] overflow-hidden bg-white dark:bg-black transition-colors duration-200 h-full w-full">
           
           {/* ── FINANCES (FLUX FINANCIER) ── */}
           <section className="vitality-panel min-w-0 xl:border-r border-b xl:border-b-0 border-zinc-200 dark:border-zinc-900 bg-zinc-50/10 dark:bg-zinc-950/5 p-4 flex flex-col h-full overflow-hidden">
@@ -560,7 +678,7 @@ const response = await fetch(`${API_URL}/chat`, {
             </div>
           </section>
 
-          {/* ── CHAT CONTROLLER AVEC LE GRAND CHAT ACCENTUÉ ── */}
+          {/* ── CHAT CONTROLLER AVEC LE GRAND CHAT ACCENTUÉ (x2.5 FLUIDE & DE HAUT EN BAS) ── */}
           <aside className="vitality-panel min-w-0 xl:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative h-full w-full">
             
             {/* EN-TÊTE SANS BOUTON */}
@@ -569,25 +687,37 @@ const response = await fetch(`${API_URL}/chat`, {
               <h2 className="font-bold text-xs text-zinc-800 dark:text-zinc-100 uppercase font-mono tracking-wider">{dict.ctrlTitle}</h2>
             </div>
 
-            {/* FLUX DE CONVERSATION */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 p-4 min-h-0 bg-white dark:bg-black/20">
+            {/* FLUX DE CONVERSATION AGRANDI ET ADAPTÉ */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-5 p-5 min-h-0 bg-white dark:bg-black/20 flex flex-col justify-start">
               {echoMessages.length === 0 ? (
-                <p className="text-zinc-400 dark:text-zinc-600 text-xs italic text-center mt-4">En attente de commandes...</p>
+                <div className="flex-1 flex flex-col items-center justify-center gap-3">
+                  {!tutorialStep && (
+                    <div className="w-12 h-12 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full flex items-center justify-center shadow-inner echo-idle">
+                      <img src="/Echo.png" alt="Echo Core" className="w-full h-full object-cover rounded-full" />
+                    </div>
+                  )}
+                  <p className="text-zinc-400 dark:text-zinc-600 text-xs italic text-center">
+                    {lang === "fr" ? "En attente d'instructions financières ou métaboliques..." : "Awaiting financial or metabolic commands..."}
+                  </p>
+                </div>
               ) : echoMessages.map((msg, idx) => {
                 const isEcho  = /^Echo\s*:/i.test(msg.raw);
                 const isUser  = /^(You|Toi)\s*:/i.test(msg.raw);
                 const isLastE = isEcho && idx === lastEchoIndex;
                 const text    = msg.raw.replace(/^(Echo|You|Toi)\s*:\s*/i, "");
 
+                // Masquage intelligent des logs système complexes du sillage d'Echo
+                if (text.startsWith("[SYNCHRONISATION PROFIL]")) return null;
+
                 return (
-                  <div key={idx} className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+                  <div key={idx} className={`flex flex-col ${isUser ? "items-end" : "items-start"} animate-in fade-in duration-200`}>
                     {isUser && msg.imageB64 && (
-                      <img src={msg.imageB64} alt="upload" className="max-w-[160px] max-h-[120px] rounded-xl border border-zinc-700 object-cover shadow-md mb-1" />
+                      <img src={msg.imageB64} alt="upload" className="max-w-[180px] max-h-[140px] rounded-xl border border-zinc-700 object-cover shadow-md mb-1.5" />
                     )}
-                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm font-medium leading-relaxed tracking-wide transition-all break-words overflow-hidden ${
+                    <div className={`max-w-[85%] rounded-2xl px-5 py-3 text-[14px] font-semibold leading-relaxed tracking-wide transition-all break-words overflow-hidden ${
                       isUser
                         ? "bg-cyan-600 text-white rounded-br-none shadow-sm"
-                        : "bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 rounded-bl-none border border-zinc-200 dark:border-zinc-800/80"
+                        : "bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 rounded-bl-none border border-zinc-200 dark:border-zinc-800/80 shadow-sm"
                     } ${isLastE && echoState === "thinking" ? "animate-pulse" : ""}`}>
                       {text}
                     </div>
@@ -597,40 +727,42 @@ const response = await fetch(`${API_URL}/chat`, {
               <div ref={bottomRef} />
             </div>
 
-            {/* BARRE DE SAISIE ET RACCOURCIS ÉPURÉS */}
+            {/* BARRE DE SAISIE AVEC LE BOUTON VOCAL MODERNISÉ EXCLUSIF */}
             <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 shrink-0">
-              {imageBase64 && (
-                <div className="mb-2 flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-400">
-                  <div className="flex items-center gap-2 truncate">
-                    <img src={imageBase64} alt="preview" className="w-8 h-8 rounded object-cover border border-emerald-500/30" />
-                    <span className="truncate font-medium">{imageName || "Image prête"}</span>
-                  </div>
-                  <button onClick={() => { setImageBase64(null); setImageName(null); }} className="text-zinc-400 hover:text-red-500 font-bold ml-2">✕</button>
-                </div>
-              )}
-
               <div className="flex flex-col gap-2 relative">
                 <div className="flex gap-2 items-center relative w-full">
+                  
+                  {/* 🎙️ BOUTON VOCAL INTEGRÉ ULTRA-PRO HAUTE VISIBILITÉ */}
+                  <button
+                    type="button"
+                    onClick={lancerDictation}
+                    title={lang === "fr" ? "Activer l'écoute vocale" : "Launch continuous voice listening"}
+                    className={`h-11 w-11 shrink-0 rounded-xl flex items-center justify-center border transition-all duration-300 shadow-sm text-sm ${
+                      isListening
+                        ? "bg-red-600 border-red-500 text-white animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.5)]"
+                        : "bg-cyan-500/10 dark:bg-cyan-500/[0.05] border-cyan-500/30 hover:border-cyan-400 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/20"
+                    }`}
+                  >
+                    {isListening ? "🔴" : "🎤"}
+                  </button>
+
                   <input
                     type="text"
-                    placeholder="Rentre une transaction ou une modification (ex: Change l'assurance pour 100)..."
+                    placeholder={lang === "fr" ? "Rentre une transaction ou demande un calcul (ex: Pizza 600 kcal)..." : "Log a financial or calorie entry..."}
                     maxLength={getMessageMaxLength(userTier || "free")}
                     value={inputEcho}
                     onChange={(e) => setInputEcho(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendEcho(); } }}
-                    className="flex-1 bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-800 rounded-xl pl-4 pr-12 py-4 text-xs focus:outline-none transition-all shadow-inner placeholder-zinc-400"
+                    className="flex-1 bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-800 rounded-xl pl-4 pr-12 py-3.5 text-xs focus:outline-none transition-all shadow-inner placeholder-zinc-400"
                   />
                   <div className="absolute right-2 flex items-center">
-                    <button onClick={() => handleSendEcho()} className="bg-cyan-600 text-white font-bold h-9 w-9 text-xs rounded-xl flex items-center justify-center hover:bg-cyan-500 transition-colors shadow-md">➔</button>
+                    <button onClick={() => handleSendEcho()} className="bg-cyan-600 text-white font-bold h-8 w-8 text-xs rounded-xl flex items-center justify-center hover:bg-cyan-500 transition-colors shadow-md">➔</button>
                   </div>
                 </div>
 
-                {/* LIENS COMPACTS EN DESSOUS */}
-                <div className="flex items-center justify-end gap-2 text-[11px] font-mono pr-1">
-                  <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-                  <button type="button" onClick={lancerDictation} className={`hover:text-red-500 transition ${isListening ? "text-red-500 font-bold animate-pulse" : "text-zinc-400"}`}>🎙️ Vocal</button>
-                  <span className="text-zinc-700">|</span>
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className={`hover:text-emerald-500 transition ${imageBase64 ? "text-emerald-400 font-bold" : "text-zinc-400"}`}>🖼️ Photo</button>
+                {/* LOGS AUXILIAIRES ÉPURÉS */}
+                <div className="flex items-center justify-end text-[10px] font-mono pr-1 text-zinc-400 dark:text-zinc-600 uppercase tracking-wider font-bold">
+                  {lang === "fr" ? "Canal d'Analyse Actif" : "Core Analysis Stream Active"}
                 </div>
               </div>
             </div>
@@ -718,13 +850,26 @@ const response = await fetch(`${API_URL}/chat`, {
         </div>
       )}
 
+      {/* MODALE DE QUOTAS SÉCURISÉE ENTIÈREMENT TRADUITE SANS OUBLI */}
       {showLimitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center text-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setShowLimitModal(false)}>
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center text-xs" onClick={(e) => e.stopPropagation()}>
             <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto mb-4 text-xl">🔒</div>
-            <h3 className="font-bold text-base mb-1">Limite atteinte</h3>
-            <p className="text-zinc-500 dark:text-zinc-400 mb-5 leading-relaxed">Votre forfait a saturé ses requêtes.</p>
-            <Link href="/services" onClick={() => setShowLimitModal(false)} className="bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl py-2.5 px-4 font-bold transition block text-center">Voir les abonnements</Link>
+            <h3 className="font-bold text-sm mb-2 uppercase font-mono tracking-wider">
+              {lang === "fr" ? "Limite de Quota Atteinte" : "Plan Cycle Limit Reached"}
+            </h3>
+            <p className="text-zinc-500 dark:text-zinc-400 mb-5 leading-relaxed font-medium">
+              {activeLimitCategory === "prompts"
+                ? (lang === "fr" 
+                    ? "Votre quota mensuel d'échange textuel avec Echo est saturé pour ce forfait." 
+                    : "Your monthly prompt message matrix has been fully saturated on this tier.")
+                : (lang === "fr"
+                    ? `Limite d'actions automatisées atteinte pour le module [${activeLimitCategory}]. La réponse d'Echo a été générée, mais la modification automatique des données n'a pas pu s'exécuter.`
+                    : `Automated action limit reached for [${activeLimitCategory}]. Echo's response was outputted, but matrix data synchronization is locked.`)}
+            </p>
+            <Link href="/services" onClick={() => setShowLimitModal(false)} className="bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl py-2.5 px-4 font-bold transition block text-center uppercase tracking-wider text-[11px]">
+              {lang === "fr" ? "Voir les abonnements 🚀" : "Upgrade Plan Tier 🚀"}
+            </Link>
           </div>
         </div>
       )}
