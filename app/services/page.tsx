@@ -328,7 +328,10 @@ export default function ServicesPage() {
       <button
         type="button"
         disabled={isLoadingCheckout !== null}
-        onClick={() => handleUpgradeWithStripe(planName)}
+        onClick={(e) => {
+          e.stopPropagation(); // Évite le double déclenchement avec le onClick de la carte parent
+          handleUpgradeWithStripe(planName);
+        }}
         className={`mt-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition w-full shadow-sm ${upgradeClass}`}
       >
         {isLoadingCheckout === planName ? activeT.connecting : upgradeLabel}
@@ -337,17 +340,10 @@ export default function ServicesPage() {
   };
 
   return (
-    // ⚡ FIX SCROLL : "h-screen" (hauteur FIXE = celle de l'écran) au lieu de "min-h-screen".
-    // Avec min-h-screen, <main> grandissait toujours au moins aussi grand que son contenu, donc il
-    // n'était jamais "plus petit" que ce qu'il contient → overflow-y-auto n'avait jamais besoin de
-    // scroller, et c'est la page entière (html/body) qui tentait de gérer le scroll, ce qui entre en
-    // conflit avec les autres pages du site qui imposent overflow-hidden sur le body/html.
-    // En fixant <main> à exactement la hauteur de l'écran, tout contenu plus grand (cartes + footer +
-    // l'espaceur géant ci-dessous) déclenche maintenant correctement le scroll À L'INTÉRIEUR de <main>.
     <main className="h-screen w-full bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
       <div className="flex flex-1 h-full overflow-hidden w-full">
 
-        {/* SIDEBAR GAUCHE — reste fixe, ne scrolle pas avec le contenu */}
+        {/* SIDEBAR GAUCHE — reste fixe, ne scrolle pas */}
         <aside className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between h-full overflow-y-auto">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
@@ -369,7 +365,7 @@ export default function ServicesPage() {
           </div>
         </aside>
 
-        {/* CONTAINER PRINCIPAL — c'est CE bloc qui scrolle maintenant, contraint par h-full du parent */}
+        {/* CONTAINER PRINCIPAL — gère le défilement fluide global */}
         <section className="flex-1 flex flex-col bg-white dark:bg-black transition-colors duration-200 h-full overflow-y-auto w-full">
           <div className="flex-1 p-4 sm:p-6 pt-16 flex items-center justify-center w-full shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch w-full max-w-[95rem] mx-auto pb-12">
@@ -411,6 +407,7 @@ export default function ServicesPage() {
 
               {/* PLAN 2: BASIC */}
               <div 
+                onClick={() => TIER_RANK["basic"] > TIER_RANK[userTier] && handleUpgradeWithStripe("basic")}
                 className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[580px] select-none ${
                   userTier === "basic" 
                     ? "border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20" 
@@ -447,6 +444,7 @@ export default function ServicesPage() {
 
               {/* PLAN 3: PREMIUM */}
               <div 
+                onClick={() => TIER_RANK["premium"] > TIER_RANK[userTier] && handleUpgradeWithStripe("premium")}
                 className={`bg-zinc-50 dark:bg-zinc-900 border-2 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[580px] select-none relative ${
                   userTier === "premium" 
                     ? "border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)]" 
@@ -487,6 +485,7 @@ export default function ServicesPage() {
 
               {/* PLAN 4: ULTRA */}
               <div 
+                onClick={() => TIER_RANK["ultra"] > TIER_RANK[userTier] && handleUpgradeWithStripe("ultra")}
                 className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[580px] select-none ${
                   userTier === "ultra" 
                     ? "border-purple-500 shadow-[0_0_20px_rgba(147,51,234,0.15)] ring-1 ring-purple-500/20" 
@@ -526,6 +525,7 @@ export default function ServicesPage() {
 
               {/* PLAN 5: FOUNDER */}
               <div 
+                onClick={() => TIER_RANK["founder"] > TIER_RANK[userTier] && handleUpgradeWithStripe("founder")}
                 className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[580px] select-none ${
                   userTier === "founder" 
                     ? "border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20 shadow-md" 
@@ -565,7 +565,7 @@ export default function ServicesPage() {
             </div>
           </div>
 
-          {/* FOOTER NORMAL — toujours visible juste après les plans, AVANT l'espaceur géant */}
+          {/* FOOTER NORMAL — toujours visible juste après la grille de prix */}
           <footer className="shrink-0 border-t border-zinc-200 dark:border-zinc-900 bg-zinc-50/60 dark:bg-zinc-950/60 px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 flex-wrap text-[10px] text-zinc-400 dark:text-zinc-600 transition-colors w-full">
             <div>© {new Date().getFullYear()} Echo Ecosystem. All rights reserved.</div>
             <div className="flex gap-2 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
@@ -590,25 +590,19 @@ export default function ServicesPage() {
             </div>
           </footer>
 
-          {/*
-            🏴‍☠️ ESPACEUR GÉANT "LOIN LOIN" — pousse le trésor très bas dans la page.
-            Hauteur ajustable via la classe h-[Npx] ci-dessous. Augmente/diminue cette valeur
-            pour décider à quel point le trésor est caché (ex: h-[2000px] = encore plus loin,
-            h-[600px] = plus proche). Ce bloc fonctionne maintenant correctement car <section>
-            a overflow-y-auto + h-full : il scrolle réellement jusqu'au bout de cet espace vide.
-          */}
+          {/* 🏴‍☠️ L'ESPACEUR GÉANT "LOIN LOIN" — crée le grand vide sous le footer */}
           <div className="shrink-0 w-full h-[1400px] flex items-end justify-center pb-10 px-4">
             <p className="text-zinc-300 dark:text-zinc-800 text-[10px] font-mono uppercase tracking-widest text-center select-none">
               {lang === "fr" ? "... continue de descendre ..." : "... keep scrolling down ..."}
             </p>
           </div>
 
-          {/* 🏴‍☠️ LE COFFRE AU TRÉSOR — maintenant tout en bas de l'espaceur, vraiment caché */}
+          {/* 🏴‍☠️ LE COFFRE AU TRÉSOR — ancré tout au fond du grand vide */}
           <div className="shrink-0 w-full flex items-center justify-center pb-16">
             <button 
               type="button"
               onClick={() => setShowTreasureModal(true)}
-              className="w-8 h-4 opacity-0 hover:opacity-30 cursor-default select-none text-[8px]"
+              className="w-12 h-6 opacity-0 hover:opacity-40 cursor-pointer select-none text-[12px] transition-opacity duration-200"
               title="..."
             >
               💎
@@ -658,14 +652,14 @@ export default function ServicesPage() {
                 onClick={() => handleUpgradeWithStripe("treasure")}
                 className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md"
               >
-                {isLoadingTreasure ? "CONNECTING GATEWAY..." : (lang === "fr" ? "RÉCLAMER LE TRÉSOR (9.99$) ➔" : "CLAIM SECRET CHEST (9.99$) ➔")}
+                {isLoadingTreasure ? "CONNECTING GATEWAY..." : "RÉCLAMER LE TRÉSOR (9.99$) ➔"}
               </button>
               <button 
                 type="button"
                 onClick={() => setShowTreasureModal(false)}
                 className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800"
               >
-                {lang === "fr" ? "Laisser le secret tranquille" : "Leave the node locked"}
+                Laisser le secret tranquille
               </button>
             </div>
           </div>
