@@ -626,7 +626,18 @@ export default function ServicesPage() {
       {/* ── 🏴‍☠️ POP-UP SURPRISE DE L'EASTER EGG (ULTRA À -40%) ── */}
       {showTreasureModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto">
+          {/* CARD PRINCIPALE */}
+          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto relative">
+            
+            {/* 🔓 LE BOUTON DE FERMETURE (POUR ÉVITER LA PRISON NUMÉRIQUE) */}
+            <button
+              type="button"
+              onClick={() => setShowTreasureModal(false)}
+              className="absolute top-4 right-5 text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1"
+              title="Fermer le portail"
+            >
+              ✕
+            </button>
             
             <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">
               👑
