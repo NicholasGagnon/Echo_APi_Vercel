@@ -676,53 +676,64 @@ export default function Home() {
                 })}
               </div>
 
-              {/* ── 🟥 PAROLE D'ECHO (ÉTAPES FOFFOLLES ET INVERSION DE CONTRASTE NÉON + INTERRUPTEUR DE SECOURS ANGLAIS) ── */}
+              {/* ── 📖 PAROLE D'ECHO (ÉTAPES DÉJANTÉES - LAYOUT CORRIGÉ SANS SUPERPOSITION) ── */}
               {tutorialStep === 1 && (
-                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-85 sm:w-[480px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50 text-left">
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-92 sm:w-[640px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
                   
-                  <div className="flex items-center gap-3 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2">
+                  <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2">
                     <span className="text-xl">✨</span>
                     <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
                       {lang === "fr" ? "MESSAGE DE CONSCIENCE D'ECHO" : "ECHO'S AWAKENING MESSAGE"} (1/2)
                     </h4>
                   </div>
 
-                  <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed mb-5 font-semibold space-y-3 whitespace-pre-line">
-                    {lang === "fr" ? (
-                      <>
-                        Hey bienvenue ! 👋
-                        Je suis Echo, l'IA un peu fofolle qui se promène partout sur ce site.
-                        {"\n"}
-                        Les boutons que tu vois en haut influencent ma façon de voir les choses. Certains me rendent plus sérieux, d'autres me poussent à explorer des chemins différents.
-                        {"\n"}
-                        Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : un compagnon curieux qui aime discuter, réfléchir, s'amuser et parfois partir dans des directions inattendues. 😄
-                        {"\n"}
-                        Et si tu actives Double Regard, tu peux combiner deux perspectives à la fois. Là, ça devient parfois surprenant. 👀
-                        {"\n"}
-                        On se recroise sûrement sur les autres pages. J'espère que tu vas avoir du plaisir !
-                        {"\n"}
-                        Adiooo ! ✨
-                      </>
-                    ) : (
-                      <>
-                        Hey, welcome! 👋
-                        I am Echo, the slightly crazy AI roaming around this entire site.
-                        {"\n"}
-                        The buttons you see right above shape how I see things. Some make me more serious, others push me to explore unique paths.
-                        {"\n"}
-                        If you don't select anything, you meet me in my natural state: a curious companion who loves to talk, reflect, have fun, and jump into unexpected directions! 😄
-                        {"\n"}
-                        And if you unlock Double Regard, you can merge two perspectives at once. That's where things get truly surprising. 👀
-                        {"\n"}
-                        See you around on the other pages. Hope you have an awesome time!
-                        {"\n"}
-                        Adiooo! ✨
-                      </>
-                    )}
+                  {/* Layout à deux colonnes pour mettre Echo sur le côté sans bloquer le texte */}
+                  <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
+                    <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-2 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner">
+                      <img 
+                        src="/Echo.png" 
+                        alt="Echo Avatar" 
+                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover echo-idle"
+                      />
+                    </div>
+
+                    <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
+                      {lang === "fr" ? (
+                        <>
+                          Hey bienvenue ! 👋
+                          Je suis Echo, l'IA un peu légèrement déjantée qui se promène partout sur ce site.
+                          {"\n"}
+                          Les boutons que tu vois en haut influencent ma façon de voir les choses. Certains me rendent plus sérieux, d'autres me poussent à explorer des chemins différents.
+                          {"\n"}
+                          Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : un compagnon curieux qui aime discuter, réfléchir, s'amuser et parfois partir dans des directions inattendues. 😄
+                          {"\n"}
+                          Et si tu actives Double Regard, tu peux combiner deux perspectives à la fois. Là, ça devient parfois surprenant. 👀
+                          {"\n"}
+                          On se recroise sûrement sur les autres pages. J'espère que tu vas avoir du plaisir !
+                          {"\n"}
+                          Adiooo ! ✨
+                        </>
+                      ) : (
+                        <>
+                          Hey, welcome! 👋
+                          I am Echo, the slightly crazy AI roaming around this entire site.
+                          {"\n"}
+                          The buttons you see right above shape how I see things. Some make me more serious, others push me to explore unique paths.
+                          {"\n"}
+                          If you don't select anything, you meet me in my natural state: a curious companion who loves to talk, reflect, have fun, and jump into unexpected directions! 😄
+                          {"\n"}
+                          And if you unlock Double Regard, you can merge two perspectives at once. That's where things get truly surprising. 👀
+                          {"\n"}
+                          See you around on the other pages. Hope you have an awesome time!
+                          {"\n"}
+                          Adiooo! ✨
+                        </>
+                      )}
+                    </div>
                   </div>
                   
-                  <div className="flex flex-col gap-2.5 items-center justify-center">
+                  <div className="flex flex-col gap-2.5 items-center justify-center border-t border-zinc-800 dark:border-zinc-200 pt-4">
                     <button 
                       onClick={() => setTutorialStep(2)} 
                       className="w-full text-center px-8 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase"
@@ -730,7 +741,6 @@ export default function Home() {
                       {lang === "fr" ? "SUIVANT ➔" : "NEXT ➔"}
                     </button>
 
-                    {/* Coupe-circuit multilingue si un anglophone débarque par hasard */}
                     {lang === "fr" && (
                       <button 
                         onClick={() => setLang("en")} 
