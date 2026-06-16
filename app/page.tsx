@@ -63,7 +63,7 @@ const fetchUserTier = async (uid: string): Promise<UserTier> => {
   }
 
   const cachedTier = localStorage.getItem(`echo-user-tier-${uid}`);
-  return isUserTier(cachedTier) ? cachedTier : "free";
+  return isUserTier(cachedTier) ? (cachedTier as UserTier) : "free";
 };
 
 const STICKY_STYLES = {
@@ -100,21 +100,53 @@ export default function Home() {
   const [userTier, setUserTier] = useState<UserTier>("free");
   const [echoState, setEchoState] = useState("idle");
 
+  // ── CONFIGURATION DES COMPTEURS & MENUS DROPDOWN ──
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+
   // ── ÉTATS POUR LA MATRIX DE BOUTONS ──
   const [selectedButtons, setSelectedButtons] = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
 
+  // Dictionnaire de secours multilingue local pour les libellés des boutons comportementaux
+  const localButtonsLabels: Record<"fr" | "en", Record<string, string>> = {
+    fr: {
+      clarity: "1🧠 Clarté",
+      reflection: "2🔍 Réflexion",
+      critical: "3⚔️ Regard critique",
+      expert: "4🎓 Expert",
+      precision: "5🎯 Précision",
+      philosophy: "6🏛️ Philosophie",
+      strategy: "7♟️ Stratégie",
+      decompose: "8🧩 Décomposer",
+      refine: "9❓ Affiner",
+      double: "10⚡ Double Regard"
+    },
+    en: {
+      clarity: "1🧠 Clarity",
+      reflection: "2🔍 Reflection",
+      critical: "3⚔️ Critical View",
+      expert: "4🎓 Expert",
+      precision: "5🎯 Precision",
+      philosophy: "6🏛️ Philosophy",
+      strategy: "7♟️ Strategy",
+      decompose: "8🧩 Decompose",
+      refine: "9❓ Refine",
+      double: "10⚡ Double Regard"
+    }
+  };
+
   const buttonsData = [
-    { id: "clarity", label: "1🧠 Clarté" },
-    { id: "reflection", label: "2🔍 Réflexion" },
-    { id: "critical", label: "3⚔️ Regard critique" },
-    { id: "expert", label: "4🎓 Expert" },
-    { id: "precision", label: "5🎯 Précision" },
-    { id: "philosophy", label: "6🏛️ Philosophie" },
-    { id: "strategy", label: "7♟️ Stratégie" },
-    { id: "decompose", label: "8🧩 Décomposer" },
-    { id: "refine", label: "9❓ Affiner" },
-    { id: "double", label: "10⚡ Double Regard" },
+    { id: "clarity" },
+    { id: "reflection" },
+    { id: "critical" },
+    { id: "expert" },
+    { id: "precision" },
+    { id: "philosophy" },
+    { id: "strategy" },
+    { id: "decompose" },
+    { id: "refine" },
+    { id: "double" },
   ];
 
   const handleButtonClick = (id: string) => {
@@ -189,6 +221,12 @@ export default function Home() {
         } else {
           setUserTier("free");
         }
+
+        // ── SYNC DE L'ONBOARDING TUTORIEL ──
+        const isTutoDone = localStorage.getItem("echo-tuto-done-v1");
+        if (!isTutoDone) {
+          setTutorialStep(1);
+        }
       } catch (e) {
         console.error("Load error", e);
       }
@@ -211,7 +249,6 @@ export default function Home() {
         const savedConvo = localStorage.getItem(getConversationKey(uid));
         setMessages(savedConvo ? deserializeMsgs(JSON.parse(savedConvo)) : []);
         setCalendarEvents(localStorage.getItem(getStorageKey(uid)) ? JSON.parse(localStorage.getItem(getStorageKey(uid))!) : {});
-        // ⚡ FIX : fallback en tableau vide [] (et non {}) pour éviter "stickies.map is not a function"
         setStickies(localStorage.getItem(getStickyKey(uid)) ? JSON.parse(localStorage.getItem(getStickyKey(uid))!) : []);
         
         setUserTier(await fetchUserTier(uid));
@@ -243,10 +280,6 @@ export default function Home() {
     if (userId) localStorage.setItem(getTierKey(userId), userTier);
     localStorage.setItem("echo-user-tier", userTier);
   }, [userTier, isLoaded, userId]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   const checkAndSaveHistory = async (msgs: string[]) => {
     const totalChars = msgs.join("").length;
@@ -297,7 +330,6 @@ export default function Home() {
   const envoyer = async () => {
     if (!message.trim() && !selectedImage) return;
 
-    // ── VÉRIFICATION DE LA LIMITE MENSUELLE DE PROMPTS ──
     const quotaStatus = checkQuota("prompts", userTier);
     if (!quotaStatus.allowed) {
       const lockMessage = lang === "fr" 
@@ -335,9 +367,7 @@ export default function Home() {
     const historyForBackend = serializeMsgs(baseMessages);
 
     try {
-      const API_URL =
-        process.env.NEXT_PUBLIC_API_URL ||
-        "http://localhost:5000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
@@ -355,23 +385,25 @@ export default function Home() {
       const data = await response.json();
       setEchoState("speaking");
 
+      let isActionBlocked = false;
       if (data.action) {
         const { type } = data.action;
         const quotaCategory = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG") ? "vitality" : "calendar";
         const status = checkQuota(quotaCategory, userTier);
         
         if (!status.allowed) {
-          setMessages([...baseMessages, { raw: `Echo: 🔒 "Do It For You" automated action limit reached for [${quotaCategory}] on this 24h cycle.` }]);
+          // ⚡ AMÉLIORATION : Si l'action automatisée est bloquée par son sous-quota, on affiche l'erreur, mais on préserve la réponse textuelle
           setActiveLimitCategory(quotaCategory);
           setShowLimitModal(true);
-          return;
+          isActionBlocked = true;
         }
       }
 
       const echoText = data.response || (typeof data === "string" ? data : "");
-      setMessages([...baseMessages, { raw: `Echo: ${echoText}` }]);
+      const actionNotice = isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${activeLimitCategory}"]` : "";
+      setMessages([...baseMessages, { raw: `Echo: ${echoText}${actionNotice}` }]);
 
-      if (data.action) {
+      if (data.action && !isActionBlocked) {
         if (data.action.type === "ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt } = data.action.payload;
           const expenses: BudgetExpense[] = JSON.parse(localStorage.getItem("echo-budget-expenses") || "[]");
@@ -501,15 +533,72 @@ export default function Home() {
     return lang === "fr" ? `Dans ${d} jours` : `In ${d} days`;
   };
 
+  // Fermer le menu lors du clic à l'extérieur
+  useEffect(() => {
+    const handleOutsideClick = () => setIsSettingsOpen(false);
+    if (isSettingsOpen) {
+      window.addEventListener("click", handleOutsideClick);
+    }
+    return () => window.removeEventListener("click", handleOutsideClick);
+  }, [isSettingsOpen]);
+
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
       
-      <div className="absolute top-4 right-4 z-50 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 p-2 rounded-xl text-xs flex gap-3 items-center shadow-md">
-        <LangDropdown />
-        <span className="text-zinc-300 dark:text-zinc-700">|</span>
-        <button onClick={toggleTheme} className="font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 transition-colors">
-          {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
-        </button>
+      {/* ── ⚙️ NEW SETTINGS DROPDOWN COMPONENT (CORRIGÉ & CENTRALISÉ) ── */}
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="relative">
+          <button 
+            id="settings-trigger"
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
+            className="p-2.5 rounded-xl bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 hover:border-cyan-500/50 transition-all shadow-md flex items-center justify-center text-sm"
+            title={t.settings?.title || "Settings"}
+          >
+            ⚙️ <span className="ml-1.5 hidden sm:inline">{t.settings?.title || "Paramètres"}</span>
+          </button>
+
+          {isSettingsOpen && (
+            <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl p-3 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200">
+              <div className="px-2 py-1.5 text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold border-b border-zinc-100 dark:border-zinc-900">
+                {t.settings?.title || "Configuration"}
+              </div>
+              <div className="p-1 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900/50 transition-colors">
+                <LangDropdown />
+              </div>
+              <button 
+                onClick={toggleTheme} 
+                className="w-full text-left px-2.5 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 rounded-xl transition-colors"
+              >
+                {theme === "dark" ? (t.settings?.lightMode || "☀️ Light Mode") : (t.settings?.darkMode || "🌙 Dark Mode")}
+              </button>
+              <button 
+                onClick={() => { setTutorialStep(1); setIsSettingsOpen(false); }} 
+                className="w-full text-left px-2.5 py-2 text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-colors"
+              >
+                {t.settings?.tutorial || "📖 Rejouer le Tutoriel"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── 📖 INTERFACE DE POP-OVER POUR LE TUTORIEL FLOTTANT ── */}
+        {tutorialStep === 2 && (
+          <div className="absolute right-0 top-14 w-72 bg-gradient-to-br from-cyan-600 to-blue-700 text-white rounded-2xl p-4 shadow-2xl border border-cyan-400/30 animate-in zoom-in-95 duration-300 z-50">
+            <div className="absolute -top-2 right-6 w-4 h-4 bg-cyan-600 rotate-45 border-l border-t border-cyan-400/30" />
+            <h4 className="font-bold text-xs font-mono uppercase tracking-wider mb-1.5">
+              {t.tutorial?.title || "Configuration d'Echo"} (2/2)
+            </h4>
+            <p className="text-xs text-cyan-50 leading-relaxed mb-3 font-normal">
+              {t.tutorial?.text2 || "Cliquez ici sur l'icône de Paramètres pour ajuster la langue, alterner entre le mode clair et sombre, ou relancer ce guide à tout moment !"}
+            </p>
+            <button 
+              onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }} 
+              className="w-full py-1.5 rounded-xl bg-white text-cyan-700 hover:bg-cyan-50 font-bold text-xs transition-colors shadow-md"
+            >
+              {t.tutorial?.finish || "C'est parti ! 🚀"}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-1 overflow-hidden min-h-0">
@@ -539,8 +628,8 @@ export default function Home() {
           
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
             
-            {/* ── INTERFACE 10 BOUTONS MATRIX ── */}
-            <div className="w-full bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg">
+            {/* ── INTERFACE 10 BOUTONS MATRIX (AVEC SYNC DU DICTIONNAIRE & TUTORIEL) ── */}
+            <div className="w-full bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
                 {buttonsData.map((btn) => {
                   const isSelected = selectedButtons.includes(btn.id);
@@ -565,6 +654,9 @@ export default function Home() {
                     }
                   }
 
+                  // Résolution dynamique du libellé selon la langue active de l'écosystème Echo
+                  const currentLabel = localButtonsLabels[lang]?.[btn.id] || localButtonsLabels.fr[btn.id];
+
                   return (
                     <button
                       key={btn.id}
@@ -580,18 +672,36 @@ export default function Home() {
                         }
                       `}
                     >
-                      {btn.label}
+                      {currentLabel}
                     </button>
                   );
                 })}
               </div>
+
+              {/* ── 📖 POP-OVER ÉTAPE 1 DU TUTORIEL (MODES COMPORTEMENTAUX) ── */}
+              {tutorialStep === 1 && (
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-80 sm:w-[450px] bg-gradient-to-br from-zinc-900 to-black text-white rounded-2xl p-5 shadow-2xl border border-zinc-800 animate-in fade-in slide-in-from-top-4 duration-300 z-50 text-center">
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-zinc-900 rotate-45 border-l border-t border-zinc-800" />
+                  <h4 className="font-bold text-sm font-mono uppercase tracking-widest text-cyan-400 mb-2">
+                    {t.tutorial?.title || "Configuration d'Echo"} (1/2)
+                  </h4>
+                  <p className="text-xs text-zinc-300 leading-relaxed mb-4 font-normal">
+                    {t.tutorial?.text1 || "Voici vos modes comportementaux. Sans aucun bouton activé, vous faites face à la personnalité brute, authentique et profonde d'Echo. (Le Double Regard vous permet d'en combiner deux)."}
+                  </p>
+                  <button 
+                    onClick={() => setTutorialStep(2)} 
+                    className="px-6 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition-all shadow-md uppercase tracking-wider"
+                  >
+                    {t.tutorial?.next || "Suivant ➔"}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 mt-3 px-2">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center">
                   <div className={echoState === "idle" ? "echo-idle" : echoState === "thinking" ? "echo-thinking" : "echo-speaking"}>
-                    {/* ⚡ FIX : balise <img> classique + chemin "/Echo.png" (E majuscule, sensible à la casse sur Vercel) */}
                     <img
                       src="/Echo.png"
                       alt="Echo Core"
@@ -617,7 +727,6 @@ export default function Home() {
                       return (
                         <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 min-w-0">
                           <div className="flex items-center gap-4">
-                            {/* ⚡ FIX : chemin "/Echo.png" (E majuscule) */}
                             <img
                               src="/Echo.png"
                               alt="Echo"
@@ -803,7 +912,7 @@ export default function Home() {
             <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
               {activeLimitCategory === "prompts"
                 ? (lang === "fr" ? "Votre quota mensuel de messages est épuisé. Élevez votre sillage vers un forfait supérieur pour continuer l'expérience." : "Your monthly message quota has been reached. Upgrade your tier to unlock unlimited interactions.")
-                : (lang === "fr" ? "Limite d'actions automatisées atteinte." : "Automated action limit reached.")
+                : (lang === "fr" ? `Limite d'actions automatisées atteinte pour la section [${activeLimitCategory}]. Le message texte d'Echo a été généré, mais les données n'ont pas pu s'enregistrer pour ce cycle.` : `Automated action limit reached for [${activeLimitCategory}]. Echo's text response was generated, but data could not be saved for this cycle.`)
               }
             </p>
             <button onClick={() => setShowLimitModal(false)} className="w-full bg-cyan-600 text-white py-2.5 rounded-xl text-xs font-semibold">OK</button>

@@ -15,6 +15,19 @@ export const translations: Record<"fr" | "en", {
     history: string;
   };
   chat: { placeholder: string; send: string; };
+  settings: {
+    title: string;
+    lightMode: string;
+    darkMode: string;
+    tutorial: string;
+  };
+  tutorial: {
+    title: string;
+    text1: string;
+    text2: string;
+    next: string;
+    finish: string;
+  };
 }> = {
   fr: {
     sidebar: { 
@@ -28,6 +41,19 @@ export const translations: Record<"fr" | "en", {
       history: "⭐ Historique"
     },
     chat: { placeholder: "Parle à Echo...", send: "🚀 ENVOYER" },
+    settings: {
+      title: "Paramètres",
+      lightMode: "☀️ Mode Clair",
+      darkMode: "🌙 Mode Sombre",
+      tutorial: "📖 Rejouer le Tutoriel",
+    },
+    tutorial: {
+      title: "Configuration d'Echo",
+      text1: "Voici vos modes comportementaux. Sans aucun bouton activé, vous faites face à la personnalité brute, authentique et profonde d'Echo. (Le Double Regard vous permet d'en combiner deux).",
+      text2: "Cliquez ici sur l'icône de Paramètres pour ajuster la langue, alterner entre le mode clair et sombre, ou relancer ce guide à tout moment !",
+      next: "Suivant ➔",
+      finish: "C'est parti ! 🚀",
+    },
   },
   en: {
     sidebar: { 
@@ -41,6 +67,19 @@ export const translations: Record<"fr" | "en", {
       history: "⭐ History"
     },
     chat: { placeholder: "Talk to Echo...", send: "🚀 SEND" },
+    settings: {
+      title: "Settings",
+      lightMode: "☀️ Light Mode",
+      darkMode: "🌙 Dark Mode",
+      tutorial: "📖 Replay Tutorial",
+    },
+    tutorial: {
+      title: "Echo Configuration",
+      text1: "Here are your behavioral modes. With no button active, you face Echo's raw, authentic, deep personality. (Double Regard lets you combine two).",
+      text2: "Click here on the Settings icon to adjust language, switch between light and dark mode, or replay this guide anytime!",
+      next: "Next ➔",
+      finish: "Let's go! 🚀",
+    },
   },
 };
 
