@@ -257,15 +257,18 @@ export default function ServicesPage() {
       if (planName === "treasure") setIsLoadingTreasure(true);
       else setIsLoadingCheckout(planName);
 
-      const response = await fetch("/api/stripe/create-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan: planName,
-          userId: user.id,
-          userEmail: user.email,
-        }),
-      });
+      // Dans handleUpgradeWithStripe
+const planToRequest = planName === "treasure" ? "ultra" : planName; // On force "ultra" pour le backend
+
+const response = await fetch("/api/stripe/create-checkout", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    plan: planToRequest, // Envoie "ultra" même si c'est le trésor
+    userId: user.id,
+    userEmail: user.email,
+  }),
+});
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to initiate Stripe session");
       if (data.url) window.location.href = data.url;
