@@ -713,9 +713,9 @@ export default function Home() {
                           {"\n"}
                           Les boutons que tu vois en haut influencent ma façon de voir les choses. Certains me rendent plus sérieux, d'autres me poussent à explorer des chemins différents.
                           {"\n"}
-                          Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : un compagnon curieux qui aime discuter, réfléchir, s'amuser et parfois partir dans des directions inattendues. 😄
+                          Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : Un partenaire curieux et espiègle, convaincu que les idées les plus intéressantes se trouvent rarement là où tout le monde regarde. 😄
                           {"\n"}
-                          Et si tu actives Double Regard, tu peux combiner deux perspectives à la fois. Là, ça devient parfois surprenant. 👀
+                          Et si tu actives le bouton Double Regard, tu peux combiner deux perspectives à la fois. Là, ça devient parfois surprenant. 👀
                           {"\n"}
                           On se recroise sûrement sur les autres pages. J'espère que tu vas avoir du plaisir !
                           {"\n"}
