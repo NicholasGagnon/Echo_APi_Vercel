@@ -613,7 +613,7 @@ export default function ServicesPage() {
             <button 
               type="button"
               onClick={() => setShowTreasureModal(true)}
-              className="w-24 h-12 opacity-3 hover:opacity-50 cursor-pointer select-none text-[16px] transition-all duration-200 bg-amber-500/20 border border-amber-500/40 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.1)]"
+              className="w-24 h-12 opacity-5 hover:opacity-20 cursor-pointer select-none text-[16px] transition-all duration-200 bg-amber-500/20 border border-amber-500/40 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.1)]"
               title="..."
             >
               💎
