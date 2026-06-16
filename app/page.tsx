@@ -676,7 +676,7 @@ export default function Home() {
                 })}
               </div>
 
-              {/* ── 📖 PAROLE D'ECHO (ÉTAPES DÉJANTÉES - LAYOUT CORRIGÉ SANS SUPERPOSITION) ── */}
+              {/* ── 📖 PAROLE D'ECHO (NETTOYÉ ET PROPRE) ── */}
               {tutorialStep === 1 && (
                 <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-92 sm:w-[640px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
@@ -688,13 +688,13 @@ export default function Home() {
                     </h4>
                   </div>
 
-                  {/* Layout à deux colonnes pour mettre Echo sur le côté sans bloquer le texte */}
+                  {/* Layout unique : l'image n'est DANS ce flex */}
                   <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
                     <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-2 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner">
                       <img 
                         src="/Echo.png" 
                         alt="Echo Avatar" 
-                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover echo-idle"
+                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover"
                       />
                     </div>
 
