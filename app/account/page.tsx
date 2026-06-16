@@ -55,12 +55,19 @@ const clearHash = () => {
 };
 
 export default function AccountPage() {
-  // ⚡ RÉCUPÉRATION DU TIER GLOBAL ET DU SETTER DEPUIS CONTEXT
   const { t, lang, theme, toggleTheme, userTier, setUserTier } = useApp();
   
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [showGoogleSyncPopup, setShowGoogleSyncPopup] = useState(false);
+
+  // ── ÉTATS POUR LE RECOVERY DE MOT DE PASSE FLUIDE ──
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+
+  // ── ÉTATS POUR LA SUPPRESSION DE COMPTE SÉCURISÉE ──
+  const [deleteStage, setDeleteStage] = useState<"idle" | "confirm" | "final">("idle");
 
   const [user, setUser] = useState<any>(null);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
@@ -84,14 +91,13 @@ export default function AccountPage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // 1. On ajoute un paramètre "currentTier" à la fonction
   const saveGoogleTokenToDB = async (uid: string, token: string, currentTier: string, refreshToken?: string | null) => {
     await supabase.from("user_tokens").upsert(
       {
         id: uid,
         google_access_token: token,
         google_refresh_token: refreshToken ?? null,
-        user_tier: currentTier, // ⚡ Utilise DIRECTEMENT la valeur exacte et fraîche
+        user_tier: currentTier, 
         last_request_date: new Date().toISOString().split("T")[0],
       },
       { onConflict: "id" }
@@ -103,11 +109,8 @@ export default function AccountPage() {
     const resolveAndSaveToken = async (session: any) => {
       if (!session?.user) return;
       const uid = session.user.id;
-      
-      // On initialise une variable locale par défaut
       let activeTier = "free";
 
-      // 🛰️ APPEL SÉCURISÉ SUPABASE POUR LE FORFAIT DE L'UTILISATEUR ORDINAIRE
       try {
         const { data: profile } = await supabase
           .from("profiles")
@@ -124,7 +127,6 @@ export default function AccountPage() {
         console.error("[SUPABASE PROFILE ERROR]", err);
       }
 
-      // ⚡ ICI : On passe "activeTier" en paramètre aux appels pour éviter la course d'état React
       const hashToken = extractProviderTokenFromHash();
       if (hashToken) {
         clearHash();
@@ -152,7 +154,14 @@ export default function AccountPage() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // ── FLUX DE SURVEILLANCE DE RÉCUPÉRATION DE MOT DE PASSE ──
+      if (event === "PASSWORD_RECOVERY") {
+        setIsRecoveringPassword(true);
+        setShowSignInModal(false);
+        setShowSignUpModal(false);
+      }
+
       if (session?.user) {
         setUser(session.user);
         setActiveProvider(session.user.app_metadata?.provider || "email");
@@ -160,7 +169,7 @@ export default function AccountPage() {
       } else {
         setUser(null);
         setActiveProvider(null);
-        setUserTier("free"); // Filet de sécurité déconnexion
+        setUserTier("free"); 
         localStorage.setItem("echo-user-tier", "free");
       }
     });
@@ -223,7 +232,8 @@ export default function AccountPage() {
     }
   };
 
-  const handleEmailSignIn = async () => {
+  const handleEmailSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setSignInError(null);
     setSignInSuccess(null);
     if (!email.trim() || !password.trim()) {
@@ -240,7 +250,8 @@ export default function AccountPage() {
     }
   };
 
-  const handleEmailSignUp = async () => {
+  const handleEmailSignUp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setSignUpError(null);
     setSignUpSuccess(null);
     if (!email.trim() || !password.trim()) {
@@ -264,6 +275,23 @@ export default function AccountPage() {
     }
   };
 
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryError(null);
+    if (!newPassword.trim() || newPassword.length < 6) {
+      setRecoveryError(lang === "fr" ? "Le mot de passe doit faire au moins 6 caractères." : "Password must be at least 6 characters.");
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword.trim() });
+    if (error) {
+      setRecoveryError(error.message);
+    } else {
+      alert(lang === "fr" ? "Mot de passe modifié avec succès !" : "Password modified successfully!");
+      setIsRecoveringPassword(false);
+      setNewPassword("");
+    }
+  };
+
   const handleForgotPassword = async () => {
     setSignInError(null);
     setSignInSuccess(null);
@@ -277,8 +305,28 @@ export default function AccountPage() {
     if (error) {
       setSignInError(error.message);
     } else {
-      setSignInSuccess(lang === "fr" ? "Lien de réinitialisation envoyé !" : "Reset link dispatched!");
+      setSignInSuccess(lang === "fr" ? "Lien de réinitialisation envoyé avec succès !" : "Reset link dispatched successfully!");
       showToast(lang === "fr" ? "Lien envoyé !" : "Reset link sent!", "success");
+    }
+  };
+
+  const handleDeleteAccountData = async () => {
+    if (!user) return;
+    try {
+      // 1. Suppression des jetons d'accès distants
+      await supabase.from("user_tokens").delete().eq("id", user.id);
+      // 2. Suppression de la ligne de profil Supabase Public
+      await supabase.from("profiles").delete().eq("id", user.id);
+      // 3. Déconnexion immédiate de la session
+      await supabase.auth.signOut();
+      
+      alert(lang === "fr" 
+        ? "Votre compte et vos données associées ont été supprimés de nos serveurs." 
+        : "Your account and associated data have been completely removed from our nodes."
+      );
+      setDeleteStage("idle");
+    } catch (err: any) {
+      alert(`Error during data purge: ${err.message}`);
     }
   };
 
@@ -303,7 +351,7 @@ export default function AccountPage() {
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
 
       {/* TOP-RIGHT MENU */}
-      <div className="absolute top-4 right-4 z-50 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 p-2 rounded-xl text-xs flex gap-3 items-center shadow-md">
+      <div className="absolute top-4 right-4 z-40 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 p-2 rounded-xl text-xs flex gap-3 items-center shadow-md">
         <LangDropdown />
         <span className="text-zinc-300 dark:text-zinc-700">|</span>
         <button onClick={toggleTheme} className="font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 transition-colors">
@@ -351,281 +399,388 @@ export default function AccountPage() {
           </div>
         </aside>
 
-        {/* MAIN */}
-        <section className="flex-1 flex flex-col items-center px-8 py-12 overflow-y-auto bg-white dark:bg-gradient-to-b dark:from-zinc-950 dark:via-black dark:to-black transition-colors duration-200">
+        {/* MAIN PANEL AVEC DEFILEMENT TOTAL POUR CONTENIR LE GRAND PLAN DE BATAILLE */}
+        <section className="flex-1 flex flex-col items-center px-6 sm:px-12 py-12 overflow-y-auto bg-white dark:bg-gradient-to-b dark:from-zinc-950 dark:via-black dark:to-black transition-colors duration-200 justify-between">
 
-          <div className="text-center mb-12 shrink-0 w-full max-w-md">
-            <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-500 font-mono text-sm shadow-sm">
-              idx
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 mb-1.5">
-              {lang === "fr" ? "Passerelle de Compte" : "Account Gateway"}
-            </h1>
-            <p className="text-zinc-500 text-xs tracking-wide">
-              {lang === "fr"
-                ? "Orchestrez et synchronisez vos paramètres d'identité au sein de l'écosystème sécurisé."
-                : "Orchestrate and sync identity parameters within the secure ecosystem."}
-            </p>
+          <div className="w-full max-w-5xl flex flex-col items-center flex-1">
+            <div className="text-center mb-12 shrink-0 w-full max-w-md">
+              <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-500 font-mono text-sm shadow-sm">
+                idx
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 mb-1.5">
+                {lang === "fr" ? "Passerelle de Compte" : "Account Gateway"}
+              </h1>
+              <p className="text-zinc-500 text-xs tracking-wide">
+                {lang === "fr"
+                  ? "Orchestrez et synchronisez vos paramètres d'identité au sein de l'écosystème sécurisé."
+                  : "Orchestrate and sync identity parameters within the secure ecosystem."}
+              </p>
 
-            {user?.email ? (
-              <div className="mt-5 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-3 inline-flex items-center gap-4 text-left shadow-sm animate-in fade-in duration-300">
-                <div>
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block uppercase tracking-wider font-mono">
-                    {lang === "fr" ? "Session Authentifiée" : "Authenticated Session"}
-                  </span>
-                  <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold font-mono">{user.email}</span>
+              {user?.email ? (
+                <div className="mt-5 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-3 inline-flex items-center gap-4 text-left shadow-sm animate-in fade-in duration-300">
+                  <div>
+                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block uppercase tracking-wider font-mono">
+                      {lang === "fr" ? "Session Authentifiée" : "Authenticated Session"}
+                    </span>
+                    <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold font-mono">{user.email}</span>
+                  </div>
+                  <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800" />
+                  <button onClick={handleSignOut} className="text-xs text-red-500 hover:text-red-600 font-bold transition-colors">
+                    {lang === "fr" ? "Se Déconnecter" : "Sign Out"}
+                  </button>
                 </div>
-                <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800" />
-                <button onClick={handleSignOut} className="text-xs text-red-500 hover:text-red-600 font-bold transition-colors">
-                  {lang === "fr" ? "Se Déconnecter" : "Sign Out"}
+              ) : (
+                <p className="text-amber-600 dark:text-amber-500 text-xs font-semibold mt-4 bg-amber-500/5 border border-amber-200 dark:border-amber-500/10 rounded-xl py-1.5 px-3 inline-block">
+                  ⚠️ {lang === "fr" ? "Aucune session active — Connectez-vous ci-dessous" : "No active session — Connect below"}
+                </p>
+              )}
+            </div>
+
+            {/* GATEWAY CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full shrink-0">
+
+              {/* MICROSOFT */}
+              <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
+                activeProvider === "azure"
+                  ? "border-emerald-500 bg-emerald-50/10 dark:bg-zinc-900/50 shadow-lg"
+                  : "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800"
+              }`}>
+                <div className="mt-4">
+                  <MicrosoftLogo />
+                  <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">Microsoft</h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Outlook & Directories</p>
+                </div>
+                <button
+                  onClick={handleMicrosoftConnect}
+                  className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                    activeProvider === "azure"
+                      ? "bg-emerald-600 text-white cursor-default"
+                      : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950"
+                  }`}
+                >
+                  {activeProvider === "azure" ? `✓ ${lang === "fr" ? "Connecté" : "Connected"}` : "Connexion"}
                 </button>
               </div>
-            ) : (
-              <p className="text-amber-600 dark:text-amber-500 text-xs font-semibold mt-4 bg-amber-500/5 border border-amber-200 dark:border-amber-500/10 rounded-xl py-1.5 px-3 inline-block">
-                ⚠️ {lang === "fr" ? "Aucune session active — Connectez-vous ci-dessous" : "No active session — Connect below"}
-              </p>
+
+              {/* GOOGLE CLASSIQUE */}
+              <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
+                activeProvider === "google"
+                  ? "border-emerald-500 bg-emerald-50/10 dark:bg-zinc-900/50 shadow-lg"
+                  : "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800"
+              }`}>
+                <div className="mt-4">
+                  <GoogleLogo />
+                  <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">Google</h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Identity & Secure Nodes</p>
+                </div>
+                <button
+                  onClick={handleGoogleConnectNormal}
+                  className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                    activeProvider === "google"
+                      ? "bg-emerald-600 text-white cursor-default"
+                      : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950"
+                  }`}
+                >
+                  {activeProvider === "google" ? `✓ ${lang === "fr" ? "Connecté" : "Connected"}` : "Connexion"}
+                </button>
+              </div>
+
+              {/* EMAIL SIGN IN */}
+              <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
+                activeProvider === "email"
+                  ? "border-emerald-500 bg-emerald-50/10 dark:bg-zinc-900/50 shadow-lg"
+                  : "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800"
+              }`}>
+                <div className="mt-4">
+                  <MailIcon />
+                  <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">
+                    {lang === "fr" ? "Connexion E-mail" : "Sign in Email"}
+                  </h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Access Existing Token</p>
+                </div>
+                <button
+                  onClick={() => { if (activeProvider !== "email") setShowSignInModal(true); }}
+                  className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                    activeProvider === "email"
+                      ? "bg-emerald-600 text-white cursor-default"
+                      : "bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 hover:bg-zinc-300 dark:hover:bg-zinc-700"
+                  }`}
+                >
+                  {activeProvider === "email" ? `✓ ${lang === "fr" ? "Connecté" : "Connected"}` : (lang === "fr" ? "Ouvrir la Session" : "Open Sign In")}
+                </button>
+              </div>
+
+              {/* CREATE ACCOUNT */}
+              <div className="bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800 rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm">
+                <div className="mt-4">
+                  <UserPlusIcon />
+                  <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">
+                    {lang === "fr" ? "Créer un Compte" : "Create Account"}
+                  </h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Initialize New Profile</p>
+                </div>
+                <button
+                  disabled={activeProvider !== null}
+                  onClick={() => setShowSignUpModal(true)}
+                  className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                    activeProvider !== null
+                      ? "bg-zinc-200 dark:bg-zinc-950 text-zinc-400 dark:text-zinc-700 border border-zinc-300 dark:border-zinc-900 cursor-not-allowed shadow-inner"
+                      : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950"
+                  }`}
+                >
+                  {activeProvider !== null ? (lang === "fr" ? "Session Verrouillée" : "Session Locked") : (lang === "fr" ? "S'inscrire" : "Open Sign Up")}
+                </button>
+              </div>
+
+            </div>
+
+            {/* BANDEROLE DE SYNCHRONISATION AGENDA GOOGLE */}
+            <div className="mt-10 w-full border border-dashed border-cyan-500/30 bg-zinc-50 dark:bg-zinc-950 p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-900 shadow-sm">
+              <div className="flex items-center gap-4 text-center sm:text-left">
+                <div className="w-12 h-12 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shadow-inner shrink-0 mx-auto sm:mx-0">
+                  <GoogleLogo />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black font-mono tracking-wide text-zinc-900 dark:text-zinc-100">Here For Google Connection With calendar Synch</h4>
+                  <p className="text-zinc-500 text-xs mt-0.5">{lang === "fr" ? "Configurez les passerelles d'autorisations pour l'agent de liaison." : "Configure high-tier auth bridges for the core cloud connection."}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowGoogleSyncPopup(true)}
+                className="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md shrink-0 w-full sm:w-auto text-center"
+              >
+                {lang === "fr" ? "Synchronisation Google Calendar" : "Google Calendar Synchronisation"}
+              </button>
+            </div>
+
+            {/* SECTION DE PURGE DES DONNÉES EXIGÉE PAR GOOGLE (INTELLIGENTE & DOUBLE CONFIRMATION) */}
+            {user && (
+              <div className="mt-6 w-full border border-red-500/30 bg-red-500/[0.02] p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm animate-in fade-in duration-200">
+                <div className="text-center sm:text-left">
+                  <h4 className="text-sm font-bold text-red-600 dark:text-red-400 font-mono uppercase tracking-wide">
+                    ⚠️ {lang === "fr" ? "Zone de Suppression des Données" : "Data Deletion Node"}
+                  </h4>
+                  <p className="text-zinc-500 text-xs mt-0.5">
+                    {lang === "fr" 
+                      ? "Conformément aux protocoles de sécurité, purgez définitivement votre compte, vos jetons cloud et vos configurations." 
+                      : "In compliance with platform guidelines, permanently delete your identity token rows and all sync cache."}
+                  </p>
+                </div>
+
+                {deleteStage === "idle" && (
+                  <button 
+                    onClick={() => setDeleteStage("confirm")} 
+                    className="px-5 py-2.5 bg-red-600/10 hover:bg-red-600 text-red-600 hover:text-white border border-red-500/40 font-bold text-xs rounded-xl uppercase tracking-wider transition-all shadow-sm shrink-0 w-full sm:w-auto text-center"
+                  >
+                    {lang === "fr" ? "Supprimer mon compte" : "Delete My Account"}
+                  </button>
+                )}
+
+                {deleteStage === "confirm" && (
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button 
+                      onClick={() => setDeleteStage("final")} 
+                      className="flex-1 sm:flex-none px-4 py-2.5 bg-amber-600 text-white font-bold text-xs rounded-xl uppercase tracking-wider transition-all animate-pulse"
+                    >
+                      {lang === "fr" ? "Êtes-vous sûr ?" : "Are you sure?"}
+                    </button>
+                    <button onClick={() => setDeleteStage("idle")} className="px-3 py-2.5 bg-zinc-200 dark:bg-zinc-800 text-xs rounded-xl font-medium">
+                      {lang === "fr" ? "Annuler" : "Cancel"}
+                    </button>
+                  </div>
+                )}
+
+                {deleteStage === "final" && (
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button 
+                      onClick={handleDeleteAccountData} 
+                      className="flex-1 sm:flex-none px-4 py-2.5 bg-red-600 text-white font-black text-xs rounded-xl uppercase tracking-widest transition-all"
+                    >
+                      💥 {lang === "fr" ? "CONFIRMER LA PURGE TOTAL" : "CONFIRM TOTAL PURGE"}
+                    </button>
+                    <button onClick={() => setDeleteStage("idle")} className="px-3 py-2.5 bg-zinc-200 dark:bg-zinc-800 text-xs rounded-xl font-medium">
+                      {lang === "fr" ? "Annuler" : "Cancel"}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
+
+            {/* PROTOCOLE ARCHITECTURE */}
+            <div className="mt-6 w-full border border-cyan-500/20 bg-cyan-50/5 dark:bg-cyan-950/5 rounded-2xl p-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-center sm:text-left shadow-inner mb-16">
+              <div className="space-y-1">
+                <h4 className="text-xs font-bold font-mono tracking-widest text-cyan-600 dark:text-cyan-400 uppercase">🛡️ Agentic Architecture Protocol</h4>
+                <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed max-w-2xl">
+                  Please ensure a persistent passport node link is fully bound. An active profile session is strictly required to route automated background actions into your personal calendar stack and tracking matrix grid.
+                </p>
+              </div>
+              <div className="shrink-0 flex flex-col items-center sm:items-end font-mono">
+                <span className="text-[10px] text-zinc-400 dark:text-zinc-600 uppercase tracking-widest block">System Build</span>
+                <span className="text-sm font-extrabold text-cyan-600 dark:text-cyan-400 filter drop-shadow-[0_0_8px_rgba(6,182,212,0.3)]">v10.0.10</span>
+              </div>
+            </div>
           </div>
 
-          {/* GATEWAY CARDS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-5xl shrink-0">
-
-            {/* MICROSOFT */}
-            <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
-              activeProvider === "azure"
-                ? "border-emerald-500 bg-emerald-50/10 dark:bg-zinc-900/50 shadow-lg"
-                : "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800"
-            }`}>
-              <div className="mt-4">
-                <MicrosoftLogo />
-                <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">Microsoft</h2>
-                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Outlook & Directories</p>
+          {/* ── 🟥 GRAND FOOTER CONFORME ET STRUCTURE ENTREPRISE (ENTIÈREMENT BILINGUE) ── */}
+          <footer className="w-full shrink-0 border-t border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md px-6 py-10 mt-12">
+            <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-sm">
+              
+              {/* Colonne 1: Liens de Conformité Google */}
+              <div className="space-y-3">
+                <h5 className="font-bold font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                  {lang === "fr" ? "🔗 Conformité & Conditions" : "🔗 Legal & Compliance"}
+                </h5>
+                <ul className="space-y-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  <li>
+                    <a href="https://echosai.ca/terms" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-500 transition-colors">
+                      {lang === "fr" ? "➔ Conditions d'Utilisation (Terms)" : "➔ Terms of Service"}
+                    </a>
+                  </li>
+                  <li>
+                    <a href="https://echosai.ca/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-500 transition-colors">
+                      {lang === "fr" ? "➔ Politique de Confidentialité (Privacy)" : "➔ Privacy Policy"}
+                    </a>
+                  </li>
+                </ul>
               </div>
-              <button
-                onClick={handleMicrosoftConnect}
-                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                  activeProvider === "azure"
-                    ? "bg-emerald-600 text-white cursor-default"
-                    : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950"
-                }`}
-              >
-                {activeProvider === "azure" ? `✓ ${lang === "fr" ? "Connecté" : "Connected"}` : "Connexion"}
-              </button>
-            </div>
 
-            {/* GOOGLE CLASSIQUE */}
-            <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
-              activeProvider === "google"
-                ? "border-emerald-500 bg-emerald-50/10 dark:bg-zinc-900/50 shadow-lg"
-                : "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800"
-            }`}>
-              <div className="mt-4">
-                <GoogleLogo />
-                <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">Google</h2>
-                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Identity & Secure Nodes</p>
+              {/* Colonne 2: Réseaux Sociaux Écosystème */}
+              <div className="space-y-3">
+                <h5 className="font-bold font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                  {lang === "fr" ? "👥 Entreprise & Réseaux" : "👥 Corporate Ecosystem"}
+                </h5>
+                <ul className="space-y-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  <li>
+                    <a href="https://www.facebook.com/EchoAgentic" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-500 transition-colors flex items-center gap-1.5">
+                      <span>📘 Facebook :</span> <span className="text-zinc-400 font-mono">@EchoAgentic</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a href="https://www.tiktok.com/@lafailleestouverte?lang=fr" target="_blank" rel="noopener noreferrer" className="hover:text-cyan-500 transition-colors flex items-center gap-1.5">
+                      <span>🎵 TikTok :</span> <span className="text-zinc-400 font-mono">@lafailleestouverte</span>
+                    </a>
+                  </li>
+                </ul>
               </div>
-              <button
-                onClick={handleGoogleConnectNormal}
-                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                  activeProvider === "google"
-                    ? "bg-emerald-600 text-white cursor-default"
-                    : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950"
-                }`}
-              >
-                {activeProvider === "google" ? `✓ ${lang === "fr" ? "Connecté" : "Connected"}` : "Connexion"}
-              </button>
-            </div>
 
-            {/* EMAIL SIGN IN */}
-            <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
-              activeProvider === "email"
-                ? "border-emerald-500 bg-emerald-50/10 dark:bg-zinc-900/50 shadow-lg"
-                : "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800"
-            }`}>
-              <div className="mt-4">
-                <MailIcon />
-                <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">
-                  {lang === "fr" ? "Connexion E-mail" : "Sign in Email"}
-                </h2>
-                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Access Existing Token</p>
+              {/* Colonne 3: Hub de Contact Officiel */}
+              <div className="space-y-3">
+                <h5 className="font-bold font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                  {lang === "fr" ? "✉️ Canaux de Contact" : "✉️ Connection Desks"}
+                </h5>
+                <ul className="space-y-2 text-xs font-mono text-zinc-600 dark:text-zinc-400">
+                  <li>
+                    <span className="font-sans font-semibold text-zinc-700 dark:text-zinc-300">Support: </span>
+                    <a href="mailto:support@echosai.ca" className="text-cyan-600 dark:text-cyan-400 hover:underline">support@echosai.ca</a>
+                  </li>
+                  <li>
+                    <span className="font-sans font-semibold text-zinc-700 dark:text-zinc-300">General: </span>
+                    <a href="mailto:contact@echosai.ca" className="text-cyan-600 dark:text-cyan-400 hover:underline">contact@echosai.ca</a>
+                  </li>
+                </ul>
               </div>
-              <button
-                onClick={() => { if (activeProvider !== "email") setShowSignInModal(true); }}
-                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                  activeProvider === "email"
-                    ? "bg-emerald-600 text-white cursor-default"
-                    : "bg-zinc-200 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 hover:bg-zinc-300 dark:hover:bg-zinc-700"
-                }`}
-              >
-                {activeProvider === "email" ? `✓ ${lang === "fr" ? "Connecté" : "Connected"}` : (lang === "fr" ? "Ouvrir la Session" : "Open Sign In")}
-              </button>
+
             </div>
 
-            {/* CREATE ACCOUNT */}
-            <div className="bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-800 rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm">
-              <div className="mt-4">
-                <UserPlusIcon />
-                <h2 className="text-sm font-bold mt-4 tracking-wide text-zinc-800 dark:text-zinc-300">
-                  {lang === "fr" ? "Créer un Compte" : "Create Account"}
-                </h2>
-                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Initialize New Profile</p>
-              </div>
-              <button
-                disabled={activeProvider !== null}
-                onClick={() => setShowSignUpModal(true)}
-                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                  activeProvider !== null
-                    ? "bg-zinc-200 dark:bg-zinc-950 text-zinc-400 dark:text-zinc-700 border border-zinc-300 dark:border-zinc-900 cursor-not-allowed shadow-inner"
-                    : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950"
-                }`}
-              >
-                {activeProvider !== null ? (lang === "fr" ? "Session Verrouillée" : "Session Locked") : (lang === "fr" ? "S'inscrire" : "Open Sign Up")}
-              </button>
+            <div className="max-w-5xl mx-auto border-t border-zinc-200 dark:border-zinc-900 mt-8 pt-4 flex flex-col sm:flex-row items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-600 gap-2">
+              <div>© {new Date().getFullYear()} Echo AI Ecosystem (echosai.ca). All rights reserved.</div>
+              <div className="font-mono tracking-widest uppercase">Secured Identity Gateway Dashboard</div>
             </div>
-
-          </div>
-
-          {/* BANDEROLE DE SYNCHRONISATION AGENDA GOOGLE */}
-          <div className="mt-10 w-full max-w-5xl border border-dashed border-cyan-500/30 bg-zinc-50 dark:bg-zinc-950 p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-900 shadow-sm">
-            <div className="flex items-center gap-4 text-center sm:text-left">
-              <div className="w-12 h-12 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center justify-center shadow-inner shrink-0 mx-auto sm:mx-0">
-                <GoogleLogo />
-              </div>
-              <div>
-                <h4 className="text-sm font-black font-mono tracking-wide text-zinc-900 dark:text-zinc-100">Here For Google Connection With calendar Synch</h4>
-                <p className="text-zinc-500 text-xs mt-0.5">{lang === "fr" ? "Configurez les passerelles d'autorisations pour l'agent de liaison." : "Configure high-tier auth bridges for the core cloud connection."}</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setShowGoogleSyncPopup(true)}
-              className="px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md shrink-0 w-full sm:w-auto text-center"
-            >
-              {lang === "fr" ? "Synchronisation Google Calendar" : "Google Calendar Synchronisation"}
-            </button>
-          </div>
-
-          {/* INFO FOOTER */}
-          <div className="mt-6 w-full max-w-5xl border border-cyan-500/20 bg-cyan-50/5 dark:bg-cyan-950/5 rounded-2xl p-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-center sm:text-left shadow-inner">
-            <div className="space-y-1">
-              <h4 className="text-xs font-bold font-mono tracking-widest text-cyan-600 dark:text-cyan-400 uppercase">🛡️ Agentic Architecture Protocol</h4>
-              <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed max-w-2xl">
-                Please ensure a persistent passport node link is fully bound. An active profile session is strictly required to route automated background actions into your personal calendar stack and tracking matrix grid.
-              </p>
-            </div>
-            <div className="shrink-0 flex flex-col items-center sm:items-end font-mono">
-              <span className="text-[10px] text-zinc-400 dark:text-zinc-600 uppercase tracking-widest block">System Build</span>
-              <span className="text-sm font-extrabold text-cyan-600 dark:text-cyan-400 filter drop-shadow-[0_0_8px_rgba(6,182,212,0.3)]">v10.0.10</span>
-            </div>
-          </div>
+          </footer>
 
         </section>
       </div>
 
-      {/* POP-UP GOOGLE SYNC GUIDE */}
-      {showGoogleSyncPopup && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[999] p-4 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 sm:p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-6 transform animate-in zoom-in-95 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center border-b border-zinc-900 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6"><GoogleLogo /></div>
-                <h3 className="font-mono text-xs uppercase tracking-widest text-cyan-400 font-black">Google Advanced Synch</h3>
-              </div>
-              <button onClick={() => setShowGoogleSyncPopup(false)} className="text-zinc-500 hover:text-white font-mono text-sm p-1 transition">✕</button>
+      {/* ── 🛸 FORMULAIRE INTERCEPTÉ : NOUVEAU MOT DE PASSE (PASSWORD RECOVERY MODAL) ── */}
+      {isRecoveringPassword && (
+        <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[9999] p-6 backdrop-blur-md animate-in fade-in duration-300">
+          <form onSubmit={handleUpdatePassword} className="bg-white dark:bg-zinc-950 border-2 border-cyan-400 dark:border-cyan-500 rounded-3xl p-8 max-w-md w-full shadow-[0_0_40px_rgba(6,182,212,0.4)] space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="border-b border-zinc-200 dark:border-zinc-900 pb-3">
+              <h2 className="text-base font-mono uppercase tracking-widest text-cyan-500 font-black">🛠️ {lang === "fr" ? "Mise à Jour Sécurisée" : "Reset Access Token"}</h2>
+              <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">{lang === "fr" ? "Veuillez définir votre nouvelle clé de sécurité d'accès." : "Please define your new secure operational password profile key."}</p>
             </div>
-            <div className="space-y-6 text-white text-sm leading-relaxed font-sans">
-              <p className="text-[14px] text-white leading-relaxed font-medium">Voici les étapes à suivre pour autoriser la synchronisation de votre calendrier Google.</p>
-              <div className="border border-zinc-800 p-5 sm:p-6 rounded-xl bg-zinc-900/30 space-y-6">
-                <div className="flex items-start gap-3 bg-red-950/20 border border-red-500/20 p-4 rounded-xl text-white font-sans text-sm">
-                  <div className="text-red-500 text-2xl pt-0.5 select-none">⚠️</div>
-                  <div className="space-y-1">
-                    <p className="font-bold text-zinc-100 tracking-wide text-[14px]">Google n'a pas vérifié cette application</p>
-                    <p className="text-zinc-200 text-xs sm:text-sm leading-relaxed">Il est possible que Google affiche ce message.</p>
-                  </div>
-                </div>
-                <p className="text-zinc-200 text-sm">Voici la manipulation à faire :</p>
-                <div className="space-y-6 pt-2">
-                  <div>
-                    <p className="text-zinc-300 font-bold font-mono uppercase tracking-wider text-xs mb-1">Étape 1</p>
-                    <p className="text-white text-sm font-medium">Tout en bas de la page de connexion Google, vous verrez le lien :</p>
-                    <p className="text-white font-bold underline mt-2 block tracking-wide text-sm sm:text-base select-none">Paramètres avancés</p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-300 font-bold font-mono uppercase tracking-wider text-xs mb-1">Étape 2</p>
-                    <p className="text-white text-sm font-medium">Un texte supplémentaire s'affichera. Repérez puis cliquez sur le tout dernier lien situé complètement au bas de la page :</p>
-                    <p className="text-white font-bold underline mt-2 block tracking-wide text-sm sm:text-base select-none">Accéder à l'application non sécurisée</p>
-                    <p className="text-zinc-300 text-xs sm:text-sm italic mt-2 block font-normal">Cette étape permettra d'autoriser la synchronisation de votre calendrier.</p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-300 font-bold font-mono uppercase tracking-wider text-xs mb-1">Étape 3</p>
-                    <p className="text-white text-sm font-medium">Acceptez ensuite les autorisations demandées par Google pour terminer la synchronisation.</p>
-                  </div>
-                </div>
-              </div>
+            {recoveryError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {recoveryError}</div>}
+            <div>
+              <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Nouveau Mot de Passe" : "New Password Key"}</label>
+              <input 
+                type="password" 
+                placeholder="Minimum 6 caractères" 
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)} 
+                className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 shadow-inner" 
+                autoFocus
+              />
             </div>
-            <div className="flex flex-col gap-3 pt-2 border-t border-zinc-900">
-              <button onClick={handleGoogleConnectWithSyncNewTab} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2">
-                <span>🌐 Aller à la page d'autorisation Google</span>
+            <div className="flex gap-2">
+              <button type="submit" className="flex-1 bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">
+                {lang === "fr" ? "Enregistrer" : "Save New Key"}
               </button>
-              <button onClick={() => setShowGoogleSyncPopup(false)} className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-400 font-mono text-xs py-2.5 rounded-xl transition border border-zinc-800">Retour</button>
+              <button type="button" onClick={() => setIsRecoveringPassword(false)} className="px-4 py-3 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl font-semibold text-zinc-500">
+                {lang === "fr" ? "Annuler" : "Cancel"}
+              </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
-      {/* SIGN IN MODAL */}
+      {/* SIGN IN MODAL (AVEC FORMULAIRE ET PRESSION SUR ENTER ACTIVE) */}
       {showSignInModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowSignInModal(false)}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
-              <div>
-                <h2 className="text-base font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">🛸 {lang === "fr" ? "Accès Écosystème" : "Account Access"}</h2>
-                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">{lang === "fr" ? "Entrez vos paramètres d'authentification pour synchroniser votre profil." : "Input your authorized encryption parameters to sync your profile."}</p>
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => { setShowSignInModal(false); clearInputs(); }}>
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <form onSubmit={handleEmailSignIn} className="space-y-6">
+              <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
+                <div>
+                  <h2 className="text-base font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">🛸 {lang === "fr" ? "Accès Écosystème" : "Account Access"}</h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">{lang === "fr" ? "Entrez vos paramètres d'authentification pour synchroniser votre profil." : "Input your authorized encryption parameters to sync your profile."}</p>
+                </div>
+                <button type="button" onClick={() => { setShowSignInModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
               </div>
-              <button onClick={() => { setShowSignInModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
-            </div>
-            {signInError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signInError}</div>}
-            {signInSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signInSuccess}</div>}
-            <div className="space-y-4">
-              <div>
-                <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Adresse Courriel" : "Identity Node (Email)"}</label>
-                <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+              {signInError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signInError}</div>}
+              {signInSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signInSuccess}</div>}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Adresse Courriel" : "Identity Node (Email)"}</label>
+                  <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+                </div>
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Mot de Passe" : "Access Token (Password)"}</label>
+                  <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+                </div>
+                <button onClick={handleForgotPassword} type="button" className="w-full py-3 rounded-xl text-xs font-mono font-bold border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/50 bg-zinc-50 dark:bg-zinc-900/30 transition-all shadow-sm">{lang === "fr" ? "Mot de passe oublié ? Réinitialiser" : "Forgot password? Reset access link"}</button>
               </div>
-              <div>
-                <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Mot de Passe" : "Access Token (Password)"}</label>
-                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
-              </div>
-              <button onClick={handleForgotPassword} type="button" className="w-full py-3 rounded-xl text-xs font-mono font-bold border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/50 bg-zinc-50 dark:bg-zinc-900/30 transition-all shadow-sm">{lang === "fr" ? "Mot de passe oublié ? Réinitialiser" : "Forgot password? Reset access link"}</button>
-            </div>
-            <button onClick={handleEmailSignIn} className="w-full bg-cyan-600 hover:bg-cyan-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{lang === "fr" ? "Se connecter à votre compte" : "Login to your account"}</button>
+              <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{lang === "fr" ? "Se connecter à votre compte" : "Login to your account"}</button>
+            </form>
           </div>
         </div>
       )}
 
-      {/* SIGN UP MODAL */}
+      {/* SIGN UP MODAL (AVEC FORMULAIRE ET PRESSION SUR ENTER ACTIVE) */}
       {showSignUpModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowSignUpModal(false)}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
-              <div>
-                <h2 className="text-base font-mono uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-bold">🛸 {lang === "fr" ? "Créer un Profil" : "Create Account"}</h2>
-                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Register your cryptographic access tokens within our decentralized network.</p>
-                <p className="text-amber-600 dark:text-amber-400/90 text-[11px] font-mono mt-2 bg-amber-500/5 border border-amber-200 dark:border-amber-500/10 rounded-lg py-1 px-3.5">{lang === "fr" ? "💡 Note : Pensez à vérifier votre dossier Courriers indésirables (Spam) si vous ne recevez pas le lien de validation." : "💡 Note: Please remember to check your Junk or Spam folders if you do not receive the verification link."}</p>
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => { setShowSignUpModal(false); clearInputs(); }}>
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <form onSubmit={handleEmailSignUp} className="space-y-6">
+              <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
+                <div>
+                  <h2 className="text-base font-mono uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-bold">🛸 {lang === "fr" ? "Créer un Profil" : "Create Account"}</h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Register your cryptographic access tokens within our decentralized network.</p>
+                  <p className="text-amber-600 dark:text-amber-400/90 text-[11px] font-mono mt-2 bg-amber-500/5 border border-amber-200 dark:border-amber-500/10 rounded-lg py-1 px-3.5">{lang === "fr" ? "💡 Note : Pensez à vérifier votre dossier Courriers indésirables (Spam) si vous ne recevez pas le lien de validation." : "💡 Note: Please remember to check your Junk or Spam folders if you do not receive the verification link."}</p>
+                </div>
+                <button type="button" onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
               </div>
-              <button onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
-            </div>
-            {signUpError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signUpError}</div>}
-            {signUpSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-4 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signUpSuccess}</div>}
-            <div className="space-y-4">
-              <div>
-                <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">Target Email Address</label>
-                <input type="email" placeholder="nom@domaine.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" />
+              {signUpError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signUpError}</div>}
+              {signUpSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-4 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signUpSuccess}</div>}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">Target Email Address</label>
+                  <input type="email" placeholder="nom@domaine.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" />
+                </div>
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">Define Secure Security Key</label>
+                  <input type="password" placeholder="Minimum 6 caractères" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" />
+                </div>
               </div>
-              <div>
-                <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">Define Secure Security Key</label>
-                <input type="password" placeholder="Minimum 6 caractères" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" />
-              </div>
-            </div>
-            <button onClick={handleEmailSignUp} className="w-full bg-emerald-600 hover:bg-emerald-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{lang === "fr" ? "Créer le compte" : "Create Account"}</button>
+              <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{lang === "fr" ? "Créer le compte" : "Create Account"}</button>
+            </form>
           </div>
         </div>
       )}
