@@ -604,12 +604,16 @@ export default function ServicesPage() {
             </p>
           </div>
 
-          {/* 🏴‍☠️ LE COFFRE AU TRÉSOR — Zone réactive agrandie pour faciliter le clic tout au fond */}
-          <div className="shrink-0 w-full flex items-center justify-center pb-32">
+          {/* 🏴‍☠️ LE TERMINUS : Le coffre est rendu ICI, juste après le texte de guidage */}
+          <div className="shrink-0 w-full flex flex-col items-center justify-center pt-20 pb-32 gap-6">
+            <p className="text-zinc-500 dark:text-zinc-700 text-[10px] font-mono uppercase tracking-widest text-center select-none">
+              {lang === "fr" ? "✦ MATRIX TERMINUS REACHED ✦" : "✦ MATRIX TERMINUS REACHED ✦"}
+            </p>
+            
             <button 
               type="button"
               onClick={() => setShowTreasureModal(true)}
-              className="w-24 h-12 opacity-0 hover:opacity-40 cursor-pointer select-none text-[14px] transition-all duration-200 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-center"
+              className="w-24 h-12 opacity-0 hover:opacity-50 cursor-pointer select-none text-[16px] transition-all duration-200 bg-amber-500/20 border border-amber-500/40 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.1)]"
               title="..."
             >
               💎
