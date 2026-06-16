@@ -19,25 +19,27 @@ const localT = {
       free: {
         title: "Free",
         sub: "FOREVER FREE",
-        f1: "✅ AI Standard Model",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
-        f5: "✅ Behavioral Prompts Limited",
-        f6: "❌ History page",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Standard Model",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f5: "✅ Vitality",
+        f6: "✅ Behavioral Prompts Limited",
+        f7: "❌ History page",
         ai1: "✅ Calendar Echo AI Limited",
         ai2: "✅ Vitality Echo AI Limited",
       },
       basic: {
         title: "Basic",
         sub: "PER MONTH",
-        f1: "✅ AI Advanced Model",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
-        f5: "✅ Behavioral Prompts x4",
-        f6: "❌ History page",
-        f7: "✅ Email Support",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Advanced Model",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f5: "✅ Vitality",
+        f6: "✅ Behavioral Prompts x4",
+        f7: "❌ History page",
+        f8: "✅ Email Support",
         ai1: "✅ Calendar Echo AI x4",
         ai2: "✅ Vitality Echo AI x4",
       },
@@ -45,10 +47,11 @@ const localT = {
         title: "Premium",
         sub: "PER MONTH",
         badge: "⭐ MOST POPULAR",
-        f1: "✅ AI Advanced Model",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Advanced Model",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f4_1: "✅ Vitality",
         f5: "✅ History page limited",
         f6: "✅ Email Support",
         f7: "✅ Image Analysis",
@@ -60,15 +63,16 @@ const localT = {
         title: "Ultra",
         sub: "PER MONTH",
         power: "Power Users",
-        f1: "✅ AI Expert Model",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
-        f5: "✅ History page unlimited",
-        f6: "✅ Priority Processing",
-        f7: "✅ Email Support",
-        f8: "✅ Image Analysis",
-        f9: "✅ Behavioral Prompts x30",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Expert Model",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f5: "✅ Vitality",
+        f6: "✅ History page unlimited",
+        f7: "✅ Priority Processing",
+        f8: "✅ Email Support",
+        f9: "✅ Image Analysis",
+        f10: "✅ Behavioral Prompts x30",
         ai1: "✅ Calendar Echo AI x30",
         ai2: "✅ Vitality Echo AI x30",
       },
@@ -76,16 +80,17 @@ const localT = {
         title: "Founder",
         sub: "PER MONTH",
         power: "Support Echo Development",
-        f1: "✅ AI Expert Model unlimited",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
-        f5: "✅ History page unlimited",
-        f6: "✅ Priority Processing",
-        f7: "✅ Email Support",
-        f8: "✅ Image Analysis",
-        f9: "✅ Advanced Capabilities",
-        f10: "✅ Unlimited Behavioral Prompts",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Expert Model unlimited",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f5: "✅ Vitality",
+        f6: "✅ History page unlimited",
+        f7: "✅ Priority Processing",
+        f8: "✅ Email Support",
+        f9: "✅ Image Analysis",
+        f10: "✅ Advanced Capabilities",
+        f11: "✅ Unlimited Behavioral Prompts",
         ai1: "✅ Calendar Echo AI unlimited",
         ai2: "✅ Vitality Echo AI unlimited",
       }
@@ -103,25 +108,27 @@ const localT = {
       free: {
         title: "Free",
         sub: "FOREVER FREE",
-        f1: "✅ AI Standard Model",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
-        f5: "✅ Behavioral Prompts Limited",
-        f6: "❌ History page",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Standard Model",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f5: "✅ Vitality",
+        f6: "✅ Behavioral Prompts Limited",
+        f7: "❌ History page",
         ai1: "✅ Calendar Echo AI Limited",
         ai2: "✅ Vitality Echo AI Limited",
       },
       basic: {
         title: "Basic",
         sub: "PER MONTH",
-        f1: "✅ AI Advanced Model",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
-        f5: "✅ Behavioral Prompts x4",
-        f6: "❌ History page",
-        f7: "✅ Email Support",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Advanced Model",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f5: "✅ Vitality",
+        f6: "✅ Behavioral Prompts x4",
+        f7: "❌ History page",
+        f8: "✅ Email Support",
         ai1: "✅ Calendar Echo AI x4",
         ai2: "✅ Vitality Echo AI x4",
       },
@@ -129,10 +136,11 @@ const localT = {
         title: "Premium",
         sub: "PER MONTH",
         badge: "⭐ MOST POPULAR",
-        f1: "✅ AI Advanced Model",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Advanced Model",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f4_1: "✅ Vitality",
         f5: "✅ History page limited",
         f6: "✅ Email Support",
         f7: "✅ Image Analysis",
@@ -144,15 +152,16 @@ const localT = {
         title: "Ultra",
         sub: "PER MONTH",
         power: "Power Users",
-        f1: "✅ AI Expert Model",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
-        f5: "✅ History page unlimited",
-        f6: "✅ Priority Processing",
-        f7: "✅ Email Support",
-        f8: "✅ Image Analysis",
-        f9: "✅ Behavioral Prompts x30",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Expert Model",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f5: "✅ Vitality",
+        f6: "✅ History page unlimited",
+        f7: "✅ Priority Processing",
+        f8: "✅ Email Support",
+        f9: "✅ Image Analysis",
+        f10: "✅ Behavioral Prompts x30",
         ai1: "✅ Calendar Echo AI x30",
         ai2: "✅ Vitality Echo AI x30",
       },
@@ -160,16 +169,17 @@ const localT = {
         title: "Founder",
         sub: "PER MONTH",
         power: "Support Echo Development",
-        f1: "✅ AI Expert Model unlimited",
-        f2: "✅ Notes",
-        f3: "✅ Calendar",
-        f4: "✅ Vitality",
-        f5: "✅ History page unlimited",
-        f6: "✅ Priority Processing",
-        f7: "✅ Email Support",
-        f8: "✅ Image Analysis",
-        f9: "✅ Advanced Capabilities",
-        f10: "✅ Unlimited Behavioral Prompts",
+        f1: "✅ WebSearch Integration",
+        f2: "✅ AI Expert Model unlimited",
+        f3: "✅ Notes",
+        f4: "✅ Calendar",
+        f5: "✅ Vitality",
+        f6: "✅ History page unlimited",
+        f7: "✅ Priority Processing",
+        f8: "✅ Email Support",
+        f9: "✅ Image Analysis",
+        f10: "✅ Advanced Capabilities",
+        f11: "✅ Unlimited Behavioral Prompts",
         ai1: "✅ Calendar Echo AI unlimited",
         ai2: "✅ Vitality Echo AI unlimited",
       }
@@ -181,6 +191,7 @@ const TIER_RANK: Record<string, number> = {
   free: 0,
   basic: 1,
   premium: 2,
+  treasure: 2.5, // Le trésor se place stratégiquement avant l'Ultra
   ultra: 3,
   founder: 4,
 };
@@ -191,6 +202,10 @@ export default function ServicesPage() {
   const [user, setUser] = useState<any>(null);
   const [userTier, setUserTier] = useState<"free" | "basic" | "premium" | "ultra" | "founder" | string>("free");
   const [isLoadingCheckout, setIsLoadingCheckout] = useState<string | null>(null);
+
+  // ── ÉTATS POUR L'EASTER EGG DU COFFRE CACHÉ ──
+  const [showTreasureModal, setShowTreasureModal] = useState(false);
+  const [isLoadingTreasure, setIsLoadingTreasure] = useState(false);
 
   const activeT = lang === "fr" ? localT.fr : localT.en;
 
@@ -227,16 +242,24 @@ export default function ServicesPage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const handleUpgradeWithStripe = async (planName: "basic" | "premium" | "ultra" | "founder") => {
+  const handleUpgradeWithStripe = async (planName: "basic" | "premium" | "ultra" | "founder" | "treasure") => {
     if (!user) {
       alert(lang === "fr" ? "Veuillez vous connecter avant de mettre à niveau votre plan." : "Please log in before upgrading your plan.");
       return;
     }
-    if (TIER_RANK[planName] <= TIER_RANK[userTier]) {
+    // Permet l'achat du trésor sauf si on est déjà Ultra ou Founder
+    if (planName !== "treasure" && TIER_RANK[planName] <= TIER_RANK[userTier]) {
       return;
     }
+    if (planName === "treasure" && TIER_RANK[userTier] >= TIER_RANK["ultra"]) {
+      alert(lang === "fr" ? "Tu possèdes déjà un forfait supérieur ou égal à l'offre du coffre !" : "You already own an equal or higher tier than the hidden chest chest!");
+      return;
+    }
+
     try {
-      setIsLoadingCheckout(planName);
+      if (planName === "treasure") setIsLoadingTreasure(true);
+      else setIsLoadingCheckout(planName);
+
       const response = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -252,8 +275,9 @@ export default function ServicesPage() {
     } catch (error: any) {
       console.error("Stripe checkout error:", error);
       alert(`Error linking to checkout gateway: ${error.message}`);
-    } finally {
+    } {
       setIsLoadingCheckout(null);
+      setIsLoadingTreasure(false);
     }
   };
 
@@ -305,7 +329,9 @@ export default function ServicesPage() {
 
     return (
       <button
+        type="button"
         disabled={isLoadingCheckout !== null}
+        onClick={() => handleUpgradeWithStripe(planName)}
         className={`mt-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition w-full shadow-sm ${upgradeClass}`}
       >
         {isLoadingCheckout === planName ? activeT.connecting : upgradeLabel}
@@ -346,7 +372,7 @@ export default function ServicesPage() {
 
               {/* PLAN 1: FREE */}
               <div 
-                className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[540px] select-none ${
+                className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[560px] select-none ${
                   userTier === "free" 
                     ? "border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/20" 
                     : "border-zinc-200 dark:border-zinc-800"
@@ -359,12 +385,13 @@ export default function ServicesPage() {
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase block mb-1">{activeT.features}</span>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f1}</div>
+                      <div className="text-[12px] font-semibold text-cyan-500 dark:text-cyan-400">{activeT.plans.free.f1}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f2}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f3}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f4}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f5}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f6}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f7}</div>
                     </div>
                     <div className="space-y-1.5 pt-3.5 border-t border-zinc-200 dark:border-zinc-800">
                       <span className="text-[11px] font-bold tracking-wide uppercase block text-zinc-400 dark:text-zinc-500">{activeT.echoAiDoIt}</span>
@@ -380,8 +407,7 @@ export default function ServicesPage() {
 
               {/* PLAN 2: BASIC */}
               <div 
-                onClick={() => TIER_RANK["basic"] > TIER_RANK[userTier] && handleUpgradeWithStripe("basic")}
-                className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[540px] select-none ${
+                className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[560px] select-none ${
                   userTier === "basic" 
                     ? "border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20" 
                     : TIER_RANK["basic"] < TIER_RANK[userTier]
@@ -396,13 +422,14 @@ export default function ServicesPage() {
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase block mb-1">{activeT.features}</span>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.basic.f1}</div>
+                      <div className="text-[12px] font-semibold text-cyan-500 dark:text-cyan-400">{activeT.plans.basic.f1}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.basic.f2}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.basic.f3}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.basic.f4}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.basic.f5}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.basic.f6}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.basic.f7}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.basic.f8}</div>
                     </div>
                     <div className="space-y-1.5 pt-3.5 border-t border-zinc-200 dark:border-zinc-800">
                       <span className="text-[11px] font-bold tracking-wide uppercase block text-emerald-800 dark:text-emerald-600">{activeT.echoAiDoIt}</span>
@@ -416,8 +443,7 @@ export default function ServicesPage() {
 
               {/* PLAN 3: PREMIUM */}
               <div 
-                onClick={() => TIER_RANK["premium"] > TIER_RANK[userTier] && handleUpgradeWithStripe("premium")}
-                className={`bg-zinc-50 dark:bg-zinc-900 border-2 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[540px] select-none relative ${
+                className={`bg-zinc-50 dark:bg-zinc-900 border-2 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[560px] select-none relative ${
                   userTier === "premium" 
                     ? "border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)]" 
                     : TIER_RANK["premium"] < TIER_RANK[userTier]
@@ -435,10 +461,11 @@ export default function ServicesPage() {
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase block mb-1">{activeT.features}</span>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.premium.f1}</div>
+                      <div className="text-[12px] font-semibold text-cyan-500 dark:text-cyan-400">{activeT.plans.premium.f1}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.premium.f2}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.premium.f3}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.premium.f4}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.premium.f4_1}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.premium.f5}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.premium.f6}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.premium.f7}</div>
@@ -456,8 +483,7 @@ export default function ServicesPage() {
 
               {/* PLAN 4: ULTRA */}
               <div 
-                onClick={() => TIER_RANK["ultra"] > TIER_RANK[userTier] && handleUpgradeWithStripe("ultra")}
-                className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[540px] select-none ${
+                className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[560px] select-none ${
                   userTier === "ultra" 
                     ? "border-purple-500 shadow-[0_0_20px_rgba(147,51,234,0.15)] ring-1 ring-purple-500/20" 
                     : TIER_RANK["ultra"] < TIER_RANK[userTier]
@@ -473,7 +499,7 @@ export default function ServicesPage() {
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase block mb-1">{activeT.features}</span>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.ultra.f1}</div>
+                      <div className="text-[12px] font-semibold text-cyan-500 dark:text-cyan-400">{activeT.plans.ultra.f1}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.ultra.f2}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.ultra.f3}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.ultra.f4}</div>
@@ -482,6 +508,7 @@ export default function ServicesPage() {
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.ultra.f7}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.ultra.f8}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.ultra.f9}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.ultra.f10}</div>
                     </div>
                     <div className="space-y-1.5 pt-3.5 border-t border-zinc-200 dark:border-zinc-800">
                       <span className="text-[11px] font-bold tracking-wide uppercase block text-purple-600 dark:text-purple-400">{activeT.echoAiDoIt}</span>
@@ -495,8 +522,7 @@ export default function ServicesPage() {
 
               {/* PLAN 5: FOUNDER */}
               <div 
-                onClick={() => TIER_RANK["founder"] > TIER_RANK[userTier] && handleUpgradeWithStripe("founder")}
-                className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[540px] select-none ${
+                className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[560px] select-none ${
                   userTier === "founder" 
                     ? "border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20 shadow-md" 
                     : "border-zinc-200 dark:border-zinc-800 hover:border-amber-500/60 hover:shadow-[0_0_35px_rgba(245,158,11,0.35)] cursor-pointer hover:scale-102"
@@ -510,7 +536,7 @@ export default function ServicesPage() {
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase block mb-1">{activeT.features}</span>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.founder.f1}</div>
+                      <div className="text-[12px] font-semibold text-cyan-500 dark:text-cyan-400">{activeT.plans.founder.f1}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.founder.f2}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.founder.f3}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.founder.f4}</div>
@@ -520,6 +546,7 @@ export default function ServicesPage() {
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.founder.f8}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.founder.f9}</div>
                       <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.founder.f10}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.founder.f11}</div>
                     </div>
                     <div className="space-y-1.5 pt-3.5 border-t border-zinc-200 dark:border-zinc-800">
                       <span className="text-[11px] font-bold tracking-wide uppercase block text-amber-500 dark:text-amber-400">{activeT.echoAiDoIt}</span>
@@ -535,16 +562,18 @@ export default function ServicesPage() {
           </div>
 
           {/* FOOTER ÉPURÉ */}
-          <footer className="shrink-0 border-t border-zinc-200 dark:border-zinc-900 bg-zinc-50/60 dark:bg-zinc-950/60 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-3 flex-wrap text-[10px] text-zinc-400 dark:text-zinc-600 transition-colors">
+          <footer className="shrink-0 border-t border-zinc-200 dark:border-zinc-900 bg-zinc-50/60 dark:bg-zinc-950/60 px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-3 flex-wrap text-[10px] text-zinc-400 dark:text-zinc-600 transition-colors relative">
             <div>© {new Date().getFullYear()} Echo Ecosystem. All rights reserved.</div>
             <div className="flex gap-2 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
               <button
+                type="button"
                 onClick={handleFeedbackClick}
                 className="flex items-center gap-1 border border-zinc-300 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-700 px-3 py-1.5 rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white bg-white dark:bg-zinc-900/40 transition font-medium shadow-sm text-[11px]"
               >
                 💡 {lang === "fr" ? "Commentaires & Suggestions" : "Feedback & Suggestions"}
               </button>
               <button
+                type="button"
                 onClick={handleSupportClick}
                 className={`flex items-center gap-1 border px-3 py-1.5 rounded-xl font-medium transition shadow-sm text-[11px] ${
                   userTier === "free"
@@ -555,10 +584,78 @@ export default function ServicesPage() {
                 {userTier === "free" ? "🔒" : "✉️"} {lang === "fr" ? "Contacter le Support" : "Contact Support"}
               </button>
             </div>
+
+            {/* 🏴‍☠️ BOUTON COFFRE AU TRÉSOR COMPLÈTEMENT CACHÉ (EASTER EGG SOUS LE FOOTER) */}
+            <button 
+              type="button"
+              onClick={() => setShowTreasureModal(true)}
+              className="w-5 h-5 opacity-0 hover:opacity-20 cursor-default absolute bottom-0.5 left-1/2 -translate-x-1/2 z-50 select-none text-[8px]"
+              title="..."
+            >
+              💎
+            </button>
           </footer>
 
         </section>
       </div>
+
+      {/* ── 🏴‍☠️ EXTENSION POP-UP DU COFFRE SECRÈT D'ECHO (ULTRA À -40%) ── */}
+      {showTreasureModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white">
+            
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">
+              👑
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">
+                {lang === "fr" ? "🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉" : "🎉✨ GREETINGS, MATRIX EXPLORER! ✨🎉"}
+              </h3>
+              <p className="text-zinc-400 text-[11px] font-semibold leading-relaxed">
+                {lang === "fr" 
+                  ? "Tu viens de découvrir un Easter Egg caché dans les profondeurs d'Echo AI... et ça mérite une récompense. 😎" 
+                  : "You have just unearthed a hidden Easter Egg deep within the core sub-levels of Echo AI... you earned this reward. 😎"}
+              </p>
+            </div>
+
+            {/* MESSAGE EXACT INJECTÉ SANS AUCUNE FAUTE D'ORTHOGRAPHE */}
+            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-left text-[12px] sm:text-[13px] leading-relaxed text-zinc-100 font-semibold space-y-3">
+              <p className="text-center font-black text-amber-400 text-sm">🏆 FÉLICITATIONS!</p>
+              <p>Tu débloques un accès à l'abonnement ULTRA avec une réduction exceptionnelle de 40 % pendant 1 mois.</p>
+              <p>Peu de gens tombent sur cette surprise. Encore moins prennent le temps d'explorer suffisamment pour la trouver. 👀</p>
+              <div className="pt-1 text-cyan-400 font-mono space-y-0.5">
+                <p>💎 Ton bonus :</p>
+                <p>• 40 % de réduction sur ULTRA pendant 1 mois</p>
+                <p>• Accès complet aux fonctionnalités avancées</p>
+                <p>• Le droit officiel de te vanter d'avoir trouvé un secret caché d'Echo AI</p>
+              </div>
+              <p className="text-[11px] text-zinc-400 italic">⚠️ Cette récompense est valable pour un seul mois d'abonnement ULTRA et ne peut être combinée avec d'autres promotions.</p>
+              <p className="text-zinc-300 font-medium">Profites-en tant que le portail est encore ouvert... les Easter Eggs ont tendance à disparaître aussi mystérieusement qu'ils apparaissent. 😉</p>
+              <p className="text-center font-bold text-emerald-400 pt-1">🚀 Bien joué. Echo te regardait depuis le début.</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button 
+                type="button"
+                disabled={isLoadingTreasure}
+                onClick={() => handleUpgradeWithStripe("treasure")}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md"
+              >
+                {isLoadingTreasure ? "CONNECTING GATEWAY..." : (lang === "fr" ? "RÉCLAMER LE TRESOR (9.99$) ➔" : "CLAIM SECRET CHEST (9.99$) ➔")}
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowTreasureModal(false)}
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800"
+              >
+                {lang === "fr" ? "Laisser le secret tranquille" : "Leave the node locked"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
