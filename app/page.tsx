@@ -762,20 +762,26 @@ export default function Home() {
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 mt-3 px-2">
-              {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center">
-                  <div className={echoState === "idle" ? "echo-idle" : echoState === "thinking" ? "echo-thinking" : "echo-speaking"}>
-                    <img
-                      src="/Echo.png"
-                      alt="Echo Core"
-                      className="w-[350px] h-[350px] object-cover rounded-full border border-zinc-200 dark:border-zinc-900 shadow-lg"
-                    />
-                    <span className="text-zinc-400 dark:text-zinc-600 text-[10px] block mt-4 tracking-widest uppercase font-mono">
-                      System Hub Status: {echoState}
-                    </span>
-                  </div>
-                </div>
-              ) : (
+  {messages.length === 0 ? (
+    <div className="h-full flex flex-col items-center justify-center text-center">
+      
+      {/* 🛑 Ajoute la condition ici, juste avant l'avatar */}
+      {!tutorialStep && (
+        <div className={echoState === "idle" ? "echo-idle" : echoState === "thinking" ? "echo-thinking" : "echo-speaking"}>
+          <img
+            src="/Echo.png"
+            alt="Echo Core"
+            className="w-[350px] h-[350px] object-cover rounded-full border border-zinc-200 dark:border-zinc-900 shadow-lg"
+          />
+          <span className="text-zinc-400 dark:text-zinc-600 text-[10px] block mt-4 tracking-widest uppercase font-mono">
+            System Hub Status: {echoState}
+          </span>
+        </div>
+      )}
+      {/* 🛑 Fin de la condition */}
+
+    </div>
+  ) : (
                 <div className="max-w-4xl mx-auto py-4 flex flex-col gap-10 min-w-0">
                   {messages.map((msg, index) => {
                     const isEcho = /^Echo\s*:/i.test(msg.raw);
