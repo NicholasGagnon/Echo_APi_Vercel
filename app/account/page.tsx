@@ -200,7 +200,10 @@ export default function AccountPage() {
         provider: "google",
         options: {
           redirectTo: `${window.location.origin}/account`,
-          scopes: "openid profile email", 
+          scopes: "openid profile email",
+          queryParams: {
+            prompt: "select_account",
+          },
         },
       });
       if (error) throw error;
