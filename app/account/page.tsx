@@ -60,6 +60,7 @@ export default function AccountPage() {
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [showGoogleSyncPopup, setShowGoogleSyncPopup] = useState(false);
+  const [showTreasureModal, setShowTreasureModal] = useState(false);
 
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -395,9 +396,6 @@ export default function AccountPage() {
 
         {/* MAIN PANEL */}
         <section className="flex-1 flex flex-col items-center px-6 sm:px-12 py-12 overflow-y-auto bg-white dark:bg-gradient-to-b dark:from-zinc-950 dark:via-black dark:to-black transition-colors duration-200 justify-between">
-          
-          
-
           <div className="w-full max-w-5xl flex flex-col items-center flex-1">
             <div className="text-center mb-12 shrink-0 w-full max-w-md">
               <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-500 font-mono text-sm shadow-sm">
@@ -673,9 +671,40 @@ export default function AccountPage() {
 
             <div className="max-w-5xl mx-auto border-t border-zinc-200 dark:border-zinc-900 mt-8 pt-4 flex flex-col sm:flex-row items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-600 gap-2">
               <div>© {new Date().getFullYear()} Echo AI Ecosystem (echosai.ca). All rights reserved.</div>
-              <div className="font-mono tracking-widest uppercase">Secured Identity Gateway Gateway Dashboard</div>
+              <div className="font-mono tracking-widest uppercase">Secured Identity Gateway Dashboard</div>
             </div>
           </footer>
+
+          {/* 🏴‍☠️ L'ESPACEUR GÉANT 1 (RESTORED) */}
+          <div className="shrink-0 w-full h-[1400px] flex items-end justify-center pb-10 px-4">
+            <p className="text-zinc-300 dark:text-zinc-800 text-[10px] font-mono uppercase tracking-widest text-center select-none">
+              {lang === "fr" ? "... continue de descendre ..." : "... keep scrolling down ..."}
+            </p>
+          </div>
+
+          {/* 🏴‍☠️ L'ESPACEUR GÉANT 2 (RESTORED) */}
+          <div className="shrink-0 w-full h-[2200px] flex items-end justify-center pb-10 px-4">
+            <p className="text-zinc-400 dark:text-zinc-700 text-[10px] font-mono uppercase tracking-widest text-center select-none">
+              {lang === "fr" ? "... continue de descendre ..." : "... keep scrolling down ..."}
+            </p>
+          </div>
+
+          {/* 🏴‍☠️ LE TERMINUS DES TRÉSORS (RESTORED) */}
+          <div className="shrink-0 w-full flex flex-col items-center justify-center pt-20 pb-32 gap-6">
+            <p className="text-zinc-500 dark:text-zinc-700 text-[10px] font-mono uppercase tracking-widest text-center select-none">
+              ✦ MATRIX TERMINUS REACHED ✦
+            </p>
+            
+            <button 
+              type="button"
+              onClick={() => setShowTreasureModal(true)}
+              className="w-24 h-12 opacity-5 hover:opacity-20 cursor-pointer select-none text-[16px] transition-all duration-200 bg-amber-500/20 border border-amber-500/40 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(245,158,11,0.1)]"
+              title="..."
+            >
+              💎
+            </button>
+          </div>
+
         </section>
       </div>
 
@@ -742,69 +771,111 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* ── 🛰️ POP-UP RECONSTRUIT PAS À PAS (GOOGLE CALENDAR GUIDANCE) ── */}
+      {/* ── 🛰️ POP-UP RECONSTRUIT GRAND LARGE (GOOGLE CALENDAR GUIDANCE) ── */}
       {showGoogleSyncPopup && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowGoogleSyncPopup(false)}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-lg w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 sm:p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowGoogleSyncPopup(false)}>
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-10 max-w-4xl w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200 max-h-[95vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             
             <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
               <div className="flex items-center gap-3">
                 <GoogleLogo />
                 <div>
-                  <h2 className="text-sm font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">
-                    {lang === "fr" ? "Passerelle Google Calendar" : "Google Calendar Bridge"}
+                  <h2 className="text-base sm:text-lg font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-black">
+                    {lang === "fr" ? "Passerelle d'Autorisation Google Calendar Stack" : "Google Calendar Stack Authorization Bridge"}
                   </h2>
-                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-0.5">
-                    {lang === "fr" ? "Autorisation d'accès sécurisé" : "Secure access authorization"}
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-0.5 font-medium">
+                    {lang === "fr" ? "Protocole d'intégration et de liaison de l'infrastructure" : "Infrastructure integration and synchronization tracking track"}
                   </p>
                 </div>
               </div>
               <button onClick={() => setShowGoogleSyncPopup(false)} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
             </div>
 
-            <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 space-y-4 leading-relaxed font-semibold">
+            <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 space-y-5 leading-relaxed font-semibold">
               {lang === "fr" ? (
                 <>
-                  <p className="text-amber-600 dark:text-amber-500 font-bold border border-amber-500/20 bg-amber-500/5 rounded-xl p-3">
-                    ⚠️ ATTENTION : Lors de la connexion, Google affichera un avertissement indiquant que l'application n'est pas validée. C'est tout à fait normal car Echo est en cours de développement.
+                  <p className="text-amber-600 dark:text-amber-500 font-bold border border-amber-500/20 bg-amber-500/5 rounded-xl p-4">
+                    ⚠️ NOTIFICATION DE SÉCURITÉ : Lors du déclenchement du nœud d'authentification, la cellule Google affichera un avertissement indiquant que l'application n'est pas validée. C'est le comportement attendu et tout à fait normal puisque l'écosystème Echo AI est en phase active de développement interne.
                   </p>
-                  <p className="font-mono text-[11px] text-zinc-400 uppercase tracking-wider">Procédure d'autorisation par étapes :</p>
-                  <ol className="list-decimal pl-5 space-y-2.5 text-zinc-700 dark:text-zinc-200">
-                    <li>Cliquez sur le bouton bleu <span className="text-cyan-500 font-bold">"Vers Autorisation Google Agenda"</span> ci-dessous.</li>
-                    <li>Sélectionnez votre compte Google.</li>
-                    <li>Sur l'écran d'avertissement de sécurité, cliquez sur le petit lien <span className="underline font-bold">"Paramètres avancés"</span> (Advanced) en bas à gauche.</li>
-                    <li>Cliquez ensuite sur le lien <span className="underline text-red-500 font-bold">"Accéder à echosai.ca (non sécurisé)"</span> pour autoriser l'agent à se lier à votre calendrier.</li>
-                    <li>Cochez bien les cases d'autorisations pour l'affichage et la gestion des événements, puis validez.</li>
-                  </ol>
+                  
+                  <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-2xl p-5 space-y-3">
+                    <p className="font-mono text-[11px] text-cyan-600 dark:text-cyan-400 uppercase tracking-widest font-black">📋 Guide d'autorisation pas à pas :</p>
+                    <ol className="list-decimal pl-5 space-y-3 text-zinc-800 dark:text-zinc-200 text-xs sm:text-sm">
+                      <li>Cliquez sur la commande principale de liaison <span className="text-cyan-500 font-bold">"Vers Autorisation Google Agenda"</span> située au bas de cet écran.</li>
+                      <li>Sélectionnez l'adresse du compte Google cible que vous désirez lier à vos matrices Echo.</li>
+                      <li>Dès l'apparition de l'écran d'avertissement de sécurité de Google, repérez et cliquez sur le petit lien textuel <span className="underline font-bold text-zinc-900 dark:text-white">"Paramètres avancés"</span> (Advanced) situé dans le coin inférieur gauche.</li>
+                      <li>Une section masquée va s'étendre : cliquez fermement sur le lien de contournement <span className="underline text-red-500 font-black">"Accéder à echosai.ca (non sécurisé)"</span> pour lier l'agent.</li>
+                      <li>Sur l'écran final de consentement, <span className="text-emerald-500 font-bold">cochez impérativement toutes les cases d'autorisations</span> requises pour la lecture, la création et la modification de vos événements d'agenda, puis confirmez la validation.</li>
+                    </ol>
+                  </div>
+
+                  {/* 🌐 AJOUT DU VRAI GUIDE AVEC LIEN HYPERTEXTE GOOGLE */}
+                  <div className="border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 p-4 rounded-xl text-xs flex items-start gap-3 shadow-inner">
+                    <span className="text-cyan-500 text-sm mt-0.5">ℹ️</span>
+                    <div>
+                      <p className="text-zinc-500 dark:text-zinc-400 font-medium">
+                        Besoin d'aide supplémentaire ? Vous pouvez consulter la documentation de support officielle de Google concernant les alertes de sécurité et les applications tierces non validées :
+                      </p>
+                      <a 
+                        href="https://support.google.com/cloud/answer/7454865" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-cyan-600 dark:text-cyan-400 font-bold underline mt-1.5 inline-block hover:text-cyan-500 transition-colors"
+                      >
+                        Documentation Google Cloud - Applications non validées ➔
+                      </a>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <>
-                  <p className="text-amber-600 dark:text-amber-500 font-bold border border-amber-500/20 bg-amber-500/5 rounded-xl p-3">
-                    ⚠️ NOTICE: During sign-in, Google will display a warning stating that the app is unverified. This is completely standard as Echo is currently in development.
+                  <p className="text-amber-600 dark:text-amber-500 font-bold border border-amber-500/20 bg-amber-500/5 rounded-xl p-4">
+                    ⚠️ SECURITY NOTICE: When executing the auth script, Google's stack will issue a warning alert stating that the core application is unverified. This is completely standard as the Echo AI ecosystem is running on a private development track.
                   </p>
-                  <p className="font-mono text-[11px] text-zinc-400 uppercase tracking-wider">Step-by-step authorization procedure:</p>
-                  <ol className="list-decimal pl-5 space-y-2.5 text-zinc-700 dark:text-zinc-200">
-                    <li>Click the blue <span className="text-cyan-500 font-bold">"Vers Autorisation Google Agenda"</span> button below.</li>
-                    <li>Select your Google account.</li>
-                    <li>On the security warning screen, click the small <span className="underline font-bold">"Advanced settings"</span> link at the bottom left.</li>
-                    <li>Then click the link <span className="underline text-red-500 font-bold">"Go to echosai.ca (unsafe)"</span> to allow the agent to bind with your calendar stacks.</li>
-                    <li>Make sure to check the permission boxes to view and manage your events, then confirm.</li>
-                  </ol>
+                  
+                  <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-2xl p-5 space-y-3">
+                    <p className="font-mono text-[11px] text-cyan-600 dark:text-cyan-400 uppercase tracking-widest font-black">📋 Step-by-Step Authorization Script:</p>
+                    <ol className="list-decimal pl-5 space-y-3 text-zinc-800 dark:text-zinc-200 text-xs sm:text-sm">
+                      <li>Click the main gateway link <span className="text-cyan-500 font-bold">"Vers Autorisation Google Agenda"</span> at the bottom of this modal panel.</li>
+                      <li>Select the identity node (Google account) you want to fuse into your Echo system.</li>
+                      <li>Once the splash security warning grid loads up, target and click the small text anchor called <span className="underline font-bold text-zinc-900 dark:text-white">"Advanced settings"</span> on the lower left.</li>
+                      <li>A hidden drawer node will open: click the routing bypass anchor <span className="underline text-red-500 font-black">"Go to echosai.ca (unsafe)"</span> to bind authorization arrays.</li>
+                      <li>On the final consent view, <span className="text-emerald-500 font-bold">you must explicitly check every parameter checkbox</span> to read, write, and patch calendar events before confirming your entry.</li>
+                    </ol>
+                  </div>
+
+                  {/* 🌐 TRUE SUPPORT GUIDE FOR ENGLISH USERS */}
+                  <div className="border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 p-4 rounded-xl text-xs flex items-start gap-3 shadow-inner">
+                    <span className="text-cyan-500 text-sm mt-0.5">ℹ️</span>
+                    <div>
+                      <p className="text-zinc-500 dark:text-zinc-400 font-medium">
+                        Need additional guidance? You can read Google's official cloud security framework detailing unverified app authorization and firewall warnings:
+                      </p>
+                      <a 
+                        href="https://support.google.com/cloud/answer/7454865" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-cyan-600 dark:text-cyan-400 font-bold underline mt-1.5 inline-block hover:text-cyan-500 transition-colors"
+                      >
+                        Google Cloud Documentation - Unverified Apps Guide ➔
+                      </a>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
 
-            <div className="flex flex-col gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row gap-3 pt-3">
               <button
                 onClick={() => {
                   setShowGoogleSyncPopup(false);
                   handleGoogleConnectWithSyncNewTab();
                 }}
-                className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl font-mono text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md text-center"
+                className="flex-1 bg-cyan-600 hover:bg-cyan-500 py-3.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md text-center"
               >
                 {lang === "fr" ? "Vers Autorisation Google Agenda ➔" : "Proceed to Google Auth ➔"}
               </button>
-              <button onClick={() => setShowGoogleSyncPopup(false)} className="w-full py-2.5 rounded-xl text-xs font-semibold border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
+              <button onClick={() => setShowGoogleSyncPopup(false)} className="px-6 py-3.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 text-xs rounded-xl font-semibold hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
                 {lang === "fr" ? "Annuler et revenir" : "Cancel and go back"}
               </button>
             </div>
@@ -812,36 +883,67 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* SIGN UP MODAL */}
-      {showSignUpModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => { setShowSignUpModal(false); clearInputs(); }}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <form onSubmit={handleEmailSignUp} className="space-y-6">
-              <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
-                <div>
-                  <h2 className="text-base font-mono uppercase tracking-widest text-emerald-600 dark:text-emerald-400 font-bold">🛸 {lang === "fr" ? "Créer un Profil" : "Create Account"}</h2>
-                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Register your cryptographic access tokens within our decentralized network.</p>
-                  <p className="text-amber-600 dark:text-amber-400/90 text-[11px] font-mono mt-2 bg-amber-500/5 border border-amber-200 dark:border-amber-500/10 rounded-lg py-1 px-3.5">{lang === "fr" ? "💡 Note : Pensez à vérifier votre dossier Courriers indésirables (Spam) si vous ne recevez pas le lien de validation." : "💡 Note: Please remember to check your Junk or Spam folders if you do not receive the verification link."}</p>
-                </div>
-                <button type="button" onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
+      {/* ── 🏴‍☠️ POP-UP SURPRISE DU TRÉSOR (RESTORED EASTER EGG OFFER ULTRA) ── */}
+      {showTreasureModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto relative">
+            <button
+              type="button"
+              onClick={() => setShowTreasureModal(false)}
+              className="absolute top-4 right-5 text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1"
+              title="Fermer le portail"
+            >
+              ✕
+            </button>
+            
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">
+              👑
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">
+                🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉
+              </h3>
+              <p className="text-zinc-400 text-[11px] font-semibold leading-relaxed">
+                Tu viens de découvrir un Easter Egg caché dans les profondeurs d'Echo AI... et ça mérite une récompense. 😎
+              </p>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-left text-[12px] sm:text-[13px] leading-relaxed text-zinc-100 font-semibold space-y-3">
+              <p className="text-center font-black text-amber-400 text-sm">🏆 FÉLICITATIONS!</p>
+              <p>Tu débloques un accès à l'abonnement ULTRA avec une réduction exceptionnelle de 40 % pendant 1 mois.</p>
+              <p>Peu de gens tombent sur cette surprise. Encore moins prennent le temps d'explorer suffisamment pour la trouver. 👀</p>
+              <div className="pt-1 text-cyan-400 font-mono space-y-0.5">
+                <p>💎 Ton bonus :</p>
+                <p>• 40 % de réduction sur ULTRA pendant 1 mois</p>
+                <p>• Accès complet aux fonctionnalités avancées</p>
+                <p>• Le droit officiel de te vanter d'avoir trouvé un secret caché d'Echo AI</p>
               </div>
-              {signUpError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signUpError}</div>}
-              {signUpSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 rounded-2xl p-4 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signUpSuccess}</div>}
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">Target Email Address</label>
-                  <input type="email" placeholder="nom@domaine.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" />
-                </div>
-                <div>
-                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">Define Secure Security Key</label>
-                  <input type="password" placeholder="Minimum 6 caractères" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" />
-                </div>
-              </div>
-              <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{lang === "fr" ? "Créer le compte" : "Create Account"}</button>
-            </form>
+              <p className="text-[11px] text-zinc-400 italic">⚠️ Cette récompense est valable pour un seul mois d'abonnement ULTRA et ne peut être combinée avec d'autres promotions.</p>
+              <p className="text-zinc-300 font-medium">Profites-en tant que le portail est encore ouvert... les Easter Eggs ont tendance à disparaître aussi mystérieusement qu'ils apparaissent. 😉</p>
+              <p className="text-center font-bold text-emerald-400 pt-1">🚀 Bien joué. Echo te regardait depuis le début.</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Link
+                href="/services"
+                onClick={() => setShowTreasureModal(false)}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md text-center block"
+              >
+                VOIR LES FORFAITS POUR RÉCLAMER ➔
+              </Link>
+              <button 
+                type="button"
+                onClick={() => setShowTreasureModal(false)}
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800"
+              >
+                Laisser le secret tranquille
+              </button>
+            </div>
           </div>
         </div>
       )}
+
     </main>
   );
 }
