@@ -399,11 +399,7 @@ export default function AccountPage() {
           {/* 🚨 AVERTISSEMENT EN ROUGE TOUT EN HAUT */}
           <div className="w-full max-w-5xl mb-6 border border-red-500/30 bg-red-500/[0.04] p-4 rounded-2xl flex items-center gap-3 animate-in fade-in duration-300">
             <span className="text-red-500 text-lg shrink-0">⚠️</span>
-            <p className="text-xs font-semibold leading-relaxed text-red-600 dark:text-red-400">
-              {lang === "fr" 
-                ? "Avis important : La passerelle d'accès Google Agenda est actuellement configurée sous nœud d'infrastructure de développement (Unverified). Suivez attentivement les instructions de liaison avancées pour franchir le pare-feu Google."
-                : "Important notice: The Google Calendar gateway node is currently running on a development track (Unverified). Please precisely follow the advanced auth sequence to clear the Google firewall."}
-            </p>
+            
           </div>
 
           <div className="w-full max-w-5xl flex flex-col items-center flex-1">
