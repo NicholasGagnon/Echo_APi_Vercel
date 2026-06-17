@@ -258,7 +258,7 @@ export default function ServicesPage() {
       if (planName === "treasure") setIsLoadingTreasure(true);
       else setIsLoadingCheckout(planName);
 
-      const planToRequest = planName === "treasure" ? "ultra" : planName;
+      const planToRequest = planName;
 
       const response = await fetch("/api/stripe/create-checkout", {
         method: "POST",

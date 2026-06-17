@@ -61,6 +61,7 @@ export default function AccountPage() {
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [showGoogleSyncPopup, setShowGoogleSyncPopup] = useState(false);
   const [showTreasureModal, setShowTreasureModal] = useState(false);
+  const [isLoadingTreasure, setIsLoadingTreasure] = useState(false);
 
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -332,6 +333,28 @@ export default function AccountPage() {
     setActiveProvider(null);
     setUserTier("connected_free");
     showToast(lang === "fr" ? "Déconnexion sécurisée effectuée." : "Disconnected safely.", "info");
+  };
+
+  const handleTreasureCheckout = async () => {
+    if (!user) {
+      alert(lang === "fr" ? "Connectez-vous avant de réclamer le trésor." : "Please log in before claiming the treasure.");
+      return;
+    }
+    try {
+      setIsLoadingTreasure(true);
+      const response = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "treasure", userId: user.id, userEmail: user.email }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Checkout error");
+      if (data.url) window.location.href = data.url;
+    } catch (err: any) {
+      alert(`Erreur : ${err.message}`);
+    } finally {
+      setIsLoadingTreasure(false);
+    }
   };
 
   const clearInputs = () => {
@@ -925,13 +948,14 @@ export default function AccountPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Link
-                href="/services"
-                onClick={() => setShowTreasureModal(false)}
-                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md text-center block"
+              <button
+                type="button"
+                disabled={isLoadingTreasure}
+                onClick={handleTreasureCheckout}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md text-center"
               >
-                VOIR LES FORFAITS POUR RÉCLAMER ➔
-              </Link>
+                {isLoadingTreasure ? "CONNEXION..." : "RÉCLAMER LE TRÉSOR (9.99$) ➔"}
+              </button>
               <button 
                 type="button"
                 onClick={() => setShowTreasureModal(false)}

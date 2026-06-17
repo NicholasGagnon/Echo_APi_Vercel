@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     }
 
     // Si c'est l'achat du coffre, on lui attribue le forfait premium (ou ultra selon ton choix) dans ton sillage
-    const tierToAssign = formattedPlan === "treasure" ? "premium" : formattedPlan;
+    const tierToAssign = formattedPlan === "treasure" ? "ultra" : formattedPlan;
 
     try {
       const { error } = await supabaseAdmin
