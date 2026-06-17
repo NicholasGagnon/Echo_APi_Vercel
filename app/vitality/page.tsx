@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
+import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import { useApp } from "../../context/AppContext";
 
 type BudgetExpense = {
@@ -27,7 +28,7 @@ type VitalityMessage = {
 };
 
 export default function VitalityPage() {
-  const { t, lang, theme, userTier, setLang } = useApp();
+  const { t, lang, theme, userTier } = useApp();
   const [isLoaded, setIsLoaded] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [inputEcho, setInputEcho] = useState("");
@@ -393,8 +394,9 @@ export default function VitalityPage() {
 
       {/* ── TUTORIAL BUBBLES ── */}
       {tutorialStep === 1 && (
-        <div className="absolute top-44 left-6 sm:left-72 w-80 sm:w-[430px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in duration-300 z-50">
-          <div className="flex items-center gap-2.5 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2">
+        <div className="absolute top-44 left-6 sm:left-72 w-80 sm:w-[460px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in duration-300 z-50">
+          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-vitality-done-v1", "true"); }} />
+          <div className="flex items-center gap-2.5 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
             <span>💸</span>
             <h4 className="font-black text-xs font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
               {lang === "fr" ? "ECHO BUDGET (1/2)" : "ECHO BUDGET (1/2)"}
@@ -415,18 +417,14 @@ export default function VitalityPage() {
             <button onClick={() => setTutorialStep(2)} className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
               {lang === "fr" ? "SUIVANT ➔" : "NEXT ➔"}
             </button>
-            {lang === "fr" && (
-              <button onClick={() => setLang("en")} className="text-[10px] font-mono uppercase text-zinc-400 hover:text-cyan-400 text-center underline mt-1">
-                English version? Switch here ➔
-              </button>
-            )}
           </div>
         </div>
       )}
 
       {tutorialStep === 2 && (
-        <div className="absolute top-64 left-6 sm:left-[450px] w-80 sm:w-[430px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(16,185,129,0.5)] border-2 border-emerald-400 dark:border-emerald-500 animate-in fade-in duration-300 z-50">
-          <div className="flex items-center gap-2.5 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2">
+        <div className="absolute top-64 left-6 sm:left-[450px] w-80 sm:w-[460px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(16,185,129,0.5)] border-2 border-emerald-400 dark:border-emerald-500 animate-in fade-in duration-300 z-50">
+          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-vitality-done-v1", "true"); }} />
+          <div className="flex items-center gap-2.5 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
             <span>🔥</span>
             <h4 className="font-black text-xs font-mono uppercase tracking-widest text-emerald-400 dark:text-emerald-600">
               {lang === "fr" ? "ECHO CALORIES (2/2)" : "ECHO CALORIES (2/2)"}

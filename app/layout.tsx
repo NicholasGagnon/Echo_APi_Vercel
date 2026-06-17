@@ -3,6 +3,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "../context/AppContext"; // 👈 On utilise le chemin d'importation propre de ton architecture
+import { Analytics } from "@vercel/analytics/react"; // 👈 Injection du tracker officiel de Vercel
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,6 +31,9 @@ export default function RootLayout({
         <AppProvider>
           {children}
         </AppProvider>
+
+        {/* 📊 Ton compteur de visites privé, visible uniquement sur ton dashboard Vercel */}
+        <Analytics />
 
       </body>
     </html>

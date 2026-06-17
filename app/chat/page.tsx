@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
 import LangDropdown from "../components/LangDropdown";
+import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import { useApp } from "../../context/AppContext";
 
 type HistoryEntry = { id: string; title: string; date: string; messages: string[]; };
@@ -49,6 +50,10 @@ export default function ChatPage() {
 
   // ── ÉTAT POUR LE FIL NARRATIF DU TUTORIEL (CHAPITRE 2) ──
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+
+  // ── TAILLE AJUSTABLE DU CHAMP DE SAISIE ──
+  const DEFAULT_INPUT_HEIGHT = 136;
+  const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
 
   // ── ÉTATS POUR LA MATRIX DE BOUTONS ──
   const [selectedButtons, setSelectedButtons] = useState<string[]>([]);
@@ -384,8 +389,9 @@ export default function ChatPage() {
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
 
       {tutorialStep === 1 && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 w-85 sm:w-[540px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
-          <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2">
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[92vw] max-w-[460px] sm:max-w-[640px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
+          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1", "true"); }} />
+          <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
             <span className="text-xl">💬</span>
             <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
               {lang === "fr" ? "CHAPITRE 2 : L'ESPACE IMMERSIF" : "CHAPTER 2: IMMERSIVE SPACE"}
@@ -473,7 +479,7 @@ export default function ChatPage() {
         </aside>
 
         <section className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-black transition-colors duration-200 min-w-0">
-          <div className="flex-1 flex flex-row overflow-hidden min-h-0 w-full">
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-white dark:bg-black">
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center gap-4">
@@ -549,7 +555,7 @@ export default function ChatPage() {
               </div>
             </div>
 
-            <div className="w-64 shrink-0 border-l border-zinc-100 dark:border-zinc-900/60 flex flex-col bg-zinc-50/20 dark:bg-zinc-950/10 overflow-hidden h-full">
+            <div className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-100 dark:border-zinc-900/60 flex flex-col bg-zinc-50/20 dark:bg-zinc-950/10 overflow-hidden max-h-[42vh] lg:max-h-none lg:h-full">
               <div className="p-4 border-b border-zinc-100 dark:border-zinc-900/80 bg-transparent flex gap-3 items-center justify-between shadow-sm shrink-0">
                 <LangDropdown />
                 <button onClick={toggleTheme} className="font-bold text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 transition-colors bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 py-1.5 px-2.5 rounded-lg">
@@ -557,7 +563,7 @@ export default function ChatPage() {
                 </button>
               </div>
 
-              <div className="flex-1 p-4 overflow-hidden flex flex-col gap-2 justify-start">
+              <div className="flex-1 p-4 overflow-y-auto grid grid-cols-2 lg:flex lg:flex-col gap-2 content-start">
                 {buttonsOrder.map((id) => {
                   const isSelected = selectedButtons.includes(id);
                   const isDoubleRegard = id === "double";
@@ -615,16 +621,37 @@ export default function ChatPage() {
               )}
 
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end w-full">
-                <textarea
-                  value={input}
-                  maxLength={getMessageMaxLength(userTier)}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                  placeholder={t.chat.placeholder}
-                  className="flex-1 bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 resize-y min-h-[136px] max-h-[220px] text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400 dark:placeholder-zinc-700 transition-colors leading-relaxed shadow-inner"
-                />
+                <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setInputHeight((h) => Math.max(60, Math.round(h / 2)))}
+                      title={lang === "fr" ? "Réduire de moitié" : "Shrink by half"}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                    >
+                      ➖ {lang === "fr" ? "Réduire" : "Shrink"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInputHeight(DEFAULT_INPUT_HEIGHT)}
+                      title={lang === "fr" ? "Taille originale" : "Reset to original size"}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                    >
+                      ↺ {lang === "fr" ? "Original" : "Reset"}
+                    </button>
+                  </div>
+                  <textarea
+                    value={input}
+                    maxLength={getMessageMaxLength(userTier)}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                    placeholder={t.chat.placeholder}
+                    style={{ height: inputHeight }}
+                    className="w-full bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 resize-y text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400 dark:placeholder-zinc-700 transition-colors leading-relaxed shadow-inner"
+                  />
+                </div>
 
-                <div className="flex sm:flex-col gap-2 sm:w-40 shrink-0 sm:h-[136px]">
+                <div className="flex sm:flex-col gap-2 sm:w-40 shrink-0">
                   <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
 
                   <button

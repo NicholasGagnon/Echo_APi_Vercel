@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import LangDropdown from "../components/LangDropdown";
 import { useApp } from "../../context/AppContext";
 
 // --- LOGOS & ICONS ---
@@ -55,7 +54,7 @@ const clearHash = () => {
 };
 
 export default function AccountPage() {
-  const { t, lang, theme, toggleTheme, userTier, setUserTier } = useApp();
+  const { t, lang, userTier, setUserTier } = useApp();
   
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
@@ -371,15 +370,6 @@ export default function AccountPage() {
 
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
-
-      {/* TOP-RIGHT MENU */}
-      <div className="absolute top-4 right-4 z-40 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 p-2 rounded-xl text-xs flex gap-3 items-center shadow-md">
-        <LangDropdown />
-        <span className="text-zinc-300 dark:text-zinc-700">|</span>
-        <button onClick={toggleTheme} className="font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 transition-colors">
-          {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
-        </button>
-      </div>
 
       {/* TOAST */}
       {toast && (

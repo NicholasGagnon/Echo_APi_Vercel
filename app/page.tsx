@@ -5,7 +5,8 @@ import Link from "next/link";
 import { supabase } from "./lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../utils/quota"; 
 import LangDropdown from "./components/LangDropdown";
-import { useApp } from "../context/AppContext"; 
+import TutorialHeaderControls from "./components/TutorialHeaderControls";
+import { useApp } from "../context/AppContext";
 
 type HistoryEntry = {
   id: string;
@@ -88,7 +89,7 @@ const STICKY_STYLES = {
 const EVENT_DOT_COLORS = ["bg-cyan-400", "bg-green-400", "bg-yellow-400"];
 
 export default function Home() {
-  const { t, lang, setLang, theme, toggleTheme } = useApp(); 
+  const { t, lang, theme, toggleTheme } = useApp();
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<EchoMessage[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -597,7 +598,15 @@ export default function Home() {
         {tutorialStep === 2 && (
           <div className="absolute right-0 top-14 w-76 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
             <div className="absolute -top-2.5 right-6 w-4 h-4 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
-            <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2">
+            <button
+              type="button"
+              onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }}
+              title="Fermer"
+              className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-white/10 dark:bg-black/10 hover:bg-red-600 hover:text-white dark:hover:bg-red-500 text-white dark:text-black text-xs font-bold flex items-center justify-center transition-colors"
+            >
+              ✕
+            </button>
+            <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2 pr-8">
               🤖 {lang === "fr" ? "PARAMÈTRES GLOBAUX" : "GLOBAL SETTINGS"} (2/2)
             </h4>
             <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">
@@ -692,10 +701,11 @@ export default function Home() {
 
               {/* ── 📖 PAROLE D'ECHO — AVATAR EN COLONNE FIXE À GAUCHE, TEXTE À DROITE (ANTI-CHEVAUCHEMENT) ── */}
               {tutorialStep === 1 && (
-                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-[92vw] max-w-[420px] sm:max-w-[640px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-[92vw] max-w-[460px] sm:max-w-[700px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
-                  
-                  <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2">
+                  <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }} />
+
+                  <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
                     <span className="text-xl">✨</span>
                     <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
                       {lang === "fr" ? "ECHO AI" : "ECHO AI"} (1/2)
@@ -747,21 +757,12 @@ export default function Home() {
                   </div>
                   
                   <div className="flex flex-col gap-2.5 items-center justify-center border-t border-zinc-800 dark:border-zinc-200 pt-4">
-                    <button 
-                      onClick={() => setTutorialStep(2)} 
+                    <button
+                      onClick={() => setTutorialStep(2)}
                       className="w-full text-center px-8 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase"
                     >
                       {lang === "fr" ? "SUIVANT ➔" : "NEXT ➔"}
                     </button>
-
-                    {lang === "fr" && (
-                      <button 
-                        onClick={() => setLang("en")} 
-                        className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 hover:text-cyan-400 transition-colors mt-0.5 font-bold underline decoration-dotted"
-                      >
-                        English version? Switch here ➔
-                      </button>
-                    )}
                   </div>
                 </div>
               )}

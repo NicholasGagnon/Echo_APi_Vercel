@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
-import LangDropdown from "../components/LangDropdown";
 import { useApp } from "../../context/AppContext";
 import { UserTier } from "../../utils/quota";
 
@@ -43,7 +42,7 @@ const clearHash = () => {
 };
 
 export default function CalendarPage() {
-  const { t, lang, theme, toggleTheme, userTier } = useApp();
+  const { t, lang, userTier } = useApp();
   const today = new Date();
 
   // ── Safe tier ─────────────────────────────────────────────────────────────
@@ -368,17 +367,8 @@ export default function CalendarPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
+    <main className="h-[100dvh] bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
       <input type="file" ref={icsInputRef} accept=".ics" onChange={handleICSRawImport} className="hidden" />
-
-      {/* TOP-RIGHT MENU */}
-      <div className="absolute top-4 right-4 z-50 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 p-2 rounded-xl text-xs flex gap-3 items-center shadow-md">
-        <LangDropdown />
-        <span className="text-zinc-300 dark:text-zinc-700">|</span>
-        <button onClick={toggleTheme} className="font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 transition-colors">
-          {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
-        </button>
-      </div>
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
