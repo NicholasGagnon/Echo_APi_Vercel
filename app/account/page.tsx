@@ -396,11 +396,7 @@ export default function AccountPage() {
         {/* MAIN PANEL */}
         <section className="flex-1 flex flex-col items-center px-6 sm:px-12 py-12 overflow-y-auto bg-white dark:bg-gradient-to-b dark:from-zinc-950 dark:via-black dark:to-black transition-colors duration-200 justify-between">
           
-          {/* 🚨 AVERTISSEMENT EN ROUGE TOUT EN HAUT */}
-          <div className="w-full max-w-5xl mb-6 border border-red-500/30 bg-red-500/[0.04] p-4 rounded-2xl flex items-center gap-3 animate-in fade-in duration-300">
-            <span className="text-red-500 text-lg shrink-0">⚠️</span>
-            
-          </div>
+          
 
           <div className="w-full max-w-5xl flex flex-col items-center flex-1">
             <div className="text-center mb-12 shrink-0 w-full max-w-md">
