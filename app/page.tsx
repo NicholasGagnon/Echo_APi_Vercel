@@ -96,15 +96,29 @@ export default function Home() {
   const [userId, setUserId] = useState<string | null>(null); 
   const bottomRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const lastSavedLength = useRef(0); 
-  
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastSavedLength = useRef(0);
+
   const [isListening, setIsListening] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
 
   // ── TAILLE AJUSTABLE DU CHAMP DE SAISIE ──
-  const DEFAULT_INPUT_HEIGHT = 132;
+  const DEFAULT_INPUT_HEIGHT = 200;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
+
+  const shrinkInput = () => {
+    const el = textareaRef.current;
+    const current = el ? el.getBoundingClientRect().height : inputHeight;
+    const next = Math.max(60, Math.round(current / 2));
+    if (el) el.style.height = `${next}px`;
+    setInputHeight(next);
+  };
+
+  const resetInput = () => {
+    if (textareaRef.current) textareaRef.current.style.height = `${DEFAULT_INPUT_HEIGHT}px`;
+    setInputHeight(DEFAULT_INPUT_HEIGHT);
+  };
 
   const [stickies, setStickies] = useState<StickyNote[]>([]);
   const [newStickyText, setNewStickyText] = useState("");
@@ -654,7 +668,7 @@ export default function Home() {
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
             
             {/* ── INTERFACE 10 BOUTONS MATRIX (AVEC SYNC DU DICTIONNAIRE MULTILINGUE) ── */}
-            <div className="w-full bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
+            <div className="w-full max-w-4xl mx-auto bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
                 {buttonsData.map((btn) => {
                   const isSelected = selectedButtons.includes(btn.id);
@@ -687,10 +701,11 @@ export default function Home() {
                       key={btn.id}
                       disabled={isLocked}
                       onClick={() => handleButtonClick(btn.id)}
+                      title={currentLabel}
                       className={`
-                        py-3 px-2 rounded-xl text-xs font-bold font-mono tracking-wide uppercase transition-all duration-300 border text-center select-none
-                        ${isLocked 
-                          ? "opacity-20 cursor-not-allowed bg-transparent border-zinc-200 dark:border-zinc-900 text-zinc-400" 
+                        h-9 px-2 rounded-xl text-xs font-bold font-mono tracking-wide uppercase transition-all duration-300 border text-center select-none truncate
+                        ${isLocked
+                          ? "opacity-20 cursor-not-allowed bg-transparent border-zinc-200 dark:border-zinc-900 text-zinc-400"
                           : isSelected || (isDoubleRegard && isDoubleRegardUnlocked)
                             ? "bg-cyan-500/30 text-cyan-400 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.6)]"
                             : "bg-cyan-500/5 dark:bg-cyan-950/10 text-cyan-600 dark:text-cyan-400 border-cyan-700/40 dark:border-cyan-900/60 hover:border-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.3)] hover:bg-cyan-500/10"
@@ -875,7 +890,7 @@ export default function Home() {
                   <div className="flex justify-end gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setInputHeight((h) => Math.max(60, Math.round(h / 2)))}
+                      onClick={shrinkInput}
                       title={lang === "fr" ? "Réduire de moitié" : "Shrink by half"}
                       className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
                     >
@@ -883,7 +898,7 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setInputHeight(DEFAULT_INPUT_HEIGHT)}
+                      onClick={resetInput}
                       title={lang === "fr" ? "Taille originale" : "Reset to original size"}
                       className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
                     >
@@ -891,6 +906,7 @@ export default function Home() {
                     </button>
                   </div>
                   <textarea
+                    ref={textareaRef}
                     className="flex-1 p-4 bg-zinc-50 dark:bg-zinc-950 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl resize-y max-h-[300px] w-full max-w-full placeholder-zinc-400 dark:placeholder-zinc-700 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-800 transition-colors leading-relaxed shadow-inner break-words overflow-x-hidden whitespace-pre-wrap"
                     style={{ height: inputHeight }}
                     maxLength={getMessageMaxLength(userTier)}

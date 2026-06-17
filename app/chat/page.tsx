@@ -39,6 +39,7 @@ export default function ChatPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastSavedLength = useRef(0);
   const [userTier, setUserTier] = useState<UserTier>("connected_free");
   const [isListening, setIsListening] = useState(false);
@@ -52,8 +53,21 @@ export default function ChatPage() {
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
 
   // ── TAILLE AJUSTABLE DU CHAMP DE SAISIE ──
-  const DEFAULT_INPUT_HEIGHT = 136;
+  const DEFAULT_INPUT_HEIGHT = 200;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
+
+  const shrinkInput = () => {
+    const el = textareaRef.current;
+    const current = el ? el.getBoundingClientRect().height : inputHeight;
+    const next = Math.max(60, Math.round(current / 2));
+    if (el) el.style.height = `${next}px`;
+    setInputHeight(next);
+  };
+
+  const resetInput = () => {
+    if (textareaRef.current) textareaRef.current.style.height = `${DEFAULT_INPUT_HEIGHT}px`;
+    setInputHeight(DEFAULT_INPUT_HEIGHT);
+  };
 
   // ── ÉTATS POUR LA MATRIX DE BOUTONS ──
   const [selectedButtons, setSelectedButtons] = useState<string[]>([]);
@@ -625,7 +639,7 @@ export default function ChatPage() {
                   <div className="flex justify-end gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setInputHeight((h) => Math.max(60, Math.round(h / 2)))}
+                      onClick={shrinkInput}
                       title={lang === "fr" ? "Réduire de moitié" : "Shrink by half"}
                       className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
                     >
@@ -633,7 +647,7 @@ export default function ChatPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setInputHeight(DEFAULT_INPUT_HEIGHT)}
+                      onClick={resetInput}
                       title={lang === "fr" ? "Taille originale" : "Reset to original size"}
                       className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
                     >
@@ -641,6 +655,7 @@ export default function ChatPage() {
                     </button>
                   </div>
                   <textarea
+                    ref={textareaRef}
                     value={input}
                     maxLength={getMessageMaxLength(userTier)}
                     onChange={(e) => setInput(e.target.value)}
