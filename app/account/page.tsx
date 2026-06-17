@@ -107,7 +107,7 @@ export default function AccountPage() {
     const resolveAndSaveToken = async (session: any) => {
       if (!session?.user) return;
       const uid = session.user.id;
-      let activeTier = "connected_free"; // Valeur par défaut unifiée sans trace de free
+      let activeTier = "connected_free";
 
       try {
         const { data: profile } = await supabase
@@ -167,7 +167,7 @@ export default function AccountPage() {
       } else {
         setUser(null);
         setActiveProvider(null);
-        setUserTier("connected_free"); // Transition sécurisée pour les déconnexions
+        setUserTier("connected_free");
         localStorage.setItem("echo-user-tier", "connected_free");
       }
     });
@@ -329,7 +329,7 @@ export default function AccountPage() {
     await supabase.auth.signOut();
     setUser(null);
     setActiveProvider(null);
-    setUserTier("connected_free"); // Forçage propre
+    setUserTier("connected_free");
     showToast(lang === "fr" ? "Déconnexion sécurisée effectuée." : "Disconnected safely.", "info");
   };
 
@@ -395,6 +395,17 @@ export default function AccountPage() {
 
         {/* MAIN PANEL */}
         <section className="flex-1 flex flex-col items-center px-6 sm:px-12 py-12 overflow-y-auto bg-white dark:bg-gradient-to-b dark:from-zinc-950 dark:via-black dark:to-black transition-colors duration-200 justify-between">
+          
+          {/* 🚨 AVERTISSEMENT EN ROUGE TOUT EN HAUT */}
+          <div className="w-full max-w-5xl mb-6 border border-red-500/30 bg-red-500/[0.04] p-4 rounded-2xl flex items-center gap-3 animate-in fade-in duration-300">
+            <span className="text-red-500 text-lg shrink-0">⚠️</span>
+            <p className="text-xs font-semibold leading-relaxed text-red-600 dark:text-red-400">
+              {lang === "fr" 
+                ? "Avis important : La passerelle d'accès Google Agenda est actuellement configurée sous nœud d'infrastructure de développement (Unverified). Suivez attentivement les instructions de liaison avancées pour franchir le pare-feu Google."
+                : "Important notice: The Google Calendar gateway node is currently running on a development track (Unverified). Please precisely follow the advanced auth sequence to clear the Google firewall."}
+            </p>
+          </div>
+
           <div className="w-full max-w-5xl flex flex-col items-center flex-1">
             <div className="text-center mb-12 shrink-0 w-full max-w-md">
               <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-500 font-mono text-sm shadow-sm">
@@ -670,7 +681,7 @@ export default function AccountPage() {
 
             <div className="max-w-5xl mx-auto border-t border-zinc-200 dark:border-zinc-900 mt-8 pt-4 flex flex-col sm:flex-row items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-600 gap-2">
               <div>© {new Date().getFullYear()} Echo AI Ecosystem (echosai.ca). All rights reserved.</div>
-              <div className="font-mono tracking-widest uppercase">Secured Identity Gateway Dashboard</div>
+              <div className="font-mono tracking-widest uppercase">Secured Identity Gateway Gateway Dashboard</div>
             </div>
           </footer>
         </section>
@@ -739,47 +750,70 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* GOOGLE CALENDAR SYNC POPUP */}
+      {/* ── 🛰️ POP-UP RECONSTRUIT PAS À PAS (GOOGLE CALENDAR GUIDANCE) ── */}
       {showGoogleSyncPopup && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowGoogleSyncPopup(false)}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4 mb-6">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-lg w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
               <div className="flex items-center gap-3">
                 <GoogleLogo />
                 <div>
                   <h2 className="text-sm font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">
-                    {lang === "fr" ? "Sync Google Calendar" : "Google Calendar Sync"}
+                    {lang === "fr" ? "Passerelle Google Calendar" : "Google Calendar Bridge"}
                   </h2>
                   <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-0.5">
-                    {lang === "fr" ? "Autorisation d'accès agenda" : "Calendar access authorization"}
+                    {lang === "fr" ? "Autorisation d'accès sécurisé" : "Secure access authorization"}
                   </p>
                 </div>
               </div>
               <button onClick={() => setShowGoogleSyncPopup(false)} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
             </div>
 
-            <div className="space-y-4 mb-6">
-              <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-4 text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                {lang === "fr"
-                  ? "Cette connexion autorise Echo à lire et créer des événements dans votre Google Calendar. Une fenêtre Google s'ouvrira pour confirmer les permissions."
-                  : "This connection allows Echo to read and create events in your Google Calendar. A Google window will open to confirm permissions."}
-              </div>
-              <ul className="space-y-2 text-xs text-zinc-500 dark:text-zinc-400">
-                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> {lang === "fr" ? "Lecture des événements existants" : "Read existing calendar events"}</li>
-                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> {lang === "fr" ? "Création d'événements par Echo" : "Create events via Echo"}</li>
-                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> {lang === "fr" ? "Synchronisation bidirectionnelle" : "Two-way synchronization"}</li>
-              </ul>
+            <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 space-y-4 leading-relaxed font-semibold">
+              {lang === "fr" ? (
+                <>
+                  <p className="text-amber-600 dark:text-amber-500 font-bold border border-amber-500/20 bg-amber-500/5 rounded-xl p-3">
+                    ⚠️ ATTENTION : Lors de la connexion, Google affichera un avertissement indiquant que l'application n'est pas validée. C'est tout à fait normal car Echo est en cours de développement.
+                  </p>
+                  <p className="font-mono text-[11px] text-zinc-400 uppercase tracking-wider">Procédure d'autorisation par étapes :</p>
+                  <ol className="list-decimal pl-5 space-y-2.5 text-zinc-700 dark:text-zinc-200">
+                    <li>Cliquez sur le bouton bleu <span className="text-cyan-500 font-bold">"Vers Autorisation Google Agenda"</span> ci-dessous.</li>
+                    <li>Sélectionnez votre compte Google.</li>
+                    <li>Sur l'écran d'avertissement de sécurité, cliquez sur le petit lien <span className="underline font-bold">"Paramètres avancés"</span> (Advanced) en bas à gauche.</li>
+                    <li>Cliquez ensuite sur le lien <span className="underline text-red-500 font-bold">"Accéder à echosai.ca (non sécurisé)"</span> pour autoriser l'agent à se lier à votre calendrier.</li>
+                    <li>Cochez bien les cases d'autorisations pour l'affichage et la gestion des événements, puis validez.</li>
+                  </ol>
+                </>
+              ) : (
+                <>
+                  <p className="text-amber-600 dark:text-amber-500 font-bold border border-amber-500/20 bg-amber-500/5 rounded-xl p-3">
+                    ⚠️ NOTICE: During sign-in, Google will display a warning stating that the app is unverified. This is completely standard as Echo is currently in development.
+                  </p>
+                  <p className="font-mono text-[11px] text-zinc-400 uppercase tracking-wider">Step-by-step authorization procedure:</p>
+                  <ol className="list-decimal pl-5 space-y-2.5 text-zinc-700 dark:text-zinc-200">
+                    <li>Click the blue <span className="text-cyan-500 font-bold">"Vers Autorisation Google Agenda"</span> button below.</li>
+                    <li>Select your Google account.</li>
+                    <li>On the security warning screen, click the small <span className="underline font-bold">"Advanced settings"</span> link at the bottom left.</li>
+                    <li>Then click the link <span className="underline text-red-500 font-bold">"Go to echosai.ca (unsafe)"</span> to allow the agent to bind with your calendar stacks.</li>
+                    <li>Make sure to check the permission boxes to view and manage your events, then confirm.</li>
+                  </ol>
+                </>
+              )}
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2 pt-2">
               <button
-                onClick={() => { setShowGoogleSyncPopup(false); handleGoogleConnectWithSyncNewTab(); }}
-                className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md"
+                onClick={() => {
+                  setShowGoogleSyncPopup(false);
+                  handleGoogleConnectWithSyncNewTab();
+                }}
+                className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl font-mono text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md text-center"
               >
-                {lang === "fr" ? "🔗 Autoriser l'accès Google Calendar" : "🔗 Authorize Google Calendar Access"}
+                {lang === "fr" ? "Vers Autorisation Google Agenda ➔" : "Proceed to Google Auth ➔"}
               </button>
               <button onClick={() => setShowGoogleSyncPopup(false)} className="w-full py-2.5 rounded-xl text-xs font-semibold border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
-                {lang === "fr" ? "Annuler" : "Cancel"}
+                {lang === "fr" ? "Annuler et revenir" : "Cancel and go back"}
               </button>
             </div>
           </div>
