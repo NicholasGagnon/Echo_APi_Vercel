@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase"; 
-import { checkQuota, getMessageMaxLength } from "../../utils/quota";
+import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
 import LangDropdown from "../components/LangDropdown";
 import { useApp } from "../../context/AppContext";
 
@@ -12,6 +12,19 @@ type HistoryEntry = {
   title: string;
   date: string;
   messages: string[];
+};
+
+// Normalise toute ancienne valeur de tier stockée (ex: "free") vers le nouveau
+// schéma où "connected_free" est le palier d'entrée gratuit pour l'utilisateur
+// mais routé sur l'infrastructure payante côté backend.
+const normalizeTier = (raw: string | null | undefined): UserTier => {
+  if (!raw) return "connected_free";
+  const cleaned = raw.toLowerCase().trim();
+  if (cleaned === "free" || cleaned === "connected_free") return "connected_free";
+  if (cleaned === "basic" || cleaned === "premium" || cleaned === "ultra" || cleaned === "founder") {
+    return cleaned as UserTier;
+  }
+  return "connected_free";
 };
 
 export default function HistoryPage() {
@@ -25,7 +38,7 @@ export default function HistoryPage() {
   const lastSavedLength = useRef(0);
 
   const [user, setUser] = useState<any>(null);
-  const [userTier, setUserTier] = useState<"free" | "basic" | "premium" | "ultra" | "founder">("free");
+  const [userTier, setUserTier] = useState<UserTier>("connected_free");
   const [isPageBlocked, setIsPageBlocked] = useState(true);
 
   const [showLimitModal, setShowLimitModal] = useState(false);
@@ -47,13 +60,10 @@ export default function HistoryPage() {
       .select("user_tier")
       .eq("id", userId)
       .single();
-    if (profile?.user_tier) {
-      const tier = profile.user_tier as any;
-      setUserTier(tier);
-      setIsPageBlocked(tier === "free" || tier === "basic");
-    } else {
-      setIsPageBlocked(true);
-    }
+
+    const tier = normalizeTier(profile?.user_tier);
+    setUserTier(tier);
+    setIsPageBlocked(tier === "connected_free" || tier === "basic");
   };
 
   const checkAndSaveHistory = (msgs: string[], uid: string | null) => {
@@ -136,7 +146,7 @@ export default function HistoryPage() {
         setHistory(cachedHistory ? JSON.parse(cachedHistory) : []);
       } else {
         setUser(null);
-        setUserTier("free");
+        setUserTier("connected_free");
         setIsPageBlocked(true);
         setChatMessages([]);
         setHistory([]);
