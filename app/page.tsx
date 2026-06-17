@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { supabase } from "./lib/supabase";
-import { checkQuota, getMessageMaxLength } from "../utils/quota"; 
+import { checkQuota, getMessageMaxLength, UserTier } from "../utils/quota"; 
 import LangDropdown from "./components/LangDropdown";
 import { useApp } from "../context/AppContext"; 
 
@@ -42,12 +42,23 @@ type UpcomingEvent = CalendarEvent & {
 
 type BudgetExpense = { id: string; title: string; amount: number; date: string; };
 type CalorieLog = { id: string; foodName: string; calories: number; date: string; };
-type UserTier = "free" | "basic" | "premium" | "ultra" | "founder";
 
-const USER_TIERS: UserTier[] = ["free", "basic", "premium", "ultra", "founder"];
+const USER_TIERS: UserTier[] = ["connected_free", "basic", "premium", "ultra", "founder"];
 
 const isUserTier = (value: unknown): value is UserTier =>
   typeof value === "string" && USER_TIERS.includes(value as UserTier);
+
+// Normalise toute ancienne valeur de tier (ex: "free", venant de Supabase ou
+// d'un vieux localStorage) vers le nouveau schéma où "connected_free" est le
+// palier d'entrée gratuit pour l'utilisateur, mais routé sur l'infra payante
+// côté backend (cause de l'ancien bug de quota / clé API gratuite cassée).
+const normalizeTier = (raw: unknown): UserTier => {
+  if (typeof raw !== "string") return "connected_free";
+  const cleaned = raw.toLowerCase().trim();
+  if (cleaned === "free" || cleaned === "connected_free") return "connected_free";
+  if (isUserTier(cleaned)) return cleaned;
+  return "connected_free";
+};
 
 const fetchUserTier = async (uid: string): Promise<UserTier> => {
   const { data: profile, error } = await supabase
@@ -56,14 +67,15 @@ const fetchUserTier = async (uid: string): Promise<UserTier> => {
     .eq("id", uid)
     .single();
 
-  if (!error && isUserTier(profile?.user_tier)) {
-    localStorage.setItem(`echo-user-tier-${uid}`, profile.user_tier);
-    localStorage.setItem("echo-user-tier", profile.user_tier);
-    return profile.user_tier;
+  if (!error && profile?.user_tier) {
+    const tier = normalizeTier(profile.user_tier);
+    localStorage.setItem(`echo-user-tier-${uid}`, tier);
+    localStorage.setItem("echo-user-tier", tier);
+    return tier;
   }
 
   const cachedTier = localStorage.getItem(`echo-user-tier-${uid}`);
-  return isUserTier(cachedTier) ? (cachedTier as UserTier) : "free";
+  return normalizeTier(cachedTier);
 };
 
 const STICKY_STYLES = {
@@ -97,7 +109,7 @@ export default function Home() {
   const [editText, setEditText] = useState("");
 
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvents>({});
-  const [userTier, setUserTier] = useState<UserTier>("free");
+  const [userTier, setUserTier] = useState<UserTier>("connected_free");
   const [echoState, setEchoState] = useState("idle");
 
   // ── CONFIGURATION DES COMPTEURS & MENUS DROPDOWN ──
@@ -219,7 +231,7 @@ export default function Home() {
         if (uid) {
           setUserTier(await fetchUserTier(uid));
         } else {
-          setUserTier("free");
+          setUserTier("connected_free");
         }
 
         // ── SYNC DE L'ONBOARDING TUTORIEL ──
@@ -239,7 +251,7 @@ export default function Home() {
         setCalendarEvents({});
         setStickies([]); 
         setMessages([]); 
-        setUserTier("free");
+        setUserTier("connected_free");
         return;
       }
       if (session?.user) {
@@ -386,6 +398,7 @@ export default function Home() {
       setEchoState("speaking");
 
       let isActionBlocked = false;
+      let blockedCategory: "vitality" | "calendar" | null = null;
       if (data.action) {
         const { type } = data.action;
         const quotaCategory = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG") ? "vitality" : "calendar";
@@ -395,11 +408,12 @@ export default function Home() {
           setActiveLimitCategory(quotaCategory);
           setShowLimitModal(true);
           isActionBlocked = true;
+          blockedCategory = quotaCategory;
         }
       }
 
       const echoText = data.response || (typeof data === "string" ? data : "");
-      const actionNotice = isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${activeLimitCategory}"]` : "";
+      const actionNotice = isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${blockedCategory}"]` : "";
       setMessages([...baseMessages, { raw: `Echo: ${echoText}${actionNotice}` }]);
 
       if (data.action && !isActionBlocked) {
@@ -456,7 +470,7 @@ export default function Home() {
     recognition.start();
   };
 
-  const isImageButtonLocked = userTier === "free" || userTier === "basic";
+  const isImageButtonLocked = userTier === "connected_free" || userTier === "basic";
 
   const handleImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -688,14 +702,6 @@ export default function Home() {
                     </h4>
                   </div>
 
-                  {/*
-                    ⚡ FIX ANTI-CHEVAUCHEMENT :
-                    Grille à colonnes fixes (avatar | texte) au lieu d'un flex avec une image qui flotte.
-                    L'avatar est contenu dans une boîte de taille fixe avec overflow-hidden : même si une
-                    classe externe (ex: echo-idle / echo-thinking) impose un position absolute/fixed sur
-                    l'élément <img>, celui-ci reste visuellement piégé dans sa colonne et ne peut plus
-                    se superposer au bloc de texte à droite.
-                  */}
                   <div className="grid grid-cols-[72px_1fr] sm:grid-cols-[96px_1fr] gap-4 sm:gap-5 mb-5 items-start">
                     <div className="relative w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 bg-zinc-900 dark:bg-zinc-100 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner overflow-hidden isolate">
                       <img 
@@ -765,7 +771,6 @@ export default function Home() {
   {messages.length === 0 ? (
     <div className="h-full flex flex-col items-center justify-center text-center">
       
-      {/* 🛑 Ajoute la condition ici, juste avant l'avatar */}
       {!tutorialStep && (
         <div className={echoState === "idle" ? "echo-idle" : echoState === "thinking" ? "echo-thinking" : "echo-speaking"}>
           <img
@@ -778,7 +783,6 @@ export default function Home() {
           </span>
         </div>
       )}
-      {/* 🛑 Fin de la condition */}
 
     </div>
   ) : (

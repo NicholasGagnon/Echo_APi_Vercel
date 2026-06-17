@@ -15,8 +15,8 @@ const localT = {
     upgrade: "🚀 AMÉLIORER",
     joinFounder: "👑 REJOINDRE",
     plans: {
-      free: {
-        title: "Free",
+      connected_free: {
+        title: "Connected Free",
         sub: "FOREVER FREE",
         f1: "✅ AI Standard Model",
         f2: "✅ WebSearch Integration",
@@ -104,8 +104,8 @@ const localT = {
     upgrade: "🚀 UPGRADE",
     joinFounder: "👑 BECOME A FOUNDER",
     plans: {
-      free: {
-        title: "Free",
+      connected_free: {
+        title: "Connected Free",
         sub: "FOREVER FREE",
         f1: "✅ AI Standard Model",
         f2: "✅ WebSearch Integration",
@@ -187,7 +187,7 @@ const localT = {
 };
 
 const TIER_RANK: Record<string, number> = {
-  free: 0,
+  connected_free: 0,
   basic: 1,
   premium: 2,
   treasure: 2.5,
@@ -199,7 +199,7 @@ export default function ServicesPage() {
   const { t, lang } = useApp();
   const [isLoaded, setIsLoaded] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [userTier, setUserTier] = useState<"free" | "basic" | "premium" | "ultra" | "founder" | string>("free");
+  const [userTier, setUserTier] = useState<string>("connected_free");
   const [isLoadingCheckout, setIsLoadingCheckout] = useState<string | null>(null);
 
   const [showTreasureModal, setShowTreasureModal] = useState(false);
@@ -214,7 +214,8 @@ export default function ServicesPage() {
       .eq("id", userId)
       .single();
     if (profile?.user_tier) {
-      setUserTier(profile.user_tier);
+      const cleaned = profile.user_tier.toLowerCase().trim();
+      setUserTier(cleaned === "free" ? "connected_free" : cleaned);
     }
   };
 
@@ -233,7 +234,7 @@ export default function ServicesPage() {
         await fetchProfile(session.user.id);
       } else {
         setUser(null);
-        setUserTier("free");
+        setUserTier("connected_free");
       }
     });
 
@@ -257,18 +258,17 @@ export default function ServicesPage() {
       if (planName === "treasure") setIsLoadingTreasure(true);
       else setIsLoadingCheckout(planName);
 
-      // Dans handleUpgradeWithStripe
-const planToRequest = planName === "treasure" ? "ultra" : planName; // On force "ultra" pour le backend
+      const planToRequest = planName === "treasure" ? "ultra" : planName;
 
-const response = await fetch("/api/stripe/create-checkout", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    plan: planToRequest, // Envoie "ultra" même si c'est le trésor
-    userId: user.id,
-    userEmail: user.email,
-  }),
-});
+      const response = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: planToRequest,
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Failed to initiate Stripe session");
       if (data.url) window.location.href = data.url;
@@ -282,7 +282,7 @@ const response = await fetch("/api/stripe/create-checkout", {
   };
 
   const handleSupportClick = () => {
-    if (userTier === "free") {
+    if (userTier === "connected_free") {
       alert(lang === "fr" 
         ? "🔒 Le support par courriel est réservé aux membres des plans Basic, Premium, Ultra et Fondateur. Veuillez améliorer votre forfait." 
         : "🔒 Email support is exclusive to Basic, Premium, Ultra, and Founder tiers. Please upgrade your plan.");
@@ -332,7 +332,7 @@ const response = await fetch("/api/stripe/create-checkout", {
         type="button"
         disabled={isLoadingCheckout !== null}
         onClick={(e) => {
-          e.stopPropagation(); // Évite le double déclenchement avec le onClick de la carte parent
+          e.stopPropagation();
           handleUpgradeWithStripe(planName);
         }}
         className={`mt-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition w-full shadow-sm ${upgradeClass}`}
@@ -346,7 +346,7 @@ const response = await fetch("/api/stripe/create-checkout", {
     <main className="h-screen w-full bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
       <div className="flex flex-1 h-full overflow-hidden w-full">
 
-        {/* SIDEBAR GAUCHE — reste fixe, ne scrolle pas */}
+        {/* SIDEBAR GAUCHE */}
         <aside className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between h-full overflow-y-auto">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
@@ -368,43 +368,43 @@ const response = await fetch("/api/stripe/create-checkout", {
           </div>
         </aside>
 
-        {/* CONTAINER PRINCIPAL — gère le défilement fluide global */}
+        {/* CONTAINER PRINCIPAL */}
         <section className="flex-1 flex flex-col bg-white dark:bg-black transition-colors duration-200 h-full overflow-y-auto w-full">
           <div className="flex-1 p-4 sm:p-6 pt-16 flex items-center justify-center w-full shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-stretch w-full max-w-[95rem] mx-auto pb-12">
 
-              {/* PLAN 1: FREE */}
+              {/* PLAN 1: CONNECTED FREE */}
               <div 
                 className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[580px] select-none ${
-                  userTier === "free" 
+                  userTier === "connected_free" 
                     ? "border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/20" 
                     : "border-zinc-200 dark:border-zinc-800"
                 }`}
               >
                 <div>
-                  <h2 className="text-lg font-black mb-1">{activeT.plans.free.title}</h2>
+                  <h2 className="text-lg font-black mb-1">{activeT.plans.connected_free.title}</h2>
                   <div className="text-3xl font-black mb-0.5">$0</div>
-                  <div className="text-zinc-400 text-[10px] mb-4 font-bold tracking-wide uppercase">{activeT.plans.free.sub}</div>
+                  <div className="text-zinc-400 text-[10px] mb-4 font-bold tracking-wide uppercase">{activeT.plans.connected_free.sub}</div>
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase block mb-1">{activeT.features}</span>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f1}</div>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f2}</div>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f3}</div>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f4}</div>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f5}</div>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f6}</div>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.f7}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.connected_free.f1}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.connected_free.f2}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.connected_free.f3}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.connected_free.f4}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.connected_free.f5}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.connected_free.f6}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.connected_free.f7}</div>
                     </div>
                     <div className="space-y-1.5 pt-3.5 border-t border-zinc-200 dark:border-zinc-800">
                       <span className="text-[11px] font-bold tracking-wide uppercase block text-zinc-400 dark:text-zinc-500">{activeT.echoAiDoIt}</span>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.ai1}</div>
-                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.free.ai2}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.connected_free.ai1}</div>
+                      <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{activeT.plans.connected_free.ai2}</div>
                     </div>
                   </div>
                 </div>
                 <button className="mt-6 bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-default w-full">
-                  {userTier === "free" ? activeT.currentPlan : activeT.included}
+                  {userTier === "connected_free" ? activeT.currentPlan : activeT.included}
                 </button>
               </div>
 
@@ -568,7 +568,7 @@ const response = await fetch("/api/stripe/create-checkout", {
             </div>
           </div>
 
-          {/* FOOTER NORMAL — toujours visible juste après la grille de prix */}
+          {/* FOOTER NORMAL */}
           <footer className="shrink-0 border-t border-zinc-200 dark:border-zinc-900 bg-zinc-50/60 dark:bg-zinc-950/60 px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3 flex-wrap text-[10px] text-zinc-400 dark:text-zinc-600 transition-colors w-full">
             <div>© {new Date().getFullYear()} Echo Ecosystem. All rights reserved.</div>
             <div className="flex gap-2 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
@@ -583,34 +583,34 @@ const response = await fetch("/api/stripe/create-checkout", {
                 type="button"
                 onClick={handleSupportClick}
                 className={`flex items-center gap-1 border px-3 py-1.5 rounded-xl font-medium transition shadow-sm text-[11px] ${
-                  userTier === "free"
+                  userTier === "connected_free"
                     ? "border-zinc-200 dark:border-zinc-900 text-zinc-300 dark:text-zinc-700 bg-zinc-100 dark:bg-zinc-950/30 cursor-not-allowed opacity-60"
                     : "border-zinc-300 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-black dark:hover:text-white bg-white dark:bg-zinc-900/40"
                 }`}
               >
-                {userTier === "free" ? "🔒" : "✉️"} {lang === "fr" ? "Contacter le Support" : "Contact Support"}
+                {userTier === "connected_free" ? "🔒" : "✉️"} {lang === "fr" ? "Contacter le Support" : "Contact Support"}
               </button>
             </div>
           </footer>
 
-          {/* 🏴‍☠️ L'ESPACEUR GÉANT "LOIN LOIN" — crée le grand vide sous le footer */}
+          {/* ESPACEUR GÉANT 1 */}
           <div className="shrink-0 w-full h-[1400px] flex items-end justify-center pb-10 px-4">
             <p className="text-zinc-300 dark:text-zinc-800 text-[10px] font-mono uppercase tracking-widest text-center select-none">
               {lang === "fr" ? "... continue de descendre ..." : "... keep scrolling down ..."}
             </p>
           </div>
 
-          {/* 🏴‍☠️ L'ESPACEUR GÉANT "LOIN LOIN" — Augmenté à 2200px pour forcer le défilement complet */}
+          {/* ESPACEUR GÉANT 2 */}
           <div className="shrink-0 w-full h-[2200px] flex items-end justify-center pb-10 px-4">
             <p className="text-zinc-400 dark:text-zinc-700 text-[10px] font-mono uppercase tracking-widest text-center select-none">
               {lang === "fr" ? "... continue de descendre ..." : "... keep scrolling down ..."}
             </p>
           </div>
 
-          {/* 🏴‍☠️ LE TERMINUS : Le coffre est rendu ICI, juste après le texte de guidage */}
+          {/* TERMINUS EASTER EGG */}
           <div className="shrink-0 w-full flex flex-col items-center justify-center pt-20 pb-32 gap-6">
             <p className="text-zinc-500 dark:text-zinc-700 text-[10px] font-mono uppercase tracking-widest text-center select-none">
-              {lang === "fr" ? "✦ MATRIX TERMINUS REACHED ✦" : "✦ MATRIX TERMINUS REACHED ✦"}
+              ✦ MATRIX TERMINUS REACHED ✦
             </p>
             
             <button 
@@ -626,13 +626,10 @@ const response = await fetch("/api/stripe/create-checkout", {
         </section>
       </div>
 
-      {/* ── 🏴‍☠️ POP-UP SURPRISE DE L'EASTER EGG (ULTRA À -40%) ── */}
+      {/* POP-UP EASTER EGG (TRÉSOR) */}
       {showTreasureModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
-          {/* CARD PRINCIPALE */}
           <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto relative">
-            
-            {/* 🔓 LE BOUTON DE FERMETURE (POUR ÉVITER LA PRISON NUMÉRIQUE) */}
             <button
               type="button"
               onClick={() => setShowTreasureModal(false)}
