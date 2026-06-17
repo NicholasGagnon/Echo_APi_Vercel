@@ -739,6 +739,53 @@ export default function AccountPage() {
         </div>
       )}
 
+      {/* GOOGLE CALENDAR SYNC POPUP */}
+      {showGoogleSyncPopup && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowGoogleSyncPopup(false)}>
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4 mb-6">
+              <div className="flex items-center gap-3">
+                <GoogleLogo />
+                <div>
+                  <h2 className="text-sm font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">
+                    {lang === "fr" ? "Sync Google Calendar" : "Google Calendar Sync"}
+                  </h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-0.5">
+                    {lang === "fr" ? "Autorisation d'accès agenda" : "Calendar access authorization"}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setShowGoogleSyncPopup(false)} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-4 text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                {lang === "fr"
+                  ? "Cette connexion autorise Echo à lire et créer des événements dans votre Google Calendar. Une fenêtre Google s'ouvrira pour confirmer les permissions."
+                  : "This connection allows Echo to read and create events in your Google Calendar. A Google window will open to confirm permissions."}
+              </div>
+              <ul className="space-y-2 text-xs text-zinc-500 dark:text-zinc-400">
+                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> {lang === "fr" ? "Lecture des événements existants" : "Read existing calendar events"}</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> {lang === "fr" ? "Création d'événements par Echo" : "Create events via Echo"}</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> {lang === "fr" ? "Synchronisation bidirectionnelle" : "Two-way synchronization"}</li>
+              </ul>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => { setShowGoogleSyncPopup(false); handleGoogleConnectWithSyncNewTab(); }}
+                className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md"
+              >
+                {lang === "fr" ? "🔗 Autoriser l'accès Google Calendar" : "🔗 Authorize Google Calendar Access"}
+              </button>
+              <button onClick={() => setShowGoogleSyncPopup(false)} className="w-full py-2.5 rounded-xl text-xs font-semibold border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
+                {lang === "fr" ? "Annuler" : "Cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SIGN UP MODAL */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => { setShowSignUpModal(false); clearInputs(); }}>
