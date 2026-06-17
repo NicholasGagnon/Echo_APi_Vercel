@@ -102,6 +102,10 @@ export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
 
+  // ── TAILLE AJUSTABLE DU CHAMP DE SAISIE ──
+  const DEFAULT_INPUT_HEIGHT = 132;
+  const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
+
   const [stickies, setStickies] = useState<StickyNote[]>([]);
   const [newStickyText, setNewStickyText] = useState("");
   const [selectedColor, setSelectedColor] = useState<StickyNote["color"]>("yellow");
@@ -868,8 +872,27 @@ export default function Home() {
                       <button onClick={() => { setSelectedImage(null); setSelectedImageName(""); }} className="text-zinc-400 hover:text-red-500 font-bold ml-2 shrink-0">✕</button>
                     </div>
                   )}
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setInputHeight((h) => Math.max(60, Math.round(h / 2)))}
+                      title={lang === "fr" ? "Réduire de moitié" : "Shrink by half"}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                    >
+                      ➖ {lang === "fr" ? "Réduire" : "Shrink"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInputHeight(DEFAULT_INPUT_HEIGHT)}
+                      title={lang === "fr" ? "Taille originale" : "Reset to original size"}
+                      className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                    >
+                      ↺ {lang === "fr" ? "Original" : "Reset"}
+                    </button>
+                  </div>
                   <textarea
-                    className="flex-1 p-4 bg-zinc-50 dark:bg-zinc-950 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl resize-y h-[132px] min-h-[132px] max-h-[300px] w-full max-w-full placeholder-zinc-400 dark:placeholder-zinc-700 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-800 transition-colors leading-relaxed shadow-inner break-words overflow-x-hidden whitespace-pre-wrap"
+                    className="flex-1 p-4 bg-zinc-50 dark:bg-zinc-950 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl resize-y max-h-[300px] w-full max-w-full placeholder-zinc-400 dark:placeholder-zinc-700 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-800 transition-colors leading-relaxed shadow-inner break-words overflow-x-hidden whitespace-pre-wrap"
+                    style={{ height: inputHeight }}
                     maxLength={getMessageMaxLength(userTier)}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
@@ -878,7 +901,7 @@ export default function Home() {
                     placeholder={t.chat.placeholder}
                   />
                 </div>
-                <div className="flex sm:flex-col gap-2 sm:w-40 sm:h-[132px] shrink-0 self-stretch sm:self-end">
+                <div className="flex sm:flex-col gap-2 sm:w-40 shrink-0">
                   <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
                   <button
                     type="button"
