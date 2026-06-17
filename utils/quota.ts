@@ -1,11 +1,11 @@
-export type UserTier = "free" | "basic" | "premium" | "ultra" | "founder";
+export type UserTier = "connected_free" | "basic" | "premium" | "ultra" | "founder";
 
 /**
  * Retourne la limite stricte de caractères par message selon le forfait.
- * Free = 1000, Basic = 10000, Premium/Ultra/Founder = 20000
+ * Connected_free = 1000, Basic = 10000, Premium/Ultra/Founder = 20000
  */
 export const getMessageMaxLength = (tier: UserTier): number => {
-  if (tier === "free") return 1000;
+  if (tier === "connected_free") return 1000;
   if (tier === "basic") return 10000;
   return 20000;
 };
@@ -54,14 +54,14 @@ export const checkQuota = (
 
   // ── 📊 CONFIGURATION DES LIMITES (BARÈME DE PROGRESSION STRICT) ──
   const limits: Record<UserTier, Record<'vitality' | 'calendar' | 'prompts', number>> = {
-    free: { vitality: 10, calendar: 5, prompts: 200 },           // Free fixe à 200 prompts
-    basic: { vitality: 40, calendar: 20, prompts: 2000 },        // Basic monte à 2000 prompts
-    premium: { vitality: 100, calendar: 50, prompts: 99999 },    // Illimité / Ouverture complète
-    ultra: { vitality: 300, calendar: 150, prompts: 99999 },     // Illimité
-    founder: { vitality: 9999, calendar: 9999, prompts: 99999 }  // Illimité
+    connected_free: { vitality: 10, calendar: 5, prompts: 200 },  // Connected_free fixe à 200 prompts
+    basic:          { vitality: 40, calendar: 20, prompts: 2000 }, // Basic monte à 2000 prompts
+    premium:        { vitality: 100, calendar: 50, prompts: 99999 }, // Illimité / Ouverture complète
+    ultra:          { vitality: 300, calendar: 150, prompts: 99999 }, // Illimité
+    founder:        { vitality: 9999, calendar: 9999, prompts: 99999 } // Illimité
   };
 
-  const limitConfig = limits[tier] || limits.free;
+  const limitConfig = limits[tier] || limits.connected_free;
   const maxAllowed = limitConfig[actionType];
   const currentCount = tracker[actionType].count ?? 0;
 

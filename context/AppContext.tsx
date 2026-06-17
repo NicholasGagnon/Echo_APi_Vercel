@@ -85,7 +85,9 @@ export const translations: Record<"fr" | "en", {
 
 type LangType = "fr" | "en";
 type ThemeType = "dark" | "light";
-type UserTierType = "free" | "basic" | "premium" | "ultra" | "founder";
+
+// ── EXTINCTION FINALE DE "free" ET REMPLACEMENT PAR "connected_free" ──
+type UserTierType = "connected_free" | "basic" | "premium" | "ultra" | "founder";
 
 type AppContextType = {
   lang: LangType;
@@ -94,7 +96,7 @@ type AppContextType = {
   toggleTheme: () => void;
   t: typeof translations.fr; 
   userTier: UserTierType;     
-  setUserTier: (tier: UserTierType) => void; // ⚡ AJOUTÉ : Le type du setter est maintenant exposé !
+  setUserTier: (tier: UserTierType) => void;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -102,7 +104,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [lang, setLangState] = useState<LangType>("fr");
   const [theme, setThemeState] = useState<ThemeType>("dark");
-  const [userTier, setUserTierState] = useState<UserTierType>("free"); 
+  const [userTier, setUserTierState] = useState<UserTierType>("connected_free"); 
 
   const applyTheme = (targetTheme: ThemeType) => {
     if (typeof window === "undefined") return;
@@ -125,7 +127,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .single();
       
       if (profile?.user_tier) {
-        setUserTierState(profile.user_tier.toLowerCase().trim() as UserTierType);
+        const cleaned = profile.user_tier.toLowerCase().trim();
+        // Interception fluide si la BDD renvoie encore l'ancien nom de forfait
+        const normalized = cleaned === "free" ? "connected_free" : cleaned;
+        setUserTierState(normalized as UserTierType);
       }
     } catch (err) {
       console.error("Erreur de synchronisation du forfait global :", err);
@@ -155,7 +160,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (session?.user) {
         fetchAndSyncTier(session.user.id);
       } else {
-        setUserTierState("free"); 
+        setUserTierState("connected_free"); 
       }
     });
 
@@ -174,7 +179,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     applyTheme(newTheme);
   };
 
-  // ⚡ AJOUTÉ : La fonction pour permettre à n'importe quelle page de modifier le forfait globalement
   const setUserTier = (newTier: UserTierType) => {
     setUserTierState(newTier);
   };

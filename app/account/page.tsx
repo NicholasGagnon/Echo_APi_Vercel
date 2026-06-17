@@ -61,12 +61,10 @@ export default function AccountPage() {
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [showGoogleSyncPopup, setShowGoogleSyncPopup] = useState(false);
 
-  // ── ÉTATS POUR LE RECOVERY DE MOT DE PASSE FLUIDE ──
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
-  // ── ÉTATS POUR LA SUPPRESSION DE COMPTE SÉCURISÉE ──
   const [deleteStage, setDeleteStage] = useState<"idle" | "confirm" | "final">("idle");
 
   const [user, setUser] = useState<any>(null);
@@ -109,7 +107,7 @@ export default function AccountPage() {
     const resolveAndSaveToken = async (session: any) => {
       if (!session?.user) return;
       const uid = session.user.id;
-      let activeTier = "free";
+      let activeTier = "connected_free"; // Valeur par défaut unifiée sans trace de free
 
       try {
         const { data: profile } = await supabase
@@ -119,7 +117,8 @@ export default function AccountPage() {
           .single();
 
         if (profile?.user_tier) {
-          activeTier = profile.user_tier.toLowerCase().trim();
+          const cleaned = profile.user_tier.toLowerCase().trim();
+          activeTier = cleaned === "free" ? "connected_free" : cleaned;
           setUserTier(activeTier as any);
           localStorage.setItem("echo-user-tier", activeTier);
         }
@@ -155,7 +154,6 @@ export default function AccountPage() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // ── FLUX DE SURVEILLANCE DE RÉCUPÉRATION DE MOT DE PASSE ──
       if (event === "PASSWORD_RECOVERY") {
         setIsRecoveringPassword(true);
         setShowSignInModal(false);
@@ -169,8 +167,8 @@ export default function AccountPage() {
       } else {
         setUser(null);
         setActiveProvider(null);
-        setUserTier("free"); 
-        localStorage.setItem("echo-user-tier", "free");
+        setUserTier("connected_free"); // Transition sécurisée pour les déconnexions
+        localStorage.setItem("echo-user-tier", "connected_free");
       }
     });
 
@@ -313,11 +311,8 @@ export default function AccountPage() {
   const handleDeleteAccountData = async () => {
     if (!user) return;
     try {
-      // 1. Suppression des jetons d'accès distants
       await supabase.from("user_tokens").delete().eq("id", user.id);
-      // 2. Suppression de la ligne de profil Supabase Public
       await supabase.from("profiles").delete().eq("id", user.id);
-      // 3. Déconnexion immédiate de la session
       await supabase.auth.signOut();
       
       alert(lang === "fr" 
@@ -334,7 +329,7 @@ export default function AccountPage() {
     await supabase.auth.signOut();
     setUser(null);
     setActiveProvider(null);
-    setUserTier("free");
+    setUserTier("connected_free"); // Forçage propre
     showToast(lang === "fr" ? "Déconnexion sécurisée effectuée." : "Disconnected safely.", "info");
   };
 
@@ -376,7 +371,6 @@ export default function AccountPage() {
       )}
 
       <div className="flex flex-1 overflow-hidden min-h-0">
-
         {/* SIDEBAR */}
         <aside className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
@@ -395,13 +389,12 @@ export default function AccountPage() {
             </div>
           </div>
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
-            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier || "free"}</span>
+            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier || "connected_free"}</span>
           </div>
         </aside>
 
-        {/* MAIN PANEL AVEC DEFILEMENT TOTAL POUR CONTENIR LE GRAND PLAN DE BATAILLE */}
+        {/* MAIN PANEL */}
         <section className="flex-1 flex flex-col items-center px-6 sm:px-12 py-12 overflow-y-auto bg-white dark:bg-gradient-to-b dark:from-zinc-950 dark:via-black dark:to-black transition-colors duration-200 justify-between">
-
           <div className="w-full max-w-5xl flex flex-col items-center flex-1">
             <div className="text-center mb-12 shrink-0 w-full max-w-md">
               <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-500 font-mono text-sm shadow-sm">
@@ -438,7 +431,6 @@ export default function AccountPage() {
 
             {/* GATEWAY CARDS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full shrink-0">
-
               {/* MICROSOFT */}
               <div className={`border rounded-2xl p-6 text-center flex flex-col justify-between h-64 transition-all shadow-sm ${
                 activeProvider === "azure"
@@ -531,7 +523,6 @@ export default function AccountPage() {
                   {activeProvider !== null ? (lang === "fr" ? "Session Verrouillée" : "Session Locked") : (lang === "fr" ? "S'inscrire" : "Open Sign Up")}
                 </button>
               </div>
-
             </div>
 
             {/* BANDEROLE DE SYNCHRONISATION AGENDA GOOGLE */}
@@ -553,7 +544,7 @@ export default function AccountPage() {
               </button>
             </div>
 
-            {/* SECTION DE PURGE DES DONNÉES EXIGÉE PAR GOOGLE (INTELLIGENTE & DOUBLE CONFIRMATION) */}
+            {/* SECTION DE PURGE DES DONNÉES */}
             {user && (
               <div className="mt-6 w-full border border-red-500/30 bg-red-500/[0.02] p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm animate-in fade-in duration-200">
                 <div className="text-center sm:text-left">
@@ -596,7 +587,7 @@ export default function AccountPage() {
                       onClick={handleDeleteAccountData} 
                       className="flex-1 sm:flex-none px-4 py-2.5 bg-red-600 text-white font-black text-xs rounded-xl uppercase tracking-widest transition-all"
                     >
-                      💥 {lang === "fr" ? "CONFIRMER LA PURGE TOTAL" : "CONFIRM TOTAL PURGE"}
+                      💥 {lang === "fr" ? "CONFIRMER LA PURGE TOTALE" : "CONFIRM TOTAL PURGE"}
                     </button>
                     <button onClick={() => setDeleteStage("idle")} className="px-3 py-2.5 bg-zinc-200 dark:bg-zinc-800 text-xs rounded-xl font-medium">
                       {lang === "fr" ? "Annuler" : "Cancel"}
@@ -621,11 +612,9 @@ export default function AccountPage() {
             </div>
           </div>
 
-          {/* ── 🟥 GRAND FOOTER CONFORME ET STRUCTURE ENTREPRISE (ENTIÈREMENT BILINGUE) ── */}
+          {/* GRAND FOOTER */}
           <footer className="w-full shrink-0 border-t border-zinc-200 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md px-6 py-10 mt-12">
             <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-sm">
-              
-              {/* Colonne 1: Liens de Conformité Google */}
               <div className="space-y-3">
                 <h5 className="font-bold font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
                   {lang === "fr" ? "🔗 Conformité & Conditions" : "🔗 Legal & Compliance"}
@@ -644,7 +633,6 @@ export default function AccountPage() {
                 </ul>
               </div>
 
-              {/* Colonne 2: Réseaux Sociaux Écosystème */}
               <div className="space-y-3">
                 <h5 className="font-bold font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
                   {lang === "fr" ? "👥 Entreprise & Réseaux" : "👥 Corporate Ecosystem"}
@@ -663,7 +651,6 @@ export default function AccountPage() {
                 </ul>
               </div>
 
-              {/* Colonne 3: Hub de Contact Officiel */}
               <div className="space-y-3">
                 <h5 className="font-bold font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
                   {lang === "fr" ? "✉️ Canaux de Contact" : "✉️ Connection Desks"}
@@ -679,7 +666,6 @@ export default function AccountPage() {
                   </li>
                 </ul>
               </div>
-
             </div>
 
             <div className="max-w-5xl mx-auto border-t border-zinc-200 dark:border-zinc-900 mt-8 pt-4 flex flex-col sm:flex-row items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-600 gap-2">
@@ -687,11 +673,10 @@ export default function AccountPage() {
               <div className="font-mono tracking-widest uppercase">Secured Identity Gateway Dashboard</div>
             </div>
           </footer>
-
         </section>
       </div>
 
-      {/* ── 🛸 FORMULAIRE INTERCEPTÉ : NOUVEAU MOT DE PASSE (PASSWORD RECOVERY MODAL) ── */}
+      {/* RECOVERY MODAL */}
       {isRecoveringPassword && (
         <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[9999] p-6 backdrop-blur-md animate-in fade-in duration-300">
           <form onSubmit={handleUpdatePassword} className="bg-white dark:bg-zinc-950 border-2 border-cyan-400 dark:border-cyan-500 rounded-3xl p-8 max-w-md w-full shadow-[0_0_40px_rgba(6,182,212,0.4)] space-y-5 animate-in zoom-in-95 duration-200">
@@ -723,7 +708,7 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* SIGN IN MODAL (AVEC FORMULAIRE ET PRESSION SUR ENTER ACTIVE) */}
+      {/* SIGN IN MODAL */}
       {showSignInModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => { setShowSignInModal(false); clearInputs(); }}>
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
@@ -754,7 +739,7 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* SIGN UP MODAL (AVEC FORMULAIRE ET PRESSION SUR ENTER ACTIVE) */}
+      {/* SIGN UP MODAL */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => { setShowSignUpModal(false); clearInputs(); }}>
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
@@ -784,7 +769,6 @@ export default function AccountPage() {
           </div>
         </div>
       )}
-
     </main>
   );
 }

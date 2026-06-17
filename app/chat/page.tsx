@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
-import { checkQuota, getMessageMaxLength } from "../../utils/quota";
+import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
 import LangDropdown from "../components/LangDropdown";
 import { useApp } from "../../context/AppContext";
 
@@ -16,6 +16,20 @@ type ChatMessage = {
   imageB64?: string;  // miniature base64 si message user avec image
 };
 
+// Normalise toute ancienne valeur de tier stockée localement vers le nouveau schéma.
+// L'ancien tier "free" (Gemini gratuit, cause du bug de quota) n'existe plus :
+// tout le monde est désormais routé sur une clé payante, "connected_free" étant
+// le palier d'entrée gratuit pour l'utilisateur mais payant côté infra.
+const normalizeTier = (raw: string | null): UserTier => {
+  if (!raw) return "connected_free";
+  const cleaned = raw.toLowerCase().trim();
+  if (cleaned === "free" || cleaned === "connected_free") return "connected_free";
+  if (cleaned === "basic" || cleaned === "premium" || cleaned === "ultra" || cleaned === "founder") {
+    return cleaned as UserTier;
+  }
+  return "connected_free";
+};
+
 export default function ChatPage() {
   const { t, lang, theme, toggleTheme } = useApp();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -25,7 +39,7 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const lastSavedLength = useRef(0);
-  const [userTier, setUserTier] = useState<"free" | "basic" | "premium" | "ultra" | "founder">("free");
+  const [userTier, setUserTier] = useState<UserTier>("connected_free");
   const [isListening, setIsListening] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
@@ -39,12 +53,12 @@ export default function ChatPage() {
   // ── ÉTATS POUR LA MATRIX DE BOUTONS ──
   const [selectedButtons, setSelectedButtons] = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
+  const isMatrixLockedBySurprise = false;
 
   // ── ÉTATS DÉDIÉS AU BOUTON SURPRISE / ÉMERGENCE ──
   const [isSurpriseActive, setIsSurpriseActive] = useState(false);
   const [isPressingSurprise, setIsPressingSurprise] = useState(false);
 
-  // Dictionnaire bilingue complet pour les boutons de la Matrix (Aligné sur "humain")
   const buttonsLabels: Record<string, { fr: string; en: string }> = {
     clarity: { fr: "1🧠 Clarté", en: "1🧠 Clarity" },
     humain: { fr: "2👤 Humain", en: "2👤 Human" },
@@ -90,9 +104,9 @@ export default function ChatPage() {
   };
 
   const handleSurpriseToggle = () => {
-    if (userTier === "free" || userTier === "basic") {
+    if (userTier === "connected_free" || userTier === "basic") {
       alert(lang === "fr" 
-        ? "🔒 Le mode Surprise / Émergence is reserved for Premium plans and above." 
+        ? "🔒 Le mode Surprise / Émergence est réservé aux plans Premium et supérieurs." 
         : "🔒 Surprise / Emergence mode is exclusive to Premium plans and above."
       );
       return;
@@ -114,7 +128,6 @@ export default function ChatPage() {
   const getHistoryKey = (uid: string | null) => uid ? `echo-history-${uid}` : "echo-history";
 
   const lastEchoIndex = messages.findLastIndex((m) => /^Echo\s*:/i.test(m.raw));
-
   const serializeMessages = (msgs: ChatMessage[]) => msgs.map(m => m.raw);
   const deserializeMessages = (raws: string[]): ChatMessage[] => raws.map(r => ({ raw: r }));
 
@@ -134,9 +147,8 @@ export default function ChatPage() {
           setMessages([]);
         }
         const savedTier = uid ? localStorage.getItem(getTierKey(uid)) : localStorage.getItem("echo-user-tier");
-        if (savedTier) setUserTier(savedTier as any);
+        setUserTier(normalizeTier(savedTier));
 
-        // ── FIL NARRATIF : ONBOARDING DU CHAPITRE CHAT ──
         const isChatTutoDone = localStorage.getItem("echo-tuto-chat-done-v1");
         if (!isChatTutoDone) {
           setTutorialStep(1);
@@ -147,7 +159,7 @@ export default function ChatPage() {
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session?.user) { 
-        setUserId(null); setMessages([]); setUserTier("free"); return; 
+        setUserId(null); setMessages([]); setUserTier("connected_free"); return; 
       }
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const uid = session.user.id;
@@ -156,7 +168,7 @@ export default function ChatPage() {
         const savedMessages = localStorage.getItem(convoKey);
         setMessages(savedMessages ? deserializeMessages(JSON.parse(savedMessages)) : []);
         const savedTier = localStorage.getItem(getTierKey(uid));
-        if (savedTier) setUserTier(savedTier as any);
+        setUserTier(normalizeTier(savedTier));
       }
     });
     return () => listener.subscription.unsubscribe();
@@ -184,7 +196,7 @@ export default function ChatPage() {
 
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.startsWith("image/")) {
-          if (userTier === "free" || userTier === "basic") {
+          if (userTier === "connected_free" || userTier === "basic") {
             alert(lang === "fr" ? "L'analyse d'image est disponible avec le plan Premium ou supérieur." : "Image analysis is available on Premium plans and above.");
             event.preventDefault();
             return;
@@ -263,6 +275,7 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!input.trim() && !selectedImage) return;
 
+    // Protection des quotas de discussion (200/mois pour connected_free, etc.)
     const quotaStatus = checkQuota("prompts", userTier);
     if (!quotaStatus.allowed) {
       const lockMessage = lang === "fr"
@@ -309,7 +322,6 @@ export default function ChatPage() {
           userTier, 
           calendarEvents,
           selectedButtons,
-          // ── SEARCH WEB EXTENSION FORCEE ICI ──
           "web_search": true 
         }),
       });
@@ -317,6 +329,7 @@ export default function ChatPage() {
       setEchoState("speaking");
 
       let isActionBlocked = false;
+      let blockedCategory: "vitality" | "calendar" | null = null;
       if (data.action) {
         const { type } = data.action;
         const quotaCategory = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") ? "vitality" : "calendar";
@@ -325,11 +338,11 @@ export default function ChatPage() {
           setActiveLimitCategory(quotaCategory);
           setShowLimitModal(true);
           isActionBlocked = true;
+          blockedCategory = quotaCategory;
         }
       }
 
-      // ── AMÉLIORATION QUOTAS : On préserve la réponse textuelle d'Echo même si le sous-quota bloque l'arrière-plan
-      const quotaNotice = isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${activeLimitCategory}"]` : "";
+      const quotaNotice = isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${blockedCategory}"]` : "";
       setMessages([...baseMessages, { raw: `Echo: ${data.response || ""}${quotaNotice}` }]);
 
       if (data.action && !isActionBlocked) {
@@ -367,12 +380,9 @@ export default function ChatPage() {
     }
   };
 
-  const isMatrixLockedBySurprise = isSurpriseActive;
-
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
 
-      {/* ── 📖 NOUVEAU TUTORIEL FLOTTANT : CHAPITRE 2 DU NARRATIF D'ECHO (PROPRE & VISIBLE) ── */}
       {tutorialStep === 1 && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 w-85 sm:w-[540px] bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
           <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2">
@@ -417,8 +427,6 @@ export default function ChatPage() {
       )}
 
       <div className="flex flex-1 overflow-hidden min-h-0">
-
-        {/* SIDEBAR GAUCHE */}
         <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
@@ -464,18 +472,13 @@ export default function ChatPage() {
           </div>
         </aside>
 
-        {/* LE CHAT */}
         <section className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-black transition-colors duration-200 min-w-0">
-          
           <div className="flex-1 flex flex-row overflow-hidden min-h-0 w-full">
-            
-            {/* ZONE DE MESSAGES */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-white dark:bg-black">
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center gap-4">
-                  {/* ⚡ AMÉLIORATION DE L'AVATAR CENTRAL RAPETISSÉ ET MASQUÉ SI TUTO ACTIF ── */}
                   {!tutorialStep && (
-                    <div className={`w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-900 rounded-full shadow-md overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center echo-idle`}>
+                    <div className="w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-900 rounded-full shadow-md overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center echo-idle">
                       <img src="/Echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
                     </div>
                   )}
@@ -498,7 +501,6 @@ export default function ChatPage() {
                     return (
                       <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 max-w-3xl">
                         <div className="flex items-center gap-4">
-                          {/* ⚡ AMÉLIORATION FLUIDE : Ajustement à w-16 h-16 de l'avatar des bulles de discussion */}
                           <div className={`w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-sm overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center ${
                             isLastEcho
                               ? echoState === "thinking" ? "echo-thinking" : echoState === "speaking" ? "echo-speaking" : "echo-idle"
@@ -547,7 +549,6 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* COLONNE DE DROITE */}
             <div className="w-64 shrink-0 border-l border-zinc-100 dark:border-zinc-900/60 flex flex-col bg-zinc-50/20 dark:bg-zinc-950/10 overflow-hidden h-full">
               <div className="p-4 border-b border-zinc-100 dark:border-zinc-900/80 bg-transparent flex gap-3 items-center justify-between shadow-sm shrink-0">
                 <LangDropdown />
@@ -601,13 +602,10 @@ export default function ChatPage() {
                 })}
               </div>
             </div>
-
           </div>
 
-          {/* BARRE DE SAISIE */}
           <div className="border-t border-zinc-200 dark:border-zinc-900 px-6 py-5 shrink-0 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-200">
             <div className="max-w-4xl mx-auto flex flex-col gap-3">
-
               {selectedImage && (
                 <div className="flex items-center gap-3 bg-violet-500/10 border border-violet-500/20 rounded-xl px-3 py-2">
                   <img src={selectedImage} alt="preview" className="w-10 h-10 rounded-lg object-cover border border-violet-500/30" />
@@ -631,18 +629,18 @@ export default function ChatPage() {
 
                   <button
                     type="button"
-                    disabled={userTier === "free" || userTier === "basic"}
+                    disabled={userTier === "connected_free" || userTier === "basic"}
                     onClick={() => imageInputRef.current?.click()}
-                    title={userTier === "free" || userTier === "basic" ? (lang === "fr" ? "Disponible avec le plan Premium ou supérieur" : "Available on Premium plans and above") : selectedImageName}
+                    title={userTier === "connected_free" || userTier === "basic" ? (lang === "fr" ? "Disponible avec le plan Premium ou supérieur" : "Available on Premium plans and above") : selectedImageName}
                     className={`w-full flex-1 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border transition-all shadow-sm ${
-                      userTier === "free" || userTier === "basic"
+                      userTier === "connected_free" || userTier === "basic"
                         ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
                         : selectedImage
                           ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
                           : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"
                     }`}
                   >
-                    <span>{userTier === "free" || userTier === "basic" ? "🔒" : selectedImage ? "✓" : "🖼️"}</span>
+                    <span>{userTier === "connected_free" || userTier === "basic" ? "🔒" : selectedImage ? "✓" : "🖼️"}</span>
                     <span className="truncate">{selectedImage ? (lang === "fr" ? "Image prête" : "Image Ready") : (lang === "fr" ? "Analyse d'image" : "Image Analysis")}</span>
                   </button>
 
@@ -678,11 +676,11 @@ export default function ChatPage() {
             <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
               {activeLimitCategory === "prompts"
                 ? (lang === "fr" 
-                    ? "Votre quota mensuel de messages est épuisé. Élevez votre sillage vers un forfait supérieur pour continuer l'expérience." 
-                    : "Your monthly message quota has been reached. Upgrade your tier to unlock unlimited interactions.")
+                  ? "Votre quota mensuel de messages est épuisé. Élevez votre sillage vers un forfait supérieur pour continuer l'expérience." 
+                  : "Your monthly message quota has been reached. Upgrade your tier to unlock unlimited interactions.")
                 : (lang === "fr"
-                    ? `Limite d'actions automatisées atteinte pour la section [${activeLimitCategory}]. Le message texte d'Echo a été généré, mais les données n'ont pas pu s'enregistrer pour ce cycle.`
-                    : `Automated action limit reached for [${activeLimitCategory}]. Echo's text response was generated, but data could not be saved for this cycle.`)
+                  ? `Limite d'actions automatisées atteinte pour la section [${activeLimitCategory}]. Le message texte d'Echo a été généré, mais les données n'ont pas pu s'enregistrer pour ce cycle.`
+                  : `Automated action limit reached for [${activeLimitCategory}]. Echo's text response was generated, but data could not be saved for this cycle.`)
               }
             </p>
             <div className="flex flex-col gap-3">
