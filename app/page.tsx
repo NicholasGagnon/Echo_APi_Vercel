@@ -103,22 +103,51 @@ export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
 
-  // ── TAILLE AJUSTABLE DU CHAMP DE SAISIE ──
-  const DEFAULT_INPUT_HEIGHT = 200;
-  const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
+  // ── COLONNE DROITE REDIMENSIONNABLE À LA SOURIS (GAUCHE/DROITE) ──
+  const [rightPanelWidth, setRightPanelWidth] = useState(272);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const isResizingRef = useRef(false);
 
-  const shrinkInput = () => {
-    const el = textareaRef.current;
-    const current = el ? el.getBoundingClientRect().height : inputHeight;
-    const next = Math.max(60, Math.round(current / 2));
-    if (el) el.style.height = `${next}px`;
-    setInputHeight(next);
+  useEffect(() => {
+    const saved = parseInt(localStorage.getItem("echo-home-panel-width") || "", 10);
+    if (Number.isFinite(saved)) setRightPanelWidth(Math.min(440, Math.max(220, saved)));
+
+    const checkDesktop = () => setIsDesktop(window.innerWidth >= 1024);
+    checkDesktop();
+    window.addEventListener("resize", checkDesktop);
+    return () => window.removeEventListener("resize", checkDesktop);
+  }, []);
+
+  const startPanelResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
   };
 
-  const resetInput = () => {
-    if (textareaRef.current) textareaRef.current.style.height = `${DEFAULT_INPUT_HEIGHT}px`;
-    setInputHeight(DEFAULT_INPUT_HEIGHT);
-  };
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const next = Math.min(440, Math.max(220, window.innerWidth - e.clientX));
+      setRightPanelWidth(next);
+    };
+    const onUp = () => {
+      if (!isResizingRef.current) return;
+      isResizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("echo-home-panel-width", String(rightPanelWidth));
+  }, [rightPanelWidth]);
 
   const [stickies, setStickies] = useState<StickyNote[]>([]);
   const [newStickyText, setNewStickyText] = useState("");
@@ -610,7 +639,7 @@ export default function Home() {
             
             {/* ── INTERFACE 10 BOUTONS MATRIX (AVEC SYNC DU DICTIONNAIRE MULTILINGUE) ── */}
             <div className="w-full max-w-4xl mx-auto bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
+              <div className="flex flex-wrap justify-center gap-2 w-full">
                 {buttonsData.map((btn) => {
                   const isSelected = selectedButtons.includes(btn.id);
                   const isDoubleRegard = btn.id === "double";
@@ -644,12 +673,12 @@ export default function Home() {
                       onClick={() => handleButtonClick(btn.id)}
                       title={currentLabel}
                       className={`
-                        h-9 px-2 rounded-xl text-xs font-bold font-mono tracking-wide uppercase transition-all duration-300 border text-center select-none truncate
+                        px-3.5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 border select-none whitespace-nowrap
                         ${isLocked
-                          ? "opacity-20 cursor-not-allowed bg-transparent border-zinc-200 dark:border-zinc-900 text-zinc-400"
+                          ? "opacity-30 cursor-not-allowed bg-transparent border-zinc-200 dark:border-zinc-900 text-zinc-400"
                           : isSelected || (isDoubleRegard && isDoubleRegardUnlocked)
-                            ? "bg-cyan-500/30 text-cyan-400 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.6)]"
-                            : "bg-cyan-500/5 dark:bg-cyan-950/10 text-cyan-600 dark:text-cyan-400 border-cyan-700/40 dark:border-cyan-900/60 hover:border-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.3)] hover:bg-cyan-500/10"
+                            ? "bg-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.5)]"
+                            : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-cyan-400 hover:text-cyan-600 dark:hover:text-cyan-400"
                         }
                       `}
                     >
@@ -817,39 +846,21 @@ export default function Home() {
             </div>
 
             <div className="flex flex-col gap-2 mt-4 shrink-0 px-2 min-w-0">
-              <div className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end min-w-0">
-                <div className="flex-1 flex flex-col gap-2 min-w-0">
-                  {selectedImage && (
-                    <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-600 dark:text-emerald-400 max-w-full">
-                      <div className="flex items-center gap-2 truncate min-w-0">
-                        <img src={selectedImage} alt="preview" className="w-8 h-8 rounded object-cover border border-emerald-500/30 shrink-0" />
-                        <span className="truncate font-medium">{selectedImageName || (lang === "fr" ? "Image prête" : "Image ready")}</span>
-                      </div>
-                      <button onClick={() => { setSelectedImage(null); setSelectedImageName(""); }} className="text-zinc-400 hover:text-red-500 font-bold ml-2 shrink-0">✕</button>
+              <div className="max-w-4xl w-full mx-auto flex flex-col gap-2 min-w-0">
+                {selectedImage && (
+                  <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-600 dark:text-emerald-400 max-w-full">
+                    <div className="flex items-center gap-2 truncate min-w-0">
+                      <img src={selectedImage} alt="preview" className="w-8 h-8 rounded object-cover border border-emerald-500/30 shrink-0" />
+                      <span className="truncate font-medium">{selectedImageName || (lang === "fr" ? "Image prête" : "Image ready")}</span>
                     </div>
-                  )}
-                  <div className="flex justify-end gap-1.5">
-                    <button
-                      type="button"
-                      onClick={shrinkInput}
-                      title={lang === "fr" ? "Réduire de moitié" : "Shrink by half"}
-                      className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
-                    >
-                      ➖ {lang === "fr" ? "Réduire" : "Shrink"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetInput}
-                      title={lang === "fr" ? "Taille originale" : "Reset to original size"}
-                      className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
-                    >
-                      ↺ {lang === "fr" ? "Original" : "Reset"}
-                    </button>
+                    <button onClick={() => { setSelectedImage(null); setSelectedImageName(""); }} className="text-zinc-400 hover:text-red-500 font-bold ml-2 shrink-0">✕</button>
                   </div>
+                )}
+
+                <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl shadow-inner focus-within:border-cyan-500/40 transition-colors overflow-hidden">
                   <textarea
                     ref={textareaRef}
-                    className="p-4 bg-zinc-50 dark:bg-zinc-950 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl resize-y max-h-[300px] w-full max-w-full placeholder-zinc-400 dark:placeholder-zinc-700 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-800 transition-colors leading-relaxed shadow-inner break-words overflow-x-hidden whitespace-pre-wrap"
-                    style={{ height: inputHeight }}
+                    className="w-full bg-transparent text-black dark:text-white placeholder-zinc-400 dark:placeholder-zinc-700 text-sm leading-relaxed resize-y min-h-[56px] max-h-[300px] h-28 p-4 focus:outline-none break-words whitespace-pre-wrap"
                     maxLength={getMessageMaxLength(userTier)}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
@@ -857,36 +868,40 @@ export default function Home() {
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
                     placeholder={t.chat.placeholder}
                   />
-                </div>
-                <div className="flex sm:flex-col gap-2 sm:w-40 shrink-0">
-                  <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
-                  <button
-                    type="button"
-                    disabled={isImageButtonLocked}
-                    onClick={() => imageInputRef.current?.click()}
-                    title={isImageButtonLocked ? (lang === "fr" ? "Disponible avec le plan Premium ou supérieur" : "Available on Premium plans and above") : (selectedImageName || (lang === "fr" ? "Importer ou coller (Ctrl+V) une image" : "Import or paste (Ctrl+V) an image"))}
-                    className={`flex-1 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border transition-all shadow-sm px-2 py-2.5 sm:py-0 ${
-                      isImageButtonLocked
-                        ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
-                        : selectedImage
-                          ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-                          : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"
-                    }`}
-                  >
-                    <span>{isImageButtonLocked ? "🔒" : selectedImage ? "✓" : "🖼️"}</span>
-                    <span className="truncate">{selectedImage ? (lang === "fr" ? "Image prête" : "Image Ready") : (lang === "fr" ? "Analyse d'image" : "Image Analysis")}</span>
-                  </button>
-                  <button 
-                    onClick={lancerDictation} 
-                    className={`flex-1 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm py-2.5 sm:py-0 ${
-                      isListening ? "bg-red-600 border-red-500 animate-pulse text-white" : "bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/20 text-cyan-500 dark:text-cyan-400"
-                    }`}
-                  >
-                    {isListening ? "🔴 Stop" : (lang === "fr" ? "🎤 Parler" : "🎤 Speak")}
-                  </button>
-                  <button onClick={envoyer} className="flex-1 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold text-xs text-white transition-all shadow-md uppercase tracking-wider py-2.5 sm:py-0">
-                    {t.chat.send}
-                  </button>
+
+                  <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-zinc-200 dark:border-zinc-900">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
+                      <button
+                        type="button"
+                        disabled={isImageButtonLocked}
+                        onClick={() => imageInputRef.current?.click()}
+                        title={isImageButtonLocked ? (lang === "fr" ? "Disponible avec le plan Premium ou supérieur" : "Available on Premium plans and above") : (selectedImageName || (lang === "fr" ? "Importer ou coller (Ctrl+V) une image" : "Import or paste (Ctrl+V) an image"))}
+                        className={`h-8 px-3 rounded-lg font-bold text-[11px] flex items-center gap-1.5 border transition-all shrink-0 ${
+                          isImageButtonLocked
+                            ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
+                            : selectedImage
+                              ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                              : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"
+                        }`}
+                      >
+                        <span>{isImageButtonLocked ? "🔒" : selectedImage ? "✓" : "🖼️"}</span>
+                        <span className="truncate hidden sm:inline">{selectedImage ? (lang === "fr" ? "Image prête" : "Image Ready") : (lang === "fr" ? "Analyse d'image" : "Image Analysis")}</span>
+                      </button>
+                      <button
+                        onClick={lancerDictation}
+                        className={`h-8 px-3 rounded-lg font-bold text-[11px] flex items-center gap-1.5 border transition-all shrink-0 ${
+                          isListening ? "bg-red-600 border-red-500 animate-pulse text-white" : "bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/20 text-cyan-600 dark:text-cyan-400"
+                        }`}
+                      >
+                        <span>{isListening ? "🔴" : "🎤"}</span>
+                        <span className="hidden sm:inline">{isListening ? "Stop" : (lang === "fr" ? "Parler" : "Speak")}</span>
+                      </button>
+                    </div>
+                    <button onClick={envoyer} className="h-8 px-5 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold text-[11px] text-white transition-all shadow-md uppercase tracking-wider shrink-0">
+                      {t.chat.send}
+                    </button>
+                  </div>
                 </div>
               </div>
               {!isImageButtonLocked && (
@@ -897,7 +912,17 @@ export default function Home() {
             </div>
           </section>
 
-          <aside className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
+          {/* ── POIGNÉE DE REDIMENSIONNEMENT (GLISSER GAUCHE/DROITE, DESKTOP UNIQUEMENT) ── */}
+          <div
+            onMouseDown={startPanelResize}
+            className="hidden lg:flex w-2.5 shrink-0 cursor-col-resize items-center justify-center group"
+          >
+            <div className="w-1 h-12 rounded-full bg-zinc-200 dark:bg-zinc-800 group-hover:bg-cyan-500 transition-colors" />
+          </div>
+
+          <aside
+            style={isDesktop ? { width: rightPanelWidth, flexBasis: rightPanelWidth } : undefined}
+            className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
 
             {/* ── ⚙️ BARRE PARAMÈTRES, INTÉGRÉE EN HAUT DE LA COLONNE (PLUS DE FLOTTEMENT ABSOLU) ── */}
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0" onClick={(e) => e.stopPropagation()}>
