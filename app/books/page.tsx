@@ -1,865 +1,306 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useApp } from "../../context/AppContext";
+import { jsPDF } from "jspdf";
+import LangDropdown from "../components/LangDropdown";
+import { useApp } from "../../context/AppContext"; // 🚀 Chemin ajusté avec succès !
 
-// ── TYPES ──────────────────────────────────────────────────────────────────────
-type EchoMode = "creative" | "ideas" | "critical";
-type BookView = "edit" | "preview" | "present";
-type SaveStatus = "saved" | "saving" | "unsaved";
-type Preset = "print" | "kindle";
+type Note = {
+  id: string;
+  content: string;
+  date: string;
+};
 
-type BookMessage = { role: "user" | "echo"; text: string };
-type Chapter = { id: string; title: string; content: string };
-
-// ── ECHO MODES ─────────────────────────────────────────────────────────────────
-const ECHO_MODES: { id: EchoMode; labelFr: string; labelEn: string; emoji: string; system: string }[] = [
-  {
-    id: "creative", labelFr: "Créatif", labelEn: "Creative", emoji: "✍️",
-    system: "Tu es en mode Créatif pour l'écriture. Aide avec imagination, métaphores, suggestions stylistiques originales. Propose des formulations poétiques et inattendues.",
-  },
-  {
-    id: "ideas", labelFr: "Idées", labelEn: "Ideas", emoji: "💡",
-    system: "Tu es en mode Idées. Génère des pistes narratives, rebondissements, personnages ou thèmes à explorer pour enrichir l'oeuvre.",
-  },
-  {
-    id: "critical", labelFr: "Critique", labelEn: "Critical", emoji: "🔍",
-    system: "Tu es en mode Critique. Analyse le texte avec rigueur : rythme, cohérence, clarté, redondances. Signale ce qui affaiblit le propos sans ménagements.",
-  },
-];
-
-// ── WATER GLYPHS (décoration eau plate) ────────────────────────────────────────
-const WATER = [
-  { g: "〰", top: "6%",  left: "1%",  rot: "-18deg", sz: "58px" },
-  { g: "∿",  top: "20%", right:"2%",  rot: "12deg",  sz: "70px" },
-  { g: "〜", top: "45%", left: "0.5%",rot: "-8deg",  sz: "50px" },
-  { g: "≈",  top: "68%", right:"1.5%",rot: "18deg",  sz: "64px" },
-  { g: "∾",  top: "84%", left: "2%",  rot: "-12deg", sz: "54px" },
-];
-
-// ── PRESET LOGIC ───────────────────────────────────────────────────────────────
-// Presets only touch content settings, NOT the visual size of the page box.
-function applyPreset(preset: Preset, s: {
-  setMirrorMargins:(v:boolean)=>void;
-  setShowPageNumbers:(v:boolean)=>void;
-  setShowHeader:(v:boolean)=>void;
-  setShowFooter:(v:boolean)=>void;
-  setLineHeight:(v:number)=>void;
-  setFontSize:(v:number)=>void;
-  setIsJustified:(v:boolean)=>void;
-  setParaSpacing:(v:number)=>void;
-}) {
-  if (preset === "print") {
-    // Livre imprimé en librairie : miroir, pagination, header/footer, marges typographiques
-    s.setMirrorMargins(true);
-    s.setShowPageNumbers(true);
-    s.setShowHeader(true);
-    s.setShowFooter(true);
-    s.setLineHeight(1.8);
-    s.setFontSize(12);
-    s.setIsJustified(true);
-    s.setParaSpacing(0.8);
-  } else {
-    // Kindle / EPUB : pas de miroir, pas de pagination fixe, marges optimisées
-    s.setMirrorMargins(false);
-    s.setShowPageNumbers(false);
-    s.setShowHeader(false);
-    s.setShowFooter(false);
-    s.setLineHeight(1.6);
-    s.setFontSize(14);
-    s.setIsJustified(false);
-    s.setParaSpacing(0.6);
-  }
-}
-
-// ── DOWNLOAD HELPER (ouvre le système de fichiers) ────────────────────────────
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1500);
-}
-
-function downloadText(content: string, filename: string, mime = "text/plain") {
-  downloadBlob(new Blob([content], { type: mime }), filename);
-}
-
-// ───────────────────────────────────────────────────────────────────────────────
 export default function BooksPage() {
-  const { lang, theme, toggleTheme } = useApp();
-  const fr = lang === "fr";
-
-  // ── CHAPTERS ──────────────────────────────────────────────────────────────────
-  const [chapters, setChapters] = useState<Chapter[]>([
-    { id: "ch1", title: fr ? "Chapitre 1" : "Chapter 1", content: "" },
-  ]);
-  const [activeChapter, setActiveChapter] = useState("ch1");
-  const [bookTitle, setBookTitle] = useState(fr ? "Mon Premier Livre" : "My First Book");
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [view, setView] = useState<BookView>("edit");
-  const editorRef = useRef<HTMLDivElement>(null);
-  const titleInputRef = useRef<HTMLInputElement>(null);
-
-  // ── SAVE ──────────────────────────────────────────────────────────────────────
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Autosave to localStorage
-  const autoSave = useCallback(() => {
-    setSaveStatus("saving");
-    localStorage.setItem("echo-books-manuscript", JSON.stringify({ bookTitle, chapters }));
-    setTimeout(() => setSaveStatus("saved"), 500);
-  }, [bookTitle, chapters]);
-
-  // Manual save → ouvre le système de fichiers (télécharge un .json)
-  const saveToFile = () => {
-    const data = JSON.stringify({ bookTitle, chapters }, null, 2);
-    downloadText(data, `${bookTitle.replace(/\s+/g, "_")}.echo-book.json`, "application/json");
-    setSaveStatus("saved");
-  };
+  const { t, lang, theme, toggleTheme } = useApp(); // Utilisation du dictionnaire global
+  const [input, setInput] = useState("");
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [userTier, setUserTier] = useState<"free" | "basic" | "premium" | "ultra" | "founder">("free");
 
   useEffect(() => {
-    setSaveStatus("unsaved");
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(autoSave, 2500);
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [chapters, bookTitle]);
+    const saved = localStorage.getItem("echo-notes-v2");
+    if (saved) setNotes(JSON.parse(saved));
 
-  useEffect(() => {
-    const raw = localStorage.getItem("echo-books-manuscript");
-    if (!raw) return;
-    try {
-      const { bookTitle: t, chapters: c } = JSON.parse(raw);
-      if (t) setBookTitle(t);
-      if (c?.length) { setChapters(c); setActiveChapter(c[0].id); }
-    } catch { /* ignore */ }
-    setSaveStatus("saved");
+    const savedTier = localStorage.getItem("echo-user-tier");
+    if (savedTier) setUserTier(savedTier as any);
+
+    setLoaded(true);
   }, []);
 
-  // ── BOOK CONTENT SETTINGS (presets touche seulement ces valeurs) ───────────
-  const [mirrorMargins, setMirrorMargins] = useState(false);
-  const [showPageNumbers, setShowPageNumbers] = useState(true);
-  const [showHeader, setShowHeader] = useState(false);
-  const [showFooter, setShowFooter] = useState(false);
-  const [fontSize, setFontSize] = useState(14);
-  const [fontFamily, setFontFamily] = useState("Georgia, serif");
-  const [lineHeight, setLineHeight] = useState(1.8);
-  const [isJustified, setIsJustified] = useState(true);
-  const [paraSpacing, setParaSpacing] = useState(0.75);
-  const [showSettings, setShowSettings] = useState(true);
-
-  // ── TOOLBAR STATE ─────────────────────────────────────────────────────────────
-  const [isBold, setIsBold] = useState(false);
-  const [isItalic, setIsItalic] = useState(false);
-
-  // ── ECHO ──────────────────────────────────────────────────────────────────────
-  const [echoMode, setEchoMode] = useState<EchoMode>("creative");
-  const [echoMessages, setEchoMessages] = useState<BookMessage[]>([]);
-  const [echoInput, setEchoInput] = useState("");
-  const [echoThinking, setEchoThinking] = useState(false);
-  const echoBottomRef = useRef<HTMLDivElement>(null);
-
-  // ── UI ────────────────────────────────────────────────────────────────────────
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const imgInputRef  = useRef<HTMLInputElement>(null);
-  const importJsonRef = useRef<HTMLInputElement>(null);
-
-  // ── SYNC EDITOR ───────────────────────────────────────────────────────────────
-  const handleEditorInput = useCallback(() => {
-    if (!editorRef.current) return;
-    setChapters(prev => prev.map(c => c.id === activeChapter ? { ...c, content: editorRef.current!.innerHTML } : c));
-  }, [activeChapter]);
+  useEffect(() => {
+    if (!loaded) return;
+    localStorage.setItem("echo-notes-v2", JSON.stringify(notes));
+  }, [notes, loaded]);
 
   useEffect(() => {
-    if (!editorRef.current || view !== "edit") return;
-    const current = chapters.find(c => c.id === activeChapter);
-    if (current && editorRef.current.innerHTML !== current.content) {
-      editorRef.current.innerHTML = current.content;
+    if (!loaded) return;
+    localStorage.setItem("echo-user-tier", userTier);
+  }, [userTier, loaded]);
+
+  const saveNote = () => {
+    if (!input.trim()) return;
+    const newNote: Note = {
+      id: Date.now().toString(),
+      content: input.trim(),
+      date: new Date().toLocaleString("fr-CA"),
+    };
+    setNotes((prev) => [newNote, ...prev]);
+    setInput("");
+  };
+
+  const deleteNote = (id: string) => {
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const loadNoteIntoEditor = (note: Note) => {
+    setInput(note.content);
+  };
+
+  const lancerDictation = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert(lang === "fr" ? "La reconnaissance vocale n'est pas supportée par votre navigateur." : "Speech recognition is not supported by your current browser.");
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChapter, view]);
 
-  // ── EDITOR COMMANDS ───────────────────────────────────────────────────────────
-  const execCmd = (cmd: string, val?: string) => { editorRef.current?.focus(); document.execCommand(cmd, false, val); };
-  const applyBlock  = (tag: string) => execCmd("formatBlock", tag);
-  const toggleBold   = () => { execCmd("bold");   setIsBold(v => !v); };
-  const toggleItalic = () => { execCmd("italic"); setIsItalic(v => !v); };
-  const toggleJustify = () => { execCmd(isJustified ? "justifyLeft" : "justifyFull"); setIsJustified(v => !v); };
-  const applyIndent  = () => execCmd("indent");
+    const recognition = new SpeechRecognition();
+    recognition.lang = "fr-FR"; 
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
 
-  const insertPageBreak = () => {
-    editorRef.current?.focus();
-    document.execCommand("insertHTML", false,
-      `<div class="page-break-marker" style="border-top:1px dashed rgba(6,182,212,0.22);margin:2rem 0;text-align:center;font-size:9px;color:rgba(6,182,212,0.38);letter-spacing:0.25em;padding-top:6px;">— ${fr ? "SAUT DE PAGE" : "PAGE BREAK"} —</div><p><br></p>`);
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+
+    recognition.onresult = (event: any) => {
+      const textResult = event.results[0][0].transcript;
+      setInput((prev) => prev + (prev ? " " : "") + textResult);
+    };
+
+    recognition.start();
   };
 
-  const insertTOC = () => {
-    const rows = chapters.map((c, i) =>
-      `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;border-bottom:1px dotted rgba(120,120,120,0.18);">${c.title}<span>${i + 1}</span></div>`
-    ).join("");
-    editorRef.current?.focus();
-    document.execCommand("insertHTML", false,
-      `<div style="border:1px dashed rgba(6,182,212,0.18);padding:14px;border-radius:3px;margin:18px 0;"><div style="font-size:9px;text-transform:uppercase;letter-spacing:0.12em;opacity:0.38;margin-bottom:10px;">${fr ? "Table des matières" : "Table of Contents"}</div>${rows}</div>`);
+  const exportTXT = () => {
+    const blob = new Blob([input], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "echo-note.txt"; a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const insertImage = () => imgInputRef.current?.click();
+  const exportMD = () => {
+    const blob = new Blob([input], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "echo-note.md"; a.click();
+    URL.revokeObjectURL(url);
+  };
 
-  const handleImgFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; e.target.value = "";
+  const exportJSON = () => {
+    const blob = new Blob([JSON.stringify({ content: input }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "echo-note.json"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportDOCX = async () => {
+    const html = `<html><head><meta charset="utf-8"></head><body><p>${input.replace(/\n/g, "</p><p>")}</p></body></html>`;
+    const blob = new Blob([html], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "echo-note.docx"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = () => {
+    if (!input.trim()) return;
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(11);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxLineWidth = pageWidth - (margin * 2);
+    const splitText = doc.splitTextToSize(input, maxLineWidth);
+    doc.text(splitText, margin, margin);
+    doc.save("echo-note.pdf");
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => { editorRef.current?.focus(); document.execCommand("insertImage", false, reader.result as string); };
-    reader.readAsDataURL(file);
-  };
-
-  const addChapter = () => {
-    const id = `ch${Date.now()}`;
-    setChapters(prev => [...prev, { id, title: fr ? `Chapitre ${prev.length + 1}` : `Chapter ${prev.length + 1}`, content: "" }]);
-    setActiveChapter(id);
-  };
-
-  // ── IMPORT ────────────────────────────────────────────────────────────────────
-  const handleImportTxt = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; e.target.value = "";
-    if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase();
     const reader = new FileReader();
     reader.onload = () => {
       const text = reader.result as string;
-      const id = `ch${Date.now()}`;
-      const html = text.split(/\n\n+/).map(p => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("");
-      setChapters(prev => [...prev, { id, title: file.name.replace(/\.[^.]+$/, ""), content: html }]);
-      setActiveChapter(id);
+      if (ext === "json") {
+        try {
+          const parsed = JSON.parse(text);
+          setInput(parsed.content ?? text);
+        } catch { setInput(text); }
+      } else { setInput(text); }
     };
     reader.readAsText(file);
+    e.target.value = "";
   };
 
-  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; e.target.value = "";
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const { bookTitle: t, chapters: c } = JSON.parse(reader.result as string);
-        if (t) setBookTitle(t);
-        if (c?.length) { setChapters(c); setActiveChapter(c[0].id); }
-      } catch { alert(fr ? "Fichier invalide." : "Invalid file."); }
-    };
-    reader.readAsText(file);
-  };
-
-  // ── EXPORTS (ouvrent le système de fichiers) ──────────────────────────────────
-  const exportAs = (fmt: "txt" | "html" | "json") => {
-    const activeContent = chapters.find(c => c.id === activeChapter)?.content || "";
-    if (fmt === "txt") {
-      const txt = chapters.map(c => `=== ${c.title} ===\n\n${c.content.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")}`).join("\n\n\n");
-      downloadText(txt, `${bookTitle}.txt`);
-    } else if (fmt === "html") {
-      const bodyContent = chapters.map(c => `<h2>${c.title}</h2>\n${c.content}`).join('\n<hr class="page-break">\n');
-      const html = `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-  <meta charset="UTF-8">
-  <title>${bookTitle}</title>
-  <style>
-    body { font-family: ${fontFamily}; font-size: ${fontSize}px; line-height: ${lineHeight}; max-width: 65ch; margin: 3rem auto; padding: 2rem; }
-    h1 { font-size: 2em; border-bottom: 1px solid #ccc; padding-bottom: .3em; }
-    h2 { font-size: 1.3em; text-transform: uppercase; letter-spacing: .08em; color: #06b6d4; }
-    h3 { font-size: 1.1em; color: #0891b2; }
-    p { text-align: ${isJustified ? "justify" : "left"}; margin-bottom: ${paraSpacing}em; }
-    .page-break { border: none; border-top: 1px dashed #ccc; margin: 3em 0; }
-    @media print { .page-break { page-break-after: always; } }
-  </style>
-</head>
-<body>
-  <h1>${bookTitle}</h1>
-  ${bodyContent}
-</body>
-</html>`;
-      downloadText(html, `${bookTitle}.html`, "text/html");
-    } else {
-      const data = JSON.stringify({ bookTitle, chapters }, null, 2);
-      downloadText(data, `${bookTitle}.echo-book.json`, "application/json");
-    }
-  };
-
-  // Export DOCX/PDF/EPUB → pour l'instant ouvre le HTML qui peut être converti
-  const exportAdvanced = (fmt: "docx" | "pdf" | "epub") => {
-    // On génère un HTML propre que l'utilisateur peut convertir ou qu'on branchera sur le backend
-    const notice = fr
-      ? `Export ${fmt.toUpperCase()} — Ce fichier HTML est prêt pour conversion.\nPour le connecter au backend, utiliser l'endpoint /export/${fmt}.`
-      : `Export ${fmt.toUpperCase()} — This HTML file is ready for conversion.\nTo connect to backend, use endpoint /export/${fmt}.`;
-    const bodyContent = chapters.map(c => `<h2>${c.title}</h2>\n${c.content}`).join('\n<hr class="page-break">\n');
-    const html = `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-  <meta charset="UTF-8">
-  <meta name="export-target" content="${fmt}">
-  <title>${bookTitle}</title>
-  <style>
-    body { font-family: ${fontFamily}; font-size: ${fontSize}px; line-height: ${lineHeight}; max-width: 65ch; margin: 3rem auto; padding: 2rem; }
-    h1 { font-size: 2em; border-bottom: 1px solid #ccc; padding-bottom: .3em; }
-    h2 { font-size: 1.3em; text-transform: uppercase; letter-spacing: .08em; color: #06b6d4; margin-top: 2em; }
-    p { text-align: ${isJustified ? "justify" : "left"}; margin-bottom: ${paraSpacing}em; text-indent: ${mirrorMargins ? "1.5em" : "0"}; }
-    @media print { .page-break { page-break-after: always; } }
-  </style>
-</head>
-<body>
-  <h1>${bookTitle}</h1>
-  ${bodyContent}
-  <!-- ${notice} -->
-</body>
-</html>`;
-    downloadText(html, `${bookTitle}_${fmt}_ready.html`, "text/html");
-  };
-
-  // ── ECHO ──────────────────────────────────────────────────────────────────────
-  const sendEcho = async () => {
-    if (!echoInput.trim() || echoThinking) return;
-    const msg = echoInput.trim();
-    setEchoInput("");
-    setEchoMessages(prev => [...prev, { role: "user", text: msg }]);
-    setEchoThinking(true);
-    const excerpt = editorRef.current?.innerText?.slice(0, 400) || "";
-    const modeInfo = ECHO_MODES.find(m => m.id === echoMode);
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const res = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: msg,
-          history: [],
-          systemOverride: `${modeInfo?.system || ""}\n\nContexte : livre "${bookTitle}". Extrait :\n"${excerpt}"`,
-        }),
-      });
-      const data = await res.json();
-      setEchoMessages(prev => [...prev, { role: "echo", text: data.response || "..." }]);
-    } catch {
-      setEchoMessages(prev => [...prev, { role: "echo", text: fr ? "Impossible de joindre le serveur." : "Cannot reach the server." }]);
-    } finally {
-      setEchoThinking(false);
-    }
-  };
-
-  useEffect(() => { echoBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [echoMessages, echoThinking]);
-
-  // ── PRESETS ───────────────────────────────────────────────────────────────────
-  const triggerPreset = (p: Preset) =>
-    applyPreset(p, { setMirrorMargins, setShowPageNumbers, setShowHeader, setShowFooter, setLineHeight, setFontSize, setIsJustified, setParaSpacing });
-
-  // ── SAVE STATUS DISPLAY ───────────────────────────────────────────────────────
-  const saveLabel = {
-    saved:   { dot: "bg-emerald-400",            text: fr ? "Sauvegardé" : "Saved" },
-    saving:  { dot: "bg-amber-400 animate-pulse", text: fr ? "Sauvegarde..." : "Saving..." },
-    unsaved: { dot: "bg-zinc-500",               text: fr ? "Non sauvegardé" : "Unsaved" },
-  }[saveStatus];
-
-  // ── CURRENT CHAPTER CONTENT ───────────────────────────────────────────────────
-  const currentContent = chapters.find(c => c.id === activeChapter)?.content || "";
-
-  // ── TOOLBAR BTN ───────────────────────────────────────────────────────────────
-  const TB = ({ icon, label, active, onClick }: { icon: string; label: string; active?: boolean; onClick: () => void }) => (
-    <button onClick={onClick} title={label}
-      className={`group relative w-[42px] h-7 flex items-center justify-center rounded-lg text-[13px] transition-all border select-none
-        ${active ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400" : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"}`}>
-      {icon}
-      <span className="pointer-events-none absolute left-[46px] top-1/2 -translate-y-1/2 bg-zinc-950 text-white text-[9px] px-1.5 py-0.5 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 border border-zinc-800 z-50 shadow-lg transition-opacity">
-        {label}
-      </span>
-    </button>
-  );
-
-  const Toggle = ({ val, set }: { val: boolean; set: (v: boolean) => void }) => (
-    <button onClick={() => set(!val)}
-      className={`w-8 h-4 rounded-full border relative transition-all flex-shrink-0 ${val ? "bg-cyan-500/30 border-cyan-500/50" : "bg-zinc-800 border-zinc-700"}`}>
-      <span className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${val ? "left-4 bg-cyan-400" : "left-0.5 bg-zinc-500"}`} />
-    </button>
-  );
-
-  // ── PRESENT MODE: full screen read ────────────────────────────────────────────
-  if (view === "present") {
-    return (
-      <div className="fixed inset-0 bg-black flex flex-col z-50">
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-8 py-3 border-b border-zinc-800">
-          <span className="text-zinc-400 text-sm font-mono">{bookTitle}</span>
-          <div className="flex items-center gap-3">
-            <span className="text-zinc-500 text-xs font-mono">{chapters.find(c => c.id === activeChapter)?.title}</span>
-            <div className="flex gap-1">
-              {chapters.map((ch, i) => (
-                <button key={ch.id} onClick={() => setActiveChapter(ch.id)}
-                  className={`text-[9px] px-2 py-0.5 rounded border transition-all ${activeChapter === ch.id ? "border-cyan-500/40 text-cyan-400" : "border-zinc-800 text-zinc-600 hover:text-zinc-400"}`}>
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setView("edit")}
-              className="text-[10px] px-3 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-red-500/40 hover:text-red-400 transition-all">
-              ✕ {fr ? "Fermer" : "Close"}
-            </button>
-          </div>
-        </div>
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto flex justify-center px-8 py-12" style={{scrollbarWidth:"thin",scrollbarColor:"rgba(6,182,212,0.15) transparent"}}>
-          <div className="w-full max-w-[65ch]" style={{ fontSize: `${fontSize + 2}px`, fontFamily, lineHeight: lineHeight + 0.1, color: "#e4e4e7" }}>
-            <h1 className="text-3xl font-bold text-white mb-8 border-b border-zinc-800 pb-4">{bookTitle}</h1>
-            <div className="text-[11px] uppercase tracking-widest text-cyan-500/60 font-mono mb-4">
-              {chapters.find(c => c.id === activeChapter)?.title}
-            </div>
-            <div className="books-present" style={{textAlign: isJustified ? "justify" : "left"}}
-              dangerouslySetInnerHTML={{ __html: currentContent || `<p style="color:rgba(113,113,122,0.3);font-style:italic">${fr ? "Aucun contenu." : "No content yet."}</p>` }} />
-          </div>
-        </div>
-        {/* Nav arrows */}
-        <div className="flex justify-between px-8 py-3 border-t border-zinc-800">
-          <button
-            onClick={() => {
-              const idx = chapters.findIndex(c => c.id === activeChapter);
-              if (idx > 0) setActiveChapter(chapters[idx - 1].id);
-            }}
-            className="text-[10px] px-3 py-1 rounded border border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-all disabled:opacity-30"
-            disabled={chapters.findIndex(c => c.id === activeChapter) === 0}>
-            ← {fr ? "Précédent" : "Previous"}
-          </button>
-          <span className="text-[9px] font-mono text-zinc-600">
-            {chapters.findIndex(c => c.id === activeChapter) + 1} / {chapters.length}
-          </span>
-          <button
-            onClick={() => {
-              const idx = chapters.findIndex(c => c.id === activeChapter);
-              if (idx < chapters.length - 1) setActiveChapter(chapters[idx + 1].id);
-            }}
-            className="text-[10px] px-3 py-1 rounded border border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-all disabled:opacity-30"
-            disabled={chapters.findIndex(c => c.id === activeChapter) === chapters.length - 1}>
-            {fr ? "Suivant" : "Next"} →
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── MAIN RENDER ───────────────────────────────────────────────────────────────
   return (
-    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30">
+    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
+      
+      {/* 🌐 INTERFACE MENU SUPÉRIEUR DROIT ALIGNÉ */}
+      <div className="absolute top-4 right-4 z-50 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 p-2 rounded-xl text-xs flex gap-3 items-center shadow-md">
+        <LangDropdown />
+        <span className="text-zinc-300 dark:text-zinc-700">|</span>
+        <button onClick={toggleTheme} className="font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 transition-colors">
+          {theme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode"}
+        </button>
+      </div>
 
-      {/* NAV SIDEBAR */}
-      <aside className="w-44 shrink-0 border-r border-zinc-200 dark:border-zinc-800 px-5 py-6 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
-        <div className="space-y-20">
-          <h2 className="font-bold">
-            <Link href="/" className="text-cyan-600 dark:text-cyan-400">🏠 {fr ? "Accueil" : "Home"}</Link>
-          </h2>
-          <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium text-sm">
-            <Link href="/chat"     className="block hover:text-cyan-500">💬 Chat</Link>
-            <Link href="/books"    className="block text-cyan-500 font-bold">📚 {fr ? "Livres" : "Books"}</Link>
-            <Link href="/calendar" className="block hover:text-cyan-500">📅 {fr ? "Calendrier" : "Calendar"}</Link>
-            <Link href="/vitality" className="block hover:text-cyan-500">📈 {fr ? "Vitalité" : "Vitality"}</Link>
-            <Link href="/services" className="block hover:text-cyan-500">💎 {fr ? "Services" : "Services"}</Link>
-            <Link href="/account"  className="block hover:text-cyan-500">👤 {fr ? "Compte" : "Account"}</Link>
-            <hr className="border-zinc-200 dark:border-zinc-800" />
-            <Link href="/history"  className="block hover:text-amber-500">⭐ {fr ? "Historique" : "History"}</Link>
-          </div>
-        </div>
-        <div className="text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800 pt-3">
-          Mode : <span className="text-cyan-400 uppercase font-bold block">books</span>
-        </div>
-      </aside>
-
-      {/* MAIN */}
       <div className="flex flex-1 overflow-hidden min-h-0">
-
-        {/* TOOLBAR 2 colonnes */}
-        <div className="w-[100px] shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col py-2 overflow-hidden">
-
-          <div className="px-2 pb-1.5 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">struct</div>
-            <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="T¹" label="Titre 1 / H1" onClick={() => applyBlock("h1")} />
-              <TB icon="T²" label="Titre 2 / H2" onClick={() => applyBlock("h2")} />
-              <TB icon="T³" label="Titre 3 / H3" onClick={() => applyBlock("h3")} />
-              <TB icon="¶"  label={fr ? "Texte normal" : "Normal text"} onClick={() => applyBlock("p")} />
+        
+        {/* SIDEBAR GAUCHE - INCORPORÉE DE MANIÈRE 100% IDENTIQUE AU MASTER TEMPLATE */}
+        <aside className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
+          <div className="space-y-20">
+            <h2 className="font-bold text-lg">
+              <Link href="/" className="hover:text-cyan-500 dark:hover:text-cyan-400">{t.sidebar.home}</Link>
+            </h2>
+            <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
+              <Link href="/chat" className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
+              <Link href="/books" className="block text-cyan-600 dark:text-cyan-400 font-bold">{t.sidebar.books}</Link>
+              <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang === "fr" ? "Calendrier" : "Calendar"}</Link>
+              <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang === "fr" ? "Vitalité" : "Vitality"}</Link>
+              <Link href="/services" className="block hover:text-cyan-500">💎 {lang === "fr" ? "Services" : "Services"}</Link>
+              <Link href="/account" className="block hover:text-cyan-500">👤 {lang === "fr" ? "Compte" : "Account"}</Link>
+              <hr className="border-zinc-200 dark:border-zinc-800 my-4" />
+              <Link href="/history" className="block hover:text-amber-500">⭐ {lang === "fr" ? "Historique" : "History"}</Link>
             </div>
           </div>
-
-          <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">texte</div>
-            <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="B" label={fr ? "Gras" : "Bold"} active={isBold} onClick={toggleBold} />
-              <TB icon="I" label={fr ? "Italique" : "Italic"} active={isItalic} onClick={toggleItalic} />
-              <TB icon="≡" label={fr ? "Justifié" : "Justify"} active={isJustified} onClick={toggleJustify} />
-              <TB icon="→" label={fr ? "Alinéa" : "Indent"} onClick={applyIndent} />
-            </div>
-          </div>
-
-          <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">pages</div>
-            <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="⊟" label={fr ? "Saut de page" : "Page break"} onClick={insertPageBreak} />
-              <TB icon="📑" label={fr ? "Table matières" : "TOC"} onClick={insertTOC} />
-            </div>
-          </div>
-
-          <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">police</div>
-            <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="A-" label={fr ? "Réduire" : "Smaller"} onClick={() => setFontSize(v => Math.max(10, v - 1))} />
-              <TB icon="A+" label={fr ? "Agrandir" : "Larger"}  onClick={() => setFontSize(v => Math.min(24, v + 1))} />
-            </div>
-            <div className="text-center font-mono text-[9px] text-zinc-500 mt-0.5">{fontSize}px</div>
-          </div>
-
-          <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">media</div>
-            <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="🖼️" label={fr ? "Image" : "Image"} onClick={insertImage} />
-              <TB icon="📥" label={fr ? "Import TXT/MD" : "Import TXT/MD"} onClick={() => fileInputRef.current?.click()} />
-            </div>
-            <div className="grid grid-cols-2 gap-0.5 mt-0.5">
-              <TB icon="📂" label={fr ? "Ouvrir .echo-book" : "Open .echo-book"} onClick={() => importJsonRef.current?.click()} />
-              <TB icon="📤" label={fr ? "Export HTML" : "Export HTML"} onClick={() => exportAs("html")} />
-            </div>
-          </div>
-
-          <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">livre</div>
-            <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="⚙️" label={fr ? "Paramètres" : "Settings"} active={showSettings} onClick={() => setShowSettings(v => !v)} />
-              <TB icon="+"  label={fr ? "Nouveau chapitre" : "New chapter"} onClick={addChapter} />
-            </div>
-          </div>
-
-          <div className="px-2 py-1.5">
-            <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">presets</div>
-            <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="📖" label={fr ? "Livre imprimé (miroir, pages, header...)" : "Print book (mirror, page #, header...)"} onClick={() => triggerPreset("print")} />
-              <TB icon="📱" label="Kindle (EPUB, pas de pagination...)" onClick={() => triggerPreset("kindle")} />
-            </div>
-          </div>
-        </div>
-
-        {/* EDITOR ZONE */}
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-
-          {/* Topbar */}
-          <div className="h-9 shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center px-3 gap-2">
-
-            {/* View tabs: Edit / Preview / Present */}
-            {(["edit", "preview", "present"] as BookView[]).map(v => (
-              <button key={v} onClick={() => setView(v)}
-                className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all capitalize ${view === v ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-400" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>
-                {v === "edit" ? `✏️ ${fr ? "Éditer" : "Edit"}` : v === "preview" ? `👁️ ${fr ? "Aperçu" : "Preview"}` : `📖 ${fr ? "Lire" : "Present"}`}
-              </button>
-            ))}
-
-            {/* Chapter tabs */}
-            <div className="flex-1 flex items-center gap-1 overflow-x-auto mx-1" style={{scrollbarWidth:"none"}}>
-              {chapters.map(ch => (
-                <button key={ch.id} onClick={() => setActiveChapter(ch.id)}
-                  className={`text-[9px] px-2 py-0.5 rounded border whitespace-nowrap transition-all ${activeChapter === ch.id ? "border-zinc-600 text-zinc-200 bg-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}>
-                  {ch.title}
-                </button>
-              ))}
-            </div>
-
-            {/* Save status + bouton save (ouvre système de fichiers) */}
-            <div className="flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${saveLabel.dot}`} />
-              <span className="text-[9px] font-mono text-zinc-400">{saveLabel.text}</span>
-            </div>
-            <button onClick={saveToFile}
-              className="text-[9px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-all font-mono"
-              title={fr ? "Télécharger le manuscrit (.echo-book.json)" : "Download manuscript (.echo-book.json)"}>
-              💾 {fr ? "Sauv." : "Save"}
-            </button>
-
-            {/* Exports → ouvrent le système de fichiers */}
-            <button onClick={() => exportAdvanced("docx")}
-              className="text-[9px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-all uppercase font-mono">
-              DOCX
-            </button>
-            <button onClick={() => exportAdvanced("pdf")}
-              className="text-[9px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-all uppercase font-mono">
-              PDF
-            </button>
-            <button onClick={() => exportAdvanced("epub")}
-              className="text-[9px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-all uppercase font-mono">
-              EPUB
-            </button>
-
-            {/* Settings gear */}
-            <div className="relative ml-1" onClick={e => e.stopPropagation()}>
-              <button onClick={() => setIsSettingsOpen(v => !v)}
-                className="text-[10px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">
-                ⚙️ <span className="font-mono text-[8px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase ml-0.5">{fr ? "FR" : "EN"}</span>
-              </button>
-              {isSettingsOpen && (
-                <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 flex flex-col gap-1 z-50">
-                  <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 px-2 py-1 border-b border-zinc-100 dark:border-zinc-900">
-                    {fr ? "Configuration" : "Settings"}
-                  </div>
-                  <button onClick={toggleTheme}
-                    className="text-left px-2 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors">
-                    {theme === "dark" ? "☀️ Mode Clair" : "🌙 Mode Sombre"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Book settings panel */}
-          {showSettings && (
-            <div className="shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 px-4 py-2 flex flex-wrap gap-x-5 gap-y-2 items-center text-[10px]">
-              {[
-                { label: fr ? "Miroir" : "Mirror",    val: mirrorMargins,   set: setMirrorMargins },
-                { label: fr ? "N° pages" : "Page #",  val: showPageNumbers, set: setShowPageNumbers },
-                { label: "Header", val: showHeader, set: setShowHeader },
-                { label: "Footer", val: showFooter, set: setShowFooter },
-                { label: fr ? "Justifié" : "Justify", val: isJustified,     set: setIsJustified },
-              ].map(({ label, val, set }) => (
-                <label key={label} className="flex items-center gap-1.5 cursor-pointer">
-                  <span className="text-zinc-400">{label}</span>
-                  <Toggle val={val} set={set} />
-                </label>
-              ))}
-              <div className="flex items-center gap-1.5">
-                <span className="text-zinc-400">{fr ? "Interligne" : "Line-h"}</span>
-                <input type="range" min="1.2" max="2.4" step="0.05" value={lineHeight}
-                  onChange={e => setLineHeight(parseFloat(e.target.value))}
-                  className="w-16 accent-cyan-400 h-1" />
-                <span className="font-mono text-zinc-400 text-[9px] w-7">{lineHeight.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-zinc-400">{fr ? "Para" : "Para"}</span>
-                <input type="range" min="0.2" max="2" step="0.05" value={paraSpacing}
-                  onChange={e => setParaSpacing(parseFloat(e.target.value))}
-                  className="w-12 accent-cyan-400 h-1" />
-                <span className="font-mono text-zinc-400 text-[9px] w-7">{paraSpacing.toFixed(2)}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-zinc-400">{fr ? "Police" : "Font"}</span>
-                <select value={fontFamily} onChange={e => setFontFamily(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-700 text-zinc-300 text-[9px] rounded px-1 py-0.5">
-                  <option value="Georgia, serif">Georgia</option>
-                  <option value="'Times New Roman', serif">Times New Roman</option>
-                  <option value="Garamond, serif">Garamond</option>
-                  <option value="system-ui, sans-serif">Sans-serif</option>
-                </select>
-              </div>
-              <button onClick={() => setShowSettings(false)} className="ml-auto text-zinc-500 hover:text-zinc-200 text-base">✕</button>
-            </div>
-          )}
-
-          {/* EDITOR / PREVIEW */}
-          <div className="flex-1 overflow-hidden min-h-0 relative"
-            style={{
-              backgroundImage: "url('/eauplante.png')",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }}>
-
-            {/* Overlay sombre pour lisibilité */}
-            <div className="absolute inset-0 bg-black/55 dark:bg-black/65 pointer-events-none z-0" />
-
-            {/* Water glyphs */}
-            {WATER.map((d, i) => (
-              <span key={i} aria-hidden="true" className="absolute pointer-events-none select-none z-[1]"
-                style={{ top:d.top, left:d.left, right:d.right, fontSize:d.sz,
-                  transform:`rotate(${d.rot})`, opacity:0.06, filter:"blur(1px)",
-                  color:"#06b6d4", lineHeight:1 }}>
-                {d.g}
-              </span>
-            ))}
-
-            {/* Scroll container */}
-            <div className="absolute inset-0 overflow-y-auto flex justify-center px-4 py-4 z-[2]"
-              style={{scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent"}}>
-
-              {/* PAGE SHEET — prend presque tout l'espace */}
-              <div className="w-full bg-white dark:bg-zinc-950 shadow-2xl border border-zinc-200/20 dark:border-zinc-700/30 rounded-sm relative"
-                style={{
-                  maxWidth: "860px",
-                  minHeight: "calc(100% - 2rem)",
-                  paddingTop: showHeader ? 0 : "52px",
-                  paddingBottom: showFooter ? 0 : "64px",
-                  paddingLeft: mirrorMargins ? "72px" : "56px",
-                  paddingRight: "56px",
-                }}>
-
-                {/* Margin line */}
-                <div className="absolute left-10 top-0 bottom-0 w-px pointer-events-none" style={{background:"rgba(6,182,212,0.06)"}} />
-
-                {/* Header */}
-                {showHeader && (
-                  <div className="h-9 border-b border-zinc-200 dark:border-zinc-700/40 flex items-center px-4 mb-4">
-                    <span className="text-[9px] font-mono tracking-widest uppercase text-zinc-400">{bookTitle}</span>
-                  </div>
-                )}
-
-                {/* Book title */}
-                {isEditingTitle ? (
-                  <input ref={titleInputRef} value={bookTitle}
-                    onChange={e => setBookTitle(e.target.value)}
-                    onBlur={() => setIsEditingTitle(false)}
-                    onKeyDown={e => { if (e.key === "Enter") setIsEditingTitle(false); }}
-                    className="w-full text-2xl font-bold bg-transparent border-b border-cyan-500/40 outline-none text-black dark:text-white mb-6 pb-1"
-                    autoFocus />
-                ) : (
-                  <h1 onDoubleClick={() => { setIsEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 50); }}
-                    title={fr ? "Double-cliquer pour modifier" : "Double-click to edit"}
-                    className="text-2xl font-bold text-black dark:text-white mb-6 cursor-text pb-1 border-b border-transparent hover:border-cyan-500/10 transition-colors select-text">
-                    {bookTitle}
-                  </h1>
-                )}
-
-                {/* Chapter label */}
-                <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-400 dark:text-zinc-500 mb-3 font-mono">
-                  {chapters.find(c => c.id === activeChapter)?.title}
-                </div>
-
-                {/* Editor */}
-                {view === "edit" ? (
-                  <div ref={editorRef} contentEditable suppressContentEditableWarning
-                    onInput={handleEditorInput}
-                    data-placeholder={fr ? "Commencez à écrire votre histoire..." : "Start writing your story..."}
-                    className="outline-none min-h-[420px] text-black dark:text-zinc-100 caret-cyan-400 books-editor"
-                    style={{ fontSize:`${fontSize}px`, fontFamily, lineHeight, textAlign: isJustified ? "justify" : "left" }}
-                  />
-                ) : (
-                  <div className="min-h-[420px] text-black dark:text-zinc-100 books-preview"
-                    style={{ fontSize:`${fontSize}px`, fontFamily, lineHeight, textAlign: isJustified ? "justify" : "left" }}
-                    dangerouslySetInnerHTML={{ __html: currentContent || `<p style="color:rgba(113,113,122,0.35);font-style:italic">${fr ? "Aucun contenu." : "No content yet."}</p>` }}
-                  />
-                )}
-
-                {/* Page number */}
-                {showPageNumbers && (
-                  <div className="absolute bottom-5 left-0 right-0 text-center text-[9px] text-zinc-400 font-mono pointer-events-none">
-                    — {chapters.findIndex(c => c.id === activeChapter) + 1} —
-                  </div>
-                )}
-
-                {/* Footer */}
-                {showFooter && (
-                  <div className="h-7 border-t border-zinc-200 dark:border-zinc-700/40 flex items-center justify-center mt-6">
-                    <span className="text-[9px] font-mono tracking-widest uppercase text-zinc-400">{bookTitle}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ECHO PANEL */}
-        <aside className="w-60 shrink-0 border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col overflow-hidden">
-
-          {/* Header */}
-          <div className="h-9 shrink-0 border-b border-zinc-200 dark:border-zinc-800 flex items-center px-3 gap-2">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            <span className="text-[10px] font-bold font-mono uppercase tracking-wider text-zinc-300">
-              Echo — {fr ? "Écriture" : "Writing"}
-            </span>
-          </div>
-
-          {/* Modes */}
-          <div className="flex gap-1 p-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
-            {ECHO_MODES.map(m => (
-              <button key={m.id} onClick={() => setEchoMode(m.id)}
-                className={`flex-1 text-[9px] py-1 rounded-lg border transition-all text-center ${echoMode === m.id ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-400" : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
-                {m.emoji} {fr ? m.labelFr : m.labelEn}
-              </button>
-            ))}
-          </div>
-
-          {/* Messages ou Echo idle */}
-          <div className="flex-1 overflow-y-auto p-2.5 flex flex-col gap-2 min-h-0" style={{scrollbarWidth:"thin"}}>
-            {echoMessages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-3 pb-4">
-                {/* Echo idle avatar */}
-                <div className="w-16 h-16 rounded-full overflow-hidden border border-zinc-700 shadow-lg echo-idle">
-                  <img src="/Echo.png" alt="Echo" className="w-full h-full object-cover" />
-                </div>
-                <div className="text-[10px] text-zinc-500 text-center italic leading-relaxed px-2">
-                  {fr
-                    ? "Demande à Echo d'améliorer un paragraphe, suggérer une tournure, critiquer un passage..."
-                    : "Ask Echo to improve a paragraph, suggest a phrase, critique a passage..."}
-                </div>
-              </div>
-            ) : (
-              <>
-                {echoMessages.map((msg, i) => (
-                  <div key={i} className={`text-[10px] leading-relaxed rounded-xl px-2.5 py-1.5 ${
-                    msg.role === "user"
-                      ? "self-end bg-cyan-500/10 border border-cyan-500/20 text-zinc-200 rounded-br-sm max-w-[88%]"
-                      : "self-start bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-bl-sm max-w-[92%]"
-                  }`}>
-                    {msg.text}
-                  </div>
-                ))}
-                {echoThinking && (
-                  <div className="self-start text-[10px] text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-xl rounded-bl-sm px-2.5 py-1.5">
-                    ...
-                  </div>
-                )}
-              </>
-            )}
-            <div ref={echoBottomRef} />
-          </div>
-
-          {/* Input */}
-          <div className="p-2 border-t border-zinc-200 dark:border-zinc-800 flex gap-1.5 shrink-0">
-            <textarea value={echoInput} onChange={e => setEchoInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendEcho(); } }}
-              rows={2} placeholder={fr ? "Demande à Echo..." : "Ask Echo..."}
-              className="flex-1 resize-none bg-zinc-900 border border-zinc-800 text-zinc-200 text-[10px] rounded-lg px-2 py-1.5 placeholder-zinc-600 outline-none focus:border-cyan-700/40 leading-relaxed"
-            />
-            <button onClick={sendEcho} disabled={echoThinking}
-              className="w-7 self-end bg-cyan-600/15 border border-cyan-500/25 hover:bg-cyan-600/25 disabled:opacity-30 text-cyan-400 rounded-lg text-xs flex items-center justify-center transition-all h-7 shrink-0">
-              ➤
-            </button>
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
+            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier}</span>
           </div>
         </aside>
+
+        {/* WORKSPACE AXIS */}
+        <div className="flex flex-1 overflow-hidden min-w-0">
+          
+          {/* EDITOR WINDOW */}
+          <section className="flex flex-col flex-1 p-6 overflow-hidden min-w-0 bg-white dark:bg-black transition-colors duration-200">
+            <h1 className="text-3xl font-bold mb-4">📚 {lang === "fr" ? "Espace Livres" : "Books Workspace"}</h1>
+
+            <div className="neon-laser-wire flex-1 w-full rounded-2xl flex items-center justify-center min-h-0">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.ctrlKey) {
+                    e.preventDefault();
+                    saveNote();
+                  }
+                }}
+                placeholder={lang === "fr" ? "Écris tes notes ici... (Ctrl+Enter pour sauvegarder)" : "Type your notes here... (Ctrl+Enter to save)"}
+                className="neon-laser-content flex-1 h-[calc(100%-6px)] bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-transparent rounded-xl p-4 text-black dark:text-white resize-none focus:outline-none text-sm leading-relaxed"
+              />
+            </div>
+
+            {/* CONTROL BAR */}
+            <div className="mt-4 bg-zinc-100 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-2xl p-4 flex flex-col gap-4 shrink-0">
+              <div className="flex justify-between items-center flex-wrap gap-3">
+                
+                {/* Actions principales */}
+                <div className="flex gap-2">
+                  <button 
+                    onClick={lancerDictation}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm ${
+                      isListening ? "bg-red-600 animate-pulse text-white" : "bg-cyan-600 hover:bg-cyan-500 text-white"
+                    }`}
+                  >
+                    {isListening ? (lang === "fr" ? "🔴 Écoute..." : "🔴 Listening...") : (lang === "fr" ? "🎤 Parler" : "🎤 Speak")}
+                  </button>
+                  
+                  <button
+                    onClick={saveNote}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-md"
+                  >
+                    💾 {lang === "fr" ? "Sauvegarder la note" : "Save Note"}
+                  </button>
+                </div>
+
+                {/* Groupe Import */}
+                <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-inner">
+                  <span className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mr-1">Import:</span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".txt,.md,.json"
+                    className="hidden"
+                    onChange={handleImport}
+                  />
+                  {["TXT", "MD", "JSON"].map((fmt) => (
+                    <button
+                      key={fmt}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[10px] font-bold px-2.5 py-1 rounded transition text-zinc-700 dark:text-zinc-300"
+                    >
+                      {fmt}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Groupe Export */}
+                <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-inner">
+                  <span className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase mr-1">Export:</span>
+                  <button onClick={exportTXT} className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[10px] font-bold px-2 py-1 rounded transition text-zinc-700 dark:text-zinc-300">TXT</button>
+                  <button onClick={exportMD}  className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[10px] font-bold px-2 py-1 rounded transition text-zinc-700 dark:text-zinc-300">MD</button>
+                  <button onClick={exportJSON} className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[10px] font-bold px-2 py-1 rounded transition text-zinc-700 dark:text-zinc-300">JSON</button>
+                  <button onClick={exportDOCX} className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[10px] font-bold px-2 py-1 rounded transition text-zinc-700 dark:text-zinc-300">DOCX</button>
+                  <button onClick={exportPDF} className="bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-[10px] font-bold px-2 py-1 rounded transition text-zinc-700 dark:text-zinc-300">PDF</button>
+                </div>
+
+              </div>
+            </div>
+          </section>
+
+          {/* HISTORIQUE SIDEBAR DROITE */}
+          <aside className="w-80 shrink-0 border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden">
+            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800">
+              <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-2 mt-12">
+                <span className="w-2 h-2 rounded-full bg-cyan-500" /> {lang === "fr" ? "Registre Livres" : "Storage Log"}
+              </h2>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+              {notes.length === 0 && (
+                <p className="text-zinc-400 dark:text-zinc-600 text-xs italic text-center mt-4">{lang === "fr" ? "Aucune note sauvegardée." : "No saved notes found."}</p>
+              )}
+              {notes.map((note) => (
+                <div
+                  key={note.id}
+                  className="neon-laser-wire rounded-xl cursor-pointer transition group relative border border-zinc-200 dark:border-transparent shadow-sm"
+                  onClick={() => loadNoteIntoEditor(note)}
+                >
+                  <div className="neon-laser-content bg-white dark:bg-zinc-900/90 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-zinc-400 dark:text-zinc-500 text-[9px] font-medium">📅 {note.date}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
+                        className="text-zinc-400 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete note"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="text-xs text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap line-clamp-3 leading-relaxed">{note.content}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
+
+        </div>
       </div>
-
-      {/* Hidden file inputs */}
-      <input ref={fileInputRef}   type="file" accept=".txt,.md,.markdown" onChange={handleImportTxt}  className="hidden" />
-      <input ref={imgInputRef}    type="file" accept="image/*"            onChange={handleImgFile}    className="hidden" />
-      <input ref={importJsonRef}  type="file" accept=".json"              onChange={handleImportJson} className="hidden" />
-
-      {/* Close settings overlay */}
-      {isSettingsOpen && <div className="fixed inset-0 z-40" onClick={() => setIsSettingsOpen(false)} />}
-
-      {/* Global styles */}
-      <style>{`
-        .books-editor:empty:before {
-          content: attr(data-placeholder);
-          color: rgba(113,113,122,0.38);
-          pointer-events: none;
-          font-style: italic;
-        }
-        .books-editor h1, .books-preview h1, .books-present h1 {
-          font-size: 1.6em; font-weight: 700;
-          margin: 0.5em 0 0.3em;
-          border-bottom: 1px solid rgba(6,182,212,0.1);
-          padding-bottom: 0.12em;
-        }
-        .books-editor h2, .books-preview h2, .books-present h2 {
-          font-size: 1.2em; font-weight: 600;
-          margin: 0.9em 0 0.2em;
-          text-transform: uppercase; letter-spacing: 0.07em;
-          color: rgb(6,182,212);
-        }
-        .books-editor h3, .books-preview h3, .books-present h3 {
-          font-size: 1.05em; font-weight: 600;
-          margin: 0.7em 0 0.15em;
-          color: rgba(6,182,212,0.6);
-        }
-        .books-editor p, .books-preview p, .books-present p { margin-bottom: ${paraSpacing}em; }
-        .books-editor img, .books-preview img { max-width: 100%; border-radius: 3px; margin: 0.5em 0; }
-      `}</style>
     </main>
   );
 }
