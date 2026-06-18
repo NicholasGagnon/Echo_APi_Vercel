@@ -439,42 +439,44 @@ export default function CalendarPage() {
           </div>
 
           {/* Calendar grid */}
-          <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col min-h-0 overflow-x-auto">
-            <div className="min-w-[600px] flex-1 flex flex-col">
+          <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col">
+            <div className="overflow-x-auto">
+              <div className="min-w-[600px]">
 
-              <div className="grid grid-cols-7 gap-2 mb-2 text-center font-bold text-zinc-400 dark:text-zinc-500 text-[11px] uppercase tracking-widest font-mono">
-                {activeDaysLabels.map((d, i) => <div key={i}>{d}</div>)}
-              </div>
+                <div className="grid grid-cols-7 gap-2 mb-2 text-center font-bold text-zinc-400 dark:text-zinc-500 text-[11px] uppercase tracking-widest font-mono">
+                  {activeDaysLabels.map((d, i) => <div key={i}>{d}</div>)}
+                </div>
 
-              <div className="grid grid-cols-7 gap-2 flex-1 auto-rows-fr">
-                {blanks.map((_, i) => <div key={"b" + i} className="bg-zinc-50/20 dark:bg-zinc-950/10 rounded-xl border border-transparent" />)}
-                {days.map(day => {
-                  const key       = makeDateKey(day);
-                  const dayEvents = events[key] || [];
-                  const mainToday = isToday(day);
-                  return (
-                    <button key={day} onClick={() => openDay(day)}
-                      className={`min-h-[90px] border rounded-xl p-2 text-left flex flex-col justify-between transition-all overflow-hidden ${
-                        mainToday
-                          ? "border-cyan-500 bg-cyan-50/5 dark:bg-zinc-900/60 shadow-md shadow-cyan-500/5 drop-shadow-[0_0_4px_rgba(6,182,212,0.15)]"
-                          : "border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/20 hover:border-zinc-400 dark:hover:border-zinc-800"}`}>
-                      <div className={`font-mono text-xs font-bold ${mainToday ? "text-cyan-500" : "text-zinc-400 dark:text-zinc-500"}`}>{day}</div>
-                      <div className="flex-1 w-full space-y-1 mt-1 overflow-hidden flex flex-col justify-start">
-                        {dayEvents.slice(0, 2).map(ev => (
-                          <div key={ev.id}
-                            onClick={e => { e.stopPropagation(); setSelectedDateKey(key); setTitle(ev.title || ""); setStart(ev.start || ""); setEnd(ev.end || ""); setNotes(ev.notes || ""); setShowAddForm(true); }}
-                            className={`text-[10px] border rounded-lg px-1.5 py-0.5 truncate w-full tracking-wide transition-colors ${
-                              ev.isFromEcho
-                                ? "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900/60 text-purple-700 dark:text-purple-400 font-medium"
-                                : "bg-white dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300"}`}>
-                            <span className="font-bold">{ev.start ? `${ev.start} ` : ""}</span>{ev.title}
-                          </div>
-                        ))}
-                        {dayEvents.length > 2 && <div className="text-[9px] text-cyan-600 dark:text-cyan-500 font-mono font-bold pl-1">+{dayEvents.length - 2} items</div>}
-                      </div>
-                    </button>
-                  );
-                })}
+                <div className="grid grid-cols-7 gap-2 auto-rows-fr">
+                  {blanks.map((_, i) => <div key={"b" + i} className="bg-zinc-50/20 dark:bg-zinc-950/10 rounded-xl border border-transparent" />)}
+                  {days.map(day => {
+                    const key       = makeDateKey(day);
+                    const dayEvents = events[key] || [];
+                    const mainToday = isToday(day);
+                    return (
+                      <button key={day} onClick={() => openDay(day)}
+                        className={`min-h-[90px] border rounded-xl p-2 text-left flex flex-col justify-between transition-all overflow-hidden ${
+                          mainToday
+                            ? "border-cyan-500 bg-cyan-50/5 dark:bg-zinc-900/60 shadow-md shadow-cyan-500/5 drop-shadow-[0_0_4px_rgba(6,182,212,0.15)]"
+                            : "border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/20 hover:border-zinc-400 dark:hover:border-zinc-800"}`}>
+                        <div className={`font-mono text-xs font-bold ${mainToday ? "text-cyan-500" : "text-zinc-400 dark:text-zinc-500"}`}>{day}</div>
+                        <div className="flex-1 w-full space-y-1 mt-1 overflow-hidden flex flex-col justify-start">
+                          {dayEvents.slice(0, 2).map(ev => (
+                            <div key={ev.id}
+                              onClick={e => { e.stopPropagation(); setSelectedDateKey(key); setTitle(ev.title || ""); setStart(ev.start || ""); setEnd(ev.end || ""); setNotes(ev.notes || ""); setShowAddForm(true); }}
+                              className={`text-[10px] border rounded-lg px-1.5 py-0.5 truncate w-full tracking-wide transition-colors ${
+                                ev.isFromEcho
+                                  ? "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900/60 text-purple-700 dark:text-purple-400 font-medium"
+                                  : "bg-white dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300"}`}>
+                              <span className="font-bold">{ev.start ? `${ev.start} ` : ""}</span>{ev.title}
+                            </div>
+                          ))}
+                          {dayEvents.length > 2 && <div className="text-[9px] text-cyan-600 dark:text-cyan-500 font-mono font-bold pl-1">+{dayEvents.length - 2} items</div>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

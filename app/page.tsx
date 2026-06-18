@@ -143,7 +143,7 @@ export default function Home() {
   const localButtonsLabels: Record<"fr" | "en", Record<string, string>> = {
     fr: {
       clarity: "1🧠 Clarté",
-      reflection: "2🔍 Réflexion",
+      humain: "2👤 Humain",
       critical: "3⚔️ Regard critique",
       expert: "4🎓 Expert",
       precision: "5🎯 Précision",
@@ -155,7 +155,7 @@ export default function Home() {
     },
     en: {
       clarity: "1🧠 Clarity",
-      reflection: "2🔍 Reflection",
+      humain: "2👤 Human",
       critical: "3⚔️ Critical View",
       expert: "4🎓 Expert",
       precision: "5🎯 Precision",
@@ -169,7 +169,7 @@ export default function Home() {
 
   const buttonsData = [
     { id: "clarity" },
-    { id: "reflection" },
+    { id: "humain" },
     { id: "critical" },
     { id: "expert" },
     { id: "precision" },
@@ -293,8 +293,12 @@ export default function Home() {
     if (!isLoaded) return;
     const raws = serializeMsgs(messages);
     localStorage.setItem(getConversationKey(userId), JSON.stringify(raws));
-    checkAndSaveHistory(raws); 
+    checkAndSaveHistory(raws);
   }, [messages, isLoaded, userId]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -576,69 +580,6 @@ export default function Home() {
 
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
-      
-      {/* ── ⚙️ BARRE DE MENU PARAMÈTRES AVEC DESIGN UNIVERSEL (⚙️ FR / EN) ── */}
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-        <div className="relative">
-          <button 
-            id="settings-trigger"
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
-            className="p-2.5 rounded-xl bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 hover:border-cyan-500/50 transition-all shadow-md flex items-center justify-center text-sm"
-          >
-            ⚙️ <span className="ml-1.5 font-mono text-xs bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 px-1.5 py-0.5 rounded-md uppercase font-bold">{lang}</span>
-          </button>
-
-          {isSettingsOpen && (
-            <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl p-3 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200">
-              <div className="px-2 py-1.5 text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold border-b border-zinc-100 dark:border-zinc-900">
-                {t.settings?.title || "Configuration"}
-              </div>
-              <div className="p-1 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900/50 transition-colors">
-                <LangDropdown />
-              </div>
-              <button 
-                onClick={toggleTheme} 
-                className="w-full text-left px-2.5 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 rounded-xl transition-colors"
-              >
-                {theme === "dark" ? (t.settings?.lightMode || "☀️ Mode Clair") : (t.settings?.darkMode || "🌙 Mode Sombre")}
-              </button>
-              <button 
-                onClick={() => { setTutorialStep(1); setIsSettingsOpen(false); }} 
-                className="w-full text-left px-2.5 py-2 text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-colors"
-              >
-                {t.settings?.tutorial || "📖 Rejouer le Tutoriel"}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* ── 📖 POP-OVER ÉTAPE 2 : EXPLICATION DES PARAMÈTRES (DESIGN NÉON ULTRA-VISIBLE) ── */}
-        {tutorialStep === 2 && (
-          <div className="absolute right-0 top-14 w-76 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
-            <div className="absolute -top-2.5 right-6 w-4 h-4 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
-            <button
-              type="button"
-              onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }}
-              title="Fermer"
-              className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-white/10 dark:bg-black/10 hover:bg-red-600 hover:text-white dark:hover:bg-red-500 text-white dark:text-black text-xs font-bold flex items-center justify-center transition-colors"
-            >
-              ✕
-            </button>
-            <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2 pr-8">
-              🤖 {lang === "fr" ? "PARAMÈTRES GLOBAUX" : "GLOBAL SETTINGS"} (2/2)
-            </h4>
-            <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">
-              {t.tutorial?.text2 || "Cliquez ici sur l'icône de Paramètres pour ajuster la langue, alterner entre le mode clair et sombre, ou relancer ce guide à tout moment !"}
-            </p>
-            <button 
-              onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }} 
-              className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white font-extrabold text-xs transition-colors shadow-md uppercase tracking-wider"
-            >
-              {t.tutorial?.finish || "C'est parti ! 🚀"}
-            </button>
-          </div>
-        )}
-      </div>
 
       <div className="flex flex-1 overflow-hidden min-h-0">
         
@@ -907,7 +848,7 @@ export default function Home() {
                   </div>
                   <textarea
                     ref={textareaRef}
-                    className="flex-1 p-4 bg-zinc-50 dark:bg-zinc-950 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl resize-y max-h-[300px] w-full max-w-full placeholder-zinc-400 dark:placeholder-zinc-700 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-800 transition-colors leading-relaxed shadow-inner break-words overflow-x-hidden whitespace-pre-wrap"
+                    className="p-4 bg-zinc-50 dark:bg-zinc-950 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl resize-y max-h-[300px] w-full max-w-full placeholder-zinc-400 dark:placeholder-zinc-700 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-800 transition-colors leading-relaxed shadow-inner break-words overflow-x-hidden whitespace-pre-wrap"
                     style={{ height: inputHeight }}
                     maxLength={getMessageMaxLength(userTier)}
                     value={message}
@@ -956,49 +897,116 @@ export default function Home() {
             </div>
           </section>
 
-          <aside className="w-full lg:w-80 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row lg:flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
-            <div className="flex-1 p-4 border-b sm:border-b-0 sm:border-r lg:border-r-0 lg:border-b border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden min-h-0">
-              <h2 className="font-bold text-sm mt-3 lg:mt-14 mb-3 shrink-0">📅 {lang === "fr" ? "Événements à venir" : "Upcoming Events"}</h2>
-              <div className="flex flex-col gap-2 overflow-y-auto flex-1 max-h-40 sm:max-h-none">
-                {upcomingEvents.length === 0 ? (
-                  <div className="p-3 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-sm flex items-center gap-2 text-zinc-500">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />{lang === "fr" ? "Aucun événement" : "No upcoming events"}
+          <aside className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
+
+            {/* ── ⚙️ BARRE PARAMÈTRES, INTÉGRÉE EN HAUT DE LA COLONNE (PLUS DE FLOTTEMENT ABSOLU) ── */}
+            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0" onClick={(e) => e.stopPropagation()}>
+              <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold">Hub</span>
+              <div className="relative">
+                <button
+                  id="settings-trigger"
+                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                  className="p-1.5 rounded-lg bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 hover:border-cyan-500/50 transition-all shadow-sm flex items-center justify-center text-xs"
+                >
+                  ⚙️ <span className="ml-1 font-mono text-[10px] bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 px-1 py-0.5 rounded-md uppercase font-bold">{lang}</span>
+                </button>
+
+                {isSettingsOpen && (
+                  <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl p-3 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200 z-50">
+                    <div className="px-2 py-1.5 text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold border-b border-zinc-100 dark:border-zinc-900">
+                      {t.settings?.title || "Configuration"}
+                    </div>
+                    <div className="p-1 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900/50 transition-colors">
+                      <LangDropdown />
+                    </div>
+                    <button
+                      onClick={toggleTheme}
+                      className="w-full text-left px-2.5 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 rounded-xl transition-colors"
+                    >
+                      {theme === "dark" ? (t.settings?.lightMode || "☀️ Mode Clair") : (t.settings?.darkMode || "🌙 Mode Sombre")}
+                    </button>
+                    <button
+                      onClick={() => { setTutorialStep(1); setIsSettingsOpen(false); }}
+                      className="w-full text-left px-2.5 py-2 text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-colors"
+                    >
+                      {t.settings?.tutorial || "📖 Rejouer le Tutoriel"}
+                    </button>
                   </div>
-                ) : (
-                  upcomingEvents.map((ev, i) => (
-                    <Link key={ev.id + ev.dateKey} href="/calendar" className="p-3 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-cyan-500 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/60 transition-all cursor-pointer block text-sm group">
-                      <div className="flex items-center gap-2 font-semibold text-cyan-600 dark:text-cyan-400 mb-1 group-hover:text-cyan-500">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${EVENT_DOT_COLORS[i % EVENT_DOT_COLORS.length]}`} />
-                        {ev.title}
-                      </div>
-                      <div className="text-zinc-500 dark:text-zinc-400 text-xs">{diffDaysLabel(ev.diffDays)} · {ev.dateKey}</div>
-                    </Link>
-                  ))
+                )}
+
+                {/* ── 📖 POP-OVER ÉTAPE 2 : EXPLICATION DES PARAMÈTRES ── */}
+                {tutorialStep === 2 && (
+                  <div className="absolute right-0 top-10 w-72 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
+                    <div className="absolute -top-2.5 right-6 w-4 h-4 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
+                    <button
+                      type="button"
+                      onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }}
+                      title="Fermer"
+                      className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-white/10 dark:bg-black/10 hover:bg-red-600 hover:text-white dark:hover:bg-red-500 text-white dark:text-black text-xs font-bold flex items-center justify-center transition-colors"
+                    >
+                      ✕
+                    </button>
+                    <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2 pr-8">
+                      🤖 {lang === "fr" ? "PARAMÈTRES GLOBAUX" : "GLOBAL SETTINGS"} (2/2)
+                    </h4>
+                    <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">
+                      {t.tutorial?.text2 || "Cliquez ici sur l'icône de Paramètres pour ajuster la langue, alterner entre le mode clair et sombre, ou relancer ce guide à tout moment !"}
+                    </p>
+                    <button
+                      onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }}
+                      className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 dark:bg-cyan-500 dark:hover:bg-cyan-600 text-white font-extrabold text-xs transition-colors shadow-md uppercase tracking-wider"
+                    >
+                      {t.tutorial?.finish || "C'est parti ! 🚀"}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="flex-1 p-4 flex flex-col overflow-hidden min-h-0">
-              <h2 className="font-bold text-sm lg:mt-2 mb-3 shrink-0">🟨 {lang === "fr" ? "Notes" : "Sticky Notes"}</h2>
-              <div className="flex gap-2 mb-2 shrink-0">
-                {(["yellow", "blue", "green", "pink"] as StickyNote["color"][]).map((color) => (
-                  <button key={color} onClick={() => setSelectedColor(color)} className={`w-6 h-6 rounded-full border-2 transition-all ${STICKY_STYLES[color].dot} ${selectedColor === color ? "border-black dark:border-white scale-110" : "border-transparent opacity-50"}`} />
-                ))}
-              </div>
-              <div className="flex gap-2 mb-3 shrink-0">
-                <textarea value={newStickyText} onChange={(e) => setNewStickyText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addSticky(); } }} placeholder={lang === "fr" ? "Note rapide..." : "Quick note..."} rows={2} className={`flex-1 resize-none rounded-lg border p-2 text-sm bg-transparent focus:outline-none ${STICKY_STYLES[selectedColor].border} ${STICKY_STYLES[selectedColor].text}`} />
-                <button onClick={addSticky} className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 rounded-lg text-xs font-bold">+{` `}{lang === "fr" ? "Ajouter" : "Add"}</button>
-              </div>
-              <div className="flex flex-col gap-2 overflow-y-auto flex-1 max-h-40 sm:max-h-none">
-                {stickies.map((sticky) => {
-                  const s = STICKY_STYLES[sticky.color];
-                  return (
-                    <div key={sticky.id} onDoubleClick={() => { setExpandedSticky(sticky); setEditText(sticky.text); }} className={`relative rounded-lg border p-3 text-xs cursor-pointer group transition-transform hover:scale-102 ${s.bg} ${s.border} ${s.text}`}>
-                      <div className="whitespace-pre-wrap line-clamp-3">{sticky.text}</div>
-                      <button onClick={(e) => { e.stopPropagation(); deleteSticky(sticky.id); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-zinc-500 dark:text-white text-xs">✕</button>
+            <div className="flex flex-col sm:flex-row lg:flex-col flex-1 overflow-y-auto lg:overflow-visible min-h-0">
+              <div className="flex-1 p-3 border-b sm:border-b-0 sm:border-r lg:border-r-0 lg:border-b border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden min-h-0">
+                <h2 className="font-bold text-xs mb-2 shrink-0">📅 {lang === "fr" ? "Événements à venir" : "Upcoming Events"}</h2>
+                <div className="flex flex-col gap-1.5 overflow-y-auto flex-1 max-h-36 sm:max-h-none">
+                  {upcomingEvents.length === 0 ? (
+                    <div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs flex items-center gap-2 text-zinc-500">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />{lang === "fr" ? "Aucun événement" : "No upcoming events"}
                     </div>
-                  );
-                })}
+                  ) : (
+                    upcomingEvents.map((ev, i) => (
+                      <Link key={ev.id + ev.dateKey} href="/calendar" className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-cyan-500 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/60 transition-all cursor-pointer block text-xs group">
+                        <div className="flex items-center gap-2 font-semibold text-cyan-600 dark:text-cyan-400 mb-0.5 group-hover:text-cyan-500">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${EVENT_DOT_COLORS[i % EVENT_DOT_COLORS.length]}`} />
+                          {ev.title}
+                        </div>
+                        <div className="text-zinc-500 dark:text-zinc-400 text-[11px]">{diffDaysLabel(ev.diffDays)} · {ev.dateKey}</div>
+                      </Link>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 p-3 flex flex-col overflow-hidden min-h-0">
+                <h2 className="font-bold text-xs mb-2 shrink-0">🟨 {lang === "fr" ? "Notes" : "Sticky Notes"}</h2>
+                <div className="flex gap-2 mb-2 shrink-0">
+                  {(["yellow", "blue", "green", "pink"] as StickyNote["color"][]).map((color) => (
+                    <button key={color} onClick={() => setSelectedColor(color)} className={`w-5 h-5 rounded-full border-2 transition-all ${STICKY_STYLES[color].dot} ${selectedColor === color ? "border-black dark:border-white scale-110" : "border-transparent opacity-50"}`} />
+                  ))}
+                </div>
+                <div className="flex gap-2 mb-2 shrink-0">
+                  <textarea value={newStickyText} onChange={(e) => setNewStickyText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addSticky(); } }} placeholder={lang === "fr" ? "Note rapide..." : "Quick note..."} rows={2} className={`flex-1 resize-none rounded-lg border p-1.5 text-xs bg-transparent focus:outline-none ${STICKY_STYLES[selectedColor].border} ${STICKY_STYLES[selectedColor].text}`} />
+                  <button onClick={addSticky} className="bg-cyan-600 hover:bg-cyan-500 text-white px-2.5 rounded-lg text-xs font-bold">+{` `}{lang === "fr" ? "Ajouter" : "Add"}</button>
+                </div>
+                <div className="flex flex-col gap-1.5 overflow-y-auto flex-1 max-h-36 sm:max-h-none">
+                  {stickies.map((sticky) => {
+                    const s = STICKY_STYLES[sticky.color];
+                    return (
+                      <div key={sticky.id} onDoubleClick={() => { setExpandedSticky(sticky); setEditText(sticky.text); }} className={`relative rounded-lg border p-2 text-xs cursor-pointer group transition-transform hover:scale-102 ${s.bg} ${s.border} ${s.text}`}>
+                        <div className="whitespace-pre-wrap line-clamp-3">{sticky.text}</div>
+                        <button onClick={(e) => { e.stopPropagation(); deleteSticky(sticky.id); }} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-zinc-500 dark:text-white text-xs">✕</button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </aside>
