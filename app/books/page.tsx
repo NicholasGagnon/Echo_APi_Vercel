@@ -12,7 +12,7 @@ type Note = {
   date: string;
 };
 
-export default function NotesPage() {
+export default function BooksPage() {
   const { t, lang, theme, toggleTheme } = useApp(); // Utilisation du dictionnaire global
   const [input, setInput] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
@@ -170,7 +170,7 @@ export default function NotesPage() {
             </h2>
             <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
               <Link href="/chat" className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
-              <Link href="/notes" className="block text-cyan-600 dark:text-cyan-400 font-bold">{t.sidebar.notes}</Link>
+              <Link href="/books" className="block text-cyan-600 dark:text-cyan-400 font-bold">{t.sidebar.books}</Link>
               <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang === "fr" ? "Calendrier" : "Calendar"}</Link>
               <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang === "fr" ? "Vitalité" : "Vitality"}</Link>
               <Link href="/services" className="block hover:text-cyan-500">💎 {lang === "fr" ? "Services" : "Services"}</Link>
@@ -189,7 +189,7 @@ export default function NotesPage() {
           
           {/* EDITOR WINDOW */}
           <section className="flex flex-col flex-1 p-6 overflow-hidden min-w-0 bg-white dark:bg-black transition-colors duration-200">
-            <h1 className="text-3xl font-bold mb-4">📝 {lang === "fr" ? "Espace Notes" : "Notes Workspace"}</h1>
+            <h1 className="text-3xl font-bold mb-4">📚 {lang === "fr" ? "Espace Livres" : "Books Workspace"}</h1>
 
             <div className="neon-laser-wire flex-1 w-full rounded-2xl flex items-center justify-center min-h-0">
               <textarea
@@ -268,7 +268,7 @@ export default function NotesPage() {
           <aside className="w-80 shrink-0 border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden">
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800">
               <h2 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 flex items-center gap-2 mt-12">
-                <span className="w-2 h-2 rounded-full bg-cyan-500" /> {lang === "fr" ? "Registre Notes" : "Storage Log"}
+                <span className="w-2 h-2 rounded-full bg-cyan-500" /> {lang === "fr" ? "Registre Livres" : "Storage Log"}
               </h2>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">

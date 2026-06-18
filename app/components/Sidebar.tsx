@@ -22,7 +22,7 @@ export default function Sidebar({ userTier = "free" }: SidebarProps) {
 
   const navLinks = [
     { href: "/chat", label: t.sidebar.chat },
-    { href: "/notes", label: t.sidebar.notes },
+    { href: "/books", label: t.sidebar.books },
     { href: "/calendar", label: lang === "fr" ? "📅 Calendrier" : "📅 Calendar" },
     { href: "/vitality", label: lang === "fr" ? "📈 Vitalité" : "📈 Vitality" },
     { href: "/services", label: lang === "fr" ? "💎 Services" : "💎 Services" },

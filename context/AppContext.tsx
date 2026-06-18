@@ -7,7 +7,7 @@ export const translations: Record<"fr" | "en", {
   sidebar: {
     home: string;
     chat: string;
-    notes: string;
+    books: string;
     calendar: string;
     vitality: string;
     services: string;
@@ -31,9 +31,9 @@ export const translations: Record<"fr" | "en", {
 }> = {
   fr: {
     sidebar: { 
-      home: "🏢 Accueil", 
-      chat: "💬 Clavarder", 
-      notes: "📝 Notes",
+      home: "🏢 Accueil",
+      chat: "💬 Clavarder",
+      books: "📚 Livres",
       calendar: "📅 Calendrier",
       vitality: "📈 Vitalité",
       services: "💎 Services",
@@ -57,9 +57,9 @@ export const translations: Record<"fr" | "en", {
   },
   en: {
     sidebar: { 
-      home: "🏢 Home", 
-      chat: "💬 Chat", 
-      notes: "📝 Notes",
+      home: "🏢 Home",
+      chat: "💬 Chat",
+      books: "📚 Books",
       calendar: "📅 Calendar",
       vitality: "📈 Vitality",
       services: "Services",

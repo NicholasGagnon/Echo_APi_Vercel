@@ -454,7 +454,7 @@ export default function ChatPage() {
             </h2>
             <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
               <Link href="/chat" className="block text-cyan-600 dark:text-cyan-400 font-bold">{t.sidebar.chat}</Link>
-              <Link href="/notes" className="block hover:text-cyan-500">{t.sidebar.notes}</Link>
+              <Link href="/books" className="block hover:text-cyan-500">{t.sidebar.books}</Link>
               <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang === "fr" ? "Calendrier" : "Calendar"}</Link>
               <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang === "fr" ? "Vitalité" : "Vitality"}</Link>
               <Link href="/services" className="block hover:text-cyan-500">💎 {lang === "fr" ? "Services" : "Services"}</Link>
