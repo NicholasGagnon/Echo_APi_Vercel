@@ -1,0 +1,17 @@
+import { chromium } from "playwright";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
+const closeBtn = page.locator('button[title="Fermer"]').first();
+if (await closeBtn.count() > 0) await closeBtn.click().catch(() => {});
+const textarea = page.locator("textarea[maxlength]").first();
+const box = await textarea.boundingBox();
+console.log("textarea default height:", box.height);
+await page.mouse.move(box.x + box.width - 5, box.y + box.height - 5);
+await page.mouse.down();
+await page.mouse.move(box.x + box.width - 5, box.y + box.height + 80, { steps: 10 });
+await page.mouse.up();
+await page.waitForTimeout(150);
+const box2 = await textarea.boundingBox();
+console.log("textarea height after manual drag-resize:", box2.height);
+await browser.close();
