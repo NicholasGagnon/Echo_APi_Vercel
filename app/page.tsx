@@ -103,14 +103,17 @@ export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
 
-  // ── COLONNE DROITE REDIMENSIONNABLE À LA SOURIS (GAUCHE/DROITE) ──
+  // ── COLONNES GAUCHE/DROITE REDIMENSIONNABLES À LA SOURIS ──
+  const [leftPanelWidth, setLeftPanelWidth] = useState(220);
   const [rightPanelWidth, setRightPanelWidth] = useState(272);
   const [isDesktop, setIsDesktop] = useState(false);
-  const isResizingRef = useRef(false);
+  const resizingSideRef = useRef<"left" | "right" | null>(null);
 
   useEffect(() => {
-    const saved = parseInt(localStorage.getItem("echo-home-panel-width") || "", 10);
-    if (Number.isFinite(saved)) setRightPanelWidth(Math.min(440, Math.max(220, saved)));
+    const savedLeft = parseInt(localStorage.getItem("echo-home-left-width") || "", 10);
+    if (Number.isFinite(savedLeft)) setLeftPanelWidth(Math.min(340, Math.max(180, savedLeft)));
+    const savedRight = parseInt(localStorage.getItem("echo-home-panel-width") || "", 10);
+    if (Number.isFinite(savedRight)) setRightPanelWidth(Math.min(440, Math.max(220, savedRight)));
 
     const checkDesktop = () => setIsDesktop(window.innerWidth >= 1024);
     checkDesktop();
@@ -118,22 +121,26 @@ export default function Home() {
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
 
-  const startPanelResize = (e: React.MouseEvent) => {
+  const startPanelResize = (side: "left" | "right") => (e: React.MouseEvent) => {
     e.preventDefault();
-    isResizingRef.current = true;
+    resizingSideRef.current = side;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   };
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (!isResizingRef.current) return;
-      const next = Math.min(440, Math.max(220, window.innerWidth - e.clientX));
-      setRightPanelWidth(next);
+      const side = resizingSideRef.current;
+      if (!side) return;
+      if (side === "left") {
+        setLeftPanelWidth(Math.min(340, Math.max(180, e.clientX)));
+      } else {
+        setRightPanelWidth(Math.min(440, Math.max(220, window.innerWidth - e.clientX)));
+      }
     };
     const onUp = () => {
-      if (!isResizingRef.current) return;
-      isResizingRef.current = false;
+      if (!resizingSideRef.current) return;
+      resizingSideRef.current = null;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
@@ -144,6 +151,10 @@ export default function Home() {
       window.removeEventListener("mouseup", onUp);
     };
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("echo-home-left-width", String(leftPanelWidth));
+  }, [leftPanelWidth]);
 
   useEffect(() => {
     localStorage.setItem("echo-home-panel-width", String(rightPanelWidth));
@@ -611,8 +622,11 @@ export default function Home() {
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
 
       <div className="flex flex-1 overflow-hidden min-h-0">
-        
-        <aside className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
+
+        <aside
+          style={isDesktop ? { width: leftPanelWidth, flexBasis: leftPanelWidth } : undefined}
+          className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between"
+        >
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
               <Link href="/" className="text-cyan-600 dark:text-cyan-400 font-bold">{t.sidebar.home}</Link>
@@ -633,13 +647,21 @@ export default function Home() {
           </div>
         </aside>
 
+        {/* ── POIGNÉE DE REDIMENSIONNEMENT GAUCHE (DESKTOP UNIQUEMENT) ── */}
+        <div
+          onMouseDown={startPanelResize("left")}
+          className="hidden lg:flex w-2.5 shrink-0 cursor-col-resize items-center justify-center group"
+        >
+          <div className="w-1 h-12 rounded-full bg-zinc-200 dark:bg-zinc-800 group-hover:bg-cyan-500 transition-colors" />
+        </div>
+
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-          
+
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
             
             {/* ── INTERFACE 10 BOUTONS MATRIX (AVEC SYNC DU DICTIONNAIRE MULTILINGUE) ── */}
             <div className="w-full max-w-4xl mx-auto bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
-              <div className="flex flex-wrap justify-center gap-2 w-full">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
                 {buttonsData.map((btn) => {
                   const isSelected = selectedButtons.includes(btn.id);
                   const isDoubleRegard = btn.id === "double";
@@ -673,7 +695,7 @@ export default function Home() {
                       onClick={() => handleButtonClick(btn.id)}
                       title={currentLabel}
                       className={`
-                        px-3.5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 border select-none whitespace-nowrap
+                        h-9 px-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 border select-none truncate flex items-center justify-center
                         ${isLocked
                           ? "opacity-30 cursor-not-allowed bg-transparent border-zinc-200 dark:border-zinc-900 text-zinc-400"
                           : isSelected || (isDoubleRegard && isDoubleRegardUnlocked)
@@ -912,9 +934,9 @@ export default function Home() {
             </div>
           </section>
 
-          {/* ── POIGNÉE DE REDIMENSIONNEMENT (GLISSER GAUCHE/DROITE, DESKTOP UNIQUEMENT) ── */}
+          {/* ── POIGNÉE DE REDIMENSIONNEMENT DROITE (DESKTOP UNIQUEMENT) ── */}
           <div
-            onMouseDown={startPanelResize}
+            onMouseDown={startPanelResize("right")}
             className="hidden lg:flex w-2.5 shrink-0 cursor-col-resize items-center justify-center group"
           >
             <div className="w-1 h-12 rounded-full bg-zinc-200 dark:bg-zinc-800 group-hover:bg-cyan-500 transition-colors" />
