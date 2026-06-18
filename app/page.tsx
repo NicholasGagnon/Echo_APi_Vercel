@@ -103,6 +103,23 @@ export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
 
+  // ── TAILLE AJUSTABLE DU CHAMP DE SAISIE ──
+  const DEFAULT_INPUT_HEIGHT = 112;
+  const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
+
+  const shrinkInput = () => {
+    const el = textareaRef.current;
+    const current = el ? el.getBoundingClientRect().height : inputHeight;
+    const next = Math.max(48, Math.round(current / 2));
+    if (el) el.style.height = `${next}px`;
+    setInputHeight(next);
+  };
+
+  const resetInput = () => {
+    if (textareaRef.current) textareaRef.current.style.height = `${DEFAULT_INPUT_HEIGHT}px`;
+    setInputHeight(DEFAULT_INPUT_HEIGHT);
+  };
+
   // ── COLONNES GAUCHE/DROITE REDIMENSIONNABLES À LA SOURIS ──
   const [leftPanelWidth, setLeftPanelWidth] = useState(220);
   const [rightPanelWidth, setRightPanelWidth] = useState(272);
@@ -661,7 +678,7 @@ export default function Home() {
             
             {/* ── INTERFACE 10 BOUTONS MATRIX (AVEC SYNC DU DICTIONNAIRE MULTILINGUE) ── */}
             <div className="w-full max-w-4xl mx-auto bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 w-full">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 w-full">
                 {buttonsData.map((btn) => {
                   const isSelected = selectedButtons.includes(btn.id);
                   const isDoubleRegard = btn.id === "double";
@@ -695,7 +712,7 @@ export default function Home() {
                       onClick={() => handleButtonClick(btn.id)}
                       title={currentLabel}
                       className={`
-                        h-9 px-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 border select-none truncate flex items-center justify-center
+                        h-6 px-1.5 rounded-full text-[10px] font-semibold tracking-wide transition-all duration-200 border select-none truncate flex items-center justify-center
                         ${isLocked
                           ? "opacity-30 cursor-not-allowed bg-transparent border-zinc-200 dark:border-zinc-900 text-zinc-400"
                           : isSelected || (isDoubleRegard && isDoubleRegardUnlocked)
@@ -882,7 +899,8 @@ export default function Home() {
                 <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl shadow-inner focus-within:border-cyan-500/40 transition-colors overflow-hidden">
                   <textarea
                     ref={textareaRef}
-                    className="w-full bg-transparent text-black dark:text-white placeholder-zinc-400 dark:placeholder-zinc-700 text-sm leading-relaxed resize-y min-h-[56px] max-h-[300px] h-28 p-4 focus:outline-none break-words whitespace-pre-wrap"
+                    className="w-full bg-transparent text-black dark:text-white placeholder-zinc-400 dark:placeholder-zinc-700 text-sm leading-relaxed resize-y min-h-[48px] max-h-[300px] p-4 focus:outline-none break-words whitespace-pre-wrap"
+                    style={{ height: inputHeight }}
                     maxLength={getMessageMaxLength(userTier)}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
@@ -893,6 +911,23 @@ export default function Home() {
 
                   <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-zinc-200 dark:border-zinc-900">
                     <div className="flex items-center gap-1.5 min-w-0">
+                      <button
+                        type="button"
+                        onClick={shrinkInput}
+                        title={lang === "fr" ? "Réduire de moitié" : "Shrink by half"}
+                        className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs"
+                      >
+                        ➖
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetInput}
+                        title={lang === "fr" ? "Taille originale" : "Reset to original size"}
+                        className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs"
+                      >
+                        ↺
+                      </button>
+                      <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
                       <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
                       <button
                         type="button"
