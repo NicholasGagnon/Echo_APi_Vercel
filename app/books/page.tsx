@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useApp } from "../../context/AppContext";
@@ -27,7 +29,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     media:"media", livre:"livre", presets:"presets",
     t1:"Titre 1", t2:"Titre 2", t3:"Titre 3", normal:"Texte normal",
     bold:"Gras", italic:"Italique", indent:"Alinéa",
-    pageBreak:"Saut de page", toc:"Table matières",
+    pageBreak:"Afficher les marques (¶)", toc:"Table matières",
     smaller:"Réduire", larger:"Agrandir",
     image:"Image", importTxt:"Import TXT/MD", openBook:"Ouvrir .echo-book",
     exportHtml:"Export HTML",
@@ -59,7 +61,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     media:"media", livre:"book", presets:"presets",
     t1:"Title 1", texte:"text", t3:"Title 3", normal:"Normal text",
     bold:"Bold", italic:"Italic", indent:"Indent",
-    pageBreak:"Page break", toc:"TOC",
+    pageBreak:"Toggle marks (¶)", toc:"TOC",
     smaller:"Smaller", larger:"Larger",
     image:"Image", importTxt:"Import TXT/MD", openBook:"Open .echo-book",
     exportHtml:"Export HTML",
@@ -81,7 +83,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
 const ECHO_MODES: { id: EchoMode; key: "creative"|"ideas"|"critical"; emoji: string; system: string }[] = [
   { id:"creative", key:"creative", emoji:"✍️", system:"Tu es en mode Créatif pour l'écriture. Aide avec imagination, métaphores et suggestions stylistiques originales." },
   { id:"ideas",    key:"ideas",    emoji:"💡", system:"Tu es en mode Idées. Génère des pistes narratives, rebondissements, personnages ou thèmes à explorer." },
-  { id:"critical", key:"critical", emoji:"🔍", system:"Tu es en mode Critique. Analyse le texte avec rigueur : rythme, coherence, clarte, redondances." },
+  { id:"critical", key:"critical", emoji:"🔍", system:"Tu es en mode Critique. Analyse le texte avec rigueur : rythme, cohérence, clarté, redondances." },
 ];
 
 // ── WATER GLYPHS ───────────────────────────────────────────────────────────────
@@ -93,7 +95,6 @@ const WATER = [
   { g:"∾",  top:"83%", left:"2%",   rot:"-12deg", sz:"54px" },
 ];
 
-// ── DOWNLOAD HELPERS ───────────────────────────────────────────────────────────
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a   = document.createElement("a");
@@ -105,7 +106,6 @@ function downloadText(content: string, filename: string, mime = "text/plain") {
   downloadBlob(new Blob([content], { type: mime }), filename);
 }
 
-// ── PRESET APPLICATION ─────────────────────────────────────────────────────────
 function applyPreset(preset: "print"|"kindle", s:{
   setMirrorMargins:(v:boolean)=>void; setShowPageNumbers:(v:boolean)=>void;
   setShowHeader:(v:boolean)=>void;    setShowFooter:(v:boolean)=>void;
@@ -193,6 +193,9 @@ export default function BooksPage() {
   const [activePreset,     setActivePreset]    = useState<"print"|"kindle"|"custom"|null>(null);
   const [pageOpacity, setPageOpacity] = useState(95);
 
+  // 🎯 ÉTAT POUR LES CARACTÈRES INVISIBLES (BOUTON ¶)
+  const [showInvisibleChars, setShowInvisibleChars] = useState(false);
+
   // ── PANEL RESIZING ────────────────────────────────────────────────────────────
   const [echoPanelWidth, setEchoPanelWidth]   = useState(240);
   const [isDesktop, setIsDesktop]             = useState(false);
@@ -229,7 +232,6 @@ export default function BooksPage() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
-  // ── TOOLBAR ACTIVE STATES ─────────────────────────────────────────────────────
   const [isBold,   setIsBold]   = useState(false);
   const [isItalic, setIsItalic] = useState(false);
 
@@ -265,7 +267,6 @@ export default function BooksPage() {
   const imgInputRef    = useRef<HTMLInputElement>(null);
   const importJsonRef  = useRef<HTMLInputElement>(null);
 
-  // ── DATA SYNCHRONIZATION WITH CORE DOM ────────────────────────────────────────
   const handleEditorInput = useCallback(() => {
     if (!editorRef.current) return;
     setChapters(prev => prev.map(c => c.id === activeChapter ? { ...c, content: editorRef.current!.innerHTML } : c));
@@ -289,7 +290,7 @@ export default function BooksPage() {
   const toggleJustify= () => { execCmd(isJustified ? "justifyLeft" : "justifyFull"); setIsJustified(v => !v); };
   const applyIndent  = () => execCmd("indent");
 
-  // ── STRUCTURAL MONOLITH INSERTS (🎯 CORRIGÉS POUR UTILLISER LES CLASSES CSS NETTES) ──
+  // 🎯 INSERTEUR CHIRURGICAL POUR INJECTER LES BLOCS SANS CASSER LE TEXTE DE L'UTILISATEUR
   const insertBlockAtRoot = (html: string) => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -301,36 +302,36 @@ export default function BooksPage() {
     if (!block) return;
 
     const sel = window.getSelection();
-    let anchor: Node | null = null;
-    if (sel && sel.rangeCount > 0) {
-      let node: Node | null = sel.getRangeAt(0).startContainer;
-      while (node && node.parentNode !== editor) node = node.parentNode;
-      anchor = node;
+    if (!sel || sel.rangeCount === 0) return;
+
+    const range = sel.getRangeAt(0);
+    let currentBlock: Node | null = range.startContainer;
+    while (currentBlock && currentBlock.parentNode !== editor) {
+      currentBlock = currentBlock.parentNode;
     }
 
-    if (anchor && anchor.nextSibling) {
-      editor.insertBefore(block, anchor.nextSibling);
+    if (currentBlock) {
+      currentBlock.parentNode?.insertBefore(block, currentBlock.nextSibling);
     } else {
       editor.appendChild(block);
     }
 
-    const p = document.createElement("p");
-    p.innerHTML = "<br>";
-    block.insertAdjacentElement("afterend", p);
+    const postPara = document.createElement("p");
+    postPara.innerHTML = "<br>";
+    block.insertAdjacentElement("afterend", postPara);
 
-    const range = document.createRange();
-    range.setStart(p, 0);
-    range.collapse(true);
-    sel?.removeAllRanges();
-    sel?.addRange(range);
+    const newRange = document.createRange();
+    newRange.setStart(postPara, 0);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
 
     handleEditorInput();
   };
 
-  const insertPageBreak = () => {
-    insertBlockAtRoot(
-      `<div contenteditable="false" class="echo-page-break-block">— ${T.pageBreak} —</div>`
-    );
+  // 🎯 LE BOUTON APPPELLE MAINTENANT LE TOGGLE VISUEL DES CARACTÈRES INVISIBLES
+  const toggleInvisibleChars = () => {
+    setShowInvisibleChars(!showInvisibleChars);
   };
 
   const insertEndInjection = () => {
@@ -346,17 +347,17 @@ export default function BooksPage() {
     sel?.addRange(range);
 
     insertBlockAtRoot(
-      `<div contenteditable="false" class="echo-injection-block">— ${T.inject} —</div>`
+      `<div contenteditable="false" class="echo-injection-block" style="display:block; clear:both; user-select:none; -webkit-user-select:none; margin-top:3.5rem; margin-bottom:2.5rem; padding-top:1.5rem; border-top:1px solid rgba(6,182,212,0.25); font-size:10px; color:rgba(6,182,212,0.55); text-align:center; letter-spacing:0.25em; cursor:default;">— ${T.inject} —</div>`
     );
   };
 
   const insertTOC = () => {
     const rows = chapters.map((c, i) =>
-      `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px;border-bottom:1px dotted rgba(120,120,120,0.2);">${c.title}<span>${i+1}</span></div>`
+      `<div style="display:flex; justify-content:space-between; padding:4px 0; font-size:11px; border-bottom:1px dotted rgba(120,120,120,0.2);">${c.title}<span>${i+1}</span></div>`
     ).join("");
     insertBlockAtRoot(
-      `<div contenteditable="false" class="echo-toc-block">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.12em;opacity:0.45;margin-bottom:10px;font-weight:bold;">${T.toc}</div>
+      `<div contenteditable="false" class="echo-toc-block" style="display:block; clear:both; user-select:none; -webkit-user-select:none; border:1px dashed rgba(6,182,212,0.25); padding:16px; border-radius:6px; margin:2rem 0; cursor:default; background:rgba(6,182,212,0.02);">
+        <div style="font-size:9px; text-transform:uppercase; letter-spacing:0.12em; opacity:0.45; margin-bottom:10px; font-weight:bold;">${T.toc}</div>
         ${rows}
       </div>`
     );
@@ -407,7 +408,6 @@ export default function BooksPage() {
     reader.readAsText(file);
   };
 
-  // ── MANUSCRIPT EXPORT STRUCTURING ─────────────────────────────────────────────
   const buildHTML = (target: string) => {
     const body = chapters.map(c => `<section>\n<h2>${c.title}</h2>\n${c.content}\n</section>`).join("\n\n");
     return `<!DOCTYPE html>
@@ -448,7 +448,6 @@ export default function BooksPage() {
     }
   };
 
-  // ── BACKEND COMMUNICATIONS ────────────────────────────────────────────────────
   const sendEcho = async () => {
     if (!echoInput.trim() || echoThinking) return;
     const msg = echoInput.trim();
@@ -622,7 +621,8 @@ export default function BooksPage() {
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.pages}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="⊟"  label={T.pageBreak} onClick={insertPageBreak} />
+              {/* 🎯 LE BOUTON PASSE MAINTENANT EN MODE ACTIVE SI LES SYMBOLES SONT VISIBLES */}
+              <TB icon="⊟"  label={T.pageBreak} active={showInvisibleChars} onClick={toggleInvisibleChars} />
               <TB icon="📑" label={T.toc}       onClick={insertTOC} />
               <TB icon="↓"  label={T.inject}    onClick={insertEndInjection} />
             </div>
@@ -679,7 +679,7 @@ export default function BooksPage() {
           </div>
         </div>
 
-        {/* EDITOR ZONE */}
+        {/* EDITOR MOUNT ZONE */}
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="h-9 shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center px-3 gap-2">
             {(["edit","preview","present"] as BookView[]).map(v => (
@@ -813,7 +813,8 @@ export default function BooksPage() {
             <div className="absolute inset-0 overflow-y-auto flex items-start justify-center px-4 py-4 z-[2]"
               style={{ scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent" }}>
 
-              <div className="w-full shadow-2xl border border-zinc-200/10 dark:border-zinc-700/20 rounded-sm relative"
+              {/* 🎯 AJOUT DE LA CLASSE DYNAMIQUE SUR LA PAGE POUR LE TOGGLE DES MARQUES VISUELLES */}
+              <div className={`w-full shadow-2xl border border-zinc-200/10 dark:border-zinc-700/20 rounded-sm relative ${showInvisibleChars ? 'echo-editor-show-symbols' : ''}`}
                 style={{
                   maxWidth:"860px",
                   minHeight:"calc(100% - 2rem)",
@@ -860,9 +861,9 @@ export default function BooksPage() {
                   />
                 ) : (
                   <div className="min-h-[400px] text-black dark:text-zinc-100 books-preview"
-                    style={{fontSize:`${fontSize}px`,fontFamily,lineHeight,textAlign:isJustified?"justify":"left"}}
-                    dangerouslySetInnerHTML={{__html: currentContent || `<p style="color:rgba(113,113,122,0.35);font-style:italic">${T.noContent}</p>`}}
-                  />
+  style={{fontSize:`${fontSize}px`,fontFamily,lineHeight,textAlign:isJustified?"justify":"left"}}
+  dangerouslySetInnerHTML={{__html: currentContent || `<p style="color:rgba(113,113,122,0.35);font-style:italic">${T.noContent}</p>`}}
+/>
                 )}
 
                 {showPageNumbers && (
@@ -967,7 +968,21 @@ export default function BooksPage() {
           text-indent: ${paraIndent ? "1.5em" : "0"};
         }
 
-        /* Empêche le rapprochement des titres */
+        /* 🎯 RENDRE LES SYMBOLES VISIBLES SANS TOUCHER AU CONTENU HTML */
+        .echo-editor-show-symbols p:after {
+          content: " ¶" !important;
+          color: rgba(6, 182, 212, 0.35) !important;
+          font-size: 0.95em !important;
+          font-weight: bold !important;
+          font-family: monospace !important;
+        }
+
+        /* Mettre en valeur visuellement les sauts de page quand l'oeil est activé */
+        .echo-editor-show-symbols .echo-page-break-block {
+          outline: 1px dashed rgba(6, 182, 212, 0.5) !important;
+          background: rgba(6, 182, 212, 0.03) !important;
+        }
+
         .books-editor h1, .books-preview h1, .books-present h1 {
           font-size: 1.6em;
           font-weight: 700;
@@ -993,7 +1008,7 @@ export default function BooksPage() {
           color: rgba(6,182,212,.6);
         }
 
-        /* 🎯 APPLIQUÉ AUX CLASSES SÉMANTIQUES RÉELLES DE L'INSERTEUR */
+        /* Blocs monolithiques */
         .echo-page-break-block {
           display: block !important;
           clear: both !important;
