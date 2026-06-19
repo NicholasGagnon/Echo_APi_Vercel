@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useApp } from "../../context/AppContext";
@@ -59,7 +57,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     opacity:"Page opacity", editorBg:"Editor bg", paraIndentLbl:"First-line indent",
     struct:"struct", text:"text", pages:"pages", police:"size",
     media:"media", livre:"book", presets:"presets",
-    t1:"Title 1", text:"text", t3:"Title 3", normal:"Normal text",
+    t1:"Title 1", texte:"text", t3:"Title 3", normal:"Normal text",
     bold:"Bold", italic:"Italic", indent:"Indent",
     pageBreak:"Page break", toc:"TOC",
     smaller:"Smaller", larger:"Larger",
