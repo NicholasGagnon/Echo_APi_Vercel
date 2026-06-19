@@ -5,6 +5,13 @@ import Link from "next/link";
 import { useApp } from "../../context/AppContext";
 import LangDropdown from "../components/LangDropdown";
 
+// ── IMPORTATIONS TIPTAP ────────────────────────────────────────────────────────
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import TextStyle from "@tiptap/extension-text-style";
+import FontFamily from "@tiptap/extension-font-family";
+import TextAlign from "@tiptap/extension-text-align";
+
 // ── TYPES ──────────────────────────────────────────────────────────────────────
 type EchoMode = "creative" | "ideas" | "critical";
 type BookView  = "edit" | "preview" | "present";
@@ -141,8 +148,67 @@ export default function BooksPage() {
   const [bookTitle, setBookTitle]         = useState(fr ? "Mon Premier Livre" : "My First Book");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [view, setView]                   = useState<BookView>("edit");
-  const editorRef    = useRef<HTMLDivElement>(null);
   const titleInputRef= useRef<HTMLInputElement>(null);
+
+  // ── LAYOUT & TYPOGRAPHY SETTINGS ──────────────────────────────────────────────
+  const [mirrorMargins,   setMirrorMargins]   = useState(false);
+  const [showPageNumbers, setShowPageNumbers] = useState(true);
+  const [showHeader,       setShowHeader]      = useState(false);
+  const [showFooter,       setShowFooter]      = useState(false);
+  const [fontSize,        setFontSize]        = useState(14);
+  const [fontFamily,      setFontFamily]      = useState("Georgia, serif");
+  const [lineHeight,      setLineHeight]      = useState(1.8);
+  const [isJustified,      setIsJustified]     = useState(true);
+  const [paraSpacing,      setParaSpacing]     = useState(0.75);
+  const [showSettings,     setShowSettings]    = useState(true);
+  const [paraIndent,      setParaIndent]      = useState(false);
+  const [activePreset,     setActivePreset]    = useState<"print"|"kindle"|"custom"|null>(null);
+  const [pageOpacity, setPageOpacity] = useState(95);
+  const [showInvisibleChars, setShowInvisibleChars] = useState(false);
+
+  // ── CONFIGURATION ET INITIALISATION TIPTAP ─────────────────────────────────────
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+      TextStyle,
+      FontFamily,
+      TextAlign.configure({
+        types: ["heading", "paragraph"],
+      }),
+    ],
+    content: "",
+    onUpdate: ({ editor }) => {
+      const html = editor.getHTML();
+      setChapters(prev => prev.map(c => c.id === activeChapter ? { ...c, content: html } : c));
+    },
+  });
+
+  // Synchroniser le contenu de l'éditeur lors du changement de chapitre ou de vue
+  useEffect(() => {
+    if (!editor || view !== "edit") return;
+    const current = chapters.find(c => c.id === activeChapter);
+    if (current && editor.getHTML() !== current.content) {
+      editor.commands.setContent(current.content || "<p></p>");
+    }
+  }, [activeChapter, view, editor, chapters]);
+
+  // Synchroniser l'alignement justifié / gauche global avec Tiptap
+  useEffect(() => {
+    if (!editor) return;
+    if (isJustified) {
+      editor.commands.setTextAlign("justify");
+    } else {
+      editor.commands.unsetTextAlign();
+    }
+  }, [isJustified, editor]);
+
+  // Synchroniser la police globale sélectionnée avec Tiptap
+  useEffect(() => {
+    if (!editor) return;
+    editor.commands.setFontFamily(fontFamily);
+  }, [fontFamily, editor]);
 
   // ── AUTO-SAVE LOGIC ───────────────────────────────────────────────────────────
   const [saveStatus, setSaveStatus] = useState<"saved"|"saving"|"unsaved">("saved");
@@ -177,24 +243,6 @@ export default function BooksPage() {
     } catch { /* ignore */ }
     setSaveStatus("saved");
   }, []);
-
-  // ── LAYOUT & TYPOGRAPHY SETTINGS ──────────────────────────────────────────────
-  const [mirrorMargins,   setMirrorMargins]   = useState(false);
-  const [showPageNumbers, setShowPageNumbers] = useState(true);
-  const [showHeader,       setShowHeader]      = useState(false);
-  const [showFooter,       setShowFooter]      = useState(false);
-  const [fontSize,        setFontSize]        = useState(14);
-  const [fontFamily,      setFontFamily]      = useState("Georgia, serif");
-  const [lineHeight,      setLineHeight]      = useState(1.8);
-  const [isJustified,      setIsJustified]     = useState(true);
-  const [paraSpacing,      setParaSpacing]     = useState(0.75);
-  const [showSettings,     setShowSettings]    = useState(true);
-  const [paraIndent,      setParaIndent]      = useState(false);
-  const [activePreset,     setActivePreset]    = useState<"print"|"kindle"|"custom"|null>(null);
-  const [pageOpacity, setPageOpacity] = useState(95);
-
-  // 🎯 ÉTAT POUR LES CARACTÈRES INVISIBLES (BOUTON ¶)
-  const [showInvisibleChars, setShowInvisibleChars] = useState(false);
 
   // ── PANEL RESIZING ────────────────────────────────────────────────────────────
   const [echoPanelWidth, setEchoPanelWidth]   = useState(240);
@@ -232,145 +280,33 @@ export default function BooksPage() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
-  const [isBold,   setIsBold]   = useState(false);
-  const [isItalic, setIsItalic] = useState(false);
+  // ── COMMANDES STRUCTURELLES TIPTAP SÉCURISÉES ──────────────────────────────────
+  const toggleBold   = () => editor?.commands.toggleBold();
+  const toggleItalic = () => editor?.commands.toggleItalic();
+  const toggleJustify= () => setIsJustified(v => !v);
+  const applyIndent  = () => editor?.commands.sinkListItem("listItem"); // Pour la compatibilité structurelle
 
-  // ── ECHO STREAM LOGIC ─────────────────────────────────────────────────────────
-  const [echoMode,     setEchoMode]     = useState<EchoMode>("creative");
-  const [echoMessages, setEchoMessages] = useState<BookMessage[]>([]);
-  const [echoInput,    setEchoInput]    = useState("");
-  const [echoThinking, setEchoThinking] = useState(false);
-  const echoBottomRef = useRef<HTMLDivElement>(null);
-
-  // ── POPUP DROPDOWNS ───────────────────────────────────────────────────────────
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setShowExportMenu(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setIsSettingsOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const fileInputRef   = useRef<HTMLInputElement>(null);
-  const imgInputRef    = useRef<HTMLInputElement>(null);
-  const importJsonRef  = useRef<HTMLInputElement>(null);
-
-  const handleEditorInput = useCallback(() => {
-    if (!editorRef.current) return;
-    setChapters(prev => prev.map(c => c.id === activeChapter ? { ...c, content: editorRef.current!.innerHTML } : c));
-  }, [activeChapter]);
-
-  useEffect(() => {
-    if (!editorRef.current || view !== "edit") return;
-    const current = chapters.find(c => c.id === activeChapter);
-    if (current && editorRef.current.innerHTML !== current.content) {
-      editorRef.current.innerHTML = current.content;
-    }
-    editorRef.current.focus();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChapter, view]);
-
-  // ── DOM WRITING COMMANDS ──────────────────────────────────────────────────────
-  const execCmd     = (cmd: string, val?: string) => { editorRef.current?.focus(); document.execCommand(cmd, false, val); };
-  const applyBlock  = (tag: string) => execCmd("formatBlock", tag);
-  const toggleBold   = () => { execCmd("bold");   setIsBold(v => !v); };
-  const toggleItalic = () => { execCmd("italic"); setIsItalic(v => !v); };
-  const toggleJustify= () => { execCmd(isJustified ? "justifyLeft" : "justifyFull"); setIsJustified(v => !v); };
-  const applyIndent  = () => execCmd("indent");
-
-  // 🎯 INSERTEUR CHIRURGICAL POUR INJECTER LES BLOCS SANS CASSER LE TEXTE DE L'UTILISATEUR
-  const insertBlockAtRoot = (html: string) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    editor.focus();
-
-    const temp = document.createElement("div");
-    temp.innerHTML = html;
-    const block = temp.firstElementChild as HTMLElement | null;
-    if (!block) return;
-
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-
-    const range = sel.getRangeAt(0);
-    let currentBlock: Node | null = range.startContainer;
-    while (currentBlock && currentBlock.parentNode !== editor) {
-      currentBlock = currentBlock.parentNode;
-    }
-
-    if (currentBlock) {
-      currentBlock.parentNode?.insertBefore(block, currentBlock.nextSibling);
-    } else {
-      editor.appendChild(block);
-    }
-
-    const postPara = document.createElement("p");
-    postPara.innerHTML = "<br>";
-    block.insertAdjacentElement("afterend", postPara);
-
-    const newRange = document.createRange();
-    newRange.setStart(postPara, 0);
-    newRange.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(newRange);
-
-    handleEditorInput();
-  };
-
-  // 🎯 LE BOUTON APPPELLE MAINTENANT LE TOGGLE VISUEL DES CARACTÈRES INVISIBLES
   const toggleInvisibleChars = () => {
     setShowInvisibleChars(!showInvisibleChars);
   };
 
-  const insertEndInjection = () => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    editor.focus();
-
-    const sel = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-
-    insertBlockAtRoot(
-      `<div contenteditable="false" class="echo-injection-block" style="display:block; clear:both; user-select:none; -webkit-user-select:none; margin-top:3.5rem; margin-bottom:2.5rem; padding-top:1.5rem; border-top:1px solid rgba(6,182,212,0.25); font-size:10px; color:rgba(6,182,212,0.55); text-align:center; letter-spacing:0.25em; cursor:default;">— ${T.inject} —</div>`
-    );
-  };
-
   const insertTOC = () => {
+    if (!editor) return;
     const rows = chapters.map((c, i) =>
       `<div style="display:flex; justify-content:space-between; padding:4px 0; font-size:11px; border-bottom:1px dotted rgba(120,120,120,0.2);">${c.title}<span>${i+1}</span></div>`
     ).join("");
-    insertBlockAtRoot(
-      `<div contenteditable="false" class="echo-toc-block" style="display:block; clear:both; user-select:none; -webkit-user-select:none; border:1px dashed rgba(6,182,212,0.25); padding:16px; border-radius:6px; margin:2rem 0; cursor:default; background:rgba(6,182,212,0.02);">
-        <div style="font-size:9px; text-transform:uppercase; letter-spacing:0.12em; opacity:0.45; margin-bottom:10px; font-weight:bold;">${T.toc}</div>
-        ${rows}
-      </div>`
-    );
+    
+    const tocHtml = `<div class="echo-toc-block" style="border:1px dashed rgba(6,182,212,0.25); padding:16px; border-radius:6px; margin:2rem 0; background:rgba(6,182,212,0.02);">
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:0.12em; opacity:0.45; margin-bottom:10px; font-weight:bold;">${T.toc}</div>
+      ${rows}
+    </div><p></p>`;
+    editor.commands.insertContent(tocHtml);
   };
 
-  const insertImage = () => imgInputRef.current?.click();
-
-  const handleImgFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; e.target.value = "";
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => { editorRef.current?.focus(); document.execCommand("insertImage", false, reader.result as string); };
-    reader.readAsDataURL(file);
+  const insertEndInjection = () => {
+    if (!editor) return;
+    const injectHtml = `<div class="echo-injection-block" style="margin-top:3.5rem; margin-bottom:2.5rem; padding-top:1.5rem; border-top:1px solid rgba(6,182,212,0.25); font-size:10px; color:rgba(6,182,212,0.55); text-align:center; letter-spacing:0.25em;">— ${T.inject} —</div><p></p>`;
+    editor.commands.insertContent(injectHtml);
   };
 
   const addChapter = () => {
@@ -380,7 +316,11 @@ export default function BooksPage() {
     setActiveChapter(id);
   };
 
-  // ── IMPORTS ───────────────────────────────────────────────────────────────────
+  // ── IMPORTS & EXPORTS ─────────────────────────────────────────────────────────
+  const fileInputRef   = useRef<HTMLInputElement>(null);
+  const imgInputRef    = useRef<HTMLInputElement>(null);
+  const importJsonRef  = useRef<HTMLInputElement>(null);
+
   const handleImportTxt = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
@@ -448,6 +388,13 @@ export default function BooksPage() {
     }
   };
 
+  // ── ECHO STREAM LOGIC ─────────────────────────────────────────────────────────
+  const [echoMode,     setEchoMode]     = useState<EchoMode>("creative");
+  const [echoMessages, setEchoMessages] = useState<BookMessage[]>([]);
+  const [echoInput,    setEchoInput]    = useState("");
+  const [echoThinking, setEchoThinking] = useState(false);
+  const echoBottomRef = useRef<HTMLDivElement>(null);
+
   const sendEcho = async () => {
     if (!echoInput.trim() || echoThinking) return;
     const msg = echoInput.trim();
@@ -455,7 +402,7 @@ export default function BooksPage() {
     setEchoMessages(prev => [...prev, { role:"user", text:msg }]);
     setEchoThinking(true);
 
-    const excerpt = editorRef.current?.innerText?.slice(0, 500) || "";
+    const excerpt = editor?.getText()?.slice(0, 500) || "";
     const echoHistory = echoMessages.map(m => m.role === "user" ? `You: ${m.text}` : `Echo: ${m.text}`);
 
     try {
@@ -492,6 +439,26 @@ export default function BooksPage() {
     setActivePreset("custom");
     setShowSettings(true);
   };
+
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setShowExportMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setIsSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const saveLabel = {
     saved:   { dot:"bg-emerald-400",             text: T.saved },
@@ -601,18 +568,18 @@ export default function BooksPage() {
           <div className="px-2 pb-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.struct}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="T¹" label={T.t1} onClick={() => applyBlock("h1")} />
-              <TB icon="T²" label={T.t2} onClick={() => applyBlock("h2")} />
-              <TB icon="T³" label={T.t3} onClick={() => applyBlock("h3")} />
-              <TB icon="¶"  label={T.normal} onClick={() => applyBlock("p")} />
+              <TB icon="T¹" label={T.t1} onClick={() => editor?.commands.setHeading({ level: 1 })} />
+              <TB icon="T²" label={T.t2} onClick={() => editor?.commands.setHeading({ level: 2 })} />
+              <TB icon="T³" label={T.t3} onClick={() => editor?.commands.setHeading({ level: 3 })} />
+              <TB icon="¶"  label={T.normal} onClick={() => editor?.commands.setParagraph()} />
             </div>
           </div>
 
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.texte}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="B"  label={T.bold}   active={isBold}   onClick={toggleBold} />
-              <TB icon="I"  label={T.italic} active={isItalic} onClick={toggleItalic} />
+              <TB icon="B"  label={T.bold}   active={editor?.isActive("bold")}   onClick={toggleBold} />
+              <TB icon="I"  label={T.italic} active={editor?.isActive("italic")} onClick={toggleItalic} />
               <TB icon="≡"  label={T.justify} active={isJustified} onClick={toggleJustify} />
               <TB icon="→"  label={T.indent} onClick={applyIndent} />
             </div>
@@ -621,7 +588,6 @@ export default function BooksPage() {
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.pages}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              {/* 🎯 LE BOUTON PASSE MAINTENANT EN MODE ACTIVE SI LES SYMBOLES SONT VISIBLES */}
               <TB icon="⊟"  label={T.pageBreak} active={showInvisibleChars} onClick={toggleInvisibleChars} />
               <TB icon="📑" label={T.toc}       onClick={insertTOC} />
               <TB icon="↓"  label={T.inject}    onClick={insertEndInjection} />
@@ -632,7 +598,7 @@ export default function BooksPage() {
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.police}</div>
             <div className="grid grid-cols-2 gap-0.5">
               <TB icon="A-" label={T.smaller} onClick={() => setFontSize(v => Math.max(10, v-1))} />
-              <TB icon="A+" label={T.larger}  onClick={() => setFontSize(v => Math.min(24, v+1))} />
+              <TB icon="A+" label={T.larger}  onClick={() => setFontSize(v => Math.min(32, v+1))} />
             </div>
             <div className="text-center font-mono text-[9px] text-zinc-500 mt-0.5">{fontSize}px</div>
           </div>
@@ -640,7 +606,6 @@ export default function BooksPage() {
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.media}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="🖼️" label={T.image}     onClick={insertImage} />
               <TB icon="📥" label={T.importTxt} onClick={() => fileInputRef.current?.click()} />
               <TB icon="📂" label={T.openBook}  onClick={() => importJsonRef.current?.click()} />
             </div>
@@ -679,7 +644,7 @@ export default function BooksPage() {
           </div>
         </div>
 
-        {/* EDITOR MOUNT ZONE */}
+        {/* EDITOR ZONE */}
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="h-9 shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center px-3 gap-2">
             {(["edit","preview","present"] as BookView[]).map(v => (
@@ -813,7 +778,6 @@ export default function BooksPage() {
             <div className="absolute inset-0 overflow-y-auto flex items-start justify-center px-4 py-4 z-[2]"
               style={{ scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent" }}>
 
-              {/* 🎯 AJOUT DE LA CLASSE DYNAMIQUE SUR LA PAGE POUR LE TOGGLE DES MARQUES VISUELLES */}
               <div className={`w-full shadow-2xl border border-zinc-200/10 dark:border-zinc-700/20 rounded-sm relative ${showInvisibleChars ? 'echo-editor-show-symbols' : ''}`}
                 style={{
                   maxWidth:"860px",
@@ -853,17 +817,16 @@ export default function BooksPage() {
                 </div>
 
                 {view==="edit" ? (
-                  <div ref={editorRef} contentEditable suppressContentEditableWarning
-                    onInput={handleEditorInput}
-                    data-placeholder={fr ? "Commencez à écrire votre histoire..." : "Start writing your story..."}
-                    className="outline-none min-h-[400px] text-black dark:text-zinc-100 caret-cyan-400 books-editor"
-                    style={{fontSize:`${fontSize}px`,fontFamily,lineHeight,textAlign:isJustified?"justify":"left"}}
+                  <EditorContent 
+                    editor={editor} 
+                    className="outline-none min-h-[400px] text-black dark:text-zinc-100 caret-cyan-400 books-editor-tiptap"
+                    style={{ fontSize: `${fontSize}px`, lineHeight }}
                   />
                 ) : (
                   <div className="min-h-[400px] text-black dark:text-zinc-100 books-preview"
-  style={{fontSize:`${fontSize}px`,fontFamily,lineHeight,textAlign:isJustified?"justify":"left"}}
-  dangerouslySetInnerHTML={{__html: currentContent || `<p style="color:rgba(113,113,122,0.35);font-style:italic">${T.noContent}</p>`}}
-/>
+                    style={{ fontSize: `${fontSize}px`, fontFamily, lineHeight, textAlign: isJustified ? "justify" : "left" }}
+                    dangerouslySetInnerHTML={{ __html: currentContent || `<p style="color:rgba(113,113,122,0.35);font-style:italic">${T.noContent}</p>` }}
+                  />
                 )}
 
                 {showPageNumbers && (
@@ -948,28 +911,28 @@ export default function BooksPage() {
       </div>
 
       <input ref={fileInputRef}  type="file" accept=".txt,.md,.markdown" onChange={handleImportTxt}  className="hidden" />
-      <input ref={imgInputRef}   type="file" accept="image/*"            onChange={handleImgFile}    className="hidden" />
+      <input ref={imgInputRef}   type="file" accept="image/*"            className="hidden" />
       <input ref={importJsonRef} type="file" accept=".json"              onChange={handleImportJson} className="hidden" />
 
-      {/* ── DESIGN CHIRURGICAL ET ASSURANCE DE MAILLAGE DES COMPOSANTS STRATE ── */}
+      {/* ── DESIGN CHIRURGICAL ET STRUCTURE DE RENDU TIPTAP ── */}
       <style>{`
-        .books-editor:empty:before {
-          content: attr(data-placeholder);
-          color: rgba(113, 113, 122, 0.4);
-          pointer-events: none;
-          font-style: italic;
+        /* Style global du traitement de texte Tiptap */
+        .books-editor-tiptap .ProseMirror {
+          min-height: 400px;
+          outline: none;
+          color: inherit;
         }
 
-        /* Forcer l'aération stricte de tous les paragraphes injectés ou saisis */
-        .books-editor p, .books-preview p, .books-present p {
+        /* Gestion de l'interligne et espacement des paragraphes réels */
+        .books-editor-tiptap .ProseMirror p, .books-preview p, .books-present p {
           margin-top: 0 !important;
           margin-bottom: ${paraSpacing}em !important;
           line-height: inherit !important;
           text-indent: ${paraIndent ? "1.5em" : "0"};
         }
 
-        /* 🎯 RENDRE LES SYMBOLES VISIBLES SANS TOUCHER AU CONTENU HTML */
-        .echo-editor-show-symbols p:after {
+        /* Injection visuelle des marques invisibles Word (¶) sans toucher au HTML */
+        .echo-editor-show-symbols .ProseMirror p:after {
           content: " ¶" !important;
           color: rgba(6, 182, 212, 0.35) !important;
           font-size: 0.95em !important;
@@ -977,13 +940,8 @@ export default function BooksPage() {
           font-family: monospace !important;
         }
 
-        /* Mettre en valeur visuellement les sauts de page quand l'oeil est activé */
-        .echo-editor-show-symbols .echo-page-break-block {
-          outline: 1px dashed rgba(6, 182, 212, 0.5) !important;
-          background: rgba(6, 182, 212, 0.03) !important;
-        }
-
-        .books-editor h1, .books-preview h1, .books-present h1 {
+        /* Encapsulation propre des titres */
+        .books-editor-tiptap .ProseMirror h1, .books-preview h1 {
           font-size: 1.6em;
           font-weight: 700;
           margin-top: 1.2em !important;
@@ -991,83 +949,24 @@ export default function BooksPage() {
           border-bottom: 1px solid rgba(6,182,212,0.1);
           padding-bottom: .12em;
         }
-        .books-editor h2, .books-preview h2, .books-present h2 {
+        .books-editor-tiptap .ProseMirror h2, .books-preview h2 {
           font-size: 1.2em;
           font-weight: 600;
           margin-top: 1.6em !important;
           margin-bottom: 0.5em !important;
           text-transform: uppercase;
-          letter-spacing: .07em;
           color: rgb(6,182,212);
         }
-        .books-editor h3, .books-preview h3, .books-present h3 {
-          font-size: 1.05em;
-          font-weight: 600;
-          margin-top: 1.4em !important;
-          margin-bottom: 0.4em !important;
-          color: rgba(6,182,212,.6);
-        }
 
-        /* Blocs monolithiques */
-        .echo-page-break-block {
-          display: block !important;
-          clear: both !important;
-          user-select: none !important;
-          -webkit-user-select: none !important;
-          border-top: 1px dashed rgba(6,182,212,0.35) !important;
-          margin-top: 3.5rem !important;
-          margin-bottom: 3.5rem !important;
-          text-align: center !important;
-          font-size: 10px !important;
-          color: rgba(6,182,212,0.6) !important;
-          letter-spacing: 0.3em !important;
-          padding-top: 16px !important;
-          cursor: default !important;
-        }
-
+        /* Blocs personnalisés insérés par Echo */
         .echo-injection-block {
-          display: block !important;
-          clear: both !important;
-          user-select: none !important;
-          -webkit-user-select: none !important;
-          margin-top: 4rem !important;
-          margin-bottom: 3rem !important;
-          padding-top: 1.5rem !important;
-          border-top: 1px solid rgba(6,182,212,0.25) !important;
-          font-size: 10px !important;
-          color: rgba(6,182,212,0.55) !important;
-          text-align: center !important;
-          letter-spacing: 0.25em !important;
-          cursor: default !important;
+          user-select: none;
+          -webkit-user-select: none;
         }
 
         .echo-toc-block {
-          display: block !important;
-          clear: both !important;
-          user-select: none !important;
-          -webkit-user-select: none !important;
-          border: 1px dashed rgba(6,182,212,0.25) !important;
-          padding: 18px !important;
-          border-radius: 6px !important;
-          margin-top: 2.5rem !important;
-          margin-bottom: 2.5rem !important;
-          cursor: default !important;
-          background: rgba(6, 182, 212, 0.02) !important;
-        }
-
-        .books-editor img, .books-preview img {
-          max-width: 100%;
-          border-radius: 4px;
-          margin: 1.5em 0 !important;
-          display: block;
-        }
-
-        .books-editor:focus {
-          outline: none;
-        }
-
-        .books-editor div {
-          min-height: 1.4em;
+          user-select: none;
+          -webkit-user-select: none;
         }
       `}</style>
     </main>

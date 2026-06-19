@@ -10,6 +10,12 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
+    "@tiptap/extension-font-family": "^3.27.1",
+    "@tiptap/extension-text-align": "^3.27.1",
+    "@tiptap/extension-text-style": "^3.27.1",
+    "@tiptap/pm": "^3.27.1",
+    "@tiptap/react": "^3.27.1",
+    "@tiptap/starter-kit": "^3.27.1",
     "@vercel/analytics": "^2.0.1",
     "jspdf": "^4.2.1",
     "next": "16.2.6",
