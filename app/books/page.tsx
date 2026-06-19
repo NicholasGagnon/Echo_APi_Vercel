@@ -293,16 +293,53 @@ export default function BooksPage() {
   const toggleJustify= () => { execCmd(isJustified ? "justifyLeft" : "justifyFull"); setIsJustified(v => !v); };
   const applyIndent  = () => execCmd("indent");
 
+  // Insère du HTML bloc directement via le DOM (et non document.execCommand,
+  // qui désosse les <div> stylées en <span> inline et fait disparaître la
+  // bordure/marge du séparateur — d'où le "le bouton ne fonctionne pas").
+  const insertBlockAtCursor = (html: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+
+    const sel = window.getSelection();
+    let range: Range;
+    if (sel && sel.rangeCount > 0 && editor.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      range = sel.getRangeAt(0);
+    } else {
+      range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    }
+    range.deleteContents();
+
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    const frag = document.createDocumentFragment();
+    let lastNode: ChildNode | null = null;
+    while (wrapper.firstChild) {
+      lastNode = frag.appendChild(wrapper.firstChild);
+    }
+    range.insertNode(frag);
+
+    if (lastNode && sel) {
+      const after = document.createRange();
+      after.setStartAfter(lastNode);
+      after.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(after);
+    }
+
+    handleEditorInput();
+  };
+
   const insertPageBreak = () => {
-    editorRef.current?.focus();
-    document.execCommand("insertHTML", false,
+    insertBlockAtCursor(
       `<div style="border-top:1px dashed rgba(6,182,212,0.22);margin:2rem 0;text-align:center;font-size:9px;color:rgba(6,182,212,0.38);letter-spacing:0.25em;padding-top:6px;">— ${T.pageBreak} —</div><p><br></p>`);
   };
 
   // Injection en fin de page (textarea en bas de la boîte)
   const insertEndInjection = () => {
     if (!editorRef.current) return;
-    editorRef.current.focus();
     // Move cursor to end
     const range = document.createRange();
     const sel   = window.getSelection();
@@ -310,7 +347,7 @@ export default function BooksPage() {
     range.collapse(false);
     sel?.removeAllRanges();
     sel?.addRange(range);
-    document.execCommand("insertHTML", false,
+    insertBlockAtCursor(
       `<div style="margin-top:3rem;padding-top:1rem;border-top:1px solid rgba(6,182,212,0.15);font-size:9px;color:rgba(6,182,212,0.35);text-align:center;letter-spacing:0.2em;">— ${T.inject} —</div><p><br></p>`);
   };
 
@@ -318,8 +355,7 @@ export default function BooksPage() {
     const rows = chapters.map((c, i) =>
       `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;border-bottom:1px dotted rgba(120,120,120,0.18);">${c.title}<span>${i+1}</span></div>`
     ).join("");
-    editorRef.current?.focus();
-    document.execCommand("insertHTML", false,
+    insertBlockAtCursor(
       `<div style="border:1px dashed rgba(6,182,212,0.18);padding:14px;border-radius:3px;margin:18px 0;">
         <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.12em;opacity:0.38;margin-bottom:10px;">${T.toc}</div>
         ${rows}
