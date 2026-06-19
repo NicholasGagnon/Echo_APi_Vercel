@@ -49,10 +49,6 @@ const USER_TIERS: UserTier[] = ["connected_free", "basic", "premium", "ultra", "
 const isUserTier = (value: unknown): value is UserTier =>
   typeof value === "string" && USER_TIERS.includes(value as UserTier);
 
-// Normalise toute ancienne valeur de tier (ex: "free", venant de Supabase ou
-// d'un vieux localStorage) vers le nouveau schéma où "connected_free" est le
-// palier d'entrée gratuit pour l'utilisateur, mais routé sur l'infra payante
-// côté backend (cause de l'ancien bug de quota / clé API gratuite cassée).
 const normalizeTier = (raw: unknown): UserTier => {
   if (typeof raw !== "string") return "connected_free";
   const cleaned = raw.toLowerCase().trim();
@@ -103,7 +99,6 @@ export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
 
-  // ── TAILLE AJUSTABLE DU CHAMP DE SAISIE ──
   const DEFAULT_INPUT_HEIGHT = 112;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
 
@@ -120,7 +115,6 @@ export default function Home() {
     setInputHeight(DEFAULT_INPUT_HEIGHT);
   };
 
-  // ── COLONNES GAUCHE/DROITE REDIMENSIONNABLES À LA SOURIS ──
   const [leftPanelWidth, setLeftPanelWidth] = useState(220);
   const [rightPanelWidth, setRightPanelWidth] = useState(272);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -188,15 +182,12 @@ export default function Home() {
   const [userTier, setUserTier] = useState<UserTier>("connected_free");
   const [echoState, setEchoState] = useState("idle");
 
-  // ── CONFIGURATION DES COMPTEURS & MENUS DROPDOWN ──
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
 
-  // ── ÉTATS POUR LA MATRIX DE BOUTONS ──
   const [selectedButtons, setSelectedButtons] = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
 
-  // Dictionnaire de secours multilingue local pour les libellés des boutons comportementaux
   const localButtonsLabels: Record<"fr" | "en", Record<string, string>> = {
     fr: {
       clarity: "1🧠 Clarté",
@@ -310,7 +301,6 @@ export default function Home() {
           setUserTier("connected_free");
         }
 
-        // ── SYNC DE L'ONBOARDING TUTORIEL ──
         const isTutoDone = localStorage.getItem("echo-tuto-done-v1");
         if (!isTutoDone) {
           setTutorialStep(1);
@@ -461,7 +451,8 @@ export default function Home() {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-      const response = await fetch(`${API_URL}/chat`, {
+      // ── ALIGNEMENT SUR LA ROUTE CASCADE DÉDIÉE À LA PAGE ACCUEIL ──
+      const response = await fetch(`${API_URL}/home`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -626,7 +617,6 @@ export default function Home() {
     return lang === "fr" ? `Dans ${d} jours` : `In ${d} days`;
   };
 
-  // Fermer le menu lors du clic à l'extérieur
   useEffect(() => {
     const handleOutsideClick = () => setIsSettingsOpen(false);
     if (isSettingsOpen) {
@@ -664,7 +654,6 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* ── POIGNÉE DE REDIMENSIONNEMENT GAUCHE (DESKTOP UNIQUEMENT) ── */}
         <div
           onMouseDown={startPanelResize("left")}
           className="hidden lg:flex w-2.5 shrink-0 cursor-col-resize items-center justify-center group"
@@ -676,7 +665,6 @@ export default function Home() {
 
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
             
-            {/* ── INTERFACE 10 BOUTONS MATRIX (AVEC SYNC DU DICTIONNAIRE MULTILINGUE) ── */}
             <div className="w-full max-w-4xl mx-auto bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 w-full">
                 {buttonsData.map((btn) => {
@@ -702,7 +690,6 @@ export default function Home() {
                     }
                   }
 
-                  // Résolution dynamique du libellé selon la langue active de l'écosystème Echo
                   const currentLabel = localButtonsLabels[lang]?.[btn.id] || localButtonsLabels.fr[btn.id];
 
                   return (
@@ -727,7 +714,6 @@ export default function Home() {
                 })}
               </div>
 
-              {/* ── 📖 PAROLE D'ECHO — AVATAR EN COLONNE FIXE À GAUCHE, TEXTE À DROITE (ANTI-CHEVAUCHEMENT) ── */}
               {tutorialStep === 1 && (
                 <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-[92vw] max-w-[460px] sm:max-w-[700px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
@@ -736,7 +722,7 @@ export default function Home() {
                   <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
                     <span className="text-xl">✨</span>
                     <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
-                      {lang === "fr" ? "ECHO AI" : "ECHO AI"} (1/2)
+                      ECHO AI (1/2)
                     </h4>
                   </div>
 
@@ -797,24 +783,24 @@ export default function Home() {
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 mt-3 px-2">
-  {messages.length === 0 ? (
-    <div className="h-full flex flex-col items-center justify-center text-center">
-      
-      {!tutorialStep && (
-        <div className={echoState === "idle" ? "echo-idle" : echoState === "thinking" ? "echo-thinking" : "echo-speaking"}>
-          <img
-            src="/Echo.png"
-            alt="Echo Core"
-            className="w-[350px] h-[350px] object-cover rounded-full border border-zinc-200 dark:border-zinc-900 shadow-lg"
-          />
-          <span className="text-zinc-400 dark:text-zinc-600 text-[10px] block mt-4 tracking-widest uppercase font-mono">
-            System Hub Status: {echoState}
-          </span>
-        </div>
-      )}
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center">
+                  
+                  {!tutorialStep && (
+                    <div className={echoState === "idle" ? "echo-idle" : echoState === "thinking" ? "echo-thinking" : "echo-speaking"}>
+                      <img
+                        src="/Echo.png"
+                        alt="Echo Core"
+                        className="w-[350px] h-[350px] object-cover rounded-full border border-zinc-200 dark:border-zinc-900 shadow-lg"
+                      />
+                      <span className="text-zinc-400 dark:text-zinc-600 text-[10px] block mt-4 tracking-widest uppercase font-mono">
+                        System Hub Status: {echoState}
+                      </span>
+                    </div>
+                  )}
 
-    </div>
-  ) : (
+                </div>
+              ) : (
                 <div className="max-w-4xl mx-auto py-4 flex flex-col gap-10 min-w-0">
                   {messages.map((msg, index) => {
                     const isEcho = /^Echo\s*:/i.test(msg.raw);
@@ -905,6 +891,7 @@ export default function Home() {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onPaste={handlePaste}
+                    onFocus={shrinkInput}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
                     placeholder={t.chat.placeholder}
                   />
@@ -969,7 +956,6 @@ export default function Home() {
             </div>
           </section>
 
-          {/* ── POIGNÉE DE REDIMENSIONNEMENT DROITE (DESKTOP UNIQUEMENT) ── */}
           <div
             onMouseDown={startPanelResize("right")}
             className="hidden lg:flex w-2.5 shrink-0 cursor-col-resize items-center justify-center group"
@@ -981,7 +967,6 @@ export default function Home() {
             style={isDesktop ? { width: rightPanelWidth, flexBasis: rightPanelWidth } : undefined}
             className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
 
-            {/* ── ⚙️ BARRE PARAMÈTRES, INTÉGRÉE EN HAUT DE LA COLONNE (PLUS DE FLOTTEMENT ABSOLU) ── */}
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0" onClick={(e) => e.stopPropagation()}>
               <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold">Hub</span>
               <div className="relative">
@@ -1016,7 +1001,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* ── 📖 POP-OVER ÉTAPE 2 : EXPLICATION DES PARAMÈTRES ── */}
                 {tutorialStep === 2 && (
                   <div className="absolute right-0 top-10 w-72 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
                     <div className="absolute -top-2.5 right-6 w-4 h-4 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />

@@ -17,10 +17,6 @@ type ChatMessage = {
   imageB64?: string;  // miniature base64 si message user avec image
 };
 
-// Normalise toute ancienne valeur de tier stockée localement vers le nouveau schéma.
-// L'ancien tier "free" (Gemini gratuit, cause du bug de quota) n'existe plus :
-// tout le monde est désormais routé sur une clé payante, "connected_free" étant
-// le palier d'entrée gratuit pour l'utilisateur mais payant côté infra.
 const normalizeTier = (raw: string | null): UserTier => {
   if (!raw) return "connected_free";
   const cleaned = raw.toLowerCase().trim();
@@ -49,10 +45,8 @@ export default function ChatPage() {
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality" | "calendar" | "prompts" | "surprise">("vitality");
 
-  // ── ÉTAT POUR LE FIL NARRATIF DU TUTORIEL (CHAPITRE 2) ──
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
 
-  // ── TAILLE AJUSTABLE DU CHAMP DE SAISIE ──
   const DEFAULT_INPUT_HEIGHT = 200;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
 
@@ -69,12 +63,10 @@ export default function ChatPage() {
     setInputHeight(DEFAULT_INPUT_HEIGHT);
   };
 
-  // ── ÉTATS POUR LA MATRIX DE BOUTONS ──
   const [selectedButtons, setSelectedButtons] = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
   const isMatrixLockedBySurprise = false;
 
-  // ── ÉTATS DÉDIÉS AU BOUTON SURPRISE / ÉMERGENCE ──
   const [isSurpriseActive, setIsSurpriseActive] = useState(false);
   const [isPressingSurprise, setIsPressingSurprise] = useState(false);
 
@@ -292,7 +284,6 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!input.trim() && !selectedImage) return;
 
-    // Protection des quotas de discussion (200/mois pour connected_free, etc.)
     const quotaStatus = checkQuota("prompts", userTier);
     if (!quotaStatus.allowed) {
       const lockMessage = lang === "fr"
@@ -329,6 +320,7 @@ export default function ChatPage() {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
+      // ── ROUTAGE SUR L'ENDPOINT STANDARD /CHAT POUR LA PAGE DISCUSSION ──
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

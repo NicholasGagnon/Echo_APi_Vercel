@@ -2,12 +2,19 @@ export type UserTier = "connected_free" | "basic" | "premium" | "ultra" | "found
 
 /**
  * Retourne la limite stricte de caractères par message selon le forfait.
- * Connected_free = 1000, Basic = 10000, Premium/Ultra/Founder = 20000
  */
 export const getMessageMaxLength = (tier: UserTier): number => {
   if (tier === "connected_free") return 1000;
   if (tier === "basic") return 10000;
   return 20000;
+};
+
+/**
+ * Vérifie si le tier permet l'accès à une fonctionnalité premium minimum.
+ * Utilisé pour bloquer : History, bouton Surprise / Émergence.
+ */
+export const isPremiumOrAbove = (tier: UserTier): boolean => {
+  return tier === "premium" || tier === "ultra" || tier === "founder";
 };
 
 interface QuotaResult {
@@ -19,50 +26,56 @@ interface QuotaResult {
 
 /**
  * Vérifie et gère les quotas d'utilisation de l'écosystème Echo.
- * @param actionType La catégorie de l'action ('vitality' | 'calendar' | 'prompts')
- * @param tier Le forfait actuel de l'utilisateur
- * @param consume Si TRUE, déduit un crédit du quota. Si FALSE, effectue une simple lecture (ReadOnly).
+ *
+ * @param actionType
+ *   'prompts'  — messages envoyés à Echo (chat, home, books...)
+ *   'buttons'  — utilisations des boutons comportementaux (clarity, expert, ideas, creative...)
+ *   'calendar' — actions calendrier automatisées
+ *   'vitality' — actions budget / calories automatisées
+ *
+ * @param tier     Le forfait actuel de l'utilisateur
+ * @param consume  Si TRUE, déduit un crédit. Si FALSE, lecture seule (ReadOnly).
  */
 export const checkQuota = (
-  actionType: 'vitality' | 'calendar' | 'prompts', 
+  actionType: "prompts" | "buttons" | "calendar" | "vitality",
   tier: UserTier,
   consume = true
 ): QuotaResult => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return { allowed: true, remaining: 1, current: 0, max: 1 };
   }
 
-  const trackerRaw = localStorage.getItem('echo-usage-tracker');
-  let tracker = JSON.parse(trackerRaw || '{}');
+  const trackerRaw = localStorage.getItem("echo-usage-tracker");
+  let tracker = JSON.parse(trackerRaw || "{}");
   const now = Date.now();
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
-  // ── 📅 SYNCHRONISATION DU CYCLE UNIQUE DE 30 JOURS ──
-  if (!tracker.cycleStartTime || (now - tracker.cycleStartTime > THIRTY_DAYS)) {
+  // ── Réinitialisation du cycle de 30 jours ──
+  if (!tracker.cycleStartTime || now - tracker.cycleStartTime > THIRTY_DAYS) {
     tracker = {
       cycleStartTime: now,
-      prompts: { count: 0 },
+      prompts:  { count: 0 },
+      buttons:  { count: 0 },
       calendar: { count: 0 },
-      vitality: { count: 0 }
+      vitality: { count: 0 },
     };
   }
 
-  // Sécurité si une sous-structure de catégorie est absente dans le localStorage
   if (!tracker[actionType]) {
     tracker[actionType] = { count: 0 };
   }
 
-  // ── 📊 CONFIGURATION DES LIMITES (BARÈME DE PROGRESSION STRICT) ──
-  const limits: Record<UserTier, Record<'vitality' | 'calendar' | 'prompts', number>> = {
-    connected_free: { vitality: 10, calendar: 5, prompts: 200 },  // Connected_free fixe à 200 prompts
-    basic:          { vitality: 40, calendar: 20, prompts: 2000 }, // Basic monte à 2000 prompts
-    premium:        { vitality: 100, calendar: 50, prompts: 99999 }, // Illimité / Ouverture complète
-    ultra:          { vitality: 300, calendar: 150, prompts: 99999 }, // Illimité
-    founder:        { vitality: 9999, calendar: 9999, prompts: 99999 } // Illimité
+  // ── Barème par catégorie et par tier ──
+  const limits: Record<UserTier, Record<"prompts" | "buttons" | "calendar" | "vitality", number>> = {
+    //                prompts   buttons  calendar  vitality
+    connected_free: { prompts: 200,   buttons: 8,    calendar: 4,    vitality: 10   },
+    basic:          { prompts: 2000,  buttons: 32,   calendar: 12,   vitality: 40   },
+    premium:        { prompts: 99999, buttons: 80,   calendar: 40,   vitality: 100  },
+    ultra:          { prompts: 99999, buttons: 240,  calendar: 120,  vitality: 300  },
+    founder:        { prompts: 99999, buttons: 99999,calendar: 99999,vitality: 99999},
   };
 
-  const limitConfig = limits[tier] || limits.connected_free;
-  const maxAllowed = limitConfig[actionType];
+  const maxAllowed   = limits[tier]?.[actionType] ?? limits.connected_free[actionType];
   const currentCount = tracker[actionType].count ?? 0;
 
   if (currentCount >= maxAllowed) {
@@ -72,17 +85,17 @@ export const checkQuota = (
 
   if (consume) {
     tracker[actionType].count = currentCount + 1;
-    localStorage.setItem('echo-usage-tracker', JSON.stringify(tracker));
-    console.log(`✅ [QUOTA CONSUMED] ${actionType} incrémenté : ${tracker[actionType].count}/${maxAllowed}`);
+    localStorage.setItem("echo-usage-tracker", JSON.stringify(tracker));
+    console.log(`✅ [QUOTA CONSUMED] ${actionType} : ${tracker[actionType].count}/${maxAllowed}`);
   } else {
-    console.log(`🔍 [QUOTA READ-ONLY] ${actionType} vérifié : ${currentCount}/${maxAllowed}`);
+    console.log(`🔍 [QUOTA READ-ONLY] ${actionType} : ${currentCount}/${maxAllowed}`);
   }
 
   const finalCount = consume ? currentCount + 1 : currentCount;
-  return { 
-    allowed: true, 
+  return {
+    allowed: true,
     remaining: maxAllowed - finalCount,
     current: finalCount,
-    max: maxAllowed
+    max: maxAllowed,
   };
 };
