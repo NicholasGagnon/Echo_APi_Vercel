@@ -176,7 +176,6 @@ export default function BooksPage() {
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
-      // 🎯 Configuration pour injecter proprement les sizes inline de tes boutons
       TextStyle.extend({
         addAttributes() {
           return {
