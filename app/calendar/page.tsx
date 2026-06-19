@@ -487,7 +487,7 @@ export default function CalendarPage() {
     const tempId = Date.now().toString();
     const ev: EventData = { id: tempId, title, start, end, notes };
 
-    // 1. Afficher immédiatement dans l'UI (optimistic)
+    // 1. Affichage optimiste immédiat dans l'UI
     setEvents(prev => ({ ...prev, [selectedDateKey]: [...(prev[selectedDateKey] || []), ev] }));
     setShowAddForm(false);
     resetForm();
@@ -495,34 +495,39 @@ export default function CalendarPage() {
     if (!userId) return;
 
     try {
-      // 2. Push vers Google Calendar (optionnel — peut retourner null si pas de token)
+      // 2. Push vers Google Calendar (peut retourner null si pas de token)
       const cloudId = await pushEventToGoogle(selectedDateKey, ev);
-      const finalId = cloudId || tempId;
 
-      // 3. Sauvegarder dans Supabase echo_calendar
-      const { error: supaErr } = await supabase.from("echo_calendar").insert({
-        id:              finalId,
-        user_id:         userId,
-        title:           title,
-        start_date:      selectedDateKey,
-        end_date:        selectedDateKey,
-        notes:           notes,
-        is_from_echo_bot: false,
-      });
+      // 3. Insert dans Supabase — on ne force PAS le champ id (c'est un UUID auto-généré).
+      //    PostgreSQL rejette toute valeur qui n'est pas un UUID valide (timestamp, Google ID, etc.)
+      const { data: insertedRow, error: supaErr } = await supabase
+        .from("echo_calendar")
+        .insert({
+          user_id:          userId,
+          title:            title,
+          start_date:       selectedDateKey,
+          end_date:         selectedDateKey,
+          notes:            notes,
+          is_from_echo_bot: false,
+        })
+        .select()
+        .single();
+
       if (supaErr) {
-        console.error("[Calendar] Supabase insert error:", supaErr.message);
+        console.error("[Calendar] ❌ Supabase insert error:", supaErr.message, supaErr.details);
       } else {
-        console.log("[Calendar] ✅ Événement sauvé dans Supabase:", finalId);
-      }
+        console.log("[Calendar] ✅ Événement sauvé dans Supabase UUID:", insertedRow?.id);
 
-      // 4. Si Google a assigné un ID différent, mettre à jour l'UI avec le vrai ID
-      if (cloudId) {
+        // Mettre à jour l'UI avec l'UUID Supabase (et le Google ID si dispo)
+        const supaId = insertedRow?.id ?? tempId;
         setEvents(prev => {
           const dayEvs = prev[selectedDateKey] || [];
           return {
             ...prev,
             [selectedDateKey]: dayEvs.map(e =>
-              e.id === tempId ? { ...e, id: cloudId, googleEventId: cloudId } : e
+              e.id === tempId
+                ? { ...e, id: supaId, googleEventId: cloudId || undefined }
+                : e
             ),
           };
         });
@@ -536,14 +541,26 @@ export default function CalendarPage() {
     // Supprimer de Google
     if (googleId) await deleteFromGoogle(googleId);
 
-    // Supprimer de Supabase
+    // Supprimer de Supabase — chercher par user_id + title + start_date si l'id est un tempId local
     if (userId) {
       const { error } = await supabase
         .from("echo_calendar")
         .delete()
-        .eq("id", id)
-        .eq("user_id", userId);
-      if (error) console.error("[Calendar] Supabase delete error:", error.message);
+        .eq("user_id", userId)
+        .eq("id", id);
+      if (error) {
+        console.warn("[Calendar] Supabase delete by id failed, trying by title+date:", error.message);
+        // Fallback: supprimer par titre + date si l'id est un tempId (non-UUID)
+        const targetEv = (events[dateKey] || []).find(e => e.id === id);
+        if (targetEv) {
+          await supabase
+            .from("echo_calendar")
+            .delete()
+            .eq("user_id", userId)
+            .eq("title", targetEv.title)
+            .eq("start_date", dateKey);
+        }
+      }
     }
 
     // Supprimer de l'UI

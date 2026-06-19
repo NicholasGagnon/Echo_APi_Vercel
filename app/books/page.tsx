@@ -824,9 +824,9 @@ export default function BooksPage() {
             </div>
           )}
 
-          {/* Editor area — background = eauplante.png */}
+          {/* Editor area — background = eauplante2.png */}
           <div className="flex-1 overflow-hidden min-h-0 relative"
-            style={{ backgroundImage:"url('/eauplante.png')", backgroundSize:"cover", backgroundPosition:"center" }}>
+            style={{ backgroundImage:"url('/eauplante2.png')", backgroundSize:"cover", backgroundPosition:"center" }}>
 
             {/* Overlay */}
             <div className="absolute inset-0 bg-black/50 pointer-events-none z-0" />
