@@ -59,7 +59,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     opacity:"Page opacity", editorBg:"Editor bg", paraIndentLbl:"First-line indent",
     struct:"struct", text:"text", pages:"pages", police:"size",
     media:"media", livre:"book", presets:"presets",
-    t1:"Title 1", t2:"Title 2", t3:"Title 3", normal:"Normal text",
+    t1:"Title 1", text:"text", t3:"Title 3", normal:"Normal text",
     bold:"Bold", italic:"Italic", indent:"Indent",
     pageBreak:"Page break", toc:"TOC",
     smaller:"Smaller", larger:"Larger",
@@ -72,7 +72,6 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     noContent:"No content yet.", titleHint:"Double-click to edit",
     prevChapter:"Previous", nextChapter:"Next", closePres:"Close",
     serverErr:"Cannot reach the server.",
-    presetPrint:"📖 Print", presetKindle:"📱 Kindle", presetCustom:"⚙️ Custom",
     printPreset:"Print book: mirror margins, page numbers, header/footer, justified, indent",
     kindlePreset:"Kindle/EPUB: no mirror margins, no pagination, no header/footer",
     customPreset:"Manual settings — opens the settings panel",
@@ -84,7 +83,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
 const ECHO_MODES: { id: EchoMode; key: "creative"|"ideas"|"critical"; emoji: string; system: string }[] = [
   { id:"creative", key:"creative", emoji:"✍️", system:"Tu es en mode Créatif pour l'écriture. Aide avec imagination, métaphores et suggestions stylistiques originales." },
   { id:"ideas",    key:"ideas",    emoji:"💡", system:"Tu es en mode Idées. Génère des pistes narratives, rebondissements, personnages ou thèmes à explorer." },
-  { id:"critical", key:"critical", emoji:"🔍", system:"Tu es en mode Critique. Analyse le texte avec rigueur : rythme, cohérence, clarté, redondances." },
+  { id:"critical", key:"critical", emoji:"🔍", system:"Tu es en mode Critique. Analyse le texte avec rigueur : rythme, coherence, clarte, redondances." },
 ];
 
 // ── WATER GLYPHS ───────────────────────────────────────────────────────────────
@@ -192,7 +191,7 @@ export default function BooksPage() {
   const [isJustified,      setIsJustified]     = useState(true);
   const [paraSpacing,      setParaSpacing]     = useState(0.75);
   const [showSettings,     setShowSettings]    = useState(true);
-  const [paraIndent,       setParaIndent]      = useState(false);
+  const [paraIndent,      setParaIndent]      = useState(false);
   const [activePreset,     setActivePreset]    = useState<"print"|"kindle"|"custom"|null>(null);
   const [pageOpacity, setPageOpacity] = useState(95);
 
@@ -292,7 +291,7 @@ export default function BooksPage() {
   const toggleJustify= () => { execCmd(isJustified ? "justifyLeft" : "justifyFull"); setIsJustified(v => !v); };
   const applyIndent  = () => execCmd("indent");
 
-  // ── STRUCTURAL MONOLITH INSERTS ────────────────────────────────────────────────
+  // ── STRUCTURAL MONOLITH INSERTS (🎯 CORRIGÉS POUR UTILLISER LES CLASSES CSS NETTES) ──
   const insertBlockAtRoot = (html: string) => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -527,7 +526,6 @@ export default function BooksPage() {
     backgroundColor: `rgba(${theme==="dark"?"9,9,11":"255,255,255"},${pageOpacity/100})`,
   };
 
-  // ── PRESENTATION / READING INTERFACE ──────────────────────────────────────────
   if (view === "present") {
     return (
       <div className="fixed inset-0 bg-black flex flex-col z-50">
@@ -683,7 +681,7 @@ export default function BooksPage() {
           </div>
         </div>
 
-        {/* EDITOR MOUNT ZONE */}
+        {/* EDITOR ZONE */}
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="h-9 shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center px-3 gap-2">
             {(["edit","preview","present"] as BookView[]).map(v => (
@@ -954,7 +952,7 @@ export default function BooksPage() {
       <input ref={imgInputRef}   type="file" accept="image/*"            onChange={handleImgFile}    className="hidden" />
       <input ref={importJsonRef} type="file" accept=".json"              onChange={handleImportJson} className="hidden" />
 
-      {/* ── DESIGN CHIRURGICAL ET NETTOYAGE DES ESPACES (ECHO MATRIX EDITION) ── */}
+      {/* ── DESIGN CHIRURGICAL ET ASSURANCE DE MAILLAGE DES COMPOSANTS STRATE ── */}
       <style>{`
         .books-editor:empty:before {
           content: attr(data-placeholder);
@@ -971,7 +969,7 @@ export default function BooksPage() {
           text-indent: ${paraIndent ? "1.5em" : "0"};
         }
 
-        /* Nettoyage des titres pour éviter qu'ils ne se collent */
+        /* Empêche le rapprochement des titres */
         .books-editor h1, .books-preview h1, .books-present h1 {
           font-size: 1.6em;
           font-weight: 700;
@@ -997,51 +995,51 @@ export default function BooksPage() {
           color: rgba(6,182,212,.6);
         }
 
-        /* Isolation et étalement des blocs monolithiques (Sauts de page et Injections) */
+        /* 🎯 APPLIQUÉ AUX CLASSES SÉMANTIQUES RÉELLES DE L'INSERTEUR */
         .echo-page-break-block {
           display: block !important;
           clear: both !important;
-          user-select: none;
-          -webkit-user-select: none;
+          user-select: none !important;
+          -webkit-user-select: none !important;
           border-top: 1px dashed rgba(6,182,212,0.35) !important;
-          margin-top: 3rem !important;
-          margin-bottom: 3rem !important;
-          text-align: center;
-          font-size: 9px;
-          color: rgba(6,182,212,0.6);
-          letter-spacing: 0.25em;
-          padding-top: 12px !important;
-          cursor: default;
+          margin-top: 3.5rem !important;
+          margin-bottom: 3.5rem !important;
+          text-align: center !important;
+          font-size: 10px !important;
+          color: rgba(6,182,212,0.6) !important;
+          letter-spacing: 0.3em !important;
+          padding-top: 16px !important;
+          cursor: default !important;
         }
 
         .echo-injection-block {
           display: block !important;
           clear: both !important;
-          user-select: none;
-          -webkit-user-select: none;
+          user-select: none !important;
+          -webkit-user-select: none !important;
           margin-top: 4rem !important;
-          margin-bottom: 2rem !important;
+          margin-bottom: 3rem !important;
           padding-top: 1.5rem !important;
           border-top: 1px solid rgba(6,182,212,0.25) !important;
-          font-size: 9px;
-          color: rgba(6,182,212,0.55);
-          text-align: center;
-          letter-spacing: 0.2em;
-          cursor: default;
+          font-size: 10px !important;
+          color: rgba(6,182,212,0.55) !important;
+          text-align: center !important;
+          letter-spacing: 0.25em !important;
+          cursor: default !important;
         }
 
         .echo-toc-block {
           display: block !important;
           clear: both !important;
-          user-select: none;
-          -webkit-user-select: none;
+          user-select: none !important;
+          -webkit-user-select: none !important;
           border: 1px dashed rgba(6,182,212,0.25) !important;
-          padding: 16px !important;
-          border-radius: 6px;
-          margin-top: 2rem !important;
-          margin-bottom: 2rem !important;
-          cursor: default;
-          background: rgba(6, 182, 212, 0.02);
+          padding: 18px !important;
+          border-radius: 6px !important;
+          margin-top: 2.5rem !important;
+          margin-bottom: 2.5rem !important;
+          cursor: default !important;
+          background: rgba(6, 182, 212, 0.02) !important;
         }
 
         .books-editor img, .books-preview img {
@@ -1055,7 +1053,6 @@ export default function BooksPage() {
           outline: none;
         }
 
-        /* Empêche les sauts de lignes sauvages d'annuler la hauteur de ligne */
         .books-editor div {
           min-height: 1.4em;
         }
