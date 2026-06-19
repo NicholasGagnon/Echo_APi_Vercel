@@ -824,22 +824,6 @@ export default function AccountPage() {
                       <li>Sur l'écran final de consentement, <span className="text-emerald-500 font-bold">cochez impérativement toutes les cases d'autorisations</span> requises pour la lecture, la création et la modification de vos événements d'agenda, puis confirmez la validation.</li>
                     </ol>
                   </div>
-
-                  {/* 🌐 AJOUT DU VRAI GUIDE AVEC LIEN HYPERTEXTE GOOGLE */}
-                  <div className="border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 p-4 rounded-xl text-xs flex items-start gap-3 shadow-inner">
-                    <span className="text-cyan-500 text-sm mt-0.5">ℹ️</span>
-                    <div>
-                     
-                      <a 
-                        href="https://support.google.com/cloud/answer/7454865" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="text-cyan-600 dark:text-cyan-400 font-bold underline mt-1.5 inline-block hover:text-cyan-500 transition-colors"
-                      >
-                        Documentation Google Cloud - Applications non validées ➔
-                      </a>
-                    </div>
-                  </div>
                 </>
               ) : (
                 <>
@@ -856,24 +840,6 @@ export default function AccountPage() {
                       <li>A hidden drawer node will open: click the routing bypass anchor <span className="underline text-red-500 font-black">"Go to echosai.ca (unsafe)"</span> to bind authorization arrays.</li>
                       <li>On the final consent view, <span className="text-emerald-500 font-bold">you must explicitly check every parameter checkbox</span> to read, write, and patch calendar events before confirming your entry.</li>
                     </ol>
-                  </div>
-
-                  {/* 🌐 TRUE SUPPORT GUIDE FOR ENGLISH USERS */}
-                  <div className="border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 p-4 rounded-xl text-xs flex items-start gap-3 shadow-inner">
-                    <span className="text-cyan-500 text-sm mt-0.5">ℹ️</span>
-                    <div>
-                      <p className="text-zinc-500 dark:text-zinc-400 font-medium">
-                        Need additional guidance? You can read Google's official cloud security framework detailing unverified app authorization and firewall warnings:
-                      </p>
-                      <a 
-                        href="https://support.google.com/cloud/answer/7454865" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="text-cyan-600 dark:text-cyan-400 font-bold underline mt-1.5 inline-block hover:text-cyan-500 transition-colors"
-                      >
-                        Google Cloud Documentation - Unverified Apps Guide ➔
-                      </a>
-                    </div>
                   </div>
                 </>
               )}

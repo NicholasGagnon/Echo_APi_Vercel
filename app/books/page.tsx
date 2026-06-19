@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useApp } from "../../context/AppContext";
+import LangDropdown from "../components/LangDropdown";
 
 // ── TYPES ──────────────────────────────────────────────────────────────────────
 type EchoMode = "creative" | "ideas" | "critical";
@@ -20,7 +21,6 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     saved:"Sauvegardé", saving:"Sauvegarde...", unsaved:"Non sauvegardé",
     save:"Sauv.", inject:"Injection", newChapter:"Nouveau chapitre",
     settings:"Paramètres", lightMode:"☀️ Mode Clair", darkMode:"🌙 Mode Sombre",
-    lang:"Langue",
     mirror:"Miroir", pageNum:"N° pages", header:"Header", footer:"Footer",
     justify:"Justifié", lineH:"Interligne", para:"Para", font:"Police",
     opacity:"Opacité page", editorBg:"Fond éditeur", paraIndentLbl:"Alinéa 1ère ligne",
@@ -51,7 +51,6 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     saved:"Saved", saving:"Saving...", unsaved:"Unsaved",
     save:"Save", inject:"Inject", newChapter:"New chapter",
     settings:"Settings", lightMode:"☀️ Light Mode", darkMode:"🌙 Dark Mode",
-    lang:"Language",
     mirror:"Mirror", pageNum:"Page #", header:"Header", footer:"Footer",
     justify:"Justify", lineH:"Line-h", para:"Para", font:"Font",
     opacity:"Page opacity", editorBg:"Editor bg", paraIndentLbl:"First-line indent",
@@ -677,13 +676,8 @@ export default function BooksPage() {
                     {theme==="dark" ? T.lightMode : T.darkMode}
                   </button>
                   {/* Changement de langue */}
-                  <div className="px-2 py-1.5 flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">{T.lang} :</span>
-                    <button
-                      onClick={() => { /* toggle lang via AppContext */ }}
-                      className="text-[10px] px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400 font-mono transition-all">
-                      {fr ? "🇫🇷 FR → EN" : "🇬🇧 EN → FR"}
-                    </button>
+                  <div className="px-2 py-1.5">
+                    <LangDropdown />
                   </div>
                 </div>
               )}
