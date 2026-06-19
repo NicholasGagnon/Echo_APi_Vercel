@@ -492,48 +492,56 @@ export default function CalendarPage() {
     setShowAddForm(false);
     resetForm();
 
-    if (!userId) return;
+    if (!userId) {
+      console.error("❌ Impossible d'enregistrer : userId est null ou introuvable.");
+      alert("Erreur : Tu ne sembles pas connecté (userId introuvable).");
+      return;
+    }
 
     try {
-      // 2. Push vers Google Calendar (peut retourner null si pas de token)
+      // 2. Push vers Google Calendar (optionnel)
       const cloudId = await pushEventToGoogle(selectedDateKey, ev);
+      const finalId = cloudId || tempId;
 
-      // 3. Insert dans Supabase — on ne force PAS le champ id (c'est un UUID auto-généré).
-      //    PostgreSQL rejette toute valeur qui n'est pas un UUID valide (timestamp, Google ID, etc.)
-      const { data: insertedRow, error: supaErr } = await supabase
+      console.log("🚀 Tentative d'insert Supabase — ID:", finalId, " | User:", userId);
+
+      // 3. Sauvegarder dans Supabase avec capture de l'erreur brute
+      const { data, error: supaErr } = await supabase
         .from("echo_calendar")
         .insert({
-          user_id:          userId,
-          title:            title,
-          start_date:       selectedDateKey,
-          end_date:         selectedDateKey,
-          notes:            notes,
+          id:              finalId,
+          user_id:         userId,
+          title:           title,
+          start_date:      selectedDateKey,
+          end_date:        selectedDateKey,
+          notes:           notes,
           is_from_echo_bot: false,
         })
-        .select()
-        .single();
+        .select();
 
+      // ── LE MOMENT DE VÉRITÉ ──
       if (supaErr) {
-        console.error("[Calendar] ❌ Supabase insert error:", supaErr.message, supaErr.details);
+        console.error("🚨 [SUPABASE ERR LOG] :", supaErr);
+        // Cette alerte va te dire EXACTEMENT pourquoi ça bloque
+        alert(`Erreur Supabase :\nMessage: ${supaErr.message}\nCode: ${supaErr.code}\nDétail: ${supaErr.details || 'Aucun'}`);
       } else {
-        console.log("[Calendar] ✅ Événement sauvé dans Supabase UUID:", insertedRow?.id);
+        console.log("✅ [SUPABASE SUCCESS] Row créée avec succès :", data);
+      }
 
-        // Mettre à jour l'UI avec l'UUID Supabase (et le Google ID si dispo)
-        const supaId = insertedRow?.id ?? tempId;
+      // 4. Si Google a renvoyé un ID, on met à jour l'UI locale
+      if (cloudId) {
         setEvents(prev => {
           const dayEvs = prev[selectedDateKey] || [];
           return {
             ...prev,
             [selectedDateKey]: dayEvs.map(e =>
-              e.id === tempId
-                ? { ...e, id: supaId, googleEventId: cloudId || undefined }
-                : e
+              e.id === tempId ? { ...e, id: cloudId, googleEventId: cloudId } : e
             ),
           };
         });
       }
     } catch (err) {
-      console.error("[Calendar] saveEvent error:", err);
+      console.error("💥 Erreur d'exécution JS dans saveEvent :", err);
     }
   };
 
