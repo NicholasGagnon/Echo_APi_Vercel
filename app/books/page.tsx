@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useApp } from "../../context/AppContext";
 import LangDropdown from "../components/LangDropdown";
 
-// ── IMPORTATIONS TIPTAP ────────────────────────────────────────────────────────
+// ── IMPORTATIONS TIPTAP NETTOYÉES ET SANS DOUBLONS ─────────────────────────────
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -172,10 +172,24 @@ export default function BooksPage() {
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
       }),
-      TextStyle,
       FontFamily,
       TextAlign.configure({
         types: ["heading", "paragraph"],
+      }),
+      // 🎯 Configuration pour injecter proprement les sizes inline de tes boutons
+      TextStyle.extend({
+        addAttributes() {
+          return {
+            fontSize: {
+              default: null,
+              parseHTML: element => element.style.fontSize,
+              renderHTML: attributes => {
+                if (!attributes.fontSize) return {};
+                return { style: `font-size: ${attributes.fontSize}` };
+              },
+            },
+          };
+        },
       }),
     ],
     content: "",
@@ -284,7 +298,7 @@ export default function BooksPage() {
   const toggleBold   = () => editor?.commands.toggleBold();
   const toggleItalic = () => editor?.commands.toggleItalic();
   const toggleJustify= () => setIsJustified(v => !v);
-  const applyIndent  = () => editor?.commands.sinkListItem("listItem"); // Pour la compatibilité structurelle
+  const applyIndent  = () => editor?.commands.sinkListItem("listItem");
 
   const toggleInvisibleChars = () => {
     setShowInvisibleChars(!showInvisibleChars);
@@ -387,6 +401,12 @@ export default function BooksPage() {
       downloadText(buildHTML(fmt), `${slug}.${ext}`, "text/html");
     }
   };
+
+  // ── SYNCHRONISATION TAILLE POLICE AVEC LA MARQUE TEXTSTYLE TIPTAP ───────────────
+  useEffect(() => {
+    if (!editor) return;
+    editor.commands.setMark('textStyle', { fontSize: `${fontSize}px` });
+  }, [fontSize, editor]);
 
   // ── ECHO STREAM LOGIC ─────────────────────────────────────────────────────────
   const [echoMode,     setEchoMode]     = useState<EchoMode>("creative");
@@ -568,10 +588,10 @@ export default function BooksPage() {
           <div className="px-2 pb-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.struct}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="T¹" label={T.t1} onClick={() => editor?.commands.setHeading({ level: 1 })} />
-              <TB icon="T²" label={T.t2} onClick={() => editor?.commands.setHeading({ level: 2 })} />
-              <TB icon="T³" label={T.t3} onClick={() => editor?.commands.setHeading({ level: 3 })} />
-              <TB icon="¶"  label={T.normal} onClick={() => editor?.commands.setParagraph()} />
+              <button onClick={() => editor?.commands.setHeading({ level: 1 })} className="p-1 text-xs border border-transparent hover:bg-zinc-800 rounded">T¹</button>
+              <button onClick={() => editor?.commands.setHeading({ level: 2 })} className="p-1 text-xs border border-transparent hover:bg-zinc-800 rounded">T²</button>
+              <button onClick={() => editor?.commands.setHeading({ level: 3 })} className="p-1 text-xs border border-transparent hover:bg-zinc-800 rounded">T³</button>
+              <button onClick={() => editor?.commands.setParagraph()} className="p-1 text-xs border border-transparent hover:bg-zinc-800 rounded">¶</button>
             </div>
           </div>
 
@@ -916,14 +936,12 @@ export default function BooksPage() {
 
       {/* ── DESIGN CHIRURGICAL ET STRUCTURE DE RENDU TIPTAP ── */}
       <style>{`
-        /* Style global du traitement de texte Tiptap */
         .books-editor-tiptap .ProseMirror {
           min-height: 400px;
           outline: none;
           color: inherit;
         }
 
-        /* Gestion de l'interligne et espacement des paragraphes réels */
         .books-editor-tiptap .ProseMirror p, .books-preview p, .books-present p {
           margin-top: 0 !important;
           margin-bottom: ${paraSpacing}em !important;
@@ -931,7 +949,6 @@ export default function BooksPage() {
           text-indent: ${paraIndent ? "1.5em" : "0"};
         }
 
-        /* Injection visuelle des marques invisibles Word (¶) sans toucher au HTML */
         .echo-editor-show-symbols .ProseMirror p:after {
           content: " ¶" !important;
           color: rgba(6, 182, 212, 0.35) !important;
@@ -940,7 +957,6 @@ export default function BooksPage() {
           font-family: monospace !important;
         }
 
-        /* Encapsulation propre des titres */
         .books-editor-tiptap .ProseMirror h1, .books-preview h1 {
           font-size: 1.6em;
           font-weight: 700;
@@ -958,7 +974,6 @@ export default function BooksPage() {
           color: rgb(6,182,212);
         }
 
-        /* Blocs personnalisés insérés par Echo */
         .echo-injection-block {
           user-select: none;
           -webkit-user-select: none;
