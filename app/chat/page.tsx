@@ -17,6 +17,13 @@ type ChatMessage = {
   imageB64?: string;  // miniature base64 si message user avec image
 };
 
+type Conversation = {
+  id: string;
+  title: string;
+  messages: string[];
+  updatedAt: number;
+};
+
 const normalizeTier = (raw: string | null): UserTier => {
   if (!raw) return "connected_free";
   const cleaned = raw.toLowerCase().trim();
@@ -34,6 +41,14 @@ export default function ChatPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // ── CONVERSATIONS MULTIPLES (PANNEAU À GAUCHE, REPLIABLE + REDIMENSIONNABLE) ──
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [isConvoPanelOpen, setIsConvoPanelOpen] = useState(true);
+  const [convoPanelWidth, setConvoPanelWidth] = useState(240);
+  const convoPanelRef = useRef<HTMLDivElement>(null);
+  const convoResizingRef = useRef(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastSavedLength = useRef(0);
@@ -132,6 +147,8 @@ export default function ChatPage() {
   };
 
   const getConversationKey = (uid: string | null) => uid ? `echo-conversation-v2-${uid}` : "echo-conversation-v2";
+  const getConversationsListKey = (uid: string | null) => uid ? `echo-conversations-${uid}` : "echo-conversations";
+  const getActiveConvoKey = (uid: string | null) => uid ? `echo-active-conversation-${uid}` : "echo-active-conversation";
   const getStorageKey = (uid: string) => `echo-calendar-v2-${uid}`;
   const getTierKey = (uid: string) => `echo-user-tier-${uid}`;
   const getHistoryKey = (uid: string | null) => uid ? `echo-history-${uid}` : "echo-history";
@@ -140,21 +157,62 @@ export default function ChatPage() {
   const serializeMessages = (msgs: ChatMessage[]) => msgs.map(m => m.raw);
   const deserializeMessages = (raws: string[]): ChatMessage[] => raws.map(r => ({ raw: r }));
 
+  const deriveConvoTitle = (raws: string[]): string => {
+    const firstUser = raws.find(r => /^(You|Toi)\s*:/i.test(r));
+    if (firstUser) {
+      const clean = firstUser.replace(/^(You|Toi)\s*:\s*/i, "").trim();
+      if (clean) return clean.length > 42 ? `${clean.slice(0, 42)}…` : clean;
+    }
+    return lang === "fr" ? "Nouvelle conversation" : "New conversation";
+  };
+
+  const isDefaultConvoTitle = (title: string) => title === "Nouvelle conversation" || title === "New conversation";
+
+  // Charge la liste de conversations de l'utilisateur (et migre l'ancienne
+  // conversation unique vers ce nouveau format si c'est la première fois),
+  // puis active la plus récente.
+  const loadConversationsForUser = (uid: string | null) => {
+    const listKey = getConversationsListKey(uid);
+    let list: Conversation[] = [];
+    try { list = JSON.parse(localStorage.getItem(listKey) || "[]"); } catch { list = []; }
+
+    if (list.length === 0) {
+      const legacyRaw = localStorage.getItem(getConversationKey(uid));
+      if (legacyRaw) {
+        try {
+          const raws: string[] = JSON.parse(legacyRaw);
+          if (raws.length > 0) {
+            list = [{ id: `${Date.now()}`, title: deriveConvoTitle(raws), messages: raws, updatedAt: Date.now() }];
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+    if (list.length === 0) {
+      list = [{ id: `${Date.now()}`, title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() }];
+    }
+
+    list = list.slice().sort((a, b) => b.updatedAt - a.updatedAt);
+
+    const savedActiveId = localStorage.getItem(getActiveConvoKey(uid));
+    const active = list.find(c => c.id === savedActiveId) || list[0];
+
+    setConversations(list);
+    setActiveConversationId(active.id);
+    setMessages(deserializeMessages(active.messages));
+    lastSavedLength.current = Math.floor(active.messages.join("").length / 2000) * 2000;
+
+    localStorage.setItem(listKey, JSON.stringify(list));
+    localStorage.setItem(getActiveConvoKey(uid), active.id);
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
       setUserId(uid);
       try {
-        const convoKey = getConversationKey(uid);
-        const saved = localStorage.getItem(convoKey);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          const msgs = deserializeMessages(parsed);
-          setMessages(msgs);
-          lastSavedLength.current = Math.floor(parsed.join("").length / 2000) * 2000;
-        } else {
-          setMessages([]);
-        }
+        loadConversationsForUser(uid);
+
         const savedTier = uid ? localStorage.getItem(getTierKey(uid)) : localStorage.getItem("echo-user-tier");
         setUserTier(normalizeTier(savedTier));
 
@@ -167,15 +225,16 @@ export default function ChatPage() {
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_OUT" || !session?.user) { 
-        setUserId(null); setMessages([]); setUserTier("connected_free"); return; 
+      if (event === "SIGNED_OUT" || !session?.user) {
+        setUserId(null);
+        loadConversationsForUser(null);
+        setUserTier("connected_free");
+        return;
       }
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const uid = session.user.id;
         setUserId(uid);
-        const convoKey = getConversationKey(uid);
-        const savedMessages = localStorage.getItem(convoKey);
-        setMessages(savedMessages ? deserializeMessages(JSON.parse(savedMessages)) : []);
+        loadConversationsForUser(uid);
         const savedTier = localStorage.getItem(getTierKey(uid));
         setUserTier(normalizeTier(savedTier));
       }
@@ -183,12 +242,26 @@ export default function ChatPage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  // Sauvegarde automatique : à chaque changement, on met à jour la conversation
+  // active dans la liste (titre dérivé du premier message si pas déjà nommée),
+  // et on garde l'ancienne clé "conversation unique" synchronisée (utilisée par
+  // le chat rapide de la page d'accueil).
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !activeConversationId) return;
     const raws = serializeMessages(messages);
+
+    setConversations(prev => {
+      const updated = prev.map(c => c.id === activeConversationId
+        ? { ...c, messages: raws, updatedAt: Date.now(), title: raws.length > 0 && isDefaultConvoTitle(c.title) ? deriveConvoTitle(raws) : c.title }
+        : c
+      );
+      localStorage.setItem(getConversationsListKey(userId), JSON.stringify(updated));
+      return updated;
+    });
+
     localStorage.setItem(getConversationKey(userId), JSON.stringify(raws));
     checkAndSaveHistory(raws);
-  }, [messages, isLoaded, userId]);
+  }, [messages, isLoaded, userId, activeConversationId]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -197,6 +270,104 @@ export default function ChatPage() {
   }, [userTier, isLoaded, userId]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  // ── PANNEAU CONVERSATIONS : ÉTAT REPLIÉ/LARGEUR PERSISTÉS ──
+  useEffect(() => {
+    const savedOpen = localStorage.getItem("echo-chat-convo-open");
+    if (savedOpen !== null) setIsConvoPanelOpen(savedOpen === "true");
+    const savedWidth = parseInt(localStorage.getItem("echo-chat-convo-width") || "", 10);
+    if (Number.isFinite(savedWidth)) setConvoPanelWidth(Math.min(360, Math.max(200, savedWidth)));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("echo-chat-convo-open", String(isConvoPanelOpen));
+  }, [isConvoPanelOpen]);
+
+  useEffect(() => {
+    localStorage.setItem("echo-chat-convo-width", String(convoPanelWidth));
+  }, [convoPanelWidth]);
+
+  const startConvoResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    convoResizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!convoResizingRef.current || !convoPanelRef.current) return;
+      const rect = convoPanelRef.current.getBoundingClientRect();
+      setConvoPanelWidth(Math.min(360, Math.max(200, e.clientX - rect.left)));
+    };
+    const onUp = () => {
+      if (!convoResizingRef.current) return;
+      convoResizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  // ── ACTIONS SUR LES CONVERSATIONS ──
+  const startNewConversation = () => {
+    const current = conversations.find(c => c.id === activeConversationId);
+    if (current && current.messages.length === 0) return;
+
+    const newConvo: Conversation = {
+      id: `${Date.now()}`,
+      title: lang === "fr" ? "Nouvelle conversation" : "New conversation",
+      messages: [],
+      updatedAt: Date.now(),
+    };
+    setConversations(prev => {
+      const updated = [newConvo, ...prev];
+      localStorage.setItem(getConversationsListKey(userId), JSON.stringify(updated));
+      return updated;
+    });
+    setActiveConversationId(newConvo.id);
+    localStorage.setItem(getActiveConvoKey(userId), newConvo.id);
+    setMessages([]);
+    lastSavedLength.current = 0;
+  };
+
+  const switchConversation = (id: string) => {
+    if (id === activeConversationId) return;
+    const target = conversations.find(c => c.id === id);
+    if (!target) return;
+    setActiveConversationId(id);
+    localStorage.setItem(getActiveConvoKey(userId), id);
+    setMessages(deserializeMessages(target.messages));
+    lastSavedLength.current = Math.floor(target.messages.join("").length / 2000) * 2000;
+  };
+
+  const deleteConversation = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConversations(prev => {
+      const remaining = prev.filter(c => c.id !== id);
+      const finalList = remaining.length > 0 ? remaining : [{
+        id: `${Date.now()}`,
+        title: lang === "fr" ? "Nouvelle conversation" : "New conversation",
+        messages: [],
+        updatedAt: Date.now(),
+      }];
+      localStorage.setItem(getConversationsListKey(userId), JSON.stringify(finalList));
+
+      if (id === activeConversationId) {
+        const next = finalList[0];
+        setActiveConversationId(next.id);
+        localStorage.setItem(getActiveConvoKey(userId), next.id);
+        setMessages(deserializeMessages(next.messages));
+        lastSavedLength.current = Math.floor(next.messages.join("").length / 2000) * 2000;
+      }
+      return finalList;
+    });
+  };
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
@@ -481,6 +652,75 @@ export default function ChatPage() {
             </div>
           </div>
         </aside>
+
+        {/* ── PANNEAU CONVERSATIONS (LIÉ AU COMPTE, REPLIABLE + REDIMENSIONNABLE) ── */}
+        {isConvoPanelOpen ? (
+          <>
+            <div
+              ref={convoPanelRef}
+              style={{ width: convoPanelWidth, flexBasis: convoPanelWidth }}
+              className="shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col overflow-hidden"
+            >
+              <div className="h-12 shrink-0 flex items-center justify-between px-3 border-b border-zinc-200 dark:border-zinc-800">
+                <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">
+                  {lang === "fr" ? "Conversations" : "Conversations"}
+                </span>
+                <button
+                  onClick={() => setIsConvoPanelOpen(false)}
+                  title={lang === "fr" ? "Réduire le panneau" : "Collapse panel"}
+                  className="text-zinc-400 hover:text-cyan-500 transition-colors text-sm p-1"
+                >
+                  ◂
+                </button>
+              </div>
+
+              <button
+                onClick={startNewConversation}
+                className="m-2 shrink-0 flex items-center justify-center gap-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold py-2 rounded-xl transition-colors"
+              >
+                + {lang === "fr" ? "Nouvelle conversation" : "New conversation"}
+              </button>
+
+              <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1 min-h-0">
+                {conversations.slice().sort((a, b) => b.updatedAt - a.updatedAt).map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => switchConversation(c.id)}
+                    className={`group w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between gap-2 cursor-pointer ${
+                      c.id === activeConversationId
+                        ? "bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400"
+                        : "border border-transparent text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                    }`}
+                  >
+                    <span className="truncate flex-1">{c.title}</span>
+                    <button
+                      onClick={(e) => deleteConversation(c.id, e)}
+                      title={lang === "fr" ? "Supprimer" : "Delete"}
+                      className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 shrink-0 transition-opacity"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div
+              onMouseDown={startConvoResize}
+              className="hidden lg:flex w-2.5 shrink-0 cursor-col-resize items-center justify-center group"
+            >
+              <div className="w-1 h-12 rounded-full bg-zinc-200 dark:bg-zinc-800 group-hover:bg-cyan-500 transition-colors" />
+            </div>
+          </>
+        ) : (
+          <button
+            onClick={() => setIsConvoPanelOpen(true)}
+            title={lang === "fr" ? "Afficher les conversations" : "Show conversations"}
+            className="shrink-0 w-7 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-900 flex items-center justify-center text-zinc-400 hover:text-cyan-500 transition-colors"
+          >
+            ▸
+          </button>
+        )}
 
         <section className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-black transition-colors duration-200 min-w-0">
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">

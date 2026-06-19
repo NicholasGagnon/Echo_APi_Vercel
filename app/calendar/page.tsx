@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
@@ -45,37 +45,52 @@ export default function CalendarPage() {
   const { t, lang, userTier } = useApp();
   const today = new Date();
 
-  // ── Safe tier ─────────────────────────────────────────────────────────────
   const safeTier = (userTier || "connected_free") as UserTier;
 
-  const [currentYear, setCurrentYear]   = useState(today.getFullYear());
+  const [currentYear,  setCurrentYear]  = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-  const [events, setEvents]             = useState<CalendarEvents>({});
-  const [isLoaded, setIsLoaded]         = useState(false);
-  const [userId, setUserId]             = useState<string | null>(null);
+  const [events,       setEvents]       = useState<CalendarEvents>({});
+  const [isLoaded,     setIsLoaded]     = useState(false);
+  const [userId,       setUserId]       = useState<string | null>(null);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
 
   const [showAddForm, setShowAddForm] = useState(false);
-  const [title, setTitle] = useState("");
-  const [start, setStart] = useState("");
-  const [end, setEnd]     = useState("");
-  const [notes, setNotes] = useState("");
+  const [title,       setTitle]       = useState("");
+  const [start,       setStart]       = useState("");
+  const [end,         setEnd]         = useState("");
+  const [notes,       setNotes]       = useState("");
 
-  const [googleToken, setGoogleToken]               = useState<string | null>(null);
-  const [isSyncing, setIsSyncing]                   = useState(false);
+  const [googleToken,          setGoogleToken]          = useState<string | null>(null);
+  const [isSyncing,            setIsSyncing]            = useState(false);
   const [needsGoogleReconnect, setNeedsGoogleReconnect] = useState(false);
-  const [showLimitModal, setShowLimitModal]         = useState(false);
+  const [showLimitModal,       setShowLimitModal]       = useState(false);
   const icsInputRef = useRef<HTMLInputElement>(null);
+
+  // Ref pour eviter double-fetch en StrictMode
+  const isFetchingRef = useRef(false);
 
   const getStorageKey     = (uid: string) => `echo-calendar-v2-${uid}`;
   const getGoogleTokenKey = (uid: string) => `echo-google-token-${uid}`;
 
-  const getActiveToken = async (uid: string): Promise<string | null> => {
+  // ── TOKEN HELPERS ──────────────────────────────────────────────────────────
+  // Lit depuis : state > DB > localStorage (dans cet ordre)
+  const getActiveToken = useCallback(async (uid: string): Promise<string | null> => {
     if (googleToken) return googleToken;
-    const { data: row } = await supabase.from("user_tokens").select("google_access_token").eq("id", uid).maybeSingle();
-    if (row?.google_access_token) return row.google_access_token;
-    return localStorage.getItem(getGoogleTokenKey(uid));
-  };
+    try {
+      const { data: row } = await supabase
+        .from("user_tokens")
+        .select("google_access_token")
+        .eq("id", uid)
+        .maybeSingle();
+      if (row?.google_access_token) {
+        setGoogleToken(row.google_access_token);
+        return row.google_access_token;
+      }
+    } catch {}
+    const ls = localStorage.getItem(getGoogleTokenKey(uid));
+    if (ls) { setGoogleToken(ls); return ls; }
+    return null;
+  }, [googleToken]);
 
   const saveTokenToDB = async (uid: string, token: string) => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -98,18 +113,109 @@ export default function CalendarPage() {
   const clearStoredGoogleToken = async (uid: string) => {
     setGoogleToken(null);
     localStorage.removeItem(getGoogleTokenKey(uid));
-    try { await supabase.from("user_tokens").update({ google_access_token: null }).eq("id", uid); } catch {}
+    try {
+      await supabase.from("user_tokens").update({ google_access_token: null }).eq("id", uid);
+    } catch {}
+    setNeedsGoogleReconnect(true);
   };
 
   const reconnectGoogle = async () => {
-    const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/calendar` : undefined;
+    const redirectTo = typeof window !== "undefined"
+      ? `${window.location.origin}/calendar`
+      : undefined;
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo, scopes: GOOGLE_CALENDAR_SCOPES, queryParams: { access_type: "offline", prompt: "consent" } },
+      options: {
+        redirectTo,
+        scopes: GOOGLE_CALENDAR_SCOPES,
+        queryParams: { access_type: "offline", prompt: "consent" },
+      },
     });
   };
 
-  // ── Bootstrap ──────────────────────────────────────────────────────────────
+  // ── GOOGLE FETCH ──────────────────────────────────────────────────────────
+  const fetchGoogleEvents = useCallback(async (token: string, uid: string, year?: number, month?: number) => {
+    if (!token || !uid) return;
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    setIsSyncing(true);
+
+    const y = year  ?? currentYear;
+    const m = month ?? currentMonth;
+
+    try {
+      const timeMin = new Date(y, m, 1).toISOString();
+      const timeMax = new Date(y, m + 1, 0, 23, 59, 59).toISOString();
+
+      const res = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Token expiré → vider et demander reconnexion
+      if (res.status === 401 || res.status === 403) {
+        console.warn("[Calendar] Token Google expiré ou invalide →", res.status);
+        await clearStoredGoogleToken(uid);
+        return;
+      }
+
+      if (!res.ok) {
+        console.error("[Calendar] Google Calendar sync failed:", res.status, await res.text());
+        return;
+      }
+
+      setNeedsGoogleReconnect(false);
+      const data = await res.json();
+
+      // Persister le token valide en DB
+      await saveTokenToDB(uid, token);
+
+      if (!data.items?.length) return;
+
+      const incoming: CalendarEvents = {};
+      data.items.forEach((item: any) => {
+        const rawStart = item.start?.dateTime || item.start?.date;
+        if (!rawStart) return;
+        const dateKey   = rawStart.split("T")[0];
+        const startTime = item.start?.dateTime ? rawStart.split("T")[1]?.substring(0, 5) : "";
+        const endTime   = item.end?.dateTime   ? item.end.dateTime.split("T")[1]?.substring(0, 5) : "";
+        const ev: EventData = {
+          id: item.id,
+          title: item.summary || "Google Event",
+          start: startTime,
+          end: endTime,
+          notes: item.description || "",
+          googleEventId: item.id,
+        };
+        if (!incoming[dateKey]) incoming[dateKey] = [];
+        incoming[dateKey].push(ev);
+      });
+
+      setEvents(prev => {
+        const updated = { ...prev };
+        const monthPrefix = `${y}-${String(m + 1).padStart(2, "0")}`;
+        // Retirer les anciens events Google de ce mois
+        Object.keys(updated).forEach(k => {
+          if (k.startsWith(monthPrefix))
+            updated[k] = (updated[k] || []).filter(e => !e.googleEventId);
+        });
+        // Fusionner avec les nouveaux
+        Object.keys(incoming).forEach(k => {
+          const local = (updated[k] || []).filter(e => !e.googleEventId);
+          updated[k] = [...local, ...incoming[k]];
+        });
+        return updated;
+      });
+
+    } catch (err) {
+      console.error("[Calendar] fetchGoogleEvents error:", err);
+    } finally {
+      setIsSyncing(false);
+      isFetchingRef.current = false;
+    }
+  }, [currentYear, currentMonth]);
+
+  // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -118,143 +224,172 @@ export default function CalendarPage() {
       if (!session?.user) { if (!cancelled) setIsLoaded(true); return; }
 
       const uid = session.user.id;
-      setUserId(uid);
+      if (!cancelled) setUserId(uid);
 
+      // Charger événements locaux d'abord
       const savedEvents = localStorage.getItem(getStorageKey(uid));
-      if (savedEvents) { try { setEvents(JSON.parse(savedEvents)); } catch { setEvents({}); } }
+      if (savedEvents && !cancelled) {
+        try { setEvents(JSON.parse(savedEvents)); } catch { setEvents({}); }
+      }
 
+      // Priorité token : hash > session.provider_token > DB > localStorage
       let activeToken: string | null = null;
+
       const hashToken = extractProviderTokenFromHash();
       if (hashToken) {
         clearHash();
         activeToken = hashToken;
         await storeToken(uid, hashToken);
+        console.log("[Calendar] Token récupéré depuis hash URL");
       } else if (session.provider_token) {
         activeToken = session.provider_token;
         await storeToken(uid, session.provider_token);
+        console.log("[Calendar] Token récupéré depuis session.provider_token");
       } else {
-        const { data: row } = await supabase.from("user_tokens").select("google_access_token").eq("id", uid).maybeSingle();
-        const saved = row?.google_access_token || localStorage.getItem(getGoogleTokenKey(uid));
-        if (saved) { activeToken = saved; setGoogleToken(saved); localStorage.setItem(getGoogleTokenKey(uid), saved); }
+        // Chercher en DB puis localStorage
+        try {
+          const { data: row } = await supabase
+            .from("user_tokens")
+            .select("google_access_token")
+            .eq("id", uid)
+            .maybeSingle();
+          if (row?.google_access_token) {
+            activeToken = row.google_access_token;
+            if (!cancelled) setGoogleToken(activeToken);
+            localStorage.setItem(getGoogleTokenKey(uid), activeToken);
+            console.log("[Calendar] Token récupéré depuis DB");
+          } else {
+            const ls = localStorage.getItem(getGoogleTokenKey(uid));
+            if (ls) {
+              activeToken = ls;
+              if (!cancelled) setGoogleToken(ls);
+              console.log("[Calendar] Token récupéré depuis localStorage");
+            }
+          }
+        } catch (e) {
+          console.error("[Calendar] Erreur lecture token DB:", e);
+        }
       }
 
-      if (activeToken) await fetchGoogleEvents(activeToken, uid);
+      if (activeToken && !cancelled) {
+        await fetchGoogleEvents(activeToken, uid, today.getFullYear(), today.getMonth());
+      } else if (!activeToken) {
+        console.log("[Calendar] Aucun token Google disponible — sync désactivé");
+      }
+
       if (!cancelled) setIsLoaded(true);
     };
 
     bootstrap();
 
+    // ── AUTH STATE CHANGE ──────────────────────────────────────────────────
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session?.user) {
-        setUserId(null); setEvents({}); setGoogleToken(null); setNeedsGoogleReconnect(false); setIsLoaded(true); return;
+        setUserId(null);
+        setEvents({});
+        setGoogleToken(null);
+        setNeedsGoogleReconnect(false);
+        setIsLoaded(true);
+        return;
       }
+
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const uid = session.user.id;
         setUserId(uid);
+
         const savedEvents = localStorage.getItem(getStorageKey(uid));
         setEvents(savedEvents ? JSON.parse(savedEvents) : {});
-        const hashToken = extractProviderTokenFromHash();
+
+        // Récupérer le token dans la priorité correcte
+        const hashToken     = extractProviderTokenFromHash();
         const providerToken = hashToken || session.provider_token;
+
         if (providerToken) {
           clearHash();
           await storeToken(uid, providerToken);
-          fetchGoogleEvents(providerToken, uid);
+          console.log("[Calendar] onAuthStateChange: token OAuth reçu, sync démarré");
+          // FIX: appeler fetchGoogleEvents ici aussi, pas seulement dans bootstrap
+          await fetchGoogleEvents(providerToken, uid, today.getFullYear(), today.getMonth());
         } else {
-          const { data: row } = await supabase.from("user_tokens").select("google_access_token").eq("id", uid).maybeSingle();
-          const token = row?.google_access_token || localStorage.getItem(getGoogleTokenKey(uid));
-          if (token) setGoogleToken(token);
+          // Chercher en DB
+          try {
+            const { data: row } = await supabase
+              .from("user_tokens")
+              .select("google_access_token")
+              .eq("id", uid)
+              .maybeSingle();
+            const token = row?.google_access_token || localStorage.getItem(getGoogleTokenKey(uid));
+            if (token) {
+              setGoogleToken(token);
+              // FIX: fetch ici aussi si on a un token
+              await fetchGoogleEvents(token, uid, today.getFullYear(), today.getMonth());
+            }
+          } catch {}
         }
       }
     });
 
     return () => { cancelled = true; listener.subscription.unsubscribe(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Persistence ───────────────────────────────────────────────────────────
+  // ── PERSISTENCE ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isLoaded || !userId) return;
     localStorage.setItem(getStorageKey(userId), JSON.stringify(events));
   }, [events, isLoaded, userId]);
 
-  // ── Refetch on month change ────────────────────────────────────────────────
+  // ── REFETCH ON MONTH CHANGE ───────────────────────────────────────────────
   useEffect(() => {
     if (!isLoaded || !userId || !googleToken) return;
-    fetchGoogleEvents(googleToken, userId);
-  }, [currentMonth, currentYear, isLoaded, userId, googleToken]);
+    fetchGoogleEvents(googleToken, userId, currentYear, currentMonth);
+  }, [currentMonth, currentYear]);
+  // Note: fetchGoogleEvents intentionnellement pas dans les deps pour éviter les boucles
 
-  // ── Google fetch ──────────────────────────────────────────────────────────
-  const fetchGoogleEvents = async (token: string, uid?: string) => {
-    if (!token) return;
-    setIsSyncing(true);
-    try {
-      const timeMin = new Date(currentYear, currentMonth, 1).toISOString();
-      const timeMax = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59).toISOString();
-      const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (res.status === 401 || res.status === 403) {
-        if (uid) await clearStoredGoogleToken(uid);
-        setNeedsGoogleReconnect(true);
-        return;
-      }
-      if (!res.ok) { console.error("Google Calendar sync failed", res.status); return; }
-
-      setNeedsGoogleReconnect(false);
-      const data = await res.json();
-      if (uid) await saveTokenToDB(uid, token);
-      if (!data.items) return;
-
-      const incomingEvents: CalendarEvents = {};
-      data.items.forEach((item: any) => {
-        const dateTimeStr = item.start?.dateTime || item.start?.date;
-        if (!dateTimeStr) return;
-        const dateKey   = dateTimeStr.split("T")[0];
-        const startTime = item.start?.dateTime ? dateTimeStr.split("T")[1].substring(0, 5) : "";
-        const endTime   = item.end?.dateTime ? item.end.dateTime.split("T")[1].substring(0, 5) : "";
-        const ev: EventData = { id: item.id, title: item.summary || "Google Event", start: startTime, end: endTime, notes: item.description || "", googleEventId: item.id };
-        if (!incomingEvents[dateKey]) incomingEvents[dateKey] = [];
-        incomingEvents[dateKey].push(ev);
-      });
-
-      setEvents(prev => {
-        const updated = { ...prev };
-        const monthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`;
-        Object.keys(updated).forEach(k => { if (k.startsWith(monthPrefix)) updated[k] = (updated[k] || []).filter(e => !e.googleEventId); });
-        Object.keys(incomingEvents).forEach(k => {
-          const local = (updated[k] || []).filter(e => !e.googleEventId);
-          updated[k] = [...local, ...incomingEvents[k]];
-        });
-        return updated;
-      });
-    } catch (err) { console.error("fetchGoogleEvents error:", err); }
-    finally { setIsSyncing(false); }
-  };
-
+  // ── MANUAL SYNC ───────────────────────────────────────────────────────────
   const handleManualSync = async () => {
     if (!userId) return;
     const token = await getActiveToken(userId);
-    if (!token) { setNeedsGoogleReconnect(true); return; }
-    fetchGoogleEvents(token, userId);
+    if (!token) {
+      console.log("[Calendar] Sync manuel: aucun token → reconnexion requise");
+      setNeedsGoogleReconnect(true);
+      return;
+    }
+    await fetchGoogleEvents(token, userId, currentYear, currentMonth);
   };
 
+  // ── PUSH TO GOOGLE ─────────────────────────────────────────────────────────
   const pushEventToGoogle = async (dateKey: string, event: EventData): Promise<string | null> => {
     if (!userId) return null;
     const token = await getActiveToken(userId);
     if (!token) { setNeedsGoogleReconnect(true); return null; }
+
     try {
-      const startObj = !event.start && !event.end ? { date: dateKey } : { dateTime: new Date(`${dateKey}T${event.start || "00:00"}:00`).toISOString() };
-      const endObj   = !event.start && !event.end ? { date: dateKey } : { dateTime: new Date(`${dateKey}T${event.end || "23:59"}:00`).toISOString() };
+      const hasTime  = !!(event.start || event.end);
+      const startObj = hasTime
+        ? { dateTime: new Date(`${dateKey}T${event.start || "00:00"}:00`).toISOString() }
+        : { date: dateKey };
+      const endObj   = hasTime
+        ? { dateTime: new Date(`${dateKey}T${event.end || "23:59"}:00`).toISOString() }
+        : { date: dateKey };
+
       const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ summary: event.title, description: event.notes, start: startObj, end: endObj }),
       });
-      if (res.status === 401 || res.status === 403) { await clearStoredGoogleToken(userId); setNeedsGoogleReconnect(true); return null; }
+
+      if (res.status === 401 || res.status === 403) {
+        await clearStoredGoogleToken(userId);
+        return null;
+      }
+
       const d = await res.json();
       return d.id ?? null;
-    } catch { return null; }
+    } catch (err) {
+      console.error("[Calendar] pushEventToGoogle error:", err);
+      return null;
+    }
   };
 
   const deleteFromGoogle = async (eventId: string) => {
@@ -262,19 +397,22 @@ export default function CalendarPage() {
     const token = await getActiveToken(userId);
     if (!token) { setNeedsGoogleReconnect(true); return; }
     try {
-      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-      if (res.status === 401 || res.status === 403) { await clearStoredGoogleToken(userId); setNeedsGoogleReconnect(true); }
-    } catch (err) { console.error(err); }
+      const res = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.status === 401 || res.status === 403) await clearStoredGoogleToken(userId);
+    } catch (err) { console.error("[Calendar] deleteFromGoogle error:", err); }
   };
 
-  // ── ICS import/export ─────────────────────────────────────────────────────
+  // ── ICS ───────────────────────────────────────────────────────────────────
   const exportICS = () => {
     let ics = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Echo Ecosystem//Calendar//EN\n";
     Object.entries(events).forEach(([dateKey, dayEvents]) => {
       dayEvents.forEach(ev => {
-        const d = dateKey.replace(/-/g, "");
+        const d  = dateKey.replace(/-/g, "");
         const tS = ev.start ? ev.start.replace(":", "") + "00" : "000000";
-        const tE = ev.end ? ev.end.replace(":", "") + "00" : "235900";
+        const tE = ev.end   ? ev.end.replace(":", "") + "00"   : "235900";
         ics += `BEGIN:VEVENT\nUID:${ev.id}@echo.ai\nDTSTART:${d}T${tS}\nDTEND:${d}T${tE}\nSUMMARY:${ev.title}\nDESCRIPTION:${ev.notes.replace(/\n/g, "\\n")}\nEND:VEVENT\n`;
       });
     });
@@ -290,22 +428,30 @@ export default function CalendarPage() {
     if (!file || !userId) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const lines = (reader.result as string).split(/\r?\n/);
-      const imported: CalendarEvents = { ...events };
+      const lines    = (reader.result as string).split(/\r?\n/);
+      const imported = { ...events };
       let cur: Partial<EventData> & { dateKey?: string } = {};
       lines.forEach(line => {
         const cl = line.trim();
-        if (cl === "BEGIN:VEVENT") { cur = { id: Date.now().toString() + Math.random().toString(36).substring(2, 5) }; }
-        else if (cl.startsWith("DTSTART:") || cl.startsWith("DTSTART;")) {
-          const match = cl.match(/(\d{8})T(\d{4})/);
+        if (cl === "BEGIN:VEVENT") {
+          cur = { id: Date.now().toString() + Math.random().toString(36).substring(2, 5) };
+        } else if (cl.startsWith("DTSTART:") || cl.startsWith("DTSTART;")) {
+          const match     = cl.match(/(\d{8})T(\d{4})/);
           const matchDate = cl.match(/:(\d{8})$|;VALUE=DATE:(\d{8})/);
-          if (match) { cur.dateKey = `${match[1].substring(0,4)}-${match[1].substring(4,6)}-${match[1].substring(6,8)}`; cur.start = `${match[2].substring(0,2)}:${match[2].substring(2,4)}`; }
-          else if (matchDate) { const d = matchDate[1] || matchDate[2]; cur.dateKey = `${d.substring(0,4)}-${d.substring(4,6)}-${d.substring(6,8)}`; cur.start = ""; }
-        }
-        else if (cl.startsWith("DTEND:") || cl.startsWith("DTEND;")) { const m = cl.match(/(\d{8})T(\d{4})/); if (m) cur.end = `${m[2].substring(0,2)}:${m[2].substring(2,4)}`; }
-        else if (cl.startsWith("SUMMARY:"))     { cur.title = cl.replace("SUMMARY:", "").trim(); }
-        else if (cl.startsWith("DESCRIPTION:")) { cur.notes = cl.replace("DESCRIPTION:", "").replace(/\\n/g, "\n").trim(); }
-        else if (cl === "END:VEVENT") {
+          if (match) {
+            cur.dateKey = `${match[1].substring(0,4)}-${match[1].substring(4,6)}-${match[1].substring(6,8)}`;
+            cur.start   = `${match[2].substring(0,2)}:${match[2].substring(2,4)}`;
+          } else if (matchDate) {
+            const d = matchDate[1] || matchDate[2];
+            cur.dateKey = `${d.substring(0,4)}-${d.substring(4,6)}-${d.substring(6,8)}`;
+            cur.start   = "";
+          }
+        } else if (cl.startsWith("DTEND:") || cl.startsWith("DTEND;")) {
+          const m = cl.match(/(\d{8})T(\d{4})/);
+          if (m) cur.end = `${m[2].substring(0,2)}:${m[2].substring(2,4)}`;
+        } else if (cl.startsWith("SUMMARY:"))     { cur.title = cl.replace("SUMMARY:", "").trim(); }
+          else if (cl.startsWith("DESCRIPTION:")) { cur.notes = cl.replace("DESCRIPTION:", "").replace(/\\n/g, "\n").trim(); }
+          else if (cl === "END:VEVENT") {
           if (cur.dateKey && cur.title) {
             if (!imported[cur.dateKey]) imported[cur.dateKey] = [];
             if (!imported[cur.dateKey].some(e => e.title === cur.title && e.start === cur.start))
@@ -320,7 +466,7 @@ export default function CalendarPage() {
     e.target.value = "";
   };
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+  // ── NAVIGATION ────────────────────────────────────────────────────────────
   const prevMonth = () => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(y => y - 1); } else setCurrentMonth(m => m - 1); };
   const nextMonth = () => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); } else setCurrentMonth(m => m + 1); };
   const goToday   = () => { setCurrentMonth(today.getMonth()); setCurrentYear(today.getFullYear()); };
@@ -333,7 +479,7 @@ export default function CalendarPage() {
   const makeDateKey = (day: number) => `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   const isToday     = (day: number) => day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
 
-  const openDay  = (day: number) => { setSelectedDateKey(makeDateKey(day)); setShowAddForm(false); resetForm(); };
+  const openDay   = (day: number) => { setSelectedDateKey(makeDateKey(day)); setShowAddForm(false); resetForm(); };
   const resetForm = () => { setTitle(""); setStart(""); setEnd(""); setNotes(""); };
 
   const saveEvent = async () => {
@@ -352,27 +498,27 @@ export default function CalendarPage() {
             return { ...prev, [selectedDateKey]: dayEvs.map(e => e.id === tempId ? { ...e, id: cloudId, googleEventId: cloudId } : e) };
           });
         }
-      } catch (err) { console.error("Google push error:", err); }
+      } catch (err) { console.error("[Calendar] push error:", err); }
     }
   };
 
   const deleteEvent = async (dateKey: string, id: string, googleId?: string) => {
     if (googleId) await deleteFromGoogle(googleId);
-    setEvents(prev => ({ ...prev, [dateKey]: prev[dateKey].filter(e => e.id !== id) }));
+    setEvents(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).filter(e => e.id !== id) }));
   };
 
   const selectedEvents   = selectedDateKey ? events[selectedDateKey] || [] : [];
   const activeMonthLabel = lang === "fr" ? MONTHS_FR[currentMonth] : MONTHS_EN[currentMonth];
   const activeDaysLabels = lang === "fr" ? DAYS_LABELS_FR : DAYS_LABELS_EN;
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-[100dvh] bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
       <input type="file" ref={icsInputRef} accept=".ics" onChange={handleICSRawImport} className="hidden" />
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* ── SIDEBAR ── */}
+        {/* SIDEBAR */}
         <aside className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
@@ -394,26 +540,29 @@ export default function CalendarPage() {
           </div>
         </aside>
 
-        {/* ── MAIN ── */}
+        {/* MAIN */}
         <section className="flex-1 flex flex-col px-4 sm:px-8 py-12 overflow-y-auto bg-white dark:bg-gradient-to-b dark:from-zinc-950 dark:via-black dark:to-black transition-colors duration-200 min-w-0">
 
           {/* Reconnect banner */}
           {needsGoogleReconnect && (
             <div className="w-full max-w-7xl mx-auto mb-6 flex items-center justify-between gap-3 flex-wrap bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-2xl px-4 py-3 text-xs">
               <span className="text-amber-700 dark:text-amber-300 font-medium">
-                {lang === "fr" ? "⚠️ Connexion Google Calendar expirée. Reconnecte ton compte pour réactiver la synchronisation." : "⚠️ Your Google Calendar connection has expired. Reconnect your account to resume syncing."}
+                {lang === "fr"
+                  ? "⚠️ Connexion Google Calendar expirée. Reconnecte ton compte pour réactiver la synchronisation."
+                  : "⚠️ Your Google Calendar connection has expired. Reconnect your account to resume syncing."}
               </span>
-              <button onClick={reconnectGoogle} className="bg-amber-500 hover:bg-amber-400 text-white font-bold px-4 py-2 rounded-xl text-[11px] transition-colors shrink-0">
+              <button onClick={reconnectGoogle}
+                className="bg-amber-500 hover:bg-amber-400 text-white font-bold px-4 py-2 rounded-xl text-[11px] transition-colors shrink-0">
                 {lang === "fr" ? "🔗 Reconnecter Google" : "🔗 Reconnect Google"}
               </button>
             </div>
           )}
 
-          {/* Calendar header */}
+          {/* Header */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-start gap-4 mb-8 shrink-0 w-full max-w-7xl mx-auto border-b border-zinc-100 dark:border-zinc-900 pb-5">
             <div className="flex items-center gap-3">
               <button onClick={prevMonth} className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 hover:text-cyan-500 transition-colors text-xs">◀</button>
-              <button onClick={goToday} className="text-xl sm:text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-100 hover:text-cyan-500 transition-colors">
+              <button onClick={goToday}   className="text-xl sm:text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-100 hover:text-cyan-500 transition-colors">
                 📅 {activeMonthLabel} {currentYear}
               </button>
               <button onClick={nextMonth} className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 hover:text-cyan-500 transition-colors text-xs">▶</button>
@@ -422,8 +571,9 @@ export default function CalendarPage() {
             <div className="flex items-center gap-2 bg-zinc-50/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 p-1.5 rounded-xl shadow-sm ml-0 lg:ml-6 overflow-x-auto max-w-full">
               <button onClick={handleManualSync} disabled={isSyncing}
                 className={`text-[11px] font-bold px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 border ${
-                  isSyncing ? "bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed animate-pulse"
-                            : "bg-cyan-600 text-white border-transparent hover:bg-cyan-500 shadow-sm"}`}>
+                  isSyncing
+                    ? "bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed animate-pulse"
+                    : "bg-cyan-600 text-white border-transparent hover:bg-cyan-500 shadow-sm"}`}>
                 {isSyncing ? "⏳..." : "🔄 Sync Google"}
               </button>
               <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1 shrink-0" />
@@ -435,6 +585,13 @@ export default function CalendarPage() {
                 className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
                 📤 {lang === "fr" ? "Exporter" : "Export"}
               </button>
+              {/* Indicateur de statut sync */}
+              {googleToken && !needsGoogleReconnect && (
+                <div className="text-[10px] text-emerald-500 font-mono font-bold shrink-0 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                  Google
+                </div>
+              )}
             </div>
           </div>
 
@@ -442,11 +599,9 @@ export default function CalendarPage() {
           <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col">
             <div className="overflow-x-auto">
               <div className="min-w-[600px]">
-
                 <div className="grid grid-cols-7 gap-2 mb-2 text-center font-bold text-zinc-400 dark:text-zinc-500 text-[11px] uppercase tracking-widest font-mono">
                   {activeDaysLabels.map((d, i) => <div key={i}>{d}</div>)}
                 </div>
-
                 <div className="grid grid-cols-7 gap-2 auto-rows-fr">
                   {blanks.map((_, i) => <div key={"b" + i} className="bg-zinc-50/20 dark:bg-zinc-950/10 rounded-xl border border-transparent" />)}
                   {days.map(day => {
@@ -467,11 +622,15 @@ export default function CalendarPage() {
                               className={`text-[10px] border rounded-lg px-1.5 py-0.5 truncate w-full tracking-wide transition-colors ${
                                 ev.isFromEcho
                                   ? "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900/60 text-purple-700 dark:text-purple-400 font-medium"
+                                  : ev.googleEventId
+                                  ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40 text-blue-700 dark:text-blue-400"
                                   : "bg-white dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300"}`}>
                               <span className="font-bold">{ev.start ? `${ev.start} ` : ""}</span>{ev.title}
                             </div>
                           ))}
-                          {dayEvents.length > 2 && <div className="text-[9px] text-cyan-600 dark:text-cyan-500 font-mono font-bold pl-1">+{dayEvents.length - 2} items</div>}
+                          {dayEvents.length > 2 && (
+                            <div className="text-[9px] text-cyan-600 dark:text-cyan-500 font-mono font-bold pl-1">+{dayEvents.length - 2} items</div>
+                          )}
                         </div>
                       </button>
                     );
@@ -483,7 +642,7 @@ export default function CalendarPage() {
         </section>
       </div>
 
-      {/* ── DAY MODAL ── */}
+      {/* DAY MODAL */}
       {selectedDateKey && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setSelectedDateKey(null)}>
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl space-y-6 max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
@@ -505,8 +664,12 @@ export default function CalendarPage() {
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2 flex-wrap">
                         {ev.title}
-                        {ev.isFromEcho && <span className="text-[9px] bg-purple-100 dark:bg-purple-950 px-2 py-0.5 rounded-md border border-purple-300 dark:border-purple-800 uppercase tracking-widest font-mono font-bold text-purple-700 dark:text-purple-400">Echo Agent</span>}
-                        {ev.googleEventId && <span className="text-[9px] bg-zinc-100 dark:bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-300 dark:border-zinc-700 uppercase tracking-widest font-mono font-bold text-zinc-500">Google</span>}
+                        {ev.isFromEcho && (
+                          <span className="text-[9px] bg-purple-100 dark:bg-purple-950 px-2 py-0.5 rounded-md border border-purple-300 dark:border-purple-800 uppercase tracking-widest font-mono font-bold text-purple-700 dark:text-purple-400">Echo Agent</span>
+                        )}
+                        {ev.googleEventId && (
+                          <span className="text-[9px] bg-blue-100 dark:bg-blue-950/50 px-2 py-0.5 rounded-md border border-blue-300 dark:border-blue-800 uppercase tracking-widest font-mono font-bold text-blue-600 dark:text-blue-400">Google</span>
+                        )}
                       </div>
                       <div className="text-zinc-400 dark:text-zinc-500 text-xs font-mono">
                         🕒 {ev.start ? `${ev.start}${ev.end ? ` → ${ev.end}` : ""}` : (lang === "fr" ? "Journée Complète" : "All Day")}
@@ -517,7 +680,8 @@ export default function CalendarPage() {
                         </p>
                       )}
                     </div>
-                    <button onClick={() => deleteEvent(selectedDateKey, ev.id, ev.googleEventId)} className="text-zinc-400 hover:text-red-500 font-mono text-sm ml-4 p-1 transition-colors">🗑️</button>
+                    <button onClick={() => deleteEvent(selectedDateKey, ev.id, ev.googleEventId)}
+                      className="text-zinc-400 hover:text-red-500 font-mono text-sm ml-4 p-1 transition-colors">🗑️</button>
                   </div>
                 ))}
               </div>
@@ -541,7 +705,9 @@ export default function CalendarPage() {
                 <h3 className="font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400 font-bold">
                   ➕ {lang === "fr" ? "Nouveau Paramètre" : "New Parameter"}
                 </h3>
-                <input type="text" placeholder={lang === "fr" ? "Désignation de la tâche" : "Event Title"} value={title} onChange={e => setTitle(e.target.value)}
+                <input type="text"
+                  placeholder={lang === "fr" ? "Désignation de la tâche" : "Event Title"}
+                  value={title} onChange={e => setTitle(e.target.value)}
                   className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -576,20 +742,24 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* ── LIMIT MODAL ── */}
+      {/* LIMIT MODAL */}
       {showLimitModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowLimitModal(false)}>
           <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="text-3xl">💎</div>
             <h3 className="text-lg font-bold tracking-tight">{lang === "fr" ? "Module d'extension requis" : "Upgrade Required"}</h3>
             <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed">
-              {lang === "fr" ? "La synchronisation bidirectionnelle automatique Google Calendar nécessite un compte Premium ou supérieur." : "Bi-directional Google Calendar syncing is restricted to higher infrastructure tiers."}
+              {lang === "fr"
+                ? "La synchronisation bidirectionnelle automatique Google Calendar nécessite un compte Premium ou supérieur."
+                : "Bi-directional Google Calendar syncing is restricted to higher infrastructure tiers."}
             </p>
             <div className="pt-2 flex flex-col gap-2">
-              <Link href="/services" onClick={() => setShowLimitModal(false)} className="bg-cyan-600 text-white font-bold py-3 rounded-xl text-xs transition-all hover:bg-cyan-500 block shadow-md shadow-cyan-500/10">
+              <Link href="/services" onClick={() => setShowLimitModal(false)}
+                className="bg-cyan-600 text-white font-bold py-3 rounded-xl text-xs transition-all hover:bg-cyan-500 block shadow-md shadow-cyan-500/10">
                 {lang === "fr" ? "Voir les plans" : "Review Access Tiers"}
               </Link>
-              <button onClick={() => setShowLimitModal(false)} className="text-zinc-400 dark:text-zinc-600 hover:text-black dark:hover:text-white font-mono text-[10px] uppercase font-bold tracking-wider transition-colors py-2">
+              <button onClick={() => setShowLimitModal(false)}
+                className="text-zinc-400 dark:text-zinc-600 hover:text-black dark:hover:text-white font-mono text-[10px] uppercase font-bold tracking-wider transition-colors py-2">
                 {lang === "fr" ? "Fermer" : "Dismiss"}
               </button>
             </div>
