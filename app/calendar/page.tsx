@@ -486,24 +486,67 @@ export default function CalendarPage() {
     if (!selectedDateKey || !title.trim()) return;
     const tempId = Date.now().toString();
     const ev: EventData = { id: tempId, title, start, end, notes };
+
+    // 1. Afficher immédiatement dans l'UI (optimistic)
     setEvents(prev => ({ ...prev, [selectedDateKey]: [...(prev[selectedDateKey] || []), ev] }));
     setShowAddForm(false);
     resetForm();
-    if (userId) {
-      try {
-        const cloudId = await pushEventToGoogle(selectedDateKey, ev);
-        if (cloudId) {
-          setEvents(prev => {
-            const dayEvs = prev[selectedDateKey] || [];
-            return { ...prev, [selectedDateKey]: dayEvs.map(e => e.id === tempId ? { ...e, id: cloudId, googleEventId: cloudId } : e) };
-          });
-        }
-      } catch (err) { console.error("[Calendar] push error:", err); }
+
+    if (!userId) return;
+
+    try {
+      // 2. Push vers Google Calendar (optionnel — peut retourner null si pas de token)
+      const cloudId = await pushEventToGoogle(selectedDateKey, ev);
+      const finalId = cloudId || tempId;
+
+      // 3. Sauvegarder dans Supabase echo_calendar
+      const { error: supaErr } = await supabase.from("echo_calendar").insert({
+        id:              finalId,
+        user_id:         userId,
+        title:           title,
+        start_date:      selectedDateKey,
+        end_date:        selectedDateKey,
+        notes:           notes,
+        is_from_echo_bot: false,
+      });
+      if (supaErr) {
+        console.error("[Calendar] Supabase insert error:", supaErr.message);
+      } else {
+        console.log("[Calendar] ✅ Événement sauvé dans Supabase:", finalId);
+      }
+
+      // 4. Si Google a assigné un ID différent, mettre à jour l'UI avec le vrai ID
+      if (cloudId) {
+        setEvents(prev => {
+          const dayEvs = prev[selectedDateKey] || [];
+          return {
+            ...prev,
+            [selectedDateKey]: dayEvs.map(e =>
+              e.id === tempId ? { ...e, id: cloudId, googleEventId: cloudId } : e
+            ),
+          };
+        });
+      }
+    } catch (err) {
+      console.error("[Calendar] saveEvent error:", err);
     }
   };
 
   const deleteEvent = async (dateKey: string, id: string, googleId?: string) => {
+    // Supprimer de Google
     if (googleId) await deleteFromGoogle(googleId);
+
+    // Supprimer de Supabase
+    if (userId) {
+      const { error } = await supabase
+        .from("echo_calendar")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) console.error("[Calendar] Supabase delete error:", error.message);
+    }
+
+    // Supprimer de l'UI
     setEvents(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).filter(e => e.id !== id) }));
   };
 
