@@ -23,14 +23,13 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     lang:"Langue",
     mirror:"Miroir", pageNum:"N° pages", header:"Header", footer:"Footer",
     justify:"Justifié", lineH:"Interligne", para:"Para", font:"Police",
-    opacity:"Opacité page", editorBg:"Fond éditeur",
+    opacity:"Opacité page", editorBg:"Fond éditeur", paraIndentLbl:"Alinéa 1ère ligne",
     struct:"struct", texte:"texte", pages:"pages", police:"police",
-    media:"media", livre:"livre", presets:"presets",
+    livre:"livre", presets:"presets",
     t1:"Titre 1", t2:"Titre 2", t3:"Titre 3", normal:"Texte normal",
     bold:"Gras", italic:"Italique", indent:"Alinéa",
     pageBreak:"Saut de page", toc:"Table matières",
     smaller:"Réduire", larger:"Agrandir",
-    image:"Image", importTxt:"Import TXT/MD", openBook:"Ouvrir .echo-book",
     exportHtml:"Export HTML",
     creative:"Créatif", ideas:"Idées", critical:"Critique",
     echoPlaceholder:"Demande à Echo d'améliorer un paragraphe, suggérer une tournure, critiquer un passage...",
@@ -39,8 +38,10 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     noContent:"Aucun contenu.", titleHint:"Double-cliquer pour modifier",
     prevChapter:"Précédent", nextChapter:"Suivant", closePres:"Fermer",
     serverErr:"Impossible de joindre le serveur.",
-    printPreset:"Livre imprimé (miroir, pages, header...)",
-    kindlePreset:"Kindle (EPUB, pas de pagination...)",
+    presetPrint:"📖 Impression", presetKindle:"📱 Kindle", presetCustom:"⚙️ Personnalisé",
+    printPreset:"Livre imprimé : marges miroir, numéros de page, header/footer, justifié, alinéa",
+    kindlePreset:"Kindle/EPUB : sans marges miroir, sans pagination, sans header/footer",
+    customPreset:"Réglages manuels — ouvre le panneau de paramètres",
     close:"Fermer",
   },
   en: {
@@ -53,14 +54,13 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     lang:"Language",
     mirror:"Mirror", pageNum:"Page #", header:"Header", footer:"Footer",
     justify:"Justify", lineH:"Line-h", para:"Para", font:"Font",
-    opacity:"Page opacity", editorBg:"Editor bg",
+    opacity:"Page opacity", editorBg:"Editor bg", paraIndentLbl:"First-line indent",
     struct:"struct", texte:"text", pages:"pages", police:"size",
-    media:"media", livre:"book", presets:"presets",
+    livre:"book", presets:"presets",
     t1:"Title 1", t2:"Title 2", t3:"Title 3", normal:"Normal text",
     bold:"Bold", italic:"Italic", indent:"Indent",
     pageBreak:"Page break", toc:"TOC",
     smaller:"Smaller", larger:"Larger",
-    image:"Image", importTxt:"Import TXT/MD", openBook:"Open .echo-book",
     exportHtml:"Export HTML",
     creative:"Creative", ideas:"Ideas", critical:"Critical",
     echoPlaceholder:"Ask Echo to improve a paragraph, suggest a phrase, critique a passage...",
@@ -69,8 +69,10 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     noContent:"No content yet.", titleHint:"Double-click to edit",
     prevChapter:"Previous", nextChapter:"Next", closePres:"Close",
     serverErr:"Cannot reach the server.",
-    printPreset:"Print book (mirror, page #, header...)",
-    kindlePreset:"Kindle (EPUB, no pagination...)",
+    presetPrint:"📖 Print", presetKindle:"📱 Kindle", presetCustom:"⚙️ Custom",
+    printPreset:"Print book: mirror margins, page numbers, header/footer, justified, indent",
+    kindlePreset:"Kindle/EPUB: no mirror margins, no pagination, no header/footer",
+    customPreset:"Manual settings — opens the settings panel",
     close:"Close",
   },
 };
@@ -109,17 +111,20 @@ function applyPreset(preset: "print"|"kindle", s:{
   setShowHeader:(v:boolean)=>void;    setShowFooter:(v:boolean)=>void;
   setLineHeight:(v:number)=>void;     setFontSize:(v:number)=>void;
   setIsJustified:(v:boolean)=>void;   setParaSpacing:(v:number)=>void;
+  setParaIndent:(v:boolean)=>void;
 }) {
   if (preset === "print") {
     s.setMirrorMargins(true);  s.setShowPageNumbers(true);
     s.setShowHeader(true);     s.setShowFooter(true);
     s.setLineHeight(1.8);      s.setFontSize(12);
     s.setIsJustified(true);    s.setParaSpacing(0.8);
+    s.setParaIndent(true);
   } else {
     s.setMirrorMargins(false); s.setShowPageNumbers(false);
     s.setShowHeader(false);    s.setShowFooter(false);
     s.setLineHeight(1.6);      s.setFontSize(14);
     s.setIsJustified(false);   s.setParaSpacing(0.6);
+    s.setParaIndent(false);
   }
 }
 
@@ -184,7 +189,9 @@ export default function BooksPage() {
   const [lineHeight,      setLineHeight]      = useState(1.8);
   const [isJustified,     setIsJustified]     = useState(true);
   const [paraSpacing,     setParaSpacing]     = useState(0.75);
+  const [paraIndent,      setParaIndent]      = useState(false);
   const [showSettings,    setShowSettings]    = useState(true);
+  const [activePreset,    setActivePreset]    = useState<"print"|"kindle"|"custom"|null>(null);
 
   // ── PAGE OPACITY + BG MODE ────────────────────────────────────────────────────
   // pageOpacity: 0 = transparent, 100 = opaque noir (mode nuit full)
@@ -262,10 +269,6 @@ export default function BooksPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── FILE INPUTS ───────────────────────────────────────────────────────────────
-  const fileInputRef   = useRef<HTMLInputElement>(null);
-  const imgInputRef    = useRef<HTMLInputElement>(null);
-  const importJsonRef  = useRef<HTMLInputElement>(null);
 
   // ── SYNC EDITOR ───────────────────────────────────────────────────────────────
   const handleEditorInput = useCallback(() => {
@@ -324,16 +327,6 @@ export default function BooksPage() {
       </div>`);
   };
 
-  const insertImage = () => imgInputRef.current?.click();
-
-  const handleImgFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; e.target.value = "";
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => { editorRef.current?.focus(); document.execCommand("insertImage", false, reader.result as string); };
-    reader.readAsDataURL(file);
-  };
-
   const addChapter = () => {
     const id  = `ch${Date.now()}`;
     const num = chapters.length + 1;
@@ -341,33 +334,6 @@ export default function BooksPage() {
     setActiveChapter(id);
   };
 
-  // ── IMPORTS ───────────────────────────────────────────────────────────────────
-  const handleImportTxt = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; e.target.value = "";
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const id   = `ch${Date.now()}`;
-      const html = (reader.result as string).split(/\n\n+/).map(p => `<p>${p.replace(/\n/g,"<br>")}</p>`).join("");
-      setChapters(prev => [...prev, { id, title: file.name.replace(/\.[^.]+$/, ""), content: html }]);
-      setActiveChapter(id);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; e.target.value = "";
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const { bookTitle:t, chapters:c } = JSON.parse(reader.result as string);
-        if (t) setBookTitle(t);
-        if (c?.length) { setChapters(c); setActiveChapter(c[0].id); }
-      } catch { alert(fr ? "Fichier invalide." : "Invalid file."); }
-    };
-    reader.readAsText(file);
-  };
 
   // ── EXPORTS ───────────────────────────────────────────────────────────────────
   // Génère un HTML complet (ouvre le sélecteur de fichiers natif du navigateur)
@@ -444,8 +410,14 @@ export default function BooksPage() {
   useEffect(() => { echoBottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [echoMessages, echoThinking]);
 
   // ── PRESETS ───────────────────────────────────────────────────────────────────
-  const triggerPreset = (p: "print"|"kindle") =>
-    applyPreset(p, { setMirrorMargins, setShowPageNumbers, setShowHeader, setShowFooter, setLineHeight, setFontSize, setIsJustified, setParaSpacing });
+  const triggerPreset = (p: "print"|"kindle") => {
+    applyPreset(p, { setMirrorMargins, setShowPageNumbers, setShowHeader, setShowFooter, setLineHeight, setFontSize, setIsJustified, setParaSpacing, setParaIndent });
+    setActivePreset(p);
+  };
+  const triggerCustomPreset = () => {
+    setActivePreset("custom");
+    setShowSettings(true);
+  };
 
   // ── SAVE LABEL ────────────────────────────────────────────────────────────────
   const saveLabel = {
@@ -503,7 +475,7 @@ export default function BooksPage() {
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto flex justify-center px-8 py-12" style={{scrollbarWidth:"thin",scrollbarColor:"rgba(6,182,212,0.15) transparent"}}>
+        <div className="flex-1 overflow-y-auto flex items-start justify-center px-8 py-12" style={{scrollbarWidth:"thin",scrollbarColor:"rgba(6,182,212,0.15) transparent"}}>
           <div className="w-full max-w-[65ch]" style={{fontSize:`${fontSize+2}px`,fontFamily,lineHeight:lineHeight+0.1,color:"#e4e4e7"}}>
             <h1 className="text-3xl font-bold text-white mb-8 border-b border-zinc-800 pb-4">{bookTitle}</h1>
             <div className="text-[11px] uppercase tracking-widest text-cyan-500/60 font-mono mb-4">
@@ -599,15 +571,6 @@ export default function BooksPage() {
           </div>
 
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-            <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.media}</div>
-            <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="🖼️" label={T.image}     onClick={insertImage} />
-              <TB icon="📥" label={T.importTxt} onClick={() => fileInputRef.current?.click()} />
-              <TB icon="📂" label={T.openBook}  onClick={() => importJsonRef.current?.click()} />
-            </div>
-          </div>
-
-          <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.livre}</div>
             <div className="grid grid-cols-2 gap-0.5">
               <TB icon="⚙️" label={T.settings}   active={showSettings} onClick={() => setShowSettings(v => !v)} />
@@ -617,9 +580,25 @@ export default function BooksPage() {
 
           <div className="px-2 py-1.5">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.presets}</div>
-            <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="📖" label={T.printPreset}  onClick={() => triggerPreset("print")} />
-              <TB icon="📱" label={T.kindlePreset} onClick={() => triggerPreset("kindle")} />
+            <div className="flex flex-col gap-1">
+              <button onClick={() => triggerPreset("print")} title={T.printPreset}
+                className={`w-full flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[9px] font-medium border transition-all ${
+                  activePreset === "print" ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400" : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"
+                }`}>
+                <span className="truncate">{T.presetPrint}</span>
+              </button>
+              <button onClick={() => triggerPreset("kindle")} title={T.kindlePreset}
+                className={`w-full flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[9px] font-medium border transition-all ${
+                  activePreset === "kindle" ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400" : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"
+                }`}>
+                <span className="truncate">{T.presetKindle}</span>
+              </button>
+              <button onClick={triggerCustomPreset} title={T.customPreset}
+                className={`w-full flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[9px] font-medium border transition-all ${
+                  activePreset === "custom" ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400" : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"
+                }`}>
+                <span className="truncate">{T.presetCustom}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -720,6 +699,7 @@ export default function BooksPage() {
                 { label:T.header,  val:showHeader,      set:setShowHeader },
                 { label:T.footer,  val:showFooter,      set:setShowFooter },
                 { label:T.justify, val:isJustified,     set:setIsJustified },
+                { label:T.paraIndentLbl, val:paraIndent, set:setParaIndent },
               ].map(({ label, val, set }) => (
                 <label key={label} className="flex items-center gap-1.5 cursor-pointer">
                   <span className="text-zinc-400">{label}</span>
@@ -776,7 +756,7 @@ export default function BooksPage() {
             ))}
 
             {/* Scroll zone */}
-            <div className="absolute inset-0 overflow-y-auto flex justify-center px-4 py-4 z-[2]"
+            <div className="absolute inset-0 overflow-y-auto flex items-start justify-center px-4 py-4 z-[2]"
               style={{ scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent" }}>
 
               {/* PAGE SHEET — grande, opacité contrôlée */}
@@ -926,18 +906,13 @@ export default function BooksPage() {
         </aside>
       </div>
 
-      {/* Hidden inputs */}
-      <input ref={fileInputRef}  type="file" accept=".txt,.md,.markdown" onChange={handleImportTxt}  className="hidden" />
-      <input ref={imgInputRef}   type="file" accept="image/*"            onChange={handleImgFile}    className="hidden" />
-      <input ref={importJsonRef} type="file" accept=".json"              onChange={handleImportJson} className="hidden" />
-
       {/* Styles */}
       <style>{`
         .books-editor:empty:before{content:attr(data-placeholder);color:rgba(113,113,122,0.38);pointer-events:none;font-style:italic}
         .books-editor h1,.books-preview h1,.books-present h1{font-size:1.6em;font-weight:700;margin:.5em 0 .3em;border-bottom:1px solid rgba(6,182,212,0.1);padding-bottom:.12em}
         .books-editor h2,.books-preview h2,.books-present h2{font-size:1.2em;font-weight:600;margin:.9em 0 .2em;text-transform:uppercase;letter-spacing:.07em;color:rgb(6,182,212)}
         .books-editor h3,.books-preview h3,.books-present h3{font-size:1.05em;font-weight:600;margin:.7em 0 .15em;color:rgba(6,182,212,.6)}
-        .books-editor p,.books-preview p,.books-present p{margin-bottom:${paraSpacing}em}
+        .books-editor p,.books-preview p,.books-present p{margin-bottom:${paraSpacing}em;text-indent:${paraIndent ? "1.5em" : "0"}}
         .books-editor br{display:block;content:"";margin-bottom:0}
         .books-editor img,.books-preview img{max-width:100%;border-radius:3px;margin:.5em 0}
         .books-editor:focus{outline:none}

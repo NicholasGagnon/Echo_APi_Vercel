@@ -829,9 +829,7 @@ export default function AccountPage() {
                   <div className="border border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950 p-4 rounded-xl text-xs flex items-start gap-3 shadow-inner">
                     <span className="text-cyan-500 text-sm mt-0.5">ℹ️</span>
                     <div>
-                      <p className="text-zinc-500 dark:text-zinc-400 font-medium">
-                        Besoin d'aide supplémentaire ? Vous pouvez consulter la documentation de support officielle de Google concernant les alertes de sécurité et les applications tierces non validées :
-                      </p>
+                     
                       <a 
                         href="https://support.google.com/cloud/answer/7454865" 
                         target="_blank" 

@@ -47,7 +47,7 @@ export default function ChatPage() {
   const [selectedImageName, setSelectedImageName] = useState("");
   const [echoState, setEchoState] = useState("idle");
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality" | "calendar" | "prompts">("vitality");
+  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality" | "calendar" | "prompts" | "surprise">("vitality");
 
   // ── ÉTAT POUR LE FIL NARRATIF DU TUTORIEL (CHAPITRE 2) ──
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
@@ -124,10 +124,8 @@ export default function ChatPage() {
 
   const handleSurpriseToggle = () => {
     if (userTier === "connected_free" || userTier === "basic") {
-      alert(lang === "fr" 
-        ? "🔒 Le mode Surprise / Émergence est réservé aux plans Premium et supérieurs." 
-        : "🔒 Surprise / Emergence mode is exclusive to Premium plans and above."
-      );
+      setActiveLimitCategory("surprise");
+      setShowLimitModal(true);
       return;
     }
 
@@ -577,7 +575,7 @@ export default function ChatPage() {
                 </button>
               </div>
 
-              <div className="flex-1 p-4 overflow-y-auto grid grid-cols-2 lg:flex lg:flex-col gap-2 content-start">
+              <div className="flex-1 p-4 overflow-y-auto grid grid-cols-2 lg:flex lg:flex-col gap-2.5 content-start">
                 {buttonsOrder.map((id) => {
                   const isSelected = selectedButtons.includes(id);
                   const isDoubleRegard = id === "double";
@@ -607,12 +605,12 @@ export default function ChatPage() {
                       disabled={isLocked}
                       onClick={() => handleButtonClick(id)}
                       className={`
-                        w-full py-2.5 px-3 rounded-xl text-xs font-bold font-mono tracking-wide uppercase transition-all duration-300 border text-left select-none truncate
-                        ${isLocked 
-                          ? "opacity-20 cursor-not-allowed bg-transparent border-zinc-200 dark:border-zinc-900 text-zinc-500 shadow-none" 
+                        w-full h-10 px-3.5 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200 border text-left select-none truncate
+                        ${isLocked
+                          ? "opacity-30 cursor-not-allowed bg-transparent border-zinc-200 dark:border-zinc-900 text-zinc-400"
                           : isSelected || (isDoubleRegard && isDoubleRegardUnlocked)
-                            ? "bg-cyan-500/30 text-cyan-400 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.5)] scale-102"
-                            : "bg-cyan-500/[0.03] dark:bg-cyan-950/[0.05] text-cyan-600 dark:text-cyan-400 border-cyan-700/40 dark:border-cyan-900/60 hover:border-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.35)] hover:bg-cyan-500/10"
+                            ? "bg-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.5)]"
+                            : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-cyan-400 hover:text-cyan-600 dark:hover:text-cyan-400"
                         }
                       `}
                     >
@@ -713,12 +711,20 @@ export default function ChatPage() {
       {showLimitModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setShowLimitModal(false)}>
           <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">🔒</div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 capitalize">{activeLimitCategory} Limit</h3>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 ${activeLimitCategory === "surprise" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`}>
+              {activeLimitCategory === "surprise" ? "🌿" : "🔒"}
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 capitalize">
+              {activeLimitCategory === "surprise" ? (lang === "fr" ? "Émergence" : "Emergence") : `${activeLimitCategory} Limit`}
+            </h3>
             <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
-              {activeLimitCategory === "prompts"
-                ? (lang === "fr" 
-                  ? "Votre quota mensuel de messages est épuisé. Élevez votre sillage vers un forfait supérieur pour continuer l'expérience." 
+              {activeLimitCategory === "surprise"
+                ? (lang === "fr"
+                  ? "L'émergence n'est pas encore accessible depuis ce plan. Certaines portes restent fermées jusqu'à ce qu'elles soient prêtes à s'ouvrir avec Abonnement Premium."
+                  : "Emergence isn't accessible from this plan yet. Some doors stay closed until they're ready to open with a Premium Subscription.")
+                : activeLimitCategory === "prompts"
+                ? (lang === "fr"
+                  ? "Votre quota mensuel de messages est épuisé. Élevez votre sillage vers un forfait supérieur pour continuer l'expérience."
                   : "Your monthly message quota has been reached. Upgrade your tier to unlock unlimited interactions.")
                 : (lang === "fr"
                   ? `Limite d'actions automatisées atteinte pour la section [${activeLimitCategory}]. Le message texte d'Echo a été généré, mais les données n'ont pas pu s'enregistrer pour ce cycle.`
