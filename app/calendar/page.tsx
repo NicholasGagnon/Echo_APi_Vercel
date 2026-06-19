@@ -66,14 +66,13 @@ export default function CalendarPage() {
   const [showLimitModal,       setShowLimitModal]       = useState(false);
   const icsInputRef = useRef<HTMLInputElement>(null);
 
-  // Ref pour eviter double-fetch en StrictMode
+  // Ref pour éviter le double-fetch en StrictMode
   const isFetchingRef = useRef(false);
 
   const getStorageKey     = (uid: string) => `echo-calendar-v2-${uid}`;
   const getGoogleTokenKey = (uid: string) => `echo-google-token-${uid}`;
 
   // ── TOKEN HELPERS ──────────────────────────────────────────────────────────
-  // Lit depuis : state > DB > localStorage (dans cet ordre)
   const getActiveToken = useCallback(async (uid: string): Promise<string | null> => {
     if (googleToken) return googleToken;
     try {
@@ -152,7 +151,6 @@ export default function CalendarPage() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Token expiré → vider et demander reconnexion
       if (res.status === 401 || res.status === 403) {
         console.warn("[Calendar] Token Google expiré ou invalide →", res.status);
         await clearStoredGoogleToken(uid);
@@ -167,7 +165,6 @@ export default function CalendarPage() {
       setNeedsGoogleReconnect(false);
       const data = await res.json();
 
-      // Persister le token valide en DB
       await saveTokenToDB(uid, token);
 
       if (!data.items?.length) return;
@@ -194,12 +191,10 @@ export default function CalendarPage() {
       setEvents(prev => {
         const updated = { ...prev };
         const monthPrefix = `${y}-${String(m + 1).padStart(2, "0")}`;
-        // Retirer les anciens events Google de ce mois
         Object.keys(updated).forEach(k => {
           if (k.startsWith(monthPrefix))
             updated[k] = (updated[k] || []).filter(e => !e.googleEventId);
         });
-        // Fusionner avec les nouveaux
         Object.keys(incoming).forEach(k => {
           const local = (updated[k] || []).filter(e => !e.googleEventId);
           updated[k] = [...local, ...incoming[k]];
@@ -226,13 +221,11 @@ export default function CalendarPage() {
       const uid = session.user.id;
       if (!cancelled) setUserId(uid);
 
-      // Charger événements locaux d'abord
       const savedEvents = localStorage.getItem(getStorageKey(uid));
       if (savedEvents && !cancelled) {
         try { setEvents(JSON.parse(savedEvents)); } catch { setEvents({}); }
       }
 
-      // Priorité token : hash > session.provider_token > DB > localStorage
       let activeToken: string | null = null;
 
       const hashToken = extractProviderTokenFromHash();
@@ -246,7 +239,6 @@ export default function CalendarPage() {
         await storeToken(uid, session.provider_token);
         console.log("[Calendar] Token récupéré depuis session.provider_token");
       } else {
-        // Chercher en DB puis localStorage
         try {
           const { data: row } = await supabase
             .from("user_tokens")
@@ -300,7 +292,6 @@ export default function CalendarPage() {
         const savedEvents = localStorage.getItem(getStorageKey(uid));
         setEvents(savedEvents ? JSON.parse(savedEvents) : {});
 
-        // Récupérer le token dans la priorité correcte
         const hashToken     = extractProviderTokenFromHash();
         const providerToken = hashToken || session.provider_token;
 
@@ -308,10 +299,8 @@ export default function CalendarPage() {
           clearHash();
           await storeToken(uid, providerToken);
           console.log("[Calendar] onAuthStateChange: token OAuth reçu, sync démarré");
-          // FIX: appeler fetchGoogleEvents ici aussi, pas seulement dans bootstrap
           await fetchGoogleEvents(providerToken, uid, today.getFullYear(), today.getMonth());
         } else {
-          // Chercher en DB
           try {
             const { data: row } = await supabase
               .from("user_tokens")
@@ -321,7 +310,6 @@ export default function CalendarPage() {
             const token = row?.google_access_token || localStorage.getItem(getGoogleTokenKey(uid));
             if (token) {
               setGoogleToken(token);
-              // FIX: fetch ici aussi si on a un token
               await fetchGoogleEvents(token, uid, today.getFullYear(), today.getMonth());
             }
           } catch {}
@@ -344,7 +332,6 @@ export default function CalendarPage() {
     if (!isLoaded || !userId || !googleToken) return;
     fetchGoogleEvents(googleToken, userId, currentYear, currentMonth);
   }, [currentMonth, currentYear]);
-  // Note: fetchGoogleEvents intentionnellement pas dans les deps pour éviter les boucles
 
   // ── MANUAL SYNC ───────────────────────────────────────────────────────────
   const handleManualSync = async () => {
@@ -482,30 +469,28 @@ export default function CalendarPage() {
   const openDay   = (day: number) => { setSelectedDateKey(makeDateKey(day)); setShowAddForm(false); resetForm(); };
   const resetForm = () => { setTitle(""); setStart(""); setEnd(""); setNotes(""); };
 
+  // ── SAVE EVENT (AVEC SMART ALERTE & SYNC COLONNE SCHÉMA) ───────────────────
   const saveEvent = async () => {
     if (!selectedDateKey || !title.trim()) return;
     const tempId = Date.now().toString();
     const ev: EventData = { id: tempId, title, start, end, notes };
 
-    // 1. Affichage optimiste immédiat dans l'UI
     setEvents(prev => ({ ...prev, [selectedDateKey]: [...(prev[selectedDateKey] || []), ev] }));
     setShowAddForm(false);
     resetForm();
 
     if (!userId) {
-      console.error("❌ Impossible d'enregistrer : userId est null ou introuvable.");
+      console.error("❌ Impossible d'enregistrer : userId est null.");
       alert("Erreur : Tu ne sembles pas connecté (userId introuvable).");
       return;
     }
 
     try {
-      // 2. Push vers Google Calendar (optionnel)
       const cloudId = await pushEventToGoogle(selectedDateKey, ev);
       const finalId = cloudId || tempId;
 
-      console.log("🚀 Tentative d'insert Supabase — ID:", finalId, " | User:", userId);
+      console.log("🚀 Insertion Supabase — ID:", finalId, " | User:", userId);
 
-      // 3. Sauvegarder dans Supabase avec capture de l'erreur brute
       const { data, error: supaErr } = await supabase
         .from("echo_calendar")
         .insert({
@@ -515,20 +500,17 @@ export default function CalendarPage() {
           start_date:      selectedDateKey,
           end_date:        selectedDateKey,
           notes:           notes,
-          is_from_echo_bot: false,
+          is_from_echo:    false, // 🎯 CORRIGÉ : Utilise le nom de colonne exact 'is_from_echo'
         })
         .select();
 
-      // ── LE MOMENT DE VÉRITÉ ──
       if (supaErr) {
         console.error("🚨 [SUPABASE ERR LOG] :", supaErr);
-        // Cette alerte va te dire EXACTEMENT pourquoi ça bloque
         alert(`Erreur Supabase :\nMessage: ${supaErr.message}\nCode: ${supaErr.code}\nDétail: ${supaErr.details || 'Aucun'}`);
       } else {
-        console.log("✅ [SUPABASE SUCCESS] Row créée avec succès :", data);
+        console.log("✅ [SUPABASE SUCCESS] Événement synchronisé :", data);
       }
 
-      // 4. Si Google a renvoyé un ID, on met à jour l'UI locale
       if (cloudId) {
         setEvents(prev => {
           const dayEvs = prev[selectedDateKey] || [];
@@ -546,32 +528,17 @@ export default function CalendarPage() {
   };
 
   const deleteEvent = async (dateKey: string, id: string, googleId?: string) => {
-    // Supprimer de Google
     if (googleId) await deleteFromGoogle(googleId);
 
-    // Supprimer de Supabase — chercher par user_id + title + start_date si l'id est un tempId local
     if (userId) {
       const { error } = await supabase
         .from("echo_calendar")
         .delete()
-        .eq("user_id", userId)
-        .eq("id", id);
-      if (error) {
-        console.warn("[Calendar] Supabase delete by id failed, trying by title+date:", error.message);
-        // Fallback: supprimer par titre + date si l'id est un tempId (non-UUID)
-        const targetEv = (events[dateKey] || []).find(e => e.id === id);
-        if (targetEv) {
-          await supabase
-            .from("echo_calendar")
-            .delete()
-            .eq("user_id", userId)
-            .eq("title", targetEv.title)
-            .eq("start_date", dateKey);
-        }
-      }
+        .eq("id", id)
+        .eq("user_id", userId);
+      if (error) console.error("[Calendar] Supabase delete error:", error.message);
     }
 
-    // Supprimer de l'UI
     setEvents(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).filter(e => e.id !== id) }));
   };
 
@@ -579,7 +546,6 @@ export default function CalendarPage() {
   const activeMonthLabel = lang === "fr" ? MONTHS_FR[currentMonth] : MONTHS_EN[currentMonth];
   const activeDaysLabels = lang === "fr" ? DAYS_LABELS_FR : DAYS_LABELS_EN;
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-[100dvh] bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
       <input type="file" ref={icsInputRef} accept=".ics" onChange={handleICSRawImport} className="hidden" />
@@ -653,7 +619,6 @@ export default function CalendarPage() {
                 className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
                 📤 {lang === "fr" ? "Exporter" : "Export"}
               </button>
-              {/* Indicateur de statut sync */}
               {googleToken && !needsGoogleReconnect && (
                 <div className="text-[10px] text-emerald-500 font-mono font-bold shrink-0 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
