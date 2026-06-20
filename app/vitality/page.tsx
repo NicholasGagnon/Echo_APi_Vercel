@@ -145,6 +145,14 @@ export default function VitalityPage() {
         const savedConvo = localStorage.getItem(getVitalityConvoKey(uid));
         if (savedConvo) setEchoMessages(deserializeMsgs(JSON.parse(savedConvo)));
 
+        // Si non connecté : charger expenses + calories depuis localStorage guest
+        if (!uid) {
+          const guestExp = localStorage.getItem("echo-budget-expenses-guest");
+          if (guestExp) setExpenses(JSON.parse(guestExp));
+          const guestCal = localStorage.getItem("echo-calorie-logs-guest");
+          if (guestCal) setCaloriesList(JSON.parse(guestCal));
+        }
+
         // 4. Goals + Profile → localStorage
         const savedBGoal = localStorage.getItem(getBudgetGoalKey(uid)) || localStorage.getItem("echo-budget-goal");
         if (savedBGoal) { setBudgetGoal(Number(savedBGoal)); setInputBudgetGoal(savedBGoal); }
@@ -236,11 +244,24 @@ export default function VitalityPage() {
     e.target.value = "";
   };
 
-  // ── CRUD Expenses → Supabase ──────────────────────────────────────────────
+  // ── Clés localStorage fallback (non connecté) ────────────────────────────
+  const LOCAL_EXPENSES  = "echo-budget-expenses-guest";
+  const LOCAL_CALORIES  = "echo-calorie-logs-guest";
+
+  const persistLocalExpenses = (list: BudgetExpense[]) =>
+    localStorage.setItem(LOCAL_EXPENSES, JSON.stringify(list));
+  const persistLocalCalories = (list: CalorieLog[]) =>
+    localStorage.setItem(LOCAL_CALORIES, JSON.stringify(list));
+
+  // ── CRUD Expenses → Supabase (fallback localStorage si non connecté) ──────
   const addExpense = async (exp: Omit<BudgetExpense, "id">) => {
     if (!userId) {
-      // Non connecté : local uniquement
-      setExpenses(prev => [{ id: Date.now().toString(), ...exp }, ...prev]);
+      const newEntry: BudgetExpense = { id: Date.now().toString(), ...exp };
+      setExpenses(prev => {
+        const next = [newEntry, ...prev];
+        persistLocalExpenses(next);
+        return next;
+      });
       return;
     }
     const { data, error } = await supabase.from("echo_expenses").insert({
@@ -259,7 +280,11 @@ export default function VitalityPage() {
       const { error } = await supabase.from("echo_expenses").delete().eq("id", id).eq("user_id", userId);
       if (error) console.error("[Vitality] delete expense:", error.message);
     }
-    setExpenses(prev => prev.filter(i => i.id !== id));
+    setExpenses(prev => {
+      const next = prev.filter(i => i.id !== id);
+      if (!userId) persistLocalExpenses(next);
+      return next;
+    });
   };
 
   const updateExpense = async (id: string, changes: Partial<BudgetExpense>) => {
@@ -275,10 +300,15 @@ export default function VitalityPage() {
     setExpenses(prev => prev.map(exp => exp.id === id ? { ...exp, ...changes } : exp));
   };
 
-  // ── CRUD Calories → Supabase ──────────────────────────────────────────────
+  // ── CRUD Calories → Supabase (fallback localStorage si non connecté) ────────
   const addCalorie = async (cal: Omit<CalorieLog, "id">) => {
     if (!userId) {
-      setCaloriesList(prev => [{ id: Date.now().toString(), ...cal }, ...prev]);
+      const newEntry: CalorieLog = { id: Date.now().toString(), ...cal };
+      setCaloriesList(prev => {
+        const next = [newEntry, ...prev];
+        persistLocalCalories(next);
+        return next;
+      });
       return;
     }
     const { data, error } = await supabase.from("echo_calories").insert({
@@ -296,7 +326,11 @@ export default function VitalityPage() {
       const { error } = await supabase.from("echo_calories").delete().eq("id", id).eq("user_id", userId);
       if (error) console.error("[Vitality] delete calorie:", error.message);
     }
-    setCaloriesList(prev => prev.filter(i => i.id !== id));
+    setCaloriesList(prev => {
+      const next = prev.filter(i => i.id !== id);
+      if (!userId) persistLocalCalories(next);
+      return next;
+    });
   };
 
   // ── Send Echo ──────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "../app/lib/supabase";
+import { loadQuotasFromSupabase } from "../utils/quota";
 
 export const translations: Record<"fr" | "en", {
   sidebar: {
@@ -90,6 +91,11 @@ type LangType      = "fr" | "en";
 type ThemeType     = "dark" | "light";
 type UserTierType  = "connected_free" | "basic" | "premium" | "ultra" | "founder";
 
+interface QuotaNotification {
+  type: "error" | "warning" | "info";
+  message: string;
+}
+
 type AppContextType = {
   lang:         LangType;
   setLang:      (lang: LangType) => void;
@@ -99,14 +105,16 @@ type AppContextType = {
   t:            typeof translations.fr;
   userTier:     UserTierType;
   setUserTier:  (tier: UserTierType) => void;
+  triggerToast: (type: "error" | "warning" | "info", message: string) => void;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [lang,      setLangState]     = useState<LangType>("fr");
-  const [theme,     setThemeState]    = useState<ThemeType>("dark");
-  const [userTier,  setUserTierState] = useState<UserTierType>("connected_free");
+  const [lang,     setLangState]    = useState<LangType>("fr");
+  const [theme,    setThemeState]   = useState<ThemeType>("dark");
+  const [userTier, setUserTierState] = useState<UserTierType>("connected_free");
+  const [notification, setNotification] = useState<QuotaNotification | null>(null);
 
   const applyTheme = (target: ThemeType) => {
     if (typeof window === "undefined") return;
@@ -135,13 +143,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.error("Erreur sync forfait :", err);
     }
+
+    loadQuotasFromSupabase(userId).catch(err =>
+      console.warn("Quota sync non-critique :", err)
+    );
   };
+
+  useEffect(() => {
+    const handleQuotaNotif = (e: Event) => {
+      const customEvent = e as CustomEvent<QuotaNotification>;
+      if (customEvent.detail) {
+        setNotification({
+          type: customEvent.detail.type,
+          message: customEvent.detail.message,
+        });
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("echo-quota-notification", handleQuotaNotif);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("echo-quota-notification", handleQuotaNotif);
+      }
+    };
+  }, []);
+
+  // Fermeture automatique des notifications après 5 secondes
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   useEffect(() => {
     const savedLang  = localStorage.getItem("echo-lang")  as LangType  | null;
     const savedTheme = localStorage.getItem("echo-theme") as ThemeType | null;
 
-    if (savedLang)  setLangState(savedLang);
+    if (savedLang) setLangState(savedLang);
 
     const activeTheme = savedTheme ?? "dark";
     setThemeState(activeTheme);
@@ -181,11 +225,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ── TIER ──────────────────────────────────────────────────────────────────────
   const setUserTier = (newTier: UserTierType) => setUserTierState(newTier);
 
+  // Permet de déclencher un toast programmatiquement
+  const triggerToast = (type: "error" | "warning" | "info", message: string) => {
+    setNotification({ type, message });
+  };
+
   const t = translations[lang];
 
   return (
-    <AppContext.Provider value={{ lang, setLang, toggleLang, theme, toggleTheme, t, userTier, setUserTier }}>
+    <AppContext.Provider value={{ lang, setLang, toggleLang, theme, toggleTheme, t, userTier, setUserTier, triggerToast }}>
       {children}
+      
+      {/* TOAST SYSTEM GLOBAL D'ECHO */}
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-[9999] max-w-sm animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className={`flex items-start gap-3 p-4 rounded-xl border backdrop-blur-xl shadow-2xl transition-all
+            ${theme === "dark" 
+              ? "bg-zinc-950/80 border-zinc-800 text-zinc-200" 
+              : "bg-white/90 border-zinc-200 text-zinc-800"
+            }`}
+          >
+            {/* Icône dynamique en fonction du type */}
+            <div className="flex-shrink-0 mt-0.5">
+              {notification.type === "error" && (
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-red-500/10 text-red-500">❌</span>
+              )}
+              {notification.type === "warning" && (
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/10 text-amber-500">⚠️</span>
+              )}
+              {notification.type === "info" && (
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-cyan-500/10 text-cyan-400">⚡</span>
+              )}
+            </div>
+
+            {/* Corps du message */}
+            <div className="flex-1 space-y-1">
+              <p className="text-[11px] font-bold font-mono tracking-wider uppercase opacity-45">
+                System Status — {notification.type}
+              </p>
+              <p className="text-xs leading-relaxed font-medium">
+                {notification.message}
+              </p>
+            </div>
+
+            {/* Bouton de fermeture */}
+            <button 
+              onClick={() => setNotification(null)}
+              className="flex-shrink-0 text-zinc-500 hover:text-zinc-300 text-[10px] transition-colors p-1"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </AppContext.Provider>
   );
 };
