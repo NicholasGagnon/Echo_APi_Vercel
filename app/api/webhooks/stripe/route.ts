@@ -18,27 +18,27 @@ export async function POST(req: Request) {
   const signature = req.headers.get("stripe-signature");
 
   if (!signature) {
-    console.error("En-tete stripe-signature manquant");
+    console.error("En-tête stripe-signature manquant");
     return NextResponse.json({ error: "Signature manquante" }, { status: 400 });
   }
 
   let event: Stripe.Event;
 
   try {
-    // ⚡ CLÉ DE TEST INTERNE SÉCURISÉE VIA TON COMPTE STRIPE
-    const testWebhookSecret = "whsec_1U3vFgBHw5LMtvb0HSkCF7kdfOtJZLkl";
+    // 🔒 Extraction sécurisée via tes variables d'environnement live/test
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
     event = stripe.webhooks.constructEvent(
       payload,
       signature,
-      testWebhookSecret
+      webhookSecret
     );
   } catch (err: any) {
-    console.error(`Echec validation Webhook Stripe: ${err.message}`);
+    console.error(`Échec validation Webhook Stripe: ${err.message}`);
     return NextResponse.json({ error: `Erreur de signature: ${err.message}` }, { status: 400 });
   }
 
-  console.log(`Evenement Stripe recu : ${event.type}`);
+  console.log(`Événement Stripe reçu : ${event.type}`);
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
@@ -48,8 +48,8 @@ export async function POST(req: Request) {
     const subscriptionId = session.subscription as string;
 
     if (!userId || !planName) {
-      console.error("userId ou planName introuvable dans les metadonnees");
-      return NextResponse.json({ error: "Metadonnees manquantes dans Stripe" }, { status: 400 });
+      console.error("userId ou planName introuvable dans les métadonnées");
+      return NextResponse.json({ error: "Métadonnées manquantes dans Stripe" }, { status: 400 });
     }
 
     const formattedPlan = planName.trim().toLowerCase();
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Si c'est l'achat du coffre, on lui attribue le forfait premium (ou ultra selon ton choix) dans ton sillage
+    // Attribution du forfait selon le sillage d'Echo
     const tierToAssign = formattedPlan === "treasure" ? "ultra" : formattedPlan;
 
     try {
@@ -80,10 +80,10 @@ export async function POST(req: Request) {
 
       if (error) throw error;
 
-      console.log(`Profil ${userId} mis a jour au forfait : ${tierToAssign}`);
+      console.log(`Profil ${userId} mis à jour au forfait : ${tierToAssign}`);
     } catch (dbError: any) {
-      console.error(`Echec mise a jour Supabase: ${dbError.message}`);
-      return NextResponse.json({ error: "Echec ecriture base de donnees" }, { status: 500 });
+      console.error(`Échec mise à jour Supabase: ${dbError.message}`);
+      return NextResponse.json({ error: "Échec écriture base de données" }, { status: 500 });
     }
   }
 
