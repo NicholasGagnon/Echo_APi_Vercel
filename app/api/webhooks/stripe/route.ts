@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
   try {
     // ⚡ CLÉ DE TEST INTERNE SÉCURISÉE VIA TON COMPTE STRIPE
-    const testWebhookSecret = "whsec_ty2H1QRlonMfPINShkJymkunQCv9cIOz";
+    const testWebhookSecret = "whsec_1U3vFgBHw5LMtvb0HSkCF7kdfOtJZLkl";
 
     event = stripe.webhooks.constructEvent(
       payload,
