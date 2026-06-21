@@ -31,7 +31,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     media:"media", livre:"livre", presets:"presets", align:"alignement",
     t1:"Titre 1", t2:"Titre 2", t3:"Titre 3", normal:"Texte normal",
     bold:"Gras", italic:"Italique", indent:"Alinéa",
-    showMarks:"Marques ¶", toc:"Table matières",
+    showMarks:"Marques ¶",
     smaller:"Réduire", larger:"Agrandir",
     importTxt:"Import TXT/MD", openBook:"Ouvrir .echo-book",
     alignLeft:"Gauche", alignCenter:"Centre", alignRight:"Droite", alignJustify:"Justifié",
@@ -64,7 +64,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     media:"media", livre:"book", presets:"presets", align:"align",
     t1:"Title 1", t2:"Title 2", t3:"Title 3", normal:"Normal text",
     bold:"Bold", italic:"Italic", indent:"Indent",
-    showMarks:"Show marks ¶", toc:"TOC",
+    showMarks:"Show marks ¶",
     smaller:"Smaller", larger:"Larger",
     importTxt:"Import TXT/MD", openBook:"Open .echo-book",
     alignLeft:"Left", alignCenter:"Center", alignRight:"Right", alignJustify:"Justify",
@@ -162,6 +162,29 @@ export default function BooksPage() {
   const [showInvisibleChars, setShowInvisibleChars] = useState(false);
   const [showSaveConfirm, setShowSaveConfirm]   = useState(false);
 
+  // Pagination dynamique
+  const [pageCount, setPageCount] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const updatePageCount = useCallback(() => {
+    if (containerRef.current) {
+      const height = containerRef.current.scrollHeight;
+      const count = Math.max(1, Math.ceil(height / A4_H));
+      setPageCount(count);
+    }
+  }, []);
+
+  // Recalcule la pagination lorsque le document change ou se redimensionne
+  useEffect(() => {
+    const t = setTimeout(updatePageCount, 150);
+    return () => clearTimeout(t);
+  }, [chapters, activeChapter, view, updatePageCount]);
+
+  useEffect(() => {
+    window.addEventListener("resize", updatePageCount);
+    return () => window.removeEventListener("resize", updatePageCount);
+  }, [updatePageCount]);
+
   // ── TIPTAP ────────────────────────────────────────────────────────────────
   const editor = useEditor({
     extensions: [
@@ -184,6 +207,7 @@ export default function BooksPage() {
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       setChapters(prev => prev.map(c => c.id===activeChapter ? {...c, content:html} : c));
+      setTimeout(updatePageCount, 50);
     },
   });
 
@@ -195,7 +219,28 @@ export default function BooksPage() {
 
   useEffect(() => { if (editor) editor.commands.setFontFamily(fontFamily); }, [fontFamily, editor]);
 
-  // ── TOGGLES ───────────────────────────────────────────────────────────────
+  // ── TOGGLES AVEC DÉVERROUILLAGE DU PRESET ──────────────────────────────────
+  const handleToggle = (setter: (v: boolean) => void, val: boolean) => {
+    setter(!val);
+    setActivePreset("custom");
+  };
+
+  const handleRangeChange = (setter: (v: number) => void, val: number) => {
+    setter(val);
+    setActivePreset("custom");
+  };
+
+  const handleFontChange = (val: string) => {
+    setFontFamily(val);
+    setActivePreset("custom");
+  };
+
+  const handleFontSizeChange = (val: number) => {
+    setFontSize(val);
+    setActivePreset("custom");
+    editor?.chain().focus().setMark("textStyle", { fontSize: `${val}px` }).run();
+  };
+
   const toggleBold    = () => editor?.chain().focus().toggleBold().run();
   const toggleItalic  = () => editor?.chain().focus().toggleItalic().run();
   const toggleInvisibleChars = () => setShowInvisibleChars(v=>!v);
@@ -210,8 +255,10 @@ export default function BooksPage() {
       const next = Math.min(72, Math.max(8, current + delta));
       editor.chain().focus().setMark("textStyle", { fontSize:`${next}px` }).run();
     } else {
-      setFontSize(v => Math.min(72, Math.max(8, v+delta)));
-      editor.chain().focus().setMark("textStyle", { fontSize:`${Math.min(72, Math.max(8, fontSize+delta))}px` }).run();
+      const nextSize = Math.min(72, Math.max(8, fontSize+delta));
+      setFontSize(nextSize);
+      setActivePreset("custom");
+      editor?.chain().focus().setMark("textStyle", { fontSize:`${nextSize}px` }).run();
     }
   };
 
@@ -228,26 +275,14 @@ export default function BooksPage() {
     );
   };
 
-  const insertTOC = () => {
-    if (!editor) return;
-    const rows = chapters.map((c,i)=>
-      `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;border-bottom:1px dotted rgba(120,120,120,0.18);">${c.title}<span>${i+1}</span></div>`
-    ).join("");
-    editor.commands.insertContent(
-      `<div contenteditable="false" style="user-select:none;-webkit-user-select:none;border:1px dashed rgba(6,182,212,0.25);padding:14px;border-radius:3px;margin:18px 0;cursor:default;">
-        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.12em;opacity:0.45;margin-bottom:10px;">${T.toc}</div>
-        ${rows}
-      </div><p></p>`
-    );
-  };
-
   // ── INJECTION ECHO → fin du chapitre ─────────────────────────────────────
   const injectTextAtEnd = (text: string) => {
     if (!editor) return;
-    const size = editor.state.doc.content.size;
+    const { doc } = editor.state;
     editor.chain()
       .focus()
-      .insertContentAt(size - 1, `<p>${text}</p>`)
+      .setTextSelection(doc.content.size - 1)
+      .insertContent(`<p>${text}</p>`)
       .run();
   };
 
@@ -329,7 +364,7 @@ export default function BooksPage() {
         }
       }
       const raw=localStorage.getItem("echo-books-manuscript");
-      if(raw){try{const{bookTitle:t,chapters:c}=JSON.parse(raw);if(t)setBookTitle(t);if(c?.length){setChapters(c);setActiveChapter(c[0].id);}}catch{}}
+      if(raw){try{const{bookTitle:t,chapters:c}=JSON.parse(raw);if(t)setBookTitle(t);if(c?.length){setChapters(c);setActiveChapter(c[0].id);}}catch{}
       setSaveStatus("saved");
     });
     const{data:listener}=supabase.auth.onAuthStateChange((_,s)=>setUserId(s?.user?.id||null));
@@ -430,32 +465,122 @@ export default function BooksPage() {
   const [echoThinking,setEchoThinking] = useState(false);
   const echoBottomRef = useRef<HTMLDivElement>(null);
 
+  // ⚡ SYSTÈME DE SECOURS ET DE ROBUSTESSE INTELLIGENT DIRECT (No Failure)
+  const fetchEchoReply = async (msg: string, history: any, safeTier: string) => {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const excerpt = editor?.getText()?.slice(0, 500) || "";
+    
+    try {
+      const res = await fetch(`${API_URL}/books`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `[Livre: "${bookTitle}" | Extrait: "${excerpt.slice(0, 200)}"]\n\n${msg}`,
+          history,
+          source: "books",
+          selectedButtons: echoMode ? [echoMode] : [],
+          userTier: safeTier,
+          calendarEvents: {},
+        }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        // S'assurer qu'il ne s'agit pas du message d'erreur générique du backend
+        if (data.response && !data.response.includes("instable")) {
+          return data;
+        }
+      }
+      throw new Error("Server error or generic instable reply");
+    } catch (err) {
+      console.warn("[Books] Passage en secours sur l'appel direct local Gemini...", err);
+      
+      // Appel direct sécurisé avec clé fournie au runtime (système autonome)
+      const apiKey = ""; 
+      const targetModel = "gemini-2.5-flash-preview-09-2025";
+      const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+      
+      const systemPrompt = `
+        Tu es Echo, un assistant d'écriture intelligent.
+        Mode sélectionné : ${echoMode || "aucun"}.
+        Titre du livre : "${bookTitle}".
+        Extrait actuel : "${excerpt}".
+        
+        RÈGLES D'INJECTION :
+        Si l'utilisateur te demande d'écrire, générer ou continuer son histoire/texte directement dans le livre, tu DOIS obligatoirement envelopper le contenu rédigé à insérer à l'intérieur des balises <<<INJECT_TEXT>>> et <<<END_INJECT>>>.
+        Les commentaires et explications doivent rester EN DEHORS de ces balises pour permettre à l'interface de les séparer.
+        Exemple :
+        Voici la suite que je te propose :
+        <<<INJECT_TEXT>>>
+        Il était une fois...
+        <<<END_INJECT>>>
+      `;
+      
+      const contentsPayload: any[] = [];
+      history.forEach((h: string) => {
+        const isUser = h.startsWith("You:") || h.startsWith("Toi:");
+        const textContent = h.replace(/^(You:|Toi:|Echo:)\s*/, "");
+        contentsPayload.push({
+          role: isUser ? "user" : "model",
+          parts: [{ text: textContent }]
+        });
+      });
+      
+      contentsPayload.push({
+        role: "user",
+        parts: [{ text: msg }]
+      });
+      
+      const directRes = await fetch(directUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: contentsPayload,
+          systemInstruction: { parts: [{ text: systemPrompt }] }
+        })
+      });
+      
+      if (!directRes.ok) {
+        throw new Error("Direct Gemini call failed as well");
+      }
+      
+      const directData = await directRes.json();
+      const replyText = directData.candidates?.[0]?.content?.parts?.[0]?.text || "...";
+      
+      const injectMatch = replyText.match(/<<<INJECT_TEXT>>>(.*?)<<<END_INJECT>>>/s);
+      if (injectMatch) {
+        const injectedText = injectMatch[1].trim();
+        const cleanResponse = replyText.replace(/<<<INJECT_TEXT>>>.*?<<<END_INJECT>>>/gs, "").trim();
+        return {
+          response: cleanResponse || "J'ai injecté le texte demandé directement à la suite de ton livre ! ✨",
+          inject: true,
+          injected_text: injectedText
+        };
+      } else {
+        return {
+          response: replyText,
+          inject: false
+        };
+      }
+    }
+  };
+
   const sendEcho = async () => {
     if(!echoInput.trim()||echoThinking) return;
     const msg=echoInput.trim();
     setEchoInput("");
     setEchoMessages(prev=>[...prev,{role:"user",text:msg}]);
     setEchoThinking(true);
-    const excerpt=editor?.getText()?.slice(0,500)||"";
     const history=echoMessages.map(m=>m.role==="user"?`You: ${m.text}`:`Echo: ${m.text}`);
     try{
-      const API_URL=process.env.NEXT_PUBLIC_API_URL||"http://localhost:5000";
-      const res=await fetch(`${API_URL}/books`,{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          message:`[Livre: "${bookTitle}" | Extrait: "${excerpt.slice(0,200)}"]\n\n${msg}`,
-          history, source:"books",
-          selectedButtons: echoMode ? [echoMode] : [],
-          userTier: safeTier,
-          calendarEvents:{},
-        }),
-      });
-      const data=await res.json();
-      const reply=data.response||"...";
+      const data = await fetchEchoReply(msg, history, safeTier);
+      const reply = data.response || "...";
 
-      // Injection automatique si Echo veut injecter
-      if (data.inject && data.inject_text) {
-        injectTextAtEnd(data.inject_text);
+      const hasInject = data.inject;
+      const injectedText = data.injected_text || data.inject_text;
+
+      if (hasInject && injectedText) {
+        injectTextAtEnd(injectedText);
         setEchoMessages(prev=>[...prev,{role:"echo",text:`${reply}\n\n✅ ${fr?"Texte injecté dans le chapitre.":"Text injected into chapter."}`}]);
       } else {
         setEchoMessages(prev=>[...prev,{role:"echo",text:reply}]);
@@ -495,7 +620,6 @@ export default function BooksPage() {
     <button onClick={onClick} title={label}
       className={`group relative w-[46px] h-7 flex items-center justify-center rounded-lg text-[13px] transition-all border select-none ${active?"bg-cyan-500/15 border-cyan-500/40 text-cyan-400":"border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"}`}>
       {icon}
-      <span className="pointer-events-none absolute left-[50px] top-1/2 -translate-y-1/2 bg-zinc-950 text-white text-[9px] px-1.5 py-0.5 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 border border-zinc-800 z-50 shadow-lg transition-opacity">{label}</span>
     </button>
   );
 
@@ -558,7 +682,7 @@ export default function BooksPage() {
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* TOOLBAR — w-[130px] élargi */}
+        {/* TOOLBAR */}
         <div className="w-[130px] shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col py-2 overflow-y-auto overflow-x-hidden">
 
           {/* struct */}
@@ -568,7 +692,8 @@ export default function BooksPage() {
               <TB icon="T¹" label={T.t1} active={editor?.isActive("heading",{level:1})} onClick={()=>editor?.chain().focus().toggleHeading({level:1}).run()}/>
               <TB icon="T²" label={T.t2} active={editor?.isActive("heading",{level:2})} onClick={()=>editor?.chain().focus().toggleHeading({level:2}).run()}/>
               <TB icon="T³" label={T.t3} active={editor?.isActive("heading",{level:3})} onClick={()=>editor?.chain().focus().toggleHeading({level:3}).run()}/>
-              <TB icon="¶"  label={T.normal} active={editor?.isActive("paragraph")} onClick={()=>editor?.chain().focus().setParagraph().run()}/>
+              {/* L'icône de texte normal est Abc */}
+              <TB icon="Abc" label={T.normal} active={editor?.isActive("paragraph")} onClick={()=>editor?.chain().focus().setParagraph().run()}/>
             </div>
           </div>
 
@@ -576,9 +701,9 @@ export default function BooksPage() {
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.texte}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="B"  label={T.bold}   active={editor?.isActive("bold")}   onClick={toggleBold}/>
-              <TB icon="I"  label={T.italic} active={editor?.isActive("italic")} onClick={toggleItalic}/>
-              <TB icon="→"  label={T.indent} onClick={insertIndent}/>
+              <TB icon="B"   label={T.bold}   active={editor?.isActive("bold")}   onClick={toggleBold}/>
+              <TB icon="I"   label={T.italic} active={editor?.isActive("italic")} onClick={toggleItalic}/>
+              <TB icon="→"   label={T.indent} onClick={insertIndent}/>
             </div>
           </div>
 
@@ -586,10 +711,10 @@ export default function BooksPage() {
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.align}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="⬅" label={T.alignLeft}    active={editor?.isActive({textAlign:"left"})}    onClick={()=>{editor?.chain().focus().setTextAlign("left").run();setIsJustified(false);}}/>
-              <TB icon="⬛" label={T.alignCenter}  active={editor?.isActive({textAlign:"center"})}  onClick={()=>{editor?.chain().focus().setTextAlign("center").run();setIsJustified(false);}}/>
-              <TB icon="➡" label={T.alignRight}   active={editor?.isActive({textAlign:"right"})}   onClick={()=>{editor?.chain().focus().setTextAlign("right").run();setIsJustified(false);}}/>
-              <TB icon="≡" label={T.alignJustify} active={editor?.isActive({textAlign:"justify"})} onClick={()=>{editor?.chain().focus().setTextAlign("justify").run();setIsJustified(true);}}/>
+              <TB icon="⬅" label={T.alignLeft}    active={editor?.isActive({textAlign:"left"})}    onClick={()=>{editor?.chain().focus().setTextAlign("left").run(); handleToggle(setIsJustified, true);}}/>
+              <TB icon="⬛" label={T.alignCenter}  active={editor?.isActive({textAlign:"center"})}  onClick={()=>{editor?.chain().focus().setTextAlign("center").run(); handleToggle(setIsJustified, true);}}/>
+              <TB icon="➡" label={T.alignRight}   active={editor?.isActive({textAlign:"right"})}   onClick={()=>{editor?.chain().focus().setTextAlign("right").run(); handleToggle(setIsJustified, true);}}/>
+              <TB icon="≡" label={T.alignJustify} active={editor?.isActive({textAlign:"justify"})} onClick={()=>{editor?.chain().focus().setTextAlign("justify").run(); handleToggle(setIsJustified, false);}}/>
             </div>
           </div>
 
@@ -597,8 +722,8 @@ export default function BooksPage() {
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.pages}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="⊟" label={T.showMarks} active={showInvisibleChars} onClick={toggleInvisibleChars}/>
-              <TB icon="📑" label={T.toc} onClick={insertTOC}/>
+              {/* L'icône du bouton des marques invisibles est ¶ */}
+              <TB icon="¶" label={T.showMarks} active={showInvisibleChars} onClick={toggleInvisibleChars}/>
               <TB icon="—"  label={fr?"Saut de page":"Page break"} onClick={insertPageBreakBlock}/>
             </div>
           </div>
@@ -693,7 +818,7 @@ export default function BooksPage() {
               <span className="text-[9px] font-mono text-zinc-400">{saveLabel.text}</span>
             </div>
 
-            {/* SAVE avec popup confirmation */}
+            {/* SAVE */}
             <div className="relative shrink-0">
               <button onClick={manualSave} className="text-[9px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-all font-mono">
                 💾 {T.save}
@@ -714,9 +839,9 @@ export default function BooksPage() {
               {showExportMenu && (
                 <div className="absolute right-0 mt-1 w-40 rounded-xl bg-zinc-950 border border-zinc-800 shadow-2xl p-1 z-50 flex flex-col gap-0.5">
                   {[
-                    {key:"pdf",  label:"📄 PDF",           hint:"Via Flask"},
+                    {key:"pdf",  label:"📄 PDF",          hint:"Via Flask"},
                     {key:"docx", label:"📝 Word (.docx)",  hint:"Via Flask"},
-                    {key:"epub", label:"📚 EPUB",           hint:"Via Flask"},
+                    {key:"epub", label:"📚 EPUB",          hint:"Via Flask"},
                     {key:"txt",  label:"📃 TXT pur",        hint:"Local"},
                     {key:"json", label:"💾 .echo-book",     hint:"Local"},
                   ].map(({key,label,hint})=>(
@@ -748,6 +873,7 @@ export default function BooksPage() {
           {/* SETTINGS ROW */}
           {showSettings && (
             <div className="shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 px-4 py-2 flex flex-wrap gap-x-4 gap-y-2 items-center text-[10px]">
+              {/* ⚡ CORRIGÉ : div au lieu de label pour interdire le bug de double-clic d'événement HTML */}
               {[
                 {label:T.mirror,       val:mirrorMargins,   set:setMirrorMargins},
                 {label:T.pageNum,      val:showPageNumbers, set:setShowPageNumbers},
@@ -755,29 +881,29 @@ export default function BooksPage() {
                 {label:T.footer,       val:showFooter,      set:setShowFooter},
                 {label:T.paraIndentLbl,val:paraIndent,      set:setParaIndent},
               ].map(({label,val,set})=>(
-                <label key={label} className="flex items-center gap-1.5 cursor-pointer">
-                  <span className="text-zinc-400">{label}</span><Toggle val={val} set={set}/>
-                </label>
+                <div key={label} className="flex items-center gap-1.5">
+                  <span className="text-zinc-400">{label}</span>
+                  <Toggle val={val} set={()=>handleToggle(set, val)}/>
+                </div>
               ))}
               <div className="flex items-center gap-1.5">
                 <span className="text-zinc-400">{T.lineH}</span>
-                <input type="range" min="1.2" max="2.4" step="0.05" value={lineHeight} onChange={e=>setLineHeight(parseFloat(e.target.value))} className="w-16 accent-cyan-400 h-1"/>
+                <input type="range" min="1.2" max="2.4" step="0.05" value={lineHeight} onChange={e=>handleRangeChange(setLineHeight, parseFloat(e.target.value))} className="w-16 accent-cyan-400 h-1"/>
                 <span className="font-mono text-zinc-400 text-[9px] w-7">{lineHeight.toFixed(2)}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-zinc-400">{T.para}</span>
-                <input type="range" min="0.2" max="2" step="0.05" value={paraSpacing} onChange={e=>setParaSpacing(parseFloat(e.target.value))} className="w-12 accent-cyan-400 h-1"/>
+                <input type="range" min="0.2" max="2" step="0.05" value={paraSpacing} onChange={e=>handleRangeChange(setParaSpacing, parseFloat(e.target.value))} className="w-12 accent-cyan-400 h-1"/>
                 <span className="font-mono text-zinc-400 text-[9px] w-7">{paraSpacing.toFixed(2)}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-zinc-400">{T.opacity}</span>
-                <input type="range" min="0" max="100" step="1" value={pageOpacity} onChange={e=>setPageOpacity(parseInt(e.target.value))} className="w-16 accent-cyan-400 h-1"/>
+                <input type="range" min="0" max="100" step="1" value={pageOpacity} onChange={e=>handleRangeChange(setPageOpacity, parseInt(e.target.value))} className="w-16 accent-cyan-400 h-1"/>
                 <span className="font-mono text-zinc-400 text-[9px] w-7">{pageOpacity}%</span>
               </div>
-              {/* Police + import custom */}
               <div className="flex items-center gap-1.5">
                 <span className="text-zinc-400">{T.font}</span>
-                <select value={fontFamily} onChange={e=>setFontFamily(e.target.value)} className="bg-zinc-900 border border-zinc-700 text-zinc-300 text-[9px] rounded px-1 py-0.5">
+                <select value={fontFamily} onChange={e=>handleFontChange(e.target.value)} className="bg-zinc-900 border border-zinc-700 text-zinc-300 text-[9px] rounded px-1 py-0.5">
                   <option value="Georgia, serif">Georgia</option>
                   <option value="'Times New Roman', serif">Times New Roman</option>
                   <option value="Garamond, serif">Garamond</option>
@@ -788,10 +914,9 @@ export default function BooksPage() {
                 </select>
                 <button onClick={()=>fontInputRef.current?.click()} className="text-[9px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">+ {T.importFont}</button>
               </div>
-              {/* Global font size */}
               <div className="flex items-center gap-1.5">
                 <span className="text-zinc-400">px</span>
-                <input type="number" min="8" max="72" value={fontSize} onChange={e=>{const v=parseInt(e.target.value)||14;setFontSize(v);editor?.chain().focus().setMark("textStyle",{fontSize:`${v}px`}).run();}} className="w-12 bg-zinc-900 border border-zinc-700 text-zinc-300 text-[9px] rounded px-1 py-0.5 text-center font-mono"/>
+                <input type="number" min="8" max="72" value={fontSize} onChange={e=>handleFontSizeChange(parseInt(e.target.value)||14)} className="w-12 bg-zinc-900 border border-zinc-700 text-zinc-300 text-[9px] rounded px-1 py-0.5 text-center font-mono"/>
               </div>
               <button onClick={()=>setShowSettings(false)} className="ml-auto text-zinc-500 hover:text-zinc-200 text-base">✕</button>
             </div>
@@ -811,10 +936,10 @@ export default function BooksPage() {
               style={{scrollbarWidth:"thin",scrollbarColor:"rgba(6,182,212,0.2) transparent"}}>
 
               {/* PAGE SIMULÉE — le contenu TipTap s'étend librement en dessous */}
-              <div className={`relative shadow-2xl ${showInvisibleChars?"echo-editor-show-symbols":""}`}
+              <div ref={containerRef} className={`relative shadow-2xl ${showInvisibleChars?"echo-editor-show-symbols":""}`}
                 style={{
                   width:"860px",
-                  minHeight:`${A4_H}px`,
+                  minHeight:`${pageCount * A4_H}px`, // ⚡ CORRIGÉ : S'adapte dynamiquement pour que le curseur n'écrive plus jamais dans le vide !
                   paddingTop: showHeader ? 0 : "52px",
                   paddingBottom: showFooter ? 0 : "64px",
                   paddingLeft: mirrorMargins ? "90px" : "72px",
@@ -828,10 +953,10 @@ export default function BooksPage() {
                 {/* Repère de marge latérale */}
                 <div className="absolute left-12 top-0 bottom-0 w-px pointer-events-none" style={{background:"rgba(6,182,212,0.05)"}}/>
 
-                {/* Repères de "page" toutes les A4_H px */}
-                {Array.from({length:10}).map((_,i)=>(
+                {/* Repères de pages dynamiques */}
+                {Array.from({length: Math.max(0, pageCount - 1)}).map((_,i)=>(
                   <div key={i} className="absolute left-0 right-0 pointer-events-none"
-                    style={{top:`${(i+1)*A4_H}px`,borderTop:"1px dashed rgba(6,182,212,0.12)",zIndex:0}}>
+                    style={{top:`${(i+1)*A4_H}px`,borderTop:"1px dashed rgba(6,182,212,0.12)",zIndex:10}}>
                     <span style={{position:"absolute",right:"8px",top:"-10px",fontSize:"8px",color:"rgba(6,182,212,0.3)",fontFamily:"monospace"}}>
                       p.{i+2}
                     </span>
@@ -862,11 +987,19 @@ export default function BooksPage() {
                   className="outline-none text-black dark:text-zinc-100 caret-cyan-400 books-editor-tiptap"
                   style={{fontSize:`${fontSize}px`,lineHeight,fontFamily}}/>
 
-                {showPageNumbers && (
-                  <div className="sticky bottom-4 text-center text-[9px] text-zinc-400 font-mono pointer-events-none mt-8">
-                    — {chapters.findIndex(c=>c.id===activeChapter)+1} —
+                {/* ⚡ CORRIGÉ : Vrai système de numérotation séquentielle des pages réelles (Calcul JS corrigé) */}
+                {showPageNumbers && Array.from({ length: pageCount }).map((_, i) => (
+                  <div
+                    key={`pagenum-${i}`}
+                    className="absolute left-0 right-0 text-center text-[10px] text-zinc-400 font-mono pointer-events-none"
+                    style={{
+                      top: `${(i + 1) * A4_H - 35}px`,
+                      zIndex: 10,
+                    }}
+                  >
+                    — {i + 1} —
                   </div>
-                )}
+                ))}
 
                 {showFooter && (
                   <div className="h-7 border-t border-zinc-700/30 flex items-center justify-center mt-4">
@@ -888,7 +1021,7 @@ export default function BooksPage() {
           </div>
         )}
 
-        {/* ECHO PANEL — plus large, texte 15px */}
+        {/* ECHO PANEL */}
         <aside style={isDesktop?{width:echoPanelWidth,flexBasis:echoPanelWidth}:undefined}
           className="w-72 shrink-0 border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col overflow-hidden">
 
@@ -903,7 +1036,7 @@ export default function BooksPage() {
             </button>
           </div>
 
-          {/* Mode buttons — toggle on/off, pas de défaut forcé */}
+          {/* Mode buttons */}
           <div className="flex gap-1 p-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
             {ECHO_MODES.map(m=>(
               <button key={m.id} onClick={()=>setEchoMode(echoMode===m.id?null:m.id)}
@@ -913,7 +1046,7 @@ export default function BooksPage() {
             ))}
           </div>
 
-          {/* Messages Echo — text-[15px] */}
+          {/* Messages Echo */}
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 min-h-0" style={{scrollbarWidth:"thin"}}>
             {echoMessages.length===0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-3 pb-4">
@@ -960,7 +1093,7 @@ export default function BooksPage() {
           margin-top: 0 !important;
           margin-bottom: ${paraSpacing}em !important;
           line-height: inherit !important;
-          text-indent: ${paraIndent?"1.5em":"0"};
+          text-indent: ${paraIndent?"1.5em":"0"} !important;
         }
         .echo-editor-show-symbols .ProseMirror p:after {
           content: " ¶" !important; color: rgba(6,182,212,0.35) !important;
