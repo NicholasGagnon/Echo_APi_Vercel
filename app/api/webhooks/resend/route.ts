@@ -6,36 +6,54 @@ export async function POST(req: Request) {
     const resend = new Resend(process.env.RESEND_API_KEY);
     const body = await req.json();
 
-    console.log("INBOUND EMAIL WEBHOOK RECEIVED");
-
     const emailData = body.data || {};
     const emailId = emailData.email_id;
 
     if (!emailId) {
-      console.error("Aucun email_id trouvé dans le webhook");
       return NextResponse.json({ success: false, error: "No email ID" });
     }
 
-    // 1. Récupération des métadonnées de base
-    const from = emailData.from || "Inconnu";
-    const subject = emailData.subject || "Sans objet";
-    
-    const toArray = Array.isArray(emailData.to) ? emailData.to : [emailData.to || ""];
+    const from        = emailData.from    || "Inconnu";
+    const subject     = emailData.subject || "Sans objet";
+    const toArray     = Array.isArray(emailData.to) ? emailData.to : [emailData.to || ""];
     const toFormatted = toArray.join(", ");
 
-    // 2. APPEL API : On va chercher le vrai contenu du message chez Resend avec l'ID
-    const fullEmail = await resend.emails.get(emailId);
-    
-    // Extraction du texte ou du HTML récupéré
-    const messageContent = fullEmail.data?.text || fullEmail.data?.html || "[Message vide ou impossible à récupérer]";
-
-    // 3. Détermination du préfixe selon le destinataire
     let prefix = "[EMAIL]";
     const toLower = toFormatted.toLowerCase();
     if (toLower.includes("support@echosai.ca")) prefix = "[SUPPORT]";
     if (toLower.includes("contact@echosai.ca")) prefix = "[CONTACT]";
 
-    // 4. Envoi de l'email final épuré avec le VRAI message
+    let messageContent = "[Message vide]";
+
+    // --- STRATÉGIE 1 : Le SDK avec la bonne méthode inbound ---
+    try {
+      const received = await (resend.emails as any).receiving.get(emailId);
+      const emailContent = received?.data || received || {};
+      messageContent = emailContent.text || emailContent.html || "[Message vide]";
+    } catch (err: any) {
+      console.error("receiving.get failed:", err?.message);
+
+      // --- STRATÉGIE 2 (FALLBACK) : Appel HTTP Direct sur l'endpoint Inbound correct ---
+      try {
+        const res = await fetch(`https://api.resend.com/inbound/emails/${emailId}`, {
+          headers: { 
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+        });
+        if (res.ok) {
+          const result = await res.json();
+          const data = result.data || result;
+          messageContent = data.text || data.html || "[Message vide]";
+        } else {
+          console.error("HTTP Fallback status error:", res.status);
+        }
+      } catch (err2: any) {
+        console.error("HTTP fallback failed:", err2?.message);
+      }
+    }
+
+    // Envoi de l'email retransféré
     await resend.emails.send({
       from: "support@echosai.ca",
       to: "lafailleestouverte@gmail.com",
