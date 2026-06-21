@@ -32,7 +32,7 @@ const fetchUserTier = async (uid: string): Promise<UserTier> => {
 const STICKY_STYLES = {
   yellow: { bg:"bg-yellow-950/40 dark:bg-yellow-950", border:"border-yellow-600/50", text:"text-yellow-900 dark:text-yellow-200", dot:"bg-yellow-400" },
   blue:   { bg:"bg-blue-950/40 dark:bg-blue-950",     border:"border-blue-500/50",   text:"text-blue-900 dark:text-blue-200",   dot:"bg-blue-400"   },
-  green:  { bg:"bg-green-950/40 dark:bg-green-950",   border:"border-green-600/50",  text:"text-green-900 dark:text-green-200", dot:"bg-green-400"  },
+  green:  { bg:"bg-green-950/40 dark:bg-green-950",  border:"border-green-600/50",  text:"text-green-900 dark:text-green-200", dot:"bg-green-400"  },
   pink:   { bg:"bg-pink-950/40 dark:bg-pink-950",     border:"border-pink-600/50",   text:"text-pink-900 dark:text-pink-200",   dot:"bg-pink-400"   },
 };
 
@@ -56,7 +56,7 @@ const deriveTitle = (raws: string[], lang: string): string => {
 };
 
 export default function Home() {
-  const { t, lang, theme, toggleTheme } = useApp();
+  const { t, lang, theme, toggleTheme, triggerToast } = useApp();
 
   const [message,   setMessage]   = useState("");
   const [messages,  setMessages]  = useState<EchoMessage[]>([]);
@@ -70,7 +70,7 @@ export default function Home() {
   const saveTimerRef  = useRef<ReturnType<typeof setTimeout>|null>(null);
 
   const [isListening,       setIsListening]       = useState(false);
-  const [selectedImage,     setSelectedImage]      = useState<string|null>(null);
+  const [selectedImage,      setSelectedImage]      = useState<string|null>(null);
   const [selectedImageName, setSelectedImageName]  = useState("");
 
   const DEFAULT_INPUT_HEIGHT = 112;
@@ -147,7 +147,7 @@ export default function Home() {
   const [tutorialStep,   setTutorialStep]   = useState<number|null>(null);
   const [selectedButtons,        setSelectedButtons]        = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
-  const [showLimitModal,    setShowLimitModal]    = useState(false);
+  const [showLimitModal,        setShowLimitModal]    = useState(false);
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality"|"calendar"|"prompts">("vitality");
 
   const localButtonsLabels: Record<"fr"|"en", Record<string,string>> = {
@@ -371,55 +371,125 @@ export default function Home() {
       setMessages([...baseMessages, { raw: `Echo: ${echoText}${actionNotice}` }]);
 
       if (data.action && !isActionBlocked) {
+        const { type, payload } = data.action;
 
-        if (data.action.type === "ADD_BUDGET_EXPENSE") {
-          const { title, amount, spent, date, paymentDate, paidAt } = data.action.payload;
+        if (type === "ADD_BUDGET_EXPENSE") {
+          const { title, amount, spent, date, paymentDate, paidAt } = payload;
+          const finalTitle = title || "Achat";
+          const finalAmount = parseFloat(amount ?? spent) || 0;
+          const finalDate = paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA");
+
           if (userId) {
             const { error } = await supabase.from("echo_expenses").insert({
-              user_id: userId, title: title || "Purchase",
-              amount: parseFloat(amount ?? spent) || 0,
-              date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
+              user_id: userId, title: finalTitle,
+              amount: finalAmount,
+              date: finalDate,
             });
-            if (error) console.error("[Home] echo_expenses:", error.message);
+            if (error) {
+              console.error("[Home] echo_expenses:", error.message);
+              triggerToast("error", lang === "fr" ? `Erreur dépense : ${error.message}` : `Expense error: ${error.message}`);
+            } else {
+              triggerToast("info", lang === "fr" ? `📈 Dépense de ${finalAmount}$ ajoutée !` : `📈 Expense of ${finalAmount}$ added!`);
+            }
           }
         }
 
-        if (data.action.type === "ADD_CALORIE_LOG") {
-          const { foodName, calories } = data.action.payload;
+        if (type === "ADD_CALORIE_LOG") {
+          const { foodName, title, food_name, calories } = payload;
+          const finalFoodName = title || foodName || food_name || "Aliment";
+          const finalCalories = parseInt(calories) || 0;
+
           if (userId) {
             const { error } = await supabase.from("echo_calories").insert({
-              user_id: userId, food_name: foodName || "Food Item",
-              calories: parseInt(calories) || 0,
+              user_id: userId, food_name: finalFoodName,
+              calories: finalCalories,
               date: new Date().toLocaleDateString("fr-CA"),
             });
-            if (error) console.error("[Home] echo_calories:", error.message);
+            if (error) {
+              console.error("[Home] echo_calories:", error.message);
+              triggerToast("error", lang === "fr" ? `Erreur calorie : ${error.message}` : `Calorie error: ${error.message}`);
+            } else {
+              triggerToast("info", lang === "fr" ? `🍎 ${finalFoodName} (${finalCalories} kcal) ajouté !` : `🍎 ${finalFoodName} (${finalCalories} kcal) added!`);
+            }
           }
         }
 
-        if (data.action.type === "SET_CALORIE_GOAL" || data.action.type === "UPDATE_CALORIE_GOAL") {
-          const { goal, calorieGoal, calories } = data.action.payload;
+        if (type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") {
+          const { goal, calorieGoal, calories } = payload;
           const nextGoal = parseInt(goal ?? calorieGoal ?? calories);
-          if (Number.isFinite(nextGoal) && nextGoal > 0) localStorage.setItem("echo-calorie-goal", nextGoal.toString());
+          if (Number.isFinite(nextGoal) && nextGoal > 0) {
+            localStorage.setItem("echo-calorie-goal", nextGoal.toString());
+            triggerToast("info", lang === "fr" ? `🎯 Objectif : ${nextGoal} kcal` : `🎯 Goal: ${nextGoal} kcal`);
+          }
         }
 
-        if (data.action.type === "ADD_CALENDAR_EVENT") {
-          const { title, start, end, notes } = data.action.payload;
+        if (type === "ADD_CALENDAR_EVENT") {
+          const { title, start, end, notes } = payload;
           const dateKey = start?.split("T")[0] || start || "";
-          if (dateKey && userId) {
-            const { data: inserted, error } = await supabase.from("echo_calendar").insert({
-              user_id:      userId,
-              title:        title || "Untitled Event",
-              start_date:   dateKey,
-              end_date:     dateKey,
-              notes:        notes || "",
-              is_from_echo: true,
-            }).select().single();
+          const finalTitle = title || "Rendez-vous sans titre";
+          const finalNotes = notes || "";
 
-            if (error) {
-              console.error("[Home] echo_calendar:", error.message);
-            } else {
-              const newEvent = { id: inserted.id, title: inserted.title, start: start||"", end: end||"", notes: notes||"" };
-              setCalendarEvents(prev => ({ ...prev, [dateKey]: [...(prev[dateKey]||[]), newEvent] }));
+          if (dateKey && userId) {
+            try {
+              // On utilise select() sans single() pour éviter un crash d'autorisation RLS
+              const { data: insertedList, error } = await supabase.from("echo_calendar").insert({
+                user_id:      userId,
+                title:        finalTitle,
+                start_date:   dateKey,
+                end_date:     dateKey,
+                notes:        finalNotes,
+                is_from_echo: true,
+              }).select();
+
+              let finalId = `temp-${Date.now()}`;
+              if (error) {
+                console.warn("[Home] Échec insertion calendrier standard, repli sans 'is_from_echo' :", error.message);
+                // Repli sans 'is_from_echo' au cas où la colonne n'est pas encore synchronisée
+                const { data: retryList, error: retryError } = await supabase.from("echo_calendar").insert({
+                  user_id:      userId,
+                  title:        finalTitle,
+                  start_date:   dateKey,
+                  end_date:     dateKey,
+                  notes:        finalNotes,
+                }).select();
+
+                if (!retryError && retryList && retryList.length > 0) {
+                  finalId = retryList[0].id;
+                } else {
+                  console.error("[Home] Échec total du repli de calendrier :", retryError?.message);
+                }
+              } else if (insertedList && insertedList.length > 0) {
+                finalId = insertedList[0].id;
+              }
+
+              // Extraction intelligente d'horaires pour synchroniser l'affichage
+              let extractedStart = "";
+              const timeMatch = finalNotes.match(/(?:Heure\s*:\s*)?(\d{1,2}h(?:\d{2})?\s*(?:à|to)\s*\d{1,2}h(?:\d{2})?)/i);
+              if (timeMatch) {
+                extractedStart = timeMatch[1];
+              }
+
+              const newEvent = { 
+                id: finalId, 
+                title: finalTitle, 
+                start: extractedStart, 
+                end: "", 
+                notes: finalNotes 
+              };
+
+              // Injection instantanée de l'événement dans le state
+              setCalendarEvents(prev => {
+                const currentList = prev[dateKey] || [];
+                if (currentList.some(ev => ev.title === finalTitle && ev.notes === finalNotes)) {
+                  return prev;
+                }
+                return { ...prev, [dateKey]: [...currentList, newEvent] };
+              });
+
+              triggerToast("info", lang === "fr" ? `📅 Événement "${finalTitle}" ajouté !` : `📅 Event "${finalTitle}" added!`);
+
+            } catch (err: any) {
+              console.error("[Home] Crash insertion calendrier :", err);
             }
           }
         }
@@ -714,7 +784,7 @@ export default function Home() {
                             : selectedImage ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
                             : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"}`}>
                         <span>{isImageButtonLocked?"🔒":selectedImage?"✓":"🖼️"}</span>
-                        <span className="truncate hidden sm:inline">{selectedImage?(lang==="fr"?"Image prête":"Image Ready"):(lang==="fr"?"Analyse d'image":"Image Analysis")}</span>
+                        <span className="truncate hidden sm:inline">{isImageButtonLocked?"🔒":selectedImage?(lang==="fr"?"Image prête":"Image Ready"):(lang==="fr"?"Analyse d'image":"Image Analysis")}</span>
                       </button>
                       <button onClick={lancerDictation}
                         className={`h-8 px-3 rounded-lg font-bold text-[11px] flex items-center gap-1.5 border transition-all shrink-0 ${isListening?"bg-red-600 border-red-500 animate-pulse text-white":"bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/20 text-cyan-600 dark:text-cyan-400"}`}>
@@ -737,7 +807,7 @@ export default function Home() {
 
           {/* HUB */}
           <aside style={isDesktop ? { width: rightPanelWidth, flexBasis: rightPanelWidth } : undefined}
-            className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
+            className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 p-3 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
 
             {/* HUB HEADER — LangDropdown + thème */}
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0" onClick={e => e.stopPropagation()}>
