@@ -20,7 +20,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
   fr: {
     home:"🏠 Accueil", chat:"💬 Chat", books:"📚 Livres", calendar:"📅 Calendrier",
     vitality:"📈 Vitalité", services:"💎 Services", account:"👤 Compte", history:"⭐ Historique",
-    mode:"Mode", edit:"✏️ Éditer", present:"📖 Lire",
+    mode:"Forfait", edit:"✏️ Éditer", present:"📖 Lire",
     saved:"Sauvegardé", saving:"Sauvegarde...", unsaved:"Non sauvegardé",
     save:"Sauv.", inject:"Injecter via Echo", newChapter:"Nouveau chapitre",
     settings:"Paramètres", lightMode:"☀️ Mode Clair", darkMode:"🌙 Mode Sombre",
@@ -53,7 +53,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
   en: {
     home:"🏠 Home", chat:"💬 Chat", books:"📚 Books", calendar:"📅 Calendar",
     vitality:"📈 Vitality", services:"💎 Services", account:"👤 Account", history:"⭐ History",
-    mode:"Mode", edit:"✏️ Edit", present:"📖 Present",
+    mode:"Plan", edit:"✏️ Edit", present:"📖 Present",
     saved:"Saved", saving:"Saving...", unsaved:"Unsaved",
     save:"Save", inject:"Inject via Echo", newChapter:"New chapter",
     settings:"Settings", lightMode:"☀️ Light Mode", darkMode:"🌙 Dark Mode",
@@ -62,7 +62,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     opacity:"Page opacity", paraIndentLbl:"First-line indent",
     struct:"struct", texte:"text", pages:"pages", police:"size",
     media:"media", livre:"book", presets:"presets", align:"align",
-    t1:"Title 1", text2:"Title 2", t3:"Title 3", normal:"Normal text",
+    t1:"Title 1", t2:"Title 2", t3:"Title 3", normal:"Normal text",
     bold:"Bold", italic:"Italic", indent:"Indent",
     showMarks:"Show marks ¶",
     smaller:"Smaller", larger:"Larger",
@@ -100,7 +100,6 @@ const WATER: WaterGlyph[] = [
   { g:"∾",  top:"83%", left:"2%",   rot:"-12deg", sz:"54px" },
 ];
 
-// A4 @ 96dpi = 793px wide, 1122px tall
 const A4_H = 1122;
 
 function downloadBlob(blob: Blob, name: string) {
@@ -174,7 +173,6 @@ export default function App() {
     }
   }, []);
 
-  // Recalcule la pagination lorsque le document change ou se redimensionne
   useEffect(() => {
     const t = setTimeout(updatePageCount, 150);
     return () => clearTimeout(t);
@@ -219,7 +217,6 @@ export default function App() {
 
   useEffect(() => { if (editor) editor.commands.setFontFamily(fontFamily); }, [fontFamily, editor]);
 
-  // ── TOGGLES AVEC DÉVERROUILLAGE DU PRESET ──────────────────────────────────
   const handleToggle = (setter: (v: boolean) => void, val: boolean) => {
     setter(!val);
     setActivePreset("custom");
@@ -245,7 +242,6 @@ export default function App() {
   const toggleItalic  = () => editor?.chain().focus().toggleItalic().run();
   const toggleInvisibleChars = () => setShowInvisibleChars(v=>!v);
 
-  // Font size sur sélection uniquement
   const changeFontSize = (delta: number) => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
@@ -262,20 +258,17 @@ export default function App() {
     }
   };
 
-  // Alinéa correct : insertContent puis blur pour éviter &nbsp; dans le HTML
   const insertIndent = () => {
     if (!editor) return;
     editor.chain().focus().insertContent('\u00a0\u00a0\u00a0\u00a0').run();
   };
 
-  // ── INSERT BLOCKS ─────────────────────────────────────────────────────────
   const insertPageBreakBlock = () => {
     editor?.commands.insertContent(
       `<div data-page-break="true" contenteditable="false" style="user-select:none;-webkit-user-select:none;border-top:2px dashed rgba(6,182,212,0.5);margin:2.5rem 0;text-align:center;font-size:9px;color:rgba(6,182,212,0.6);letter-spacing:0.3em;padding-top:8px;font-family:monospace;cursor:default;">── ${fr?"SAUT DE PAGE":"PAGE BREAK"} ──</div><p></p>`
     );
   };
 
-  // ── INJECTION ECHO → fin du chapitre ─────────────────────────────────────
   const injectTextAtEnd = (text: string) => {
     if (!editor) return;
     const { doc } = editor.state;
@@ -294,7 +287,6 @@ export default function App() {
     setShowChapterDropdown(false);
   };
 
-  // ── CLOSE DROPDOWN ON OUTSIDE CLICK ──────────────────────────────────────
   useEffect(()=>{
     const h=(e:MouseEvent)=>{
       if(chapterDropRef.current&&!chapterDropRef.current.contains(e.target as Node)) setShowChapterDropdown(false);
@@ -344,38 +336,47 @@ export default function App() {
   };
 
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
-  useEffect(()=>{
-    supabase.auth.getSession().then(async({data:{session}})=>{
-      const uid=session?.user?.id||null;
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const uid = session?.user?.id || null;
       setUserId(uid);
-      if(uid){
-        const{data:rows}=await supabase.from("echo_conversations")
-          .select("id,messages").eq("user_id",uid).eq("source","books")
-          .order("updated_at",{ascending:false}).limit(1);
-        if(rows?.[0]){
+      if (uid) {
+        const { data: rows } = await supabase.from("echo_conversations")
+          .select("id,messages").eq("user_id", uid).eq("source", "books")
+          .order("updated_at", { ascending: false }).limit(1);
+        if (rows && rows[0]) {
           setBookDbId(rows[0].id);
-          try{
-            const raw=rows[0].messages?.[0];
-            const p=typeof raw==="string"?JSON.parse(raw):raw;
-            if(p?.bookTitle) setBookTitle(p.bookTitle);
-            if(p?.chapters?.length){setChapters(p.chapters);setActiveChapter(p.chapters[0].id);}
-            setSaveStatus("saved"); return;
-          }catch(e){console.error("[Books]",e);}
+          try {
+            const raw = rows[0].messages?.[0];
+            const p = typeof raw === "string" ? JSON.parse(raw) : raw;
+            if (p?.bookTitle) setBookTitle(p.bookTitle);
+            if (p?.chapters?.length) {
+              setChapters(p.chapters);
+              setActiveChapter(p.chapters[0].id);
+            }
+            setSaveStatus("saved");
+            return;
+          } catch (e) {
+            console.error("[Books]", e);
+          }
         }
       }
-      const raw=localStorage.getItem("echo-books-manuscript");
-      if(raw){
-        try{
-          const{bookTitle:t,chapters:c}=JSON.parse(raw);
-          if(t)setBookTitle(t);
-          if(c?.length){setChapters(c);setActiveChapter(c[0].id);}
-        }catch{}
+      const raw = localStorage.getItem("echo-books-manuscript");
+      if (raw) {
+        try {
+          const { bookTitle: t, chapters: c } = JSON.parse(raw);
+          if (t) setBookTitle(t);
+          if (c && c.length) {
+            setChapters(c);
+            setActiveChapter(c[0].id);
+          }
+        } catch {}
       }
       setSaveStatus("saved");
     });
-    const{data:listener}=supabase.auth.onAuthStateChange((_,s)=>setUserId(s?.user?.id||null));
-    return()=>listener.subscription.unsubscribe();
-  },[]);
+    const { data: listener } = supabase.auth.onAuthStateChange((_, s) => setUserId(s?.user?.id || null));
+    return () => listener.subscription.unsubscribe();
+  }, [lang]);
 
   // ── PANEL RESIZE ──────────────────────────────────────────────────────────
   const [echoPanelWidth,setEchoPanelWidth]=useState(280);
@@ -444,7 +445,6 @@ export default function App() {
       downloadBlob(new Blob([JSON.stringify({bookTitle,chapters},null,2)],{type:"application/json"}),`${slug}.echo-book.json`);
       return;
     }
-    // PDF / DOCX / EPUB → Flask
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
       const res = await fetch(`${API_URL}/export`, {
@@ -471,7 +471,6 @@ export default function App() {
   const [echoThinking,setEchoThinking] = useState(false);
   const echoBottomRef = useRef<HTMLDivElement>(null);
 
-  // ⚡ SYSTÈME DE SECOURS ET DE ROBUSTESSE INTELLIGENT DIRECT (No Failure)
   const fetchEchoReply = async (msg: string, history: any, safeTier: string) => {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
     const excerpt = editor?.getText()?.slice(0, 500) || "";
@@ -492,16 +491,14 @@ export default function App() {
       
       if (res.ok) {
         const data = await res.json();
-        // S'assurer qu'il ne s'agit pas du message d'erreur générique du backend
         if (data.response && !data.response.includes("instable")) {
           return data;
         }
       }
       throw new Error("Server error or generic instable reply");
     } catch (err) {
-      console.warn("[Books] Passage en secours sur l'appel direct local Gemini...", err);
+      console.warn("[Books] Passage en sillage de secours local...", err);
       
-      // Appel direct sécurisé avec clé fournie au runtime (système autonome)
       const apiKey = ""; 
       const targetModel = "gemini-2.5-flash-preview-09-2025";
       const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
@@ -514,7 +511,7 @@ export default function App() {
         
         RÈGLES D'INJECTION :
         Si l'utilisateur te demande d'écrire, générer ou continuer son histoire/texte directement dans le livre, tu DOIS obligatoirement envelopper le contenu rédigé à insérer à l'intérieur des balises <<<INJECT_TEXT>>> et <<<END_INJECT>>>.
-        Les commentaires et explications doivent rester EN DEHORS de ces balises pour permettre à l'interface de les séparer.
+        Les commentaires et explications doivent rester EN DEHORS de ces balises.
         Exemple :
         Voici la suite que je te propose :
         <<<INJECT_TEXT>>>
@@ -553,7 +550,7 @@ export default function App() {
       const directData = await directRes.json();
       const replyText = directData.candidates?.[0]?.content?.parts?.[0]?.text || "...";
       
-      // ⚡ CORRIGÉ : Remplacement de /gs par [\s\S]*? et /g pour une compatibilité d'environnement totale
+      // Utilisation d'une classe de caractères [\s\S] universelle pour matcher les retours à la ligne, supprimant l'erreur du drapeau /s de l'IDE
       const injectMatch = replyText.match(/<<<INJECT_TEXT>>>([\s\S]*?)<<<END_INJECT>>>/);
       if (injectMatch) {
         const injectedText = injectMatch[1].trim();
@@ -597,7 +594,6 @@ export default function App() {
     }finally{setEchoThinking(false);}
   };
 
-  // Injection manuelle depuis le bouton dans le header Echo
   const handleManualInject = () => {
     const lastEcho = [...echoMessages].reverse().find(m=>m.role==="echo");
     if (!lastEcho) return;
@@ -636,7 +632,6 @@ export default function App() {
     </button>
   );
 
-  // ── MODE PRÉSENTATION ─────────────────────────────────────────────────────
   if (view==="present") return (
     <div className="fixed inset-0 bg-black flex flex-col z-50">
       <div className="flex items-center justify-between px-8 py-3 border-b border-zinc-800">
@@ -683,7 +678,7 @@ export default function App() {
           </div>
         </div>
         <div className="text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800 pt-3">
-          {T.mode} : <span className="text-cyan-400 uppercase font-bold block">books</span>
+          {T.mode} : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-black tracking-wider block">{safeTier}</span>
         </div>
       </aside>
 
@@ -692,19 +687,16 @@ export default function App() {
         {/* TOOLBAR */}
         <div className="w-[130px] shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col py-2 overflow-y-auto overflow-x-hidden">
 
-          {/* struct */}
           <div className="px-2 pb-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.struct}</div>
             <div className="grid grid-cols-2 gap-0.5">
               <TB icon="T¹" label={T.t1} active={editor?.isActive("heading",{level:1})} onClick={()=>editor?.chain().focus().toggleHeading({level:1}).run()}/>
               <TB icon="T²" label={T.t2} active={editor?.isActive("heading",{level:2})} onClick={()=>editor?.chain().focus().toggleHeading({level:2}).run()}/>
               <TB icon="T³" label={T.t3} active={editor?.isActive("heading",{level:3})} onClick={()=>editor?.chain().focus().toggleHeading({level:3}).run()}/>
-              {/* L'icône de texte normal est Abc */}
               <TB icon="Abc" label={T.normal} active={editor?.isActive("paragraph")} onClick={()=>editor?.chain().focus().setParagraph().run()}/>
             </div>
           </div>
 
-          {/* texte */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.texte}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -714,7 +706,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* alignement */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.align}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -725,17 +716,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* pages */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.pages}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              {/* L'icône du bouton des marques invisibles est ¶ */}
               <TB icon="¶" label={T.showMarks} active={showInvisibleChars} onClick={toggleInvisibleChars}/>
               <TB icon="—"  label={fr?"Saut de page":"Page break"} onClick={insertPageBreakBlock}/>
             </div>
           </div>
 
-          {/* police */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.police}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -745,7 +733,6 @@ export default function App() {
             <div className="text-center font-mono text-[9px] text-zinc-500 mt-0.5">{fontSize}px global</div>
           </div>
 
-          {/* media */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.media}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -755,7 +742,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* livre */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.livre}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -764,8 +750,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* presets */}
-          <div className="px-2 py-1.5">
+          <div className="px-2 py-1.5 animate-fade-in">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.presets}</div>
             <div className="flex flex-col gap-1">
               {(["print","kindle"] as const).map(p=>(
@@ -880,7 +865,6 @@ export default function App() {
           {/* SETTINGS ROW */}
           {showSettings && (
             <div className="shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/80 px-4 py-2 flex flex-wrap gap-x-4 gap-y-2 items-center text-[10px]">
-              {/* ⚡ CORRIGÉ : div au lieu de label pour interdire le bug de double-clic d'événement HTML */}
               {[
                 {label:T.mirror,       val:mirrorMargins,   set:setMirrorMargins},
                 {label:T.pageNum,      val:showPageNumbers, set:setShowPageNumbers},
@@ -929,7 +913,7 @@ export default function App() {
             </div>
           )}
 
-          {/* EDITOR CANVAS — pages visuelles A4 */}
+          {/* EDITOR CANVAS */}
           <div className="flex-1 overflow-hidden min-h-0 relative"
             style={{backgroundImage:"url('/eauplante2.png')",backgroundSize:"cover",backgroundPosition:"center"}}>
             <div className="absolute inset-0 bg-black/50 pointer-events-none z-0"/>
@@ -938,15 +922,13 @@ export default function App() {
                 style={{top:d.top,left:d.left,right:d.right,fontSize:d.sz,transform:`rotate(${d.rot})`,opacity:0.06,filter:"blur(1px)",color:"#06b6d4",lineHeight:1}}>{d.g}</span>
             ))}
 
-            {/* Scroll container */}
             <div className="absolute inset-0 overflow-y-auto z-[2] py-8 flex flex-col items-center gap-6"
               style={{scrollbarWidth:"thin",scrollbarColor:"rgba(6,182,212,0.2) transparent"}}>
 
-              {/* PAGE SIMULÉE — le contenu TipTap s'étend librement en dessous */}
               <div ref={containerRef} className={`relative shadow-2xl ${showInvisibleChars?"echo-editor-show-symbols":""}`}
                 style={{
                   width:"860px",
-                  minHeight:`${pageCount * A4_H}px`, // ⚡ CORRIGÉ : S'adapte dynamiquement pour que le curseur n'écrive plus jamais dans le vide !
+                  minHeight:`${pageCount * A4_H}px`,
                   paddingTop: showHeader ? 0 : "52px",
                   paddingBottom: showFooter ? 0 : "64px",
                   paddingLeft: mirrorMargins ? "90px" : "72px",
@@ -957,10 +939,8 @@ export default function App() {
                   boxShadow: "0 4px 40px rgba(0,0,0,0.5)",
                 }}>
 
-                {/* Repère de marge latérale */}
                 <div className="absolute left-12 top-0 bottom-0 w-px pointer-events-none" style={{background:"rgba(6,182,212,0.05)"}}/>
 
-                {/* Repères de pages dynamiques */}
                 {Array.from({length: Math.max(0, pageCount - 1)}).map((_,i)=>(
                   <div key={i} className="absolute left-0 right-0 pointer-events-none"
                     style={{top:`${(i+1)*A4_H}px`,borderTop:"1px dashed rgba(6,182,212,0.12)",zIndex:10}}>
@@ -994,7 +974,6 @@ export default function App() {
                   className="outline-none text-black dark:text-zinc-100 caret-cyan-400 books-editor-tiptap"
                   style={{fontSize:`${fontSize}px`,lineHeight,fontFamily}}/>
 
-                {/* ⚡ CORRIGÉ : Vrai système de numérotation séquentielle des pages réelles (Calcul JS corrigé) */}
                 {showPageNumbers && Array.from({ length: pageCount }).map((_, i) => (
                   <div
                     key={`pagenum-${i}`}
@@ -1015,7 +994,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Espace bas pour scroller confortablement */}
               <div className="h-32 shrink-0"/>
             </div>
           </div>
@@ -1032,7 +1010,6 @@ export default function App() {
         <aside style={isDesktop?{width:echoPanelWidth,flexBasis:echoPanelWidth}:undefined}
           className="w-72 shrink-0 border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col overflow-hidden">
 
-          {/* Header Echo avec bouton Injecter */}
           <div className="h-10 shrink-0 border-b border-zinc-200 dark:border-zinc-800 flex items-center px-3 gap-2">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0"/>
             <span className="text-[11px] font-bold font-mono uppercase tracking-wider text-zinc-300 flex-1">Echo — {fr?"Écriture":"Writing"}</span>
@@ -1043,7 +1020,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* Mode buttons */}
           <div className="flex gap-1 p-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
             {ECHO_MODES.map(m=>(
               <button key={m.id} onClick={()=>setEchoMode(echoMode===m.id?null:m.id)}
@@ -1053,7 +1029,6 @@ export default function App() {
             ))}
           </div>
 
-          {/* Messages Echo */}
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 min-h-0" style={{scrollbarWidth:"thin"}}>
             {echoMessages.length===0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-3 pb-4">
@@ -1077,7 +1052,6 @@ export default function App() {
             <div ref={echoBottomRef}/>
           </div>
 
-          {/* Input Echo */}
           <div className="p-2 border-t border-zinc-200 dark:border-zinc-800 flex gap-1.5 shrink-0">
             <textarea value={echoInput} onChange={e=>setEchoInput(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendEcho();}}}
@@ -1089,7 +1063,6 @@ export default function App() {
         </aside>
       </div>
 
-      {/* Hidden file inputs */}
       <input ref={fileInputRef}  type="file" accept=".txt,.md,.markdown" onChange={handleImportTxt}  className="hidden"/>
       <input ref={importJsonRef} type="file" accept=".json"              onChange={handleImportJson} className="hidden"/>
       <input ref={fontInputRef}  type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontImport} className="hidden"/>
