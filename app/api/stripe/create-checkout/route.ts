@@ -29,6 +29,8 @@ export async function POST(req: Request) {
 
 console.log("PLAN REÇU =", plan);
 console.log("PRICE ID UTILISÉ =", priceId);
+console.log("STRIPE KEY =", process.env.STRIPE_SECRET_KEY?.slice(0, 12));
+console.log("BASIC =", process.env.STRIPE_BASIC_PRICE_ID);
 console.log("PRICE_IDS =", PRICE_IDS);
 
 
