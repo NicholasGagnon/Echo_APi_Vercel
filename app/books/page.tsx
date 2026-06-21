@@ -62,7 +62,7 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     opacity:"Page opacity", paraIndentLbl:"First-line indent",
     struct:"struct", texte:"text", pages:"pages", police:"size",
     media:"media", livre:"book", presets:"presets", align:"align",
-    t1:"Title 1", t2:"Title 2", t3:"Title 3", normal:"Normal text",
+    t1:"Title 1", text2:"Title 2", t3:"Title 3", normal:"Normal text",
     bold:"Bold", italic:"Italic", indent:"Indent",
     showMarks:"Show marks ¶",
     smaller:"Smaller", larger:"Larger",
@@ -127,7 +127,7 @@ function applyPreset(preset:"print"|"kindle", s:{
   }
 }
 
-export default function BooksPage() {
+export default function App() {
   const { lang, theme, toggleTheme, userTier } = useApp();
   const fr = lang === "fr";
   const T  = I[lang as "fr"|"en"] ?? I.fr;
@@ -364,7 +364,13 @@ export default function BooksPage() {
         }
       }
       const raw=localStorage.getItem("echo-books-manuscript");
-      if(raw){try{const{bookTitle:t,chapters:c}=JSON.parse(raw);if(t)setBookTitle(t);if(c?.length){setChapters(c);setActiveChapter(c[0].id);}}catch{}
+      if(raw){
+        try{
+          const{bookTitle:t,chapters:c}=JSON.parse(raw);
+          if(t)setBookTitle(t);
+          if(c?.length){setChapters(c);setActiveChapter(c[0].id);}
+        }catch{}
+      }
       setSaveStatus("saved");
     });
     const{data:listener}=supabase.auth.onAuthStateChange((_,s)=>setUserId(s?.user?.id||null));
@@ -547,10 +553,11 @@ export default function BooksPage() {
       const directData = await directRes.json();
       const replyText = directData.candidates?.[0]?.content?.parts?.[0]?.text || "...";
       
-      const injectMatch = replyText.match(/<<<INJECT_TEXT>>>(.*?)<<<END_INJECT>>>/s);
+      // ⚡ CORRIGÉ : Remplacement de /gs par [\s\S]*? et /g pour une compatibilité d'environnement totale
+      const injectMatch = replyText.match(/<<<INJECT_TEXT>>>([\s\S]*?)<<<END_INJECT>>>/);
       if (injectMatch) {
         const injectedText = injectMatch[1].trim();
-        const cleanResponse = replyText.replace(/<<<INJECT_TEXT>>>.*?<<<END_INJECT>>>/gs, "").trim();
+        const cleanResponse = replyText.replace(/<<<INJECT_TEXT>>>[\s\S]*?<<<END_INJECT>>>/g, "").trim();
         return {
           response: cleanResponse || "J'ai injecté le texte demandé directement à la suite de ton livre ! ✨",
           inject: true,
