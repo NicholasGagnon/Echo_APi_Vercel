@@ -43,15 +43,18 @@ console.log("PRICE_IDS =", PRICE_IDS);
 
     // --- SÉCURITÉ #3 : Création de la session Checkout ---
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "subscription",
-      customer_email: userEmail,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
+  payment_method_types: ["card"],
+  mode: "subscription",
+
+  allow_promotion_codes: true,
+
+  customer_email: userEmail,
+  line_items: [
+    {
+      price: priceId,
+      quantity: 1,
+    },
+  ],
       subscription_data: subscriptionData,
       success_url: `${origin}/services?success=true`,
       cancel_url: `${origin}/services?canceled=true`,
