@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
   try {
     // 🔒 Extraction sécurisée via tes variables d'environnement live/test
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+    const webhookSecret = "whsec_1U3vFgBHw5LMtvb0HSkCF7kdfOtJZLkl";
 
     event = stripe.webhooks.constructEvent(
       payload,
