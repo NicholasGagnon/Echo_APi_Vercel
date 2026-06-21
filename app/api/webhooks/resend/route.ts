@@ -17,19 +17,22 @@ export async function POST(req: Request) {
     const toArray = Array.isArray(emailData.to) ? emailData.to : [emailData.to || ""];
     const toFormatted = toArray.join(", ");
 
-    // 2. Extraction du message (Fouille partout si le webhook est restrictif)
+    // 2. Extraction et désencapsulation du vrai message
     let messageContent = "[Message vide]";
 
-    if (emailData.text) {
-      messageContent = emailData.text;
-    } else if (emailData.html) {
-      messageContent = emailData.html;
-    } else if (body.text) {
-      messageContent = body.text;
-    } else if (emailData.body?.text) {
-      messageContent = emailData.body.text;
-    } else if (emailData.body?.html) {
-      messageContent = emailData.body.html;
+    // Si Resend a mis une string JSON imbriquée dans le champ text
+    if (emailData.text && emailData.text.trim().startsWith("{")) {
+      try {
+        const nestedPayload = JSON.parse(emailData.text);
+        const nestedData = nestedPayload.data || {};
+        messageContent = nestedData.text || nestedData.html || "[Message vide dans l'objet imbriqué]";
+      } catch (e) {
+        // Si le parse échoue, on garde le texte brut
+        messageContent = emailData.text;
+      }
+    } else {
+      // Fallbacks classiques si ce n'est pas du JSON imbriqué
+      messageContent = emailData.text || emailData.html || body.text || "[Message vide]";
     }
 
     // 3. Détermination du préfixe selon le destinataire
