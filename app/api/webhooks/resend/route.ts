@@ -9,9 +9,14 @@ export async function POST(req: Request) {
 
     console.log("INBOUND EMAIL:", body);
 
-    const to = body.to || "";
-    const from = body.from || "unknown";
-    const subject = body.subject || "No subject";
+    const emailData = body.data || {};
+
+const to = Array.isArray(emailData.to)
+  ? emailData.to.join(", ")
+  : emailData.to || "";
+
+const from = emailData.from || "unknown";
+const subject = emailData.subject || "No subject";
     const text =
       body.text ||
       body.html ||
