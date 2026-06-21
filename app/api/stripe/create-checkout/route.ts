@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "User authentication missing" }, { status: 401 });
     }
 
-    const priceId = PRICE_IDS[plan as keyof typeof PRICE_IDS];
+    const priceId = "abc";
 
 console.log("PLAN REÇU =", plan);
 console.log("PRICE ID UTILISÉ =", priceId);
