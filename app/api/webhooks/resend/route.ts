@@ -10,30 +10,15 @@ export async function POST(req: Request) {
 
     const emailData = body.data || {};
 
-    // 1. Extraction des infos de base
+    // 1. Extraction simple et directe (comme le sujet)
     const from = emailData.from || "Inconnu";
     const subject = emailData.subject || "Sans objet";
     
     const toArray = Array.isArray(emailData.to) ? emailData.to : [emailData.to || ""];
     const toFormatted = toArray.join(", ");
 
-    // 2. Extraction et désencapsulation du vrai message
-    let messageContent = "[Message vide]";
-
-    // Si Resend a mis une string JSON imbriquée dans le champ text
-    if (emailData.text && emailData.text.trim().startsWith("{")) {
-      try {
-        const nestedPayload = JSON.parse(emailData.text);
-        const nestedData = nestedPayload.data || {};
-        messageContent = nestedData.text || nestedData.html || "[Message vide dans l'objet imbriqué]";
-      } catch (e) {
-        // Si le parse échoue, on garde le texte brut
-        messageContent = emailData.text;
-      }
-    } else {
-      // Fallbacks classiques si ce n'est pas du JSON imbriqué
-      messageContent = emailData.text || emailData.html || body.text || "[Message vide]";
-    }
+    // 2. Les vrais champs Inbound de Resend : text_body ou html_body
+    const messageContent = emailData.text_body || emailData.html_body || emailData.text || "[Message vide]";
 
     // 3. Détermination du préfixe selon le destinataire
     let prefix = "[EMAIL]";
