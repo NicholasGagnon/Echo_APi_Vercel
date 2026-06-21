@@ -26,7 +26,16 @@ export async function POST(req: Request) {
     }
 
     const priceId = PRICE_IDS[plan as keyof typeof PRICE_IDS];
-    const origin = req.headers.get("origin") ?? "http://localhost:3000";
+
+console.log("PLAN REÇU =", plan);
+console.log("PRICE ID UTILISÉ =", priceId);
+console.log("BASIC =", process.env.STRIPE_BASIC_PRICE_ID);
+console.log("PREMIUM =", process.env.STRIPE_PREMIUM_PRICE_ID);
+console.log("ULTRA =", process.env.STRIPE_ULTRA_PRICE_ID);
+console.log("FOUNDER =", process.env.STRIPE_FOUNDER_PRICE_ID);
+console.log("TREASURE =", process.env.STRIPE_TREASURE_PRICE_ID);
+
+const origin = req.headers.get("origin") ?? "http://localhost:3000";
 
     // --- SÉCURITÉ #2 : Configuration simplifiée pour le Checkout ---
     // On laisse l'objet d'abonnement standard à la création pour éviter les bogues TypeScript
