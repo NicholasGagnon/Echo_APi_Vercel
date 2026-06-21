@@ -6,37 +6,19 @@ export async function POST(req: Request) {
     const resend = new Resend(process.env.RESEND_API_KEY);
     const body = await req.json();
 
-    console.log("INBOUND EMAIL WEBHOOK RECEIVED");
+    console.log("DEBUG WEBHOOK INBOUND");
 
-    const emailData = body.data || {};
-
-    // 1. Extraction simple et directe (comme le sujet)
-    const from = emailData.from || "Inconnu";
-    const subject = emailData.subject || "Sans objet";
-    
-    const toArray = Array.isArray(emailData.to) ? emailData.to : [emailData.to || ""];
-    const toFormatted = toArray.join(", ");
-
-    // 2. Les vrais champs Inbound de Resend : text_body ou html_body
-    const messageContent = emailData.text_body || emailData.html_body || emailData.text || "[Message vide]";
-
-    // 3. Détermination du préfixe selon le destinataire
-    let prefix = "[EMAIL]";
-    const toLower = toFormatted.toLowerCase();
-    if (toLower.includes("support@echosai.ca")) prefix = "[SUPPORT]";
-    if (toLower.includes("contact@echosai.ca")) prefix = "[CONTACT]";
-
-    // 4. Envoi de l'email épuré
+    // Envoie l'intégralité de ce que Resend donne à ton serveur
     await resend.emails.send({
       from: "support@echosai.ca",
       to: "lafailleestouverte@gmail.com",
-      subject: `${prefix} ${subject}`,
-      text: `De: ${from}\nPour: ${toFormatted}\n\nMessage:\n${messageContent}`,
+      subject: "DEBUG RAW PAYLOAD",
+      text: JSON.stringify(body, null, 2),
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Erreur Webhook:", error);
+    console.error(error);
     return NextResponse.json({ success: false }, { status: 500 });
   }
 }
