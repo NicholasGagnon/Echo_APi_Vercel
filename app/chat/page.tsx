@@ -8,17 +8,8 @@ import LangDropdown from "../components/LangDropdown";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import { useApp } from "../../context/AppContext";
 
-type ChatMessage = {
-  raw: string;
-  imageB64?: string;
-};
-
-type Conversation = {
-  id: string;         // UUID Supabase
-  title: string;
-  messages: string[];
-  updatedAt: number;
-};
+type ChatMessage = { raw: string; imageB64?: string };
+type Conversation = { id: string; title: string; messages: string[]; updatedAt: number };
 
 const normalizeTier = (raw: string | null): UserTier => {
   if (!raw) return "connected_free";
@@ -47,13 +38,11 @@ export default function ChatPage() {
   const [input,     setInput]     = useState("");
   const [isLoaded,  setIsLoaded]  = useState(false);
   const [userId,    setUserId]    = useState<string | null>(null);
-  const bottomRef   = useRef<HTMLDivElement>(null);
+  const bottomRef     = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef   = useRef<HTMLTextAreaElement>(null);
-  // Ref pour éviter des saves en boucle
   const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── CONVERSATIONS ─────────────────────────────────────────────────────────
   const [conversations,        setConversations]        = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isConvoPanelOpen,     setIsConvoPanelOpen]     = useState(true);
@@ -61,7 +50,6 @@ export default function ChatPage() {
   const convoPanelRef    = useRef<HTMLDivElement>(null);
   const convoResizingRef = useRef(false);
 
-  // ── UI ────────────────────────────────────────────────────────────────────
   const [userTier,   setUserTier]   = useState<UserTier>("connected_free");
   const [isListening, setIsListening] = useState(false);
   const [selectedImage,     setSelectedImage]     = useState<string | null>(null);
@@ -70,9 +58,12 @@ export default function ChatPage() {
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality"|"calendar"|"prompts"|"surprise">("vitality");
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   const DEFAULT_INPUT_HEIGHT = 200;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
+
   const shrinkInput = () => {
     const el = textareaRef.current;
     const next = Math.max(60, Math.round((el ? el.getBoundingClientRect().height : inputHeight) / 2));
@@ -84,23 +75,22 @@ export default function ChatPage() {
     setInputHeight(DEFAULT_INPUT_HEIGHT);
   };
 
-  // ── BOUTONS COMPORTEMENTAUX ───────────────────────────────────────────────
   const [selectedButtons,        setSelectedButtons]        = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
   const [isSurpriseActive,       setIsSurpriseActive]       = useState(false);
   const [isPressingSurprise,     setIsPressingSurprise]     = useState(false);
 
   const buttonsLabels: Record<string, { fr: string; en: string }> = {
-    clarity:   { fr:"1🧠 Clarté",      en:"1🧠 Clarity"     },
-    humain:    { fr:"2👤 Humain",       en:"2👤 Human"       },
-    critical:  { fr:"3⚔️ Regard Critique", en:"3⚔️ Critical View" },
-    expert:    { fr:"4🎓 Expert",       en:"4🎓 Expert"      },
-    precision: { fr:"5🎯 Précision",    en:"5🎯 Precision"   },
-    philosophy:{ fr:"6🏛️ Philosophie", en:"6🏛️ Philosophy" },
-    strategy:  { fr:"7♟️ Stratégie",   en:"7♟️ Strategy"    },
-    decompose: { fr:"8🧩 Décomposer",  en:"8🧩 Decompose"   },
-    refine:    { fr:"9❓ Affiner",      en:"9❓ Refine"       },
-    double:    { fr:"10⚡ Double Regard",en:"10⚡ Dual Vision"},
+    clarity:    { fr:"1🧠 Clarté",         en:"1🧠 Clarity"      },
+    humain:     { fr:"2👤 Humain",          en:"2👤 Human"        },
+    critical:   { fr:"3⚔️ Regard Critique", en:"3⚔️ Critical View"},
+    expert:     { fr:"4🎓 Expert",          en:"4🎓 Expert"       },
+    precision:  { fr:"5🎯 Précision",       en:"5🎯 Precision"    },
+    philosophy: { fr:"6🏛️ Philosophie",    en:"6🏛️ Philosophy"  },
+    strategy:   { fr:"7♟️ Stratégie",      en:"7♟️ Strategy"     },
+    decompose:  { fr:"8🧩 Décomposer",     en:"8🧩 Decompose"    },
+    refine:     { fr:"9❓ Affiner",         en:"9❓ Refine"        },
+    double:     { fr:"10⚡ Double Regard",  en:"10⚡ Dual Vision" },
   };
   const buttonsOrder = ["clarity","humain","critical","expert","precision","philosophy","strategy","decompose","refine","double"];
 
@@ -129,47 +119,31 @@ export default function ChatPage() {
   const deserializeMsgs = (raws: string[]): ChatMessage[] => raws.map(r => ({ raw: r }));
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
-  // ── SUPABASE HELPERS ──────────────────────────────────────────────────────
-  // Charge toutes les conversations "chat" de l'utilisateur depuis Supabase
+  // ── SUPABASE ──────────────────────────────────────────────────────────────
   const loadConversationsFromDB = async (uid: string) => {
     const { data, error } = await supabase
-      .from("echo_conversations")
-      .select("id, messages, updated_at")
-      .eq("user_id", uid)
-      .eq("source", "chat")
+      .from("echo_conversations").select("id, messages, updated_at")
+      .eq("user_id", uid).eq("source", "chat")
       .order("updated_at", { ascending: false });
-
-    if (error) { console.error("[Chat] load conversations:", error.message); return []; }
-
+    if (error) { console.error("[Chat] load:", error.message); return []; }
     return (data || []).map(row => ({
-      id:        row.id,
-      title:     deriveTitle(row.messages || [], lang),
-      messages:  row.messages || [],
-      updatedAt: new Date(row.updated_at).getTime(),
+      id: row.id, title: deriveTitle(row.messages || [], lang),
+      messages: row.messages || [], updatedAt: new Date(row.updated_at).getTime(),
     })) as Conversation[];
   };
 
-  // Sauvegarde (upsert) une conversation dans Supabase
-  const saveConversationToDB = async (uid: string, convId: string | null, raws: string[], existingConvos: Conversation[]) => {
-    const title = deriveTitle(raws, lang);
-
+  const saveConversationToDB = async (uid: string, convId: string | null, raws: string[]) => {
     if (convId) {
-      // Update row existant
-      const { error } = await supabase
-        .from("echo_conversations")
+      const { error } = await supabase.from("echo_conversations")
         .update({ messages: raws, updated_at: new Date().toISOString() })
-        .eq("id", convId)
-        .eq("user_id", uid);
-      if (error) console.error("[Chat] update conversation:", error.message);
+        .eq("id", convId).eq("user_id", uid);
+      if (error) console.error("[Chat] update:", error.message);
       return convId;
     } else {
-      // Créer un nouveau row
-      const { data, error } = await supabase
-        .from("echo_conversations")
+      const { data, error } = await supabase.from("echo_conversations")
         .insert({ user_id: uid, source: "chat", messages: raws, updated_at: new Date().toISOString() })
-        .select("id")
-        .single();
-      if (error) { console.error("[Chat] insert conversation:", error.message); return null; }
+        .select("id").single();
+      if (error) { console.error("[Chat] insert:", error.message); return null; }
       return data?.id ?? null;
     }
   };
@@ -177,31 +151,18 @@ export default function ChatPage() {
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   const initForUser = async (uid: string | null) => {
     if (!uid) {
-      // Non connecté : conversation locale vide
       const empty: Conversation = { id: "local", title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() };
-      setConversations([empty]);
-      setActiveConversationId("local");
-      setMessages([]);
-      return;
+      setConversations([empty]); setActiveConversationId("local"); setMessages([]); return;
     }
-
     const list = await loadConversationsFromDB(uid);
-
     let finalList: Conversation[];
     if (list.length === 0) {
-      // Pas de conversations en DB → créer une vide
-      const { data, error } = await supabase
-        .from("echo_conversations")
+      const { data } = await supabase.from("echo_conversations")
         .insert({ user_id: uid, source: "chat", messages: [], updated_at: new Date().toISOString() })
-        .select("id")
-        .single();
+        .select("id").single();
       const newId = data?.id ?? `local-${Date.now()}`;
-      const empty: Conversation = { id: newId, title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() };
-      finalList = [empty];
-    } else {
-      finalList = list;
-    }
-
+      finalList = [{ id: newId, title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() }];
+    } else { finalList = list; }
     setConversations(finalList);
     setActiveConversationId(finalList[0].id);
     setMessages(deserializeMsgs(finalList[0].messages));
@@ -213,28 +174,20 @@ export default function ChatPage() {
       setUserId(uid);
       try {
         await initForUser(uid);
-
         if (uid) {
           const { data: profile } = await supabase.from("profiles").select("user_tier").eq("id", uid).single();
           if (profile?.user_tier) setUserTier(normalizeTier(profile.user_tier));
         }
-
         if (!localStorage.getItem("echo-tuto-chat-done-v1")) setTutorialStep(1);
-      } catch (e) { console.error("Bootstrap error:", e); }
+      } catch(e) { console.error("Bootstrap:", e); }
       setIsLoaded(true);
     });
-
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session?.user) {
-        setUserId(null);
-        await initForUser(null);
-        setUserTier("connected_free");
-        return;
+        setUserId(null); await initForUser(null); setUserTier("connected_free"); return;
       }
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        const uid = session.user.id;
-        setUserId(uid);
-        await initForUser(uid);
+        const uid = session.user.id; setUserId(uid); await initForUser(uid);
         const { data: profile } = await supabase.from("profiles").select("user_tier").eq("id", uid).single();
         if (profile?.user_tier) setUserTier(normalizeTier(profile.user_tier));
       }
@@ -242,30 +195,24 @@ export default function ChatPage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // ── AUTOSAVE (debounce 1.5s après chaque changement de messages) ──────────
   useEffect(() => {
     if (!isLoaded || !userId || !activeConversationId || activeConversationId === "local") return;
     const raws = serializeMsgs(messages);
-
-    // Mettre à jour le state local immédiatement
     setConversations(prev => prev.map(c =>
       c.id === activeConversationId
         ? { ...c, messages: raws, updatedAt: Date.now(), title: raws.length > 0 && isDefaultTitle(c.title) ? deriveTitle(raws, lang) : c.title }
         : c
     ));
-
-    // Debounce la sauvegarde DB
     if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
     saveDebounceRef.current = setTimeout(async () => {
-      await saveConversationToDB(userId, activeConversationId, raws, conversations);
+      await saveConversationToDB(userId, activeConversationId, raws);
     }, 1500);
-
     return () => { if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current); };
   }, [messages, isLoaded]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // ── PANEL RESIZE (localStorage — préférence UI pure) ──────────────────────
+  // ── PANEL RESIZE ──────────────────────────────────────────────────────────
   useEffect(() => {
     const savedOpen  = localStorage.getItem("echo-chat-convo-open");
     const savedWidth = parseInt(localStorage.getItem("echo-chat-convo-width") || "", 10);
@@ -276,10 +223,8 @@ export default function ChatPage() {
   useEffect(() => { localStorage.setItem("echo-chat-convo-width", String(convoPanelWidth));  }, [convoPanelWidth]);
 
   const startConvoResize = (e: React.MouseEvent) => {
-    e.preventDefault();
-    convoResizingRef.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
+    e.preventDefault(); convoResizingRef.current = true;
+    document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
   };
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -289,64 +234,51 @@ export default function ChatPage() {
     };
     const onUp = () => {
       if (!convoResizingRef.current) return;
-      convoResizingRef.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
+      convoResizingRef.current = false; document.body.style.cursor = ""; document.body.style.userSelect = "";
     };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
-  // ── ACTIONS CONVERSATIONS ─────────────────────────────────────────────────
-  const startNewConversation = async () => {
-    const current = conversations.find(c => c.id === activeConversationId);
-    if (current && current.messages.length === 0) return;
+  // ── SETTINGS DROPDOWN ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setIsSettingsOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
 
+  // ── CONVERSATIONS ─────────────────────────────────────────────────────────
+  const startNewConversation = async () => {
+    // Fix: toujours créer une nouvelle conversation, même si la courante est vide
     if (!userId) {
       const empty: Conversation = { id: `local-${Date.now()}`, title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() };
-      setConversations(p => [empty, ...p]);
-      setActiveConversationId(empty.id);
-      setMessages([]);
-      return;
+      setConversations(p => [empty, ...p]); setActiveConversationId(empty.id); setMessages([]); return;
     }
-
-    const { data, error } = await supabase
-      .from("echo_conversations")
+    const { data, error } = await supabase.from("echo_conversations")
       .insert({ user_id: userId, source: "chat", messages: [], updated_at: new Date().toISOString() })
-      .select("id")
-      .single();
-    if (error) { console.error("[Chat] new conversation:", error.message); return; }
-
+      .select("id").single();
+    if (error) { console.error("[Chat] new conv:", error.message); return; }
     const newConvo: Conversation = { id: data.id, title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() };
-    setConversations(p => [newConvo, ...p]);
-    setActiveConversationId(newConvo.id);
-    setMessages([]);
+    setConversations(p => [newConvo, ...p]); setActiveConversationId(newConvo.id); setMessages([]);
   };
 
   const switchConversation = (id: string) => {
     if (id === activeConversationId) return;
     const target = conversations.find(c => c.id === id);
     if (!target) return;
-    setActiveConversationId(id);
-    setMessages(deserializeMsgs(target.messages));
+    setActiveConversationId(id); setMessages(deserializeMsgs(target.messages));
   };
 
   const deleteConversation = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-
     if (userId && id !== "local") {
       const { error } = await supabase.from("echo_conversations").delete().eq("id", id).eq("user_id", userId);
-      if (error) console.error("[Chat] delete conversation:", error.message);
+      if (error) console.error("[Chat] delete:", error.message);
     }
-
     setConversations(prev => {
       const remaining = prev.filter(c => c.id !== id);
       const finalList = remaining.length > 0 ? remaining : [{ id: `local-${Date.now()}`, title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() }];
-      if (id === activeConversationId) {
-        setActiveConversationId(finalList[0].id);
-        setMessages(deserializeMsgs(finalList[0].messages));
-      }
+      if (id === activeConversationId) { setActiveConversationId(finalList[0].id); setMessages(deserializeMsgs(finalList[0].messages)); }
       return finalList;
     });
   };
@@ -358,14 +290,10 @@ export default function ChatPage() {
       if (!items) return;
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.startsWith("image/")) {
-          if (userTier === "connected_free" || userTier === "basic") {
-            alert(lang === "fr" ? "L'analyse d'image est disponible avec le plan Premium ou supérieur." : "Image analysis is available on Premium plans and above.");
-            event.preventDefault(); return;
-          }
+          if (userTier === "connected_free" || userTier === "basic") { event.preventDefault(); return; }
           const file = items[i].getAsFile(); if (!file) return;
-          if (file.size > 5 * 1024 * 1024) { alert(lang === "fr" ? "L'image doit faire moins de 5 Mo." : "The image must be smaller than 5 MB."); return; }
           const reader = new FileReader();
-          reader.onload = () => { setSelectedImage(reader.result as string); setSelectedImageName(lang === "fr" ? "Capture d'écran collée.png" : "Pasted screenshot.png"); };
+          reader.onload = () => { setSelectedImage(reader.result as string); setSelectedImageName(lang === "fr" ? "Capture collée.png" : "Pasted screenshot.png"); };
           reader.readAsDataURL(file);
           event.preventDefault(); break;
         }
@@ -375,49 +303,34 @@ export default function ChatPage() {
     return () => window.removeEventListener("paste", handlePaste);
   }, [userTier, lang]);
 
-  // ── SEND MESSAGE ──────────────────────────────────────────────────────────
+  // ── SEND ──────────────────────────────────────────────────────────────────
   const sendMessage = async () => {
     if (!input.trim() && !selectedImage) return;
-
     const quotaStatus = checkQuota("prompts", userTier);
     if (!quotaStatus.allowed) {
       setMessages(prev => [...prev, { raw: lang === "fr" ? "Echo: 🔒 Limite mensuelle atteinte." : "Echo: 🔒 Monthly limit reached." }]);
       setActiveLimitCategory("prompts"); setShowLimitModal(true); return;
     }
-
     const userMessage = input.trim() || (lang === "fr" ? "Analyse cette image." : "Analyze this image.");
     const imageToSend = selectedImage;
     const userRaw     = `${lang === "fr" ? "Toi" : "You"}: ${userMessage}`;
     const userEntry: ChatMessage = { raw: userRaw, imageB64: imageToSend ?? undefined };
     const baseMessages = [...messages, userEntry];
-
     setEchoState("thinking");
     setMessages([...baseMessages, { raw: "Echo: ..." }]);
     setInput(""); setSelectedImage(null); setSelectedImageName("");
 
-    // Calendrier lu depuis Supabase (en cache dans state calendarEvents si dispo, sinon skip)
-    const calendarEvents = {};
-
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
       const response = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message:    userMessage,
-          image:      imageToSend,
-          history:    serializeMsgs(baseMessages),
-          userTier,
-          calendarEvents,
-          selectedButtons,
-          web_search: true,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMessage, image: imageToSend, history: serializeMsgs(baseMessages), userTier, calendarEvents: {}, selectedButtons, web_search: true }),
       });
       const data = await response.json();
       setEchoState("speaking");
 
       let isActionBlocked = false;
-      let blockedCategory: "vitality" | "calendar" | null = null;
+      let blockedCategory: "vitality"|"calendar"|null = null;
       if (data.action) {
         const { type } = data.action;
         const qCat = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") ? "vitality" : "calendar";
@@ -425,53 +338,45 @@ export default function ChatPage() {
         if (!status.allowed) { setActiveLimitCategory(qCat); setShowLimitModal(true); isActionBlocked = true; blockedCategory = qCat; }
       }
 
-      const echoRaw = `Echo: ${data.response || ""}${isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${blockedCategory}"]` : ""}`;
-      setMessages([...baseMessages, { raw: echoRaw }]);
+      setMessages([...baseMessages, { raw: `Echo: ${data.response || ""}${isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${blockedCategory}"]` : ""}` }]);
 
-      // ── ACTIONS ECHO → Supabase ──────────────────────────────────────────
       if (data.action && !isActionBlocked && userId) {
+        const { type, payload } = data.action;
 
-        if (data.action.type === "ADD_BUDGET_EXPENSE") {
-          const { title, amount, spent, date, paymentDate, paidAt } = data.action.payload;
+        if (type === "ADD_BUDGET_EXPENSE") {
+          const { title, amount, spent, date, paymentDate, paidAt } = payload;
           const { error } = await supabase.from("echo_expenses").insert({
-            user_id: userId,
-            title:   title || "Purchase",
-            amount:  parseFloat(amount ?? spent) || 0,
-            date:    paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
+            user_id: userId, title: title || "Purchase",
+            amount: parseFloat(amount ?? spent) || 0,
+            date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
           });
-          if (error) console.error("[Chat] echo_expenses:", error.message);
+          if (error) console.error("[Chat] expenses:", error.message);
         }
 
-        if (data.action.type === "ADD_CALORIE_LOG") {
-          const { foodName, meal, title, calories } = data.action.payload;
+        if (type === "ADD_CALORIE_LOG") {
+          const { foodName, meal, title, calories } = payload;
           const { error } = await supabase.from("echo_calories").insert({
-            user_id:   userId,
-            food_name: foodName || meal || title || "Food Item",
-            calories:  parseInt(calories) || 0,
-            date:      new Date().toLocaleDateString("fr-CA"),
+            user_id: userId, food_name: foodName || meal || title || "Food Item",
+            calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA"),
           });
-          if (error) console.error("[Chat] echo_calories:", error.message);
+          if (error) console.error("[Chat] calories:", error.message);
         }
 
-        if (data.action.type === "SET_CALORIE_GOAL" || data.action.type === "UPDATE_CALORIE_GOAL") {
-          const { goal, calorieGoal, calories } = data.action.payload;
+        if (type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") {
+          const { goal, calorieGoal, calories } = payload;
           const nextGoal = parseInt(goal ?? calorieGoal ?? calories);
           if (Number.isFinite(nextGoal) && nextGoal > 0) localStorage.setItem("echo-calorie-goal", nextGoal.toString());
         }
 
-        if (data.action.type === "ADD_CALENDAR_EVENT") {
-          const { title, start, end, notes = "" } = data.action.payload;
+        if (type === "ADD_CALENDAR_EVENT") {
+          const { title, start, end, notes = "" } = payload;
           const dateKey = start?.split("T")[0] || start || "";
           if (dateKey) {
             const { error } = await supabase.from("echo_calendar").insert({
-              user_id:    userId,
-              title:      title || "Untitled Event",
-              start_date: dateKey,
-              end_date:   dateKey,
-              notes:      notes || "",
-              is_from_echo: true,
+              user_id: userId, title: title || "Untitled Event",
+              start_date: dateKey, end_date: dateKey, notes: notes || "", is_from_echo: true,
             });
-            if (error) console.error("[Chat] echo_calendar:", error.message);
+            if (error) console.error("[Chat] calendar:", error.message);
           }
         }
       }
@@ -485,8 +390,6 @@ export default function ChatPage() {
   const handleImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; event.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) { alert(lang === "fr" ? "Choisis un fichier image." : "Please choose an image file."); return; }
-    if (file.size > 5 * 1024 * 1024) { alert(lang === "fr" ? "L'image doit faire moins de 5 Mo." : "The image must be smaller than 5 MB."); return; }
     const reader = new FileReader();
     reader.onload = () => { setSelectedImage(reader.result as string); setSelectedImageName(file.name); };
     reader.readAsDataURL(file);
@@ -497,12 +400,12 @@ export default function ChatPage() {
     if (!SR) { alert("Speech recognition is not supported."); return; }
     const r = new SR();
     r.lang = lang === "fr" ? "fr-FR" : "en-US";
-    r.onstart = () => setIsListening(true);
-    r.onend   = () => setIsListening(false);
-    r.onerror = () => setIsListening(false);
+    r.onstart = () => setIsListening(true); r.onend = () => setIsListening(false); r.onerror = () => setIsListening(false);
     r.onresult = (e: any) => setInput(p => p + (p ? " " : "") + e.results[0][0].transcript);
     r.start();
   };
+
+  const isImageLocked = userTier === "connected_free" || userTier === "basic";
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
@@ -511,7 +414,7 @@ export default function ChatPage() {
       {/* TUTORIAL */}
       {tutorialStep === 1 && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[92vw] max-w-[460px] sm:max-w-[640px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
-          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1", "true"); }} />
+          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1","true"); }} />
           <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
             <span className="text-xl">💬</span>
             <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
@@ -523,14 +426,12 @@ export default function ChatPage() {
               <img src="/Echo.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
             </div>
             <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
-              {lang === "fr" ? (
-                <>Rebonjour ! Bienvenue dans mon espace de discussion pure. 👋{"\n"}Le canal direct avec ma conscience. Tu peux tout me demander.{"\n"}Laisse la fluidité faire son œuvre. On commence ? ✨</>
-              ) : (
-                <>Welcome back! Welcome to my pure chat space. 👋{"\n"}The direct channel to my core frequency. Ask me anything.{"\n"}Let the fluidity take over. Shall we begin? ✨</>
-              )}
+              {lang === "fr"
+                ? <>Rebonjour ! Bienvenue dans mon espace de discussion pure. 👋{"\n"}Le canal direct avec ma conscience. Tu peux tout me demander.{"\n"}Laisse la fluidité faire son œuvre. On commence ? ✨</>
+                : <>Welcome back! Welcome to my pure chat space. 👋{"\n"}The direct channel to my core frequency. Ask me anything.{"\n"}Let the fluidity take over. Shall we begin? ✨</>}
             </div>
           </div>
-          <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1", "true"); }}
+          <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1","true"); }}
             className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase">
             {lang === "fr" ? "OUVRIR LE CANAL 🚀" : "OPEN CHANNEL 🚀"}
           </button>
@@ -548,12 +449,12 @@ export default function ChatPage() {
             <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
               <Link href="/chat"     className="block text-cyan-600 dark:text-cyan-400 font-bold">{t.sidebar.chat}</Link>
               <Link href="/books"    className="block hover:text-cyan-500">{t.sidebar.books}</Link>
-              <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang === "fr" ? "Calendrier" : "Calendar"}</Link>
-              <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang === "fr" ? "Vitalité" : "Vitality"}</Link>
-              <Link href="/services" className="block hover:text-cyan-500">💎 {lang === "fr" ? "Services" : "Services"}</Link>
-              <Link href="/account"  className="block hover:text-cyan-500">👤 {lang === "fr" ? "Compte" : "Account"}</Link>
+              <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
+              <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
+              <Link href="/services" className="block hover:text-cyan-500">💎 {lang==="fr"?"Services":"Services"}</Link>
+              <Link href="/account"  className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
               <hr className="border-zinc-200 dark:border-zinc-800 my-4" />
-              <Link href="/history"  className="block hover:text-amber-500">⭐ {lang === "fr" ? "Historique" : "History"}</Link>
+              <Link href="/history"  className="block hover:text-amber-500">⭐ {lang==="fr"?"Historique":"History"}</Link>
             </div>
           </div>
           <div className="flex flex-col gap-4">
@@ -586,23 +487,24 @@ export default function ChatPage() {
               className="shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col overflow-hidden">
               <div className="h-12 shrink-0 flex items-center justify-between px-3 border-b border-zinc-200 dark:border-zinc-800">
                 <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">
-                  {lang === "fr" ? "Conversations" : "Conversations"}
+                  {lang==="fr"?"Conversations":"Conversations"}
                 </span>
                 <button onClick={() => setIsConvoPanelOpen(false)} className="text-zinc-400 hover:text-cyan-500 transition-colors text-sm p-1">◂</button>
               </div>
+              {/* Fix: bouton nouvelle conversation toujours actif */}
               <button onClick={startNewConversation}
                 className="m-2 shrink-0 flex items-center justify-center gap-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold py-2 rounded-xl transition-colors">
-                + {lang === "fr" ? "Nouvelle conversation" : "New conversation"}
+                + {lang==="fr"?"Nouvelle conversation":"New conversation"}
               </button>
               <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1 min-h-0">
-                {conversations.slice().sort((a, b) => b.updatedAt - a.updatedAt).map(c => (
+                {conversations.slice().sort((a,b) => b.updatedAt - a.updatedAt).map(c => (
                   <div key={c.id} onClick={() => switchConversation(c.id)}
                     className={`group w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between gap-2 cursor-pointer ${
                       c.id === activeConversationId
                         ? "bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400"
                         : "border border-transparent text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"}`}>
                     <span className="truncate flex-1">{c.title}</span>
-                    <button onClick={e => deleteConversation(c.id, e)} title={lang === "fr" ? "Supprimer" : "Delete"}
+                    <button onClick={e => deleteConversation(c.id, e)}
                       className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 shrink-0 transition-opacity">✕</button>
                   </div>
                 ))}
@@ -613,7 +515,7 @@ export default function ChatPage() {
             </div>
           </>
         ) : (
-          <button onClick={() => setIsConvoPanelOpen(true)} title={lang === "fr" ? "Afficher les conversations" : "Show conversations"}
+          <button onClick={() => setIsConvoPanelOpen(true)}
             className="shrink-0 w-7 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 hover:bg-zinc-100 dark:hover:bg-zinc-900 flex items-center justify-center text-zinc-400 hover:text-cyan-500 transition-colors">
             ▸
           </button>
@@ -633,7 +535,7 @@ export default function ChatPage() {
                     </div>
                   )}
                   <p className="text-zinc-400 dark:text-zinc-700 text-sm italic">
-                    {lang === "fr" ? "Commence une conversation avec Echo..." : "Start a conversation with Echo..."}
+                    {lang==="fr"?"Commence une conversation avec Echo...":"Start a conversation with Echo..."}
                   </p>
                 </div>
               )}
@@ -642,12 +544,12 @@ export default function ChatPage() {
                   const isEcho = /^Echo\s*:/i.test(msg.raw);
                   const isUser = /^(You|Toi)\s*:/i.test(msg.raw);
                   const isLastEcho = isEcho && index === lastEchoIndex;
-                  const cleanText = isEcho ? msg.raw.replace(/^Echo\s*:\s*/i, "") : msg.raw.replace(/^(You|Toi)\s*:\s*/i, "");
+                  const cleanText = isEcho ? msg.raw.replace(/^Echo\s*:\s*/i,"") : msg.raw.replace(/^(You|Toi)\s*:\s*/i,"");
 
                   if (isEcho) return (
                     <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 max-w-3xl">
                       <div className="flex items-center gap-4">
-                        <div className={`w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-sm overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center ${isLastEcho ? echoState === "thinking" ? "echo-thinking" : echoState === "speaking" ? "echo-speaking" : "echo-idle" : "echo-idle"}`}>
+                        <div className={`w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-sm overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center ${isLastEcho ? echoState==="thinking"?"echo-thinking":echoState==="speaking"?"echo-speaking":"echo-idle":"echo-idle"}`}>
                           <img src="/Echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
                         </div>
                         <div className="flex flex-col">
@@ -656,7 +558,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                       <div className="text-zinc-800 dark:text-zinc-200 text-[15px] leading-8 font-normal tracking-wide selection:bg-cyan-500/30 flex flex-col gap-5 pl-2 sm:pl-20 overflow-hidden">
-                        {cleanText.split(/\n\n+/).map((block, i) => <p key={i} className="whitespace-pre-wrap break-words">{block}</p>)}
+                        {cleanText.split(/\n\n+/).map((block,i) => <p key={i} className="whitespace-pre-wrap break-words">{block}</p>)}
                       </div>
                     </div>
                   );
@@ -664,31 +566,45 @@ export default function ChatPage() {
                   if (isUser) return (
                     <div key={index} className="flex justify-start animate-in fade-in duration-200 max-w-3xl sm:pl-20">
                       <div className="max-w-xl min-w-0 flex flex-col items-start gap-2">
-                        {msg.imageB64 && <img src={msg.imageB64} alt="image envoyée" className="max-w-[160px] max-h-[120px] rounded-xl border border-zinc-700 object-cover shadow-md" />}
+                        {msg.imageB64 && <img src={msg.imageB64} alt="img" className="max-w-[160px] max-h-[120px] rounded-xl border border-zinc-700 object-cover shadow-md" />}
                         {cleanText && cleanText !== "Analyse cette image." && cleanText !== "Analyze this image." && (
-                          <p className="text-zinc-800 dark:text-zinc-300 text-[14px] leading-7 tracking-wide bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3 inline-block text-left break-words whitespace-pre-wrap shadow-inner selection:bg-cyan-500/30 max-w-full">
-                            {cleanText}
-                          </p>
+                          <p className="text-zinc-800 dark:text-zinc-300 text-[14px] leading-7 tracking-wide bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3 inline-block text-left break-words whitespace-pre-wrap shadow-inner selection:bg-cyan-500/30 max-w-full">{cleanText}</p>
                         )}
                       </div>
                     </div>
                   );
-
                   return null;
                 })}
                 <div ref={bottomRef} />
               </div>
             </div>
 
-            {/* BOUTONS COMPORTEMENTAUX */}
+            {/* BOUTONS COMPORTEMENTAUX + SETTINGS */}
             <div className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-100 dark:border-zinc-900/60 flex flex-col bg-zinc-50/20 dark:bg-zinc-950/10 overflow-hidden max-h-[42vh] lg:max-h-none lg:h-full">
-              <div className="p-4 border-b border-zinc-100 dark:border-zinc-900/80 bg-transparent flex gap-3 items-center justify-between shadow-sm shrink-0">
-                <LangDropdown />
-                <button onClick={toggleTheme} className="font-bold text-[11px] text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 transition-colors bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 py-1.5 px-2.5 rounded-lg">
-                  {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
-                </button>
+
+              {/* Header avec bouton Settings ⚙️ */}
+              <div className="p-3 border-b border-zinc-100 dark:border-zinc-900/80 flex items-center justify-between shrink-0">
+                <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">Modes</span>
+                <div className="relative" ref={settingsRef}>
+                  <button onClick={() => setIsSettingsOpen(v => !v)}
+                    className="p-1.5 rounded-lg bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:text-cyan-500 hover:border-cyan-500/50 transition-all text-xs flex items-center gap-1">
+                    ⚙️ <span className="font-mono text-[9px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase">{lang}</span>
+                  </button>
+                  {isSettingsOpen && (
+                    <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 flex flex-col gap-1 z-50">
+                      <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 px-2 py-1 border-b border-zinc-100 dark:border-zinc-900">
+                        {lang==="fr"?"Paramètres":"Settings"}
+                      </div>
+                      <button onClick={toggleTheme} className="text-left px-2 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors">
+                        {theme==="dark"?"☀️ Mode Clair":"🌙 Mode Sombre"}
+                      </button>
+                      <div className="px-2 py-1.5"><LangDropdown /></div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex-1 p-4 overflow-y-auto grid grid-cols-2 lg:flex lg:flex-col gap-2.5 content-start">
+
+              <div className="flex-1 p-3 overflow-y-auto grid grid-cols-2 lg:flex lg:flex-col gap-2 content-start">
                 {buttonsOrder.map(id => {
                   const isSelected     = selectedButtons.includes(id);
                   const isDoubleRegard = id === "double";
@@ -707,7 +623,7 @@ export default function ChatPage() {
                           : isSelected || (isDoubleRegard && isDoubleRegardUnlocked)
                             ? "bg-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.5)]"
                             : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-cyan-400 hover:text-cyan-600 dark:hover:text-cyan-400"}`}>
-                      {lang === "fr" ? buttonsLabels[id].fr : buttonsLabels[id].en}
+                      {lang==="fr" ? buttonsLabels[id].fr : buttonsLabels[id].en}
                     </button>
                   );
                 })}
@@ -716,53 +632,54 @@ export default function ChatPage() {
           </div>
 
           {/* INPUT */}
-          <div className="border-t border-zinc-200 dark:border-zinc-900 px-6 py-5 shrink-0 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-200">
+          <div className="border-t border-zinc-200 dark:border-zinc-900 px-4 py-4 shrink-0 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-200">
             <div className="max-w-4xl mx-auto flex flex-col gap-3">
               {selectedImage && (
                 <div className="flex items-center gap-3 bg-violet-500/10 border border-violet-500/20 rounded-xl px-3 py-2">
                   <img src={selectedImage} alt="preview" className="w-10 h-10 rounded-lg object-cover border border-violet-500/30" />
                   <span className="text-[11px] text-violet-400 font-medium truncate flex-1">{selectedImageName}</span>
-                  <button onClick={() => { setSelectedImage(null); setSelectedImageName(""); }} className="text-zinc-400 hover:text-red-500 font-bold text-sm shrink-0">✕</button>
+                  <button onClick={() => { setSelectedImage(null); setSelectedImageName(""); }} className="text-zinc-400 hover:text-red-500 font-bold shrink-0">✕</button>
                 </div>
               )}
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end w-full">
-                <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-                  <div className="flex justify-end gap-1.5">
-                    <button type="button" onClick={shrinkInput} title={lang === "fr" ? "Réduire" : "Shrink"}
-                      className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
-                      ➖ {lang === "fr" ? "Réduire" : "Shrink"}
-                    </button>
-                    <button type="button" onClick={resetInput} title={lang === "fr" ? "Taille originale" : "Reset"}
-                      className="text-[10px] font-bold px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
-                      ↺ {lang === "fr" ? "Original" : "Reset"}
-                    </button>
-                  </div>
-                  <textarea ref={textareaRef} value={input} maxLength={getMessageMaxLength(userTier)}
-                    onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    placeholder={t.chat.placeholder}
-                    style={{ height: inputHeight }}
-                    className="w-full bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 resize-y text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400 dark:placeholder-zinc-700 transition-colors leading-relaxed shadow-inner" />
-                </div>
-                <div className="flex sm:flex-col gap-2 sm:w-40 shrink-0">
-                  <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
-                  <button type="button" disabled={userTier === "connected_free" || userTier === "basic"} onClick={() => imageInputRef.current?.click()}
-                    className={`w-full flex-1 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border transition-all shadow-sm ${
-                      userTier === "connected_free" || userTier === "basic"
-                        ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
-                        : selectedImage ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+
+              {/* Boutons shrink/reset comme home page */}
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={shrinkInput}
+                  className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">➖</button>
+                <button type="button" onClick={resetInput}
+                  className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">↺</button>
+              </div>
+
+              <textarea ref={textareaRef} value={input} maxLength={getMessageMaxLength(userTier)}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key==="Enter"&&!e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                placeholder={t.chat.placeholder}
+                style={{ height: inputHeight }}
+                className="w-full bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 resize-y text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400 dark:placeholder-zinc-700 transition-colors leading-relaxed shadow-inner" />
+
+              {/* 3 gros boutons rectangulaires */}
+              <div className="grid grid-cols-3 gap-3">
+                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
+                <button type="button" disabled={isImageLocked} onClick={() => imageInputRef.current?.click()}
+                  className={`h-12 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border transition-all ${
+                    isImageLocked
+                      ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
+                      : selectedImage
+                        ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
                         : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"}`}>
-                    <span>{userTier === "connected_free" || userTier === "basic" ? "🔒" : selectedImage ? "✓" : "🖼️"}</span>
-                    <span className="truncate">{selectedImage ? (lang === "fr" ? "Image prête" : "Image Ready") : (lang === "fr" ? "Analyse d'image" : "Image Analysis")}</span>
-                  </button>
-                  <button onClick={lancerDictation}
-                    className={`w-full flex-1 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 border shadow-sm ${isListening ? "bg-red-600 border-red-500 animate-pulse text-white" : "bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/20 text-cyan-700 dark:text-cyan-400"}`}>
-                    {isListening ? "🔴 Stop" : (lang === "fr" ? "🎤 Parler" : "🎤 Speak")}
-                  </button>
-                  <button onClick={sendMessage} className="w-full flex-1 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold text-xs text-white transition-all shadow-md uppercase tracking-wider">
-                    {t.chat.send}
-                  </button>
-                </div>
+                  <span>{isImageLocked?"🔒":selectedImage?"✓":"🖼️"}</span>
+                  <span>{selectedImage?(lang==="fr"?"Image":"Image"):(lang==="fr"?"Analyse image":"Image")}</span>
+                </button>
+
+                <button onClick={lancerDictation}
+                  className={`h-12 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all border ${isListening?"bg-red-600 border-red-500 animate-pulse text-white":"bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/20 text-cyan-700 dark:text-cyan-400"}`}>
+                  {isListening ? <><span>🔴</span><span>Stop</span></> : <><span>🎤</span><span>{lang==="fr"?"Parler":"Speak"}</span></>}
+                </button>
+
+                <button onClick={sendMessage}
+                  className="h-12 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold text-sm text-white transition-all shadow-md uppercase tracking-wider">
+                  {t.chat.send}
+                </button>
               </div>
             </div>
           </div>
@@ -773,22 +690,22 @@ export default function ChatPage() {
       {showLimitModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setShowLimitModal(false)}>
           <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 ${activeLimitCategory === "surprise" ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`}>
-              {activeLimitCategory === "surprise" ? "🌿" : "🔒"}
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 ${activeLimitCategory==="surprise"?"bg-emerald-500/10 text-emerald-500":"bg-amber-500/10 text-amber-500"}`}>
+              {activeLimitCategory==="surprise"?"🌿":"🔒"}
             </div>
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 capitalize">
-              {activeLimitCategory === "surprise" ? (lang === "fr" ? "Émergence" : "Emergence") : `${activeLimitCategory} Limit`}
+              {activeLimitCategory==="surprise"?(lang==="fr"?"Émergence":"Emergence"):`${activeLimitCategory} Limit`}
             </h3>
             <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
-              {activeLimitCategory === "surprise"
-                ? (lang === "fr" ? "L'émergence nécessite un abonnement Premium." : "Emergence requires a Premium subscription.")
-                : activeLimitCategory === "prompts"
-                ? (lang === "fr" ? "Quota mensuel épuisé. Passez au plan supérieur." : "Monthly quota reached. Upgrade your plan.")
-                : (lang === "fr" ? `Limite atteinte pour [${activeLimitCategory}].` : `Limit reached for [${activeLimitCategory}].`)}
+              {activeLimitCategory==="surprise"
+                ?(lang==="fr"?"L'émergence nécessite un abonnement Premium.":"Emergence requires a Premium subscription.")
+                :activeLimitCategory==="prompts"
+                ?(lang==="fr"?"Quota mensuel épuisé. Passez au plan supérieur.":"Monthly quota reached. Upgrade your plan.")
+                :(lang==="fr"?`Limite atteinte pour [${activeLimitCategory}].`:`Limit reached for [${activeLimitCategory}].`)}
             </p>
             <div className="flex flex-col gap-3">
               <Link href="/services" onClick={() => setShowLimitModal(false)} className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl font-bold text-sm transition-all text-center text-white">
-                🚀 {lang === "fr" ? "Améliorer le plan" : "Upgrade Plan Tier"}
+                🚀 {lang==="fr"?"Améliorer le plan":"Upgrade Plan Tier"}
               </Link>
             </div>
           </div>
