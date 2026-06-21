@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "User authentication missing" }, { status: 401 });
     }
 
-    const priceId = "abc";
+    const priceId = "price_1TkGWTCWU5v7pxiFQiJE4pFT";
 
 console.log("PLAN REÇU =", plan);
 console.log("PRICE ID UTILISÉ =", priceId);
