@@ -66,7 +66,6 @@ export default function CalendarPage() {
   const [showLimitModal,       setShowLimitModal]       = useState(false);
   const icsInputRef = useRef<HTMLInputElement>(null);
 
-  // Ref pour éviter le double-fetch en StrictMode
   const isFetchingRef = useRef(false);
 
   const getStorageKey     = (uid: string) => `echo-calendar-v2-${uid}`;
@@ -100,10 +99,11 @@ export default function CalendarPage() {
 
         setEvents(prev => {
           const updated = { ...prev };
-          // Fusion intelligente : on garde les événements Google mais on met à jour les locaux/Echo
-          Object.keys(rebuilt).forEach(k => {
+          // FIX: itérer sur toutes les clés (prev + rebuilt) pour éviter l'empilement
+          const allKeys = new Set([...Object.keys(updated), ...Object.keys(rebuilt)]);
+          allKeys.forEach(k => {
             const googleOnly = (updated[k] || []).filter(e => !!e.googleEventId);
-            updated[k] = [...googleOnly, ...rebuilt[k]];
+            updated[k] = [...googleOnly, ...(rebuilt[k] || [])];
           });
           return updated;
         });
@@ -262,13 +262,11 @@ export default function CalendarPage() {
       const uid = session.user.id;
       if (!cancelled) setUserId(uid);
 
-      // 1. Charger d'abord le cache local pour réactivité immédiate
       const savedEvents = localStorage.getItem(getStorageKey(uid));
       if (savedEvents && !cancelled) {
         try { setEvents(JSON.parse(savedEvents)); } catch { setEvents({}); }
       }
 
-      // 2. Charger les données fraîches depuis Supabase (Important !)
       if (!cancelled) {
         await fetchSupabaseEvents(uid);
       }
@@ -321,7 +319,6 @@ export default function CalendarPage() {
 
     bootstrap();
 
-    // ── AUTH STATE CHANGE ──────────────────────────────────────────────────
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session?.user) {
         setUserId(null);
@@ -385,10 +382,8 @@ export default function CalendarPage() {
   // ── MANUAL SYNC ───────────────────────────────────────────────────────────
   const handleManualSync = async () => {
     if (!userId) return;
-    // 1. Re-synchroniser avec la DB Supabase
     await fetchSupabaseEvents(userId);
     
-    // 2. Re-synchroniser avec Google
     const token = await getActiveToken(userId);
     if (!token) {
       console.log("[Calendar] Sync manuel: aucun token → reconnexion requise");
@@ -523,7 +518,7 @@ export default function CalendarPage() {
   const openDay   = (day: number) => { setSelectedDateKey(makeDateKey(day)); setShowAddForm(false); resetForm(); };
   const resetForm = () => { setTitle(""); setStart(""); setEnd(""); setNotes(""); };
 
-  // ── SAVE EVENT (AVEC SMART ALERTE & SYNC COLONNE SCHÉMA) ───────────────────
+  // ── SAVE EVENT ─────────────────────────────────────────────────────────────
   const saveEvent = async () => {
     if (!selectedDateKey || !title.trim()) return;
     const tempId = Date.now().toString();
@@ -553,8 +548,8 @@ export default function CalendarPage() {
           title:           title,
           start_date:      selectedDateKey,
           end_date:        selectedDateKey,
-          start_time:      start || null, // 🎯 CORRIGÉ : On stocke l'heure de début
-          end_time:        end || null,   // 🎯 CORRIGÉ : On stocke l'heure de fin
+          start_time:      start || null,
+          end_time:        end || null,
           notes:           notes,
           is_from_echo:    false, 
         })
