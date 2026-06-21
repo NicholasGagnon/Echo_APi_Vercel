@@ -8,88 +8,78 @@ import LangDropdown from "./components/LangDropdown";
 import TutorialHeaderControls from "./components/TutorialHeaderControls";
 import { useApp } from "../context/AppContext";
 
-type HistoryEntry = {
-  id: string;
-  title: string;
-  date: string;
-  messages: string[];
-};
-
-type EchoMessage = {
-  raw: string;
-  imageB64?: string;
-};
-
-type StickyNote = {
-  id: string;
-  text: string;
-  color: "yellow" | "blue" | "green" | "pink";
-};
-
-type CalendarEvent = {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-  notes: string;
-};
-
+type HistoryEntry = { id: string; title: string; date: string; messages: string[] };
+type EchoMessage  = { raw: string; imageB64?: string };
+type StickyNote   = { id: string; text: string; color: "yellow"|"blue"|"green"|"pink" };
+type CalendarEvent  = { id: string; title: string; start: string; end: string; notes: string };
 type CalendarEvents = Record<string, CalendarEvent[]>;
-
-type UpcomingEvent = CalendarEvent & {
-  dateKey: string;
-  diffDays: number;
-};
+type UpcomingEvent  = CalendarEvent & { dateKey: string; diffDays: number };
 
 const normalizeTier = (raw: unknown): UserTier => {
   if (typeof raw !== "string") return "connected_free";
-  const cleaned = raw.toLowerCase().trim();
-  if (cleaned === "free" || cleaned === "connected_free") return "connected_free";
-  const valid: UserTier[] = ["connected_free", "basic", "premium", "ultra", "founder"];
-  return valid.includes(cleaned as UserTier) ? (cleaned as UserTier) : "connected_free";
+  const c = raw.toLowerCase().trim();
+  if (c === "free" || c === "connected_free") return "connected_free";
+  const valid: UserTier[] = ["connected_free","basic","premium","ultra","founder"];
+  return valid.includes(c as UserTier) ? (c as UserTier) : "connected_free";
 };
 
 const fetchUserTier = async (uid: string): Promise<UserTier> => {
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("user_tier")
-    .eq("id", uid)
-    .single();
-  if (!error && profile?.user_tier) return normalizeTier(profile.user_tier);
+  const { data, error } = await supabase.from("profiles").select("user_tier").eq("id", uid).single();
+  if (!error && data?.user_tier) return normalizeTier(data.user_tier);
   return "connected_free";
 };
 
 const STICKY_STYLES = {
-  yellow: { bg: "bg-yellow-950/40 dark:bg-yellow-950", border: "border-yellow-600/50 dark:border-yellow-600", text: "text-yellow-900 dark:text-yellow-200", dot: "bg-yellow-400" },
-  blue:   { bg: "bg-blue-950/40 dark:bg-blue-950",     border: "border-blue-500/50 dark:border-blue-500",   text: "text-blue-900 dark:text-blue-200",   dot: "bg-blue-400"   },
-  green:  { bg: "bg-green-950/40 dark:bg-green-950",   border: "border-green-600/50 dark:border-green-600", text: "text-green-900 dark:text-green-200", dot: "bg-green-400"  },
-  pink:   { bg: "bg-pink-950/40 dark:bg-pink-950",     border: "border-pink-600/50 dark:border-pink-600",   text: "text-pink-900 dark:text-pink-200",   dot: "bg-pink-400"   },
+  yellow: { bg:"bg-yellow-950/40 dark:bg-yellow-950", border:"border-yellow-600/50", text:"text-yellow-900 dark:text-yellow-200", dot:"bg-yellow-400" },
+  blue:   { bg:"bg-blue-950/40 dark:bg-blue-950",     border:"border-blue-500/50",   text:"text-blue-900 dark:text-blue-200",   dot:"bg-blue-400"   },
+  green:  { bg:"bg-green-950/40 dark:bg-green-950",   border:"border-green-600/50",  text:"text-green-900 dark:text-green-200", dot:"bg-green-400"  },
+  pink:   { bg:"bg-pink-950/40 dark:bg-pink-950",     border:"border-pink-600/50",   text:"text-pink-900 dark:text-pink-200",   dot:"bg-pink-400"   },
 };
 
-const EVENT_DOT_COLORS = ["bg-cyan-400", "bg-green-400", "bg-yellow-400"];
+const EVENT_DOT_COLORS = ["bg-cyan-400","bg-green-400","bg-yellow-400"];
+
+const WATER = [
+  { g:"〰", top:"6%",  left:"1%",   rot:"-18deg", sz:"58px" },
+  { g:"∿",  top:"20%", right:"2%",  rot:"12deg",  sz:"70px" },
+  { g:"〜", top:"44%", left:"0.5%", rot:"-8deg",  sz:"50px" },
+  { g:"≈",  top:"67%", right:"1.5%",rot:"18deg",  sz:"64px" },
+  { g:"∾",  top:"83%", left:"2%",   rot:"-12deg", sz:"54px" },
+];
+
+const deriveTitle = (raws: string[], lang: string): string => {
+  const first = raws.find(r => /^(You|Toi)\s*:/i.test(r));
+  if (first) {
+    const clean = first.replace(/^(You|Toi)\s*:\s*/i,"").trim();
+    if (clean) return clean.length > 42 ? `${clean.slice(0,42)}…` : clean;
+  }
+  return lang === "fr" ? "Nouvelle conversation" : "New conversation";
+};
 
 export default function Home() {
   const { t, lang, theme, toggleTheme } = useApp();
-  const [message, setMessage]   = useState("");
-  const [messages, setMessages] = useState<EchoMessage[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [userId, setUserId]     = useState<string | null>(null);
-  const bottomRef      = useRef<HTMLDivElement>(null);
-  const imageInputRef  = useRef<HTMLInputElement>(null);
-  const textareaRef    = useRef<HTMLTextAreaElement>(null);
-  const lastSavedLength = useRef(0);
 
-  const [isListening, setIsListening]         = useState(false);
-  const [selectedImage, setSelectedImage]     = useState<string | null>(null);
-  const [selectedImageName, setSelectedImageName] = useState("");
+  const [message,   setMessage]   = useState("");
+  const [messages,  setMessages]  = useState<EchoMessage[]>([]);
+  const [isLoaded,  setIsLoaded]  = useState(false);
+  const [userId,    setUserId]    = useState<string|null>(null);
+  const [activeConvId, setActiveConvId] = useState<string|null>(null);
+
+  const bottomRef     = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef   = useRef<HTMLTextAreaElement>(null);
+  const saveTimerRef  = useRef<ReturnType<typeof setTimeout>|null>(null);
+
+  const [isListening,       setIsListening]       = useState(false);
+  const [selectedImage,     setSelectedImage]      = useState<string|null>(null);
+  const [selectedImageName, setSelectedImageName]  = useState("");
 
   const DEFAULT_INPUT_HEIGHT = 112;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
 
   const shrinkInput = () => {
     const el = textareaRef.current;
-    const current = el ? el.getBoundingClientRect().height : inputHeight;
-    const next = Math.max(48, Math.round(current / 2));
+    const cur = el ? el.getBoundingClientRect().height : inputHeight;
+    const next = Math.max(48, Math.round(cur / 2));
     if (el) el.style.height = `${next}px`;
     setInputHeight(next);
   };
@@ -98,24 +88,24 @@ export default function Home() {
     setInputHeight(DEFAULT_INPUT_HEIGHT);
   };
 
-  // ── RESIZE PANELS ─────────────────────────────────────────────────────────
+  // ── PANELS ────────────────────────────────────────────────────────────────
   const [leftPanelWidth,  setLeftPanelWidth]  = useState(220);
   const [rightPanelWidth, setRightPanelWidth] = useState(272);
   const [isDesktop, setIsDesktop] = useState(false);
-  const resizingSideRef = useRef<"left" | "right" | null>(null);
+  const resizingSideRef = useRef<"left"|"right"|null>(null);
 
   useEffect(() => {
-    const savedLeft  = parseInt(localStorage.getItem("echo-home-left-width")  || "", 10);
-    const savedRight = parseInt(localStorage.getItem("echo-home-panel-width") || "", 10);
-    if (Number.isFinite(savedLeft))  setLeftPanelWidth(Math.min(340, Math.max(180, savedLeft)));
-    if (Number.isFinite(savedRight)) setRightPanelWidth(Math.min(440, Math.max(220, savedRight)));
+    const sl = parseInt(localStorage.getItem("echo-home-left-width")  || "", 10);
+    const sr = parseInt(localStorage.getItem("echo-home-panel-width") || "", 10);
+    if (Number.isFinite(sl)) setLeftPanelWidth(Math.min(340,Math.max(180,sl)));
+    if (Number.isFinite(sr)) setRightPanelWidth(Math.min(440,Math.max(220,sr)));
     const check = () => setIsDesktop(window.innerWidth >= 1024);
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  const startPanelResize = (side: "left" | "right") => (e: React.MouseEvent) => {
+  const startPanelResize = (side: "left"|"right") => (e: React.MouseEvent) => {
     e.preventDefault();
     resizingSideRef.current = side;
     document.body.style.cursor = "col-resize";
@@ -124,9 +114,9 @@ export default function Home() {
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      const side = resizingSideRef.current;
-      if (!side) return;
-      if (side === "left")  setLeftPanelWidth(Math.min(340, Math.max(180, e.clientX)));
+      const s = resizingSideRef.current;
+      if (!s) return;
+      if (s === "left") setLeftPanelWidth(Math.min(340, Math.max(180, e.clientX)));
       else setRightPanelWidth(Math.min(440, Math.max(220, window.innerWidth - e.clientX)));
     };
     const onUp = () => {
@@ -144,27 +134,26 @@ export default function Home() {
   useEffect(() => { localStorage.setItem("echo-home-panel-width", String(rightPanelWidth)); }, [rightPanelWidth]);
 
   // ── STATE ─────────────────────────────────────────────────────────────────
-  const [stickies,      setStickies]      = useState<StickyNote[]>([]);
-  const [newStickyText, setNewStickyText] = useState("");
-  const [selectedColor, setSelectedColor] = useState<StickyNote["color"]>("yellow");
-  const [expandedSticky, setExpandedSticky] = useState<StickyNote | null>(null);
-  const [editText, setEditText] = useState("");
+  const [stickies,       setStickies]       = useState<StickyNote[]>([]);
+  const [newStickyText,  setNewStickyText]  = useState("");
+  const [selectedColor,  setSelectedColor]  = useState<StickyNote["color"]>("yellow");
+  const [expandedSticky, setExpandedSticky] = useState<StickyNote|null>(null);
+  const [editText,       setEditText]       = useState("");
 
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvents>({});
-  const [userTier,   setUserTier]   = useState<UserTier>("connected_free");
-  const [echoState,  setEchoState]  = useState("idle");
+  const [userTier,       setUserTier]       = useState<UserTier>("connected_free");
+  const [echoState,      setEchoState]      = useState("idle");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [tutorialStep,   setTutorialStep]   = useState<number | null>(null);
+  const [tutorialStep,   setTutorialStep]   = useState<number|null>(null);
   const [selectedButtons,        setSelectedButtons]        = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
   const [showLimitModal,    setShowLimitModal]    = useState(false);
-  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality" | "calendar" | "prompts">("vitality");
+  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality"|"calendar"|"prompts">("vitality");
 
-  const localButtonsLabels: Record<"fr" | "en", Record<string, string>> = {
+  const localButtonsLabels: Record<"fr"|"en", Record<string,string>> = {
     fr: { clarity:"1🧠 Clarté", humain:"2👤 Humain", critical:"3⚔️ Regard critique", expert:"4🎓 Expert", precision:"5🎯 Précision", philosophy:"6🏛️ Philosophie", strategy:"7♟️ Stratégie", decompose:"8🧩 Décomposer", refine:"9❓ Affiner", double:"10⚡ Double Regard" },
-    en: { clarity:"1🧠 Clarity", humain:"2👤 Human", critical:"3⚔️ Critical View",   expert:"4🎓 Expert", precision:"5🎯 Precision",  philosophy:"6🏛️ Philosophy",  strategy:"7♟️ Strategy",  decompose:"8🧩 Decompose",  refine:"9❓ Refine",  double:"10⚡ Double Regard" },
+    en: { clarity:"1🧠 Clarity", humain:"2👤 Human", critical:"3⚔️ Critical View", expert:"4🎓 Expert", precision:"5🎯 Precision", philosophy:"6🏛️ Philosophy", strategy:"7♟️ Strategy", decompose:"8🧩 Decompose", refine:"9❓ Refine", double:"10⚡ Double Regard" },
   };
-
   const buttonsData = ["clarity","humain","critical","expert","precision","philosophy","strategy","decompose","refine","double"].map(id => ({ id }));
 
   const handleButtonClick = (id: string) => {
@@ -179,13 +168,25 @@ export default function Home() {
     }
   };
 
-  // ── STORAGE KEYS (localStorage gardé pour : conversation, tuto, resize) ──
-  const getConversationKey = (uid: string | null) => uid ? `echo-conversation-v2-${uid}` : "echo-conversation-v2";
-  const getHistoryKey      = (uid: string | null) => uid ? `echo-history-${uid}` : "echo-history";
-
-  const lastEchoIndex = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
   const serializeMsgs   = (msgs: EchoMessage[]) => msgs.map(m => m.raw);
   const deserializeMsgs = (raws: string[]): EchoMessage[] => raws.map(r => ({ raw: r }));
+  const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
+
+  // ── SAVE TO SUPABASE (shared with chat) ───────────────────────────────────
+  const saveToSupabase = async (uid: string, convId: string|null, raws: string[]): Promise<string|null> => {
+    if (convId) {
+      await supabase.from("echo_conversations")
+        .update({ messages: raws, updated_at: new Date().toISOString() })
+        .eq("id", convId).eq("user_id", uid);
+      return convId;
+    } else {
+      const { data, error } = await supabase.from("echo_conversations")
+        .insert({ user_id: uid, source: "chat", messages: raws, updated_at: new Date().toISOString() })
+        .select("id").single();
+      if (error) { console.error("[Home] insert conv:", error.message); return null; }
+      return data?.id ?? null;
+    }
+  };
 
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -194,77 +195,73 @@ export default function Home() {
       setUserId(uid);
 
       try {
-        // 1. Conversation (garde localStorage — volatile par design)
-        const savedMessages = localStorage.getItem(getConversationKey(uid));
-        if (savedMessages) {
-          const parsed: string[] = JSON.parse(savedMessages);
-          setMessages(deserializeMsgs(parsed));
-          lastSavedLength.current = Math.floor(parsed.join("").length / 2000) * 2000;
-        }
-
         if (uid) {
-          // 2. Stickies → Supabase
-          const { data: stickyRows } = await supabase
-            .from("echo_stickies")
-            .select("*")
+          // 1. Charger la conversation la plus récente (partagée avec Chat)
+          const { data: convRows } = await supabase
+            .from("echo_conversations")
+            .select("id, messages")
             .eq("user_id", uid)
-            .order("created_at", { ascending: true });
-          if (stickyRows?.length) {
-            setStickies(stickyRows.map(r => ({ id: r.id, text: r.text, color: r.color as StickyNote["color"] })));
+            .eq("source", "chat")
+            .order("updated_at", { ascending: false })
+            .limit(1);
+
+          if (convRows?.length) {
+            setActiveConvId(convRows[0].id);
+            setMessages(deserializeMsgs(convRows[0].messages || []));
           }
 
-          // 3. Calendar events → Supabase echo_calendar
+          // 2. Stickies
+          const { data: stickyRows } = await supabase
+            .from("echo_stickies").select("*").eq("user_id", uid)
+            .order("created_at", { ascending: true });
+          if (stickyRows?.length)
+            setStickies(stickyRows.map(r => ({ id: r.id, text: r.text, color: r.color as StickyNote["color"] })));
+
+          // 3. Calendrier
           const { data: calRows } = await supabase
-            .from("echo_calendar")
-            .select("*")
-            .eq("user_id", uid);
+            .from("echo_calendar").select("*").eq("user_id", uid);
           if (calRows?.length) {
             const rebuilt: CalendarEvents = {};
             calRows.forEach(r => {
               const key = r.start_date;
               if (!rebuilt[key]) rebuilt[key] = [];
-              rebuilt[key].push({ id: r.id, title: r.title, start: r.start_time || "", end: r.end_time || "", notes: r.notes || "" });
+              rebuilt[key].push({ id: r.id, title: r.title, start: r.start_time||"", end: r.end_time||"", notes: r.notes||"" });
             });
             setCalendarEvents(rebuilt);
           }
 
           // 4. Tier
           setUserTier(await fetchUserTier(uid));
+        } else {
+          // Guest : localStorage
+          const saved = localStorage.getItem("echo-conversation-v2");
+          if (saved) setMessages(deserializeMsgs(JSON.parse(saved)));
         }
 
-        // 5. Tutorial
         const isTutoDone = localStorage.getItem("echo-tuto-done-v1");
         if (!isTutoDone) setTutorialStep(1);
 
-      } catch (e) { console.error("Bootstrap error", e); }
+      } catch(e) { console.error("Bootstrap error", e); }
       setIsLoaded(true);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session?.user) {
-        setUserId(null); setCalendarEvents({}); setStickies([]); setMessages([]); setUserTier("connected_free");
+        setUserId(null); setCalendarEvents({}); setStickies([]);
+        setMessages([]); setUserTier("connected_free"); setActiveConvId(null);
         return;
       }
       if (session?.user) {
         const uid = session.user.id;
         setUserId(uid);
-
-        const savedConvo = localStorage.getItem(getConversationKey(uid));
-        setMessages(savedConvo ? deserializeMsgs(JSON.parse(savedConvo)) : []);
-
-        const { data: calRows } = await supabase.from("echo_calendar").select("*").eq("user_id", uid);
-        if (calRows?.length) {
-          const rebuilt: CalendarEvents = {};
-          calRows.forEach(r => {
-            if (!rebuilt[r.start_date]) rebuilt[r.start_date] = [];
-            rebuilt[r.start_date].push({ id: r.id, title: r.title, start: r.start_time || "", end: r.end_time || "", notes: r.notes || "" });
-          });
-          setCalendarEvents(rebuilt);
+        const { data: convRows } = await supabase
+          .from("echo_conversations").select("id, messages")
+          .eq("user_id", uid).eq("source", "chat")
+          .order("updated_at", { ascending: false }).limit(1);
+        if (convRows?.length) {
+          setActiveConvId(convRows[0].id);
+          setMessages(deserializeMsgs(convRows[0].messages || []));
         }
-
-        const { data: stickyRows } = await supabase.from("echo_stickies").select("*").eq("user_id", uid).order("created_at", { ascending: true });
-        setStickies(stickyRows?.map(r => ({ id: r.id, text: r.text, color: r.color as StickyNote["color"] })) || []);
-
         setUserTier(await fetchUserTier(uid));
       }
     });
@@ -272,51 +269,45 @@ export default function Home() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // ── PERSISTER CONVERSATION (localStorage — volatile) ──────────────────────
+  // ── AUTOSAVE ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isLoaded) return;
     const raws = serializeMsgs(messages);
-    localStorage.setItem(getConversationKey(userId), JSON.stringify(raws));
-    checkAndSaveHistory(raws);
-  }, [messages, isLoaded, userId]);
+
+    if (userId) {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(async () => {
+        const newId = await saveToSupabase(userId, activeConvId, raws);
+        if (newId && !activeConvId) setActiveConvId(newId);
+      }, 1500);
+    } else {
+      localStorage.setItem("echo-conversation-v2", JSON.stringify(raws));
+    }
+
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [messages, isLoaded]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  const checkAndSaveHistory = (msgs: string[]) => {
-    const totalChars = msgs.join("").length;
-    const threshold = Math.floor(totalChars / 2000) * 2000;
-    if (threshold > lastSavedLength.current && threshold > 0) {
-      lastSavedLength.current = threshold;
-      const date  = new Date().toLocaleString("fr-CA");
-      const entry: HistoryEntry = { id: Date.now().toString(), title: `History - ${date}`, date, messages: [...msgs] };
-      const saved = localStorage.getItem(getHistoryKey(userId));
-      const history: HistoryEntry[] = saved ? JSON.parse(saved) : [];
-      history.unshift(entry);
-      localStorage.setItem(getHistoryKey(userId), JSON.stringify(history));
-    }
-  };
-
-  // ── UPCOMING EVENTS (depuis state calendarEvents) ─────────────────────────
+  // ── UPCOMING EVENTS ───────────────────────────────────────────────────────
   const upcomingEvents: UpcomingEvent[] = (() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = new Date(); today.setHours(0,0,0,0);
     const results: UpcomingEvent[] = [];
     for (const [dateKey, evts] of Object.entries(calendarEvents)) {
       const d = new Date(dateKey + "T00:00:00");
       const diffDays = Math.floor((d.getTime() - today.getTime()) / 86400000);
       if (diffDays >= 0 && diffDays <= 30) evts.forEach(ev => results.push({ ...ev, dateKey, diffDays }));
     }
-    return results.sort((a, b) => a.diffDays - b.diffDays).slice(0, 6);
+    return results.sort((a,b) => a.diffDays - b.diffDays).slice(0,6);
   })();
 
-  // ── IMAGE HELPERS ─────────────────────────────────────────────────────────
+  // ── IMAGE ─────────────────────────────────────────────────────────────────
   const compressImage = (base64: string): Promise<string> =>
     new Promise(resolve => {
       const img = document.createElement("img");
       img.onload = () => {
-        const MAX = 1200;
-        let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
+        const MAX = 1200; let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h*MAX/w); w = MAX; } else { w = Math.round(w*MAX/h); h = MAX; } }
         const canvas = document.createElement("canvas");
         canvas.width = w; canvas.height = h;
         canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
@@ -367,12 +358,12 @@ export default function Home() {
       setEchoState("speaking");
 
       let isActionBlocked = false;
-      let blockedCategory: "vitality" | "calendar" | null = null;
+      let blockedCategory: "vitality"|"calendar"|null = null;
       if (data.action) {
         const { type } = data.action;
-        const quotaCategory = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG") ? "vitality" : "calendar";
-        const status = checkQuota(quotaCategory, userTier);
-        if (!status.allowed) { setActiveLimitCategory(quotaCategory); setShowLimitModal(true); isActionBlocked = true; blockedCategory = quotaCategory; }
+        const qCat = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG") ? "vitality" : "calendar";
+        const status = checkQuota(qCat, userTier);
+        if (!status.allowed) { setActiveLimitCategory(qCat); setShowLimitModal(true); isActionBlocked = true; blockedCategory = qCat; }
       }
 
       const echoText = data.response || "";
@@ -381,91 +372,88 @@ export default function Home() {
 
       if (data.action && !isActionBlocked) {
 
-        // ── ADD_BUDGET_EXPENSE → Supabase echo_expenses ──────────────────────
         if (data.action.type === "ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt } = data.action.payload;
           if (userId) {
             const { error } = await supabase.from("echo_expenses").insert({
-              user_id: userId,
-              title:   title || "Purchase",
-              amount:  parseFloat(amount ?? spent) || 0,
-              date:    paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
+              user_id: userId, title: title || "Purchase",
+              amount: parseFloat(amount ?? spent) || 0,
+              date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
             });
-            if (error) console.error("[Home] echo_expenses insert:", error.message);
+            if (error) console.error("[Home] echo_expenses:", error.message);
           }
         }
 
-        // ── ADD_CALORIE_LOG → Supabase echo_calories ─────────────────────────
         if (data.action.type === "ADD_CALORIE_LOG") {
           const { foodName, calories } = data.action.payload;
           if (userId) {
             const { error } = await supabase.from("echo_calories").insert({
-              user_id:   userId,
-              food_name: foodName || "Food Item",
-              calories:  parseInt(calories) || 0,
-              date:      new Date().toLocaleDateString("fr-CA"),
+              user_id: userId, food_name: foodName || "Food Item",
+              calories: parseInt(calories) || 0,
+              date: new Date().toLocaleDateString("fr-CA"),
             });
-            if (error) console.error("[Home] echo_calories insert:", error.message);
+            if (error) console.error("[Home] echo_calories:", error.message);
           }
         }
 
-        // ── SET_CALORIE_GOAL → localStorage (pas de table dédiée encore) ─────
         if (data.action.type === "SET_CALORIE_GOAL" || data.action.type === "UPDATE_CALORIE_GOAL") {
           const { goal, calorieGoal, calories } = data.action.payload;
           const nextGoal = parseInt(goal ?? calorieGoal ?? calories);
           if (Number.isFinite(nextGoal) && nextGoal > 0) localStorage.setItem("echo-calorie-goal", nextGoal.toString());
         }
 
-        // ── ADD_CALENDAR_EVENT → Supabase echo_calendar ──────────────────────
         if (data.action.type === "ADD_CALENDAR_EVENT") {
           const { title, start, end, notes } = data.action.payload;
           const dateKey = start?.split("T")[0] || start || "";
           if (dateKey && userId) {
             const { data: inserted, error } = await supabase.from("echo_calendar").insert({
-              user_id:    userId,
-              title:      title || "Untitled Event",
-              start_date: dateKey,
-              end_date:   dateKey,
-              notes:      notes || "",
+              user_id:      userId,
+              title:        title || "Untitled Event",
+              start_date:   dateKey,
+              end_date:     dateKey,
+              notes:        notes || "",
               is_from_echo: true,
             }).select().single();
 
             if (error) {
-              console.error("[Home] echo_calendar insert:", error.message);
+              console.error("[Home] echo_calendar:", error.message);
             } else {
-              // Mettre à jour le state UI avec l'ID Supabase
-              const newEvent = { id: inserted.id, title: inserted.title, start: start || "", end: end || "", notes: notes || "" };
-              setCalendarEvents(prev => ({ ...prev, [dateKey]: [...(prev[dateKey] || []), newEvent] }));
+              const newEvent = { id: inserted.id, title: inserted.title, start: start||"", end: end||"", notes: notes||"" };
+              setCalendarEvents(prev => ({ ...prev, [dateKey]: [...(prev[dateKey]||[]), newEvent] }));
             }
           }
         }
       }
     } catch {
-      setMessages([...messages, { raw: "Echo: LOCAL SERVER CONNECTION ERROR" }]);
+      setMessages([...baseMessages, { raw: "Echo: Impossible de joindre le serveur." }]);
     } finally {
       setTimeout(() => setEchoState("idle"), 10000);
     }
   };
 
-  // ── STICKIES → Supabase ───────────────────────────────────────────────────
+  // ── STICKIES ──────────────────────────────────────────────────────────────
   const addSticky = async () => {
-    if (!newStickyText.trim() || !userId) return;
-    const { data: inserted, error } = await supabase.from("echo_stickies").insert({
-      user_id: userId,
-      text:    newStickyText.trim(),
-      color:   selectedColor,
-    }).select().single();
+    if (!newStickyText.trim()) return;
 
-    if (error) {
-      console.error("[Home] echo_stickies insert:", error.message);
+    if (!userId) {
+      // Guest : localStorage
+      const id = `local-${Date.now()}`;
+      setStickies(prev => [...prev, { id, text: newStickyText.trim(), color: selectedColor }]);
+      setNewStickyText("");
       return;
     }
+
+    const { data: inserted, error } = await supabase.from("echo_stickies").insert({
+      user_id: userId, text: newStickyText.trim(), color: selectedColor,
+    }).select().single();
+
+    if (error) { console.error("[Home] echo_stickies insert:", error.message); return; }
     setStickies(prev => [...prev, { id: inserted.id, text: inserted.text, color: inserted.color }]);
     setNewStickyText("");
   };
 
   const deleteSticky = async (id: string) => {
-    if (userId) {
+    if (userId && !id.startsWith("local-")) {
       const { error } = await supabase.from("echo_stickies").delete().eq("id", id).eq("user_id", userId);
       if (error) console.error("[Home] echo_stickies delete:", error.message);
     }
@@ -473,17 +461,17 @@ export default function Home() {
   };
 
   const saveStickyEdit = async () => {
-    if (!expandedSticky || !userId) return;
-    const { error } = await supabase.from("echo_stickies")
-      .update({ text: editText })
-      .eq("id", expandedSticky.id)
-      .eq("user_id", userId);
-    if (error) console.error("[Home] echo_stickies update:", error.message);
+    if (!expandedSticky) return;
+    if (userId && !expandedSticky.id.startsWith("local-")) {
+      const { error } = await supabase.from("echo_stickies")
+        .update({ text: editText }).eq("id", expandedSticky.id).eq("user_id", userId);
+      if (error) console.error("[Home] echo_stickies update:", error.message);
+    }
     setStickies(prev => prev.map(s => s.id === expandedSticky.id ? { ...s, text: editText } : s));
     setExpandedSticky(null);
   };
 
-  // ── MISC HELPERS ──────────────────────────────────────────────────────────
+  // ── MISC ──────────────────────────────────────────────────────────────────
   const isImageButtonLocked = userTier === "connected_free" || userTier === "basic";
 
   const lancerDictation = () => {
@@ -493,15 +481,15 @@ export default function Home() {
     recognition.lang = lang === "fr" ? "fr-FR" : "en-US";
     recognition.onstart  = () => setIsListening(true);
     recognition.onend    = () => setIsListening(false);
-    recognition.onresult = (e: any) => setMessage(p => p + (p ? " " : "") + e.results[0][0].transcript);
+    recognition.onresult = (e: any) => setMessage(p => p + (p?" ":"") + e.results[0][0].transcript);
     recognition.start();
   };
 
   const handleImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; event.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) { alert(lang === "fr" ? "Choisis un fichier image." : "Please choose an image file."); return; }
-    if (file.size > 5 * 1024 * 1024) { alert(lang === "fr" ? "L'image doit faire moins de 5 Mo." : "The image must be smaller than 5 MB."); return; }
+    if (!file.type.startsWith("image/")) { alert(lang==="fr"?"Choisis un fichier image.":"Please choose an image file."); return; }
+    if (file.size > 5*1024*1024) { alert(lang==="fr"?"L'image doit faire moins de 5 Mo.":"The image must be smaller than 5 MB."); return; }
     const reader = new FileReader();
     reader.onload = async () => { const c = await compressImage(reader.result as string); setSelectedImage(c); setSelectedImageName(file.name); };
     reader.readAsDataURL(file);
@@ -512,11 +500,10 @@ export default function Home() {
     const items = event.clipboardData?.items;
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (item.type.startsWith("image/")) {
-        const file = item.getAsFile(); if (!file) continue;
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile(); if (!file) continue;
         event.preventDefault();
-        if (file.size > 5 * 1024 * 1024) { alert(lang === "fr" ? "L'image doit faire moins de 5 Mo." : "The image must be smaller than 5 MB."); return; }
+        if (file.size > 5*1024*1024) { alert(lang==="fr"?"L'image doit faire moins de 5 Mo.":"The image must be smaller than 5 MB."); return; }
         const reader = new FileReader();
         reader.onload = async () => { const c = await compressImage(reader.result as string); setSelectedImage(c); setSelectedImageName(`screenshot-${Date.now()}.png`); };
         reader.readAsDataURL(file);
@@ -526,9 +513,9 @@ export default function Home() {
   };
 
   const diffDaysLabel = (d: number) => {
-    if (d === 0) return lang === "fr" ? "Aujourd'hui" : "Today";
-    if (d === 1) return lang === "fr" ? "Demain" : "Tomorrow";
-    return lang === "fr" ? `Dans ${d} jours` : `In ${d} days`;
+    if (d === 0) return lang==="fr"?"Aujourd'hui":"Today";
+    if (d === 1) return lang==="fr"?"Demain":"Tomorrow";
+    return lang==="fr"?`Dans ${d} jours`:`In ${d} days`;
   };
 
   useEffect(() => {
@@ -540,13 +527,12 @@ export default function Home() {
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
-
       <div className="flex flex-1 overflow-hidden min-h-0">
 
+        {/* NAV SIDEBAR */}
         <aside
           style={isDesktop ? { width: leftPanelWidth, flexBasis: leftPanelWidth } : undefined}
-          className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between"
-        >
+          className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
               <Link href="/" className="text-cyan-600 dark:text-cyan-400 font-bold">{t.sidebar.home}</Link>
@@ -554,12 +540,12 @@ export default function Home() {
             <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
               <Link href="/chat"     className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
               <Link href="/books"    className="block hover:text-cyan-500">{t.sidebar.books}</Link>
-              <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang === "fr" ? "Calendrier" : "Calendar"}</Link>
-              <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang === "fr" ? "Vitalité" : "Vitality"}</Link>
-              <Link href="/services" className="block hover:text-cyan-500">💎 {lang === "fr" ? "Services" : "Services"}</Link>
-              <Link href="/account"  className="block hover:text-cyan-500">👤 {lang === "fr" ? "Compte" : "Account"}</Link>
+              <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
+              <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
+              <Link href="/services" className="block hover:text-cyan-500">💎 {lang==="fr"?"Services":"Services"}</Link>
+              <Link href="/account"  className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
               <hr className="border-zinc-200 dark:border-zinc-800 my-4" />
-              <Link href="/history"  className="block hover:text-amber-500">⭐ {lang === "fr" ? "Historique" : "History"}</Link>
+              <Link href="/history"  className="block hover:text-amber-500">⭐ {lang==="fr"?"Historique":"History"}</Link>
             </div>
           </div>
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
@@ -573,13 +559,14 @@ export default function Home() {
 
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
 
+          {/* MAIN SECTION */}
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
 
             {/* BOUTONS COMPORTEMENTAUX */}
             <div className="w-full max-w-4xl mx-auto bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 w-full">
                 {buttonsData.map(btn => {
-                  const isSelected    = selectedButtons.includes(btn.id);
+                  const isSelected     = selectedButtons.includes(btn.id);
                   const isDoubleRegard = btn.id === "double";
                   let isLocked = false;
                   if (!isDoubleRegard) {
@@ -603,11 +590,10 @@ export default function Home() {
                 })}
               </div>
 
-              {/* TUTORIAL STEP 1 */}
               {tutorialStep === 1 && (
                 <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-[92vw] max-w-[460px] sm:max-w-[700px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
-                  <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }} />
+                  <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }} />
                   <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
                     <span className="text-xl">✨</span>
                     <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">ECHO AI (1/2)</h4>
@@ -618,23 +604,9 @@ export default function Home() {
                     </div>
                     <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line min-w-0">
                       {lang === "fr" ? (
-                        <>
-                          Hey bienvenue ! 👋{"\n"}
-                          Je suis Echo, l'IA un peu légèrement déjantée qui se promène partout sur ce site.{"\n"}
-                          Les boutons que tu vois en haut influencent ma façon de voir les choses.{"\n"}
-                          Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux et espiègle. 😄{"\n"}
-                          Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}
-                          Adiooo ! ✨
-                        </>
+                        <>Hey bienvenue ! 👋{"\n"}Je suis Echo, l'IA un peu légèrement déjantée qui se promène partout sur ce site.{"\n"}Les boutons que tu vois en haut influencent ma façon de voir les choses.{"\n"}Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux et espiègle. 😄{"\n"}Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}Adiooo ! ✨</>
                       ) : (
-                        <>
-                          Hey, welcome! 👋{"\n"}
-                          I am Echo, the slightly crazy AI roaming around this entire site.{"\n"}
-                          The buttons above shape how I see things.{"\n"}
-                          With no button active, you meet me in my natural state: curious and playful! 😄{"\n"}
-                          And Double Regard merges two perspectives at once. 👀{"\n"}
-                          Adiooo! ✨
-                        </>
+                        <>Hey, welcome! 👋{"\n"}I am Echo, the slightly crazy AI roaming around this entire site.{"\n"}The buttons above shape how I see things.{"\n"}With no button active, you meet me in my natural state: curious and playful! 😄{"\n"}And Double Regard merges two perspectives at once. 👀{"\n"}Adiooo! ✨</>
                       )}
                     </div>
                   </div>
@@ -665,14 +637,14 @@ export default function Home() {
                     const isEcho = /^Echo\s*:/i.test(msg.raw);
                     const isUser = /^(You|Toi)\s*:/i.test(msg.raw);
                     const isLastEcho = isEcho && index === lastEchoIndex;
-                    const cleanText = msg.raw.replace(/^(Echo|You|Toi)\s*:\s*/i, "");
+                    const cleanText = msg.raw.replace(/^(Echo|You|Toi)\s*:\s*/i,"");
                     const isDefaultImgText = cleanText === "Analyse cette image." || cleanText === "Analyze this image.";
 
                     if (isEcho) return (
                       <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 min-w-0">
                         <div className="flex items-center gap-4">
                           <img src="/Echo.png" alt="Echo"
-                            className={`w-14 h-14 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-800 shadow-md ${isLastEcho ? echoState === "thinking" ? "echo-thinking" : echoState === "speaking" ? "echo-speaking" : "echo-idle" : "echo-idle"}`} />
+                            className={`w-14 h-14 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-800 shadow-md ${isLastEcho ? echoState==="thinking"?"echo-thinking":echoState==="speaking"?"echo-speaking":"echo-idle":"echo-idle"}`} />
                           <div className="flex flex-col">
                             <span className="text-zinc-500 dark:text-zinc-400 text-xs font-mono uppercase tracking-widest font-bold">Echo</span>
                             <span className="text-zinc-400 dark:text-zinc-600 text-[10px] font-mono">Core Frequency</span>
@@ -692,7 +664,7 @@ export default function Home() {
                             <p className="text-zinc-700 dark:text-zinc-300 text-[14px] leading-7 tracking-wide bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3 inline-block text-left whitespace-pre-wrap break-words selection:bg-cyan-500/30">{cleanText}</p>
                           </div>
                         )}
-                        {msg.imageB64 && isDefaultImgText && <span className="text-zinc-500 dark:text-zinc-600 text-[10px] italic mt-0.5">{lang === "fr" ? "Analyse cette image." : "Analyze this image."}</span>}
+                        {msg.imageB64 && isDefaultImgText && <span className="text-zinc-500 dark:text-zinc-600 text-[10px] italic mt-0.5">{lang==="fr"?"Analyse cette image.":"Analyze this image."}</span>}
                       </div>
                     );
 
@@ -710,7 +682,7 @@ export default function Home() {
                   <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-600 dark:text-emerald-400 max-w-full">
                     <div className="flex items-center gap-2 truncate min-w-0">
                       <img src={selectedImage} alt="preview" className="w-8 h-8 rounded object-cover border border-emerald-500/30 shrink-0" />
-                      <span className="truncate font-medium">{selectedImageName || (lang === "fr" ? "Image prête" : "Image ready")}</span>
+                      <span className="truncate font-medium">{selectedImageName || (lang==="fr"?"Image prête":"Image ready")}</span>
                     </div>
                     <button onClick={() => { setSelectedImage(null); setSelectedImageName(""); }} className="text-zinc-400 hover:text-red-500 font-bold ml-2 shrink-0">✕</button>
                   </div>
@@ -724,31 +696,30 @@ export default function Home() {
                     value={message}
                     onChange={e => setMessage(e.target.value)}
                     onPaste={handlePaste}
-                    onFocus={shrinkInput}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
                     placeholder={t.chat.placeholder}
                   />
                   <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-zinc-200 dark:border-zinc-900">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <button type="button" onClick={shrinkInput} title={lang === "fr" ? "Réduire" : "Shrink"}
+                      <button type="button" onClick={shrinkInput} title={lang==="fr"?"Réduire":"Shrink"}
                         className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">➖</button>
-                      <button type="button" onClick={resetInput} title={lang === "fr" ? "Taille originale" : "Reset size"}
+                      <button type="button" onClick={resetInput} title={lang==="fr"?"Taille originale":"Reset size"}
                         className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">↺</button>
                       <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
                       <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
                       <button type="button" disabled={isImageButtonLocked} onClick={() => imageInputRef.current?.click()}
-                        title={isImageButtonLocked ? (lang === "fr" ? "Plan Premium requis" : "Premium plan required") : (selectedImageName || "")}
+                        title={isImageButtonLocked ? (lang==="fr"?"Plan Premium requis":"Premium plan required") : (selectedImageName||"")}
                         className={`h-8 px-3 rounded-lg font-bold text-[11px] flex items-center gap-1.5 border transition-all shrink-0 ${
                           isImageButtonLocked ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
                             : selectedImage ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
                             : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"}`}>
-                        <span>{isImageButtonLocked ? "🔒" : selectedImage ? "✓" : "🖼️"}</span>
-                        <span className="truncate hidden sm:inline">{selectedImage ? (lang === "fr" ? "Image prête" : "Image Ready") : (lang === "fr" ? "Analyse d'image" : "Image Analysis")}</span>
+                        <span>{isImageButtonLocked?"🔒":selectedImage?"✓":"🖼️"}</span>
+                        <span className="truncate hidden sm:inline">{selectedImage?(lang==="fr"?"Image prête":"Image Ready"):(lang==="fr"?"Analyse d'image":"Image Analysis")}</span>
                       </button>
                       <button onClick={lancerDictation}
-                        className={`h-8 px-3 rounded-lg font-bold text-[11px] flex items-center gap-1.5 border transition-all shrink-0 ${isListening ? "bg-red-600 border-red-500 animate-pulse text-white" : "bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/20 text-cyan-600 dark:text-cyan-400"}`}>
-                        <span>{isListening ? "🔴" : "🎤"}</span>
-                        <span className="hidden sm:inline">{isListening ? "Stop" : (lang === "fr" ? "Parler" : "Speak")}</span>
+                        className={`h-8 px-3 rounded-lg font-bold text-[11px] flex items-center gap-1.5 border transition-all shrink-0 ${isListening?"bg-red-600 border-red-500 animate-pulse text-white":"bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/20 text-cyan-600 dark:text-cyan-400"}`}>
+                        <span>{isListening?"🔴":"🎤"}</span>
+                        <span className="hidden sm:inline">{isListening?"Stop":(lang==="fr"?"Parler":"Speak")}</span>
                       </button>
                     </div>
                     <button onClick={envoyer} className="h-8 px-5 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold text-[11px] text-white transition-all shadow-md uppercase tracking-wider shrink-0">
@@ -757,11 +728,6 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              {!isImageButtonLocked && (
-                <p className="max-w-4xl w-full mx-auto text-[10px] text-zinc-400 dark:text-zinc-600 italic">
-                  {lang === "fr" ? "💡 Astuce : tu peux coller un screenshot (Ctrl+V) directement dans le champ de texte." : "💡 Tip: you can paste a screenshot (Ctrl+V) directly into the text field."}
-                </p>
-              )}
             </div>
           </section>
 
@@ -769,66 +735,53 @@ export default function Home() {
             <div className="w-1 h-12 rounded-full bg-zinc-200 dark:bg-zinc-800 group-hover:bg-cyan-500 transition-colors" />
           </div>
 
-          {/* HUB (stickies + events) */}
+          {/* HUB */}
           <aside style={isDesktop ? { width: rightPanelWidth, flexBasis: rightPanelWidth } : undefined}
             className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
 
+            {/* HUB HEADER — LangDropdown + thème */}
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0" onClick={e => e.stopPropagation()}>
               <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold">Hub</span>
-              <div className="relative">
-                <button id="settings-trigger" onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                  className="p-1.5 rounded-lg bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 font-bold text-zinc-700 dark:text-zinc-300 hover:text-cyan-500 hover:border-cyan-500/50 transition-all shadow-sm flex items-center justify-center text-xs">
-                  ⚙️ <span className="ml-1 font-mono text-[10px] bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 px-1 py-0.5 rounded-md uppercase font-bold">{lang}</span>
+              <div className="flex items-center gap-2">
+                <LangDropdown />
+                <button onClick={toggleTheme} className="p-1.5 rounded-lg bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:text-cyan-500 hover:border-cyan-500/50 transition-all text-xs">
+                  {theme === "dark" ? "☀️" : "🌙"}
                 </button>
-
-                {isSettingsOpen && (
-                  <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-2xl p-3 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200 z-50">
-                    <div className="px-2 py-1.5 text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold border-b border-zinc-100 dark:border-zinc-900">{t.settings?.title || "Configuration"}</div>
-                    <div className="p-1 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-900/50 transition-colors"><LangDropdown /></div>
-                    <button onClick={toggleTheme} className="w-full text-left px-2.5 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900/50 rounded-xl transition-colors">
-                      {theme === "dark" ? (t.settings?.lightMode || "☀️ Mode Clair") : (t.settings?.darkMode || "🌙 Mode Sombre")}
-                    </button>
-                    <button onClick={() => { setTutorialStep(1); setIsSettingsOpen(false); }} className="w-full text-left px-2.5 py-2 text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-colors">
-                      {t.settings?.tutorial || "📖 Rejouer le Tutoriel"}
-                    </button>
-                  </div>
-                )}
-
-                {tutorialStep === 2 && (
-                  <div className="absolute right-0 top-10 w-72 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
-                    <div className="absolute -top-2.5 right-6 w-4 h-4 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
-                    <button type="button" onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }}
-                      className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-white/10 dark:bg-black/10 hover:bg-red-600 hover:text-white text-white dark:text-black text-xs font-bold flex items-center justify-center transition-colors">✕</button>
-                    <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2 pr-8">
-                      🤖 {lang === "fr" ? "PARAMÈTRES GLOBAUX" : "GLOBAL SETTINGS"} (2/2)
-                    </h4>
-                    <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">
-                      {t.tutorial?.text2 || "Cliquez ici sur l'icône de Paramètres pour ajuster la langue, alterner entre le mode clair et sombre, ou relancer ce guide à tout moment !"}
-                    </p>
-                    <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1", "true"); }}
-                      className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs transition-colors shadow-md uppercase tracking-wider">
-                      {t.tutorial?.finish || "C'est parti ! 🚀"}
-                    </button>
-                  </div>
-                )}
               </div>
+
+              {tutorialStep === 2 && (
+                <div className="absolute right-4 top-16 w-72 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
+                  <button type="button" onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }}
+                    className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-white/10 dark:bg-black/10 hover:bg-red-600 hover:text-white text-white dark:text-black text-xs font-bold flex items-center justify-center transition-colors">✕</button>
+                  <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2 pr-8">
+                    🤖 {lang==="fr"?"PARAMÈTRES GLOBAUX":"GLOBAL SETTINGS"} (2/2)
+                  </h4>
+                  <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">
+                    {t.tutorial?.text2 || "Cliquez ici sur l'icône de Paramètres pour ajuster la langue, alterner entre le mode clair et sombre, ou relancer ce guide à tout moment !"}
+                  </p>
+                  <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }}
+                    className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs transition-colors shadow-md uppercase tracking-wider">
+                    {t.tutorial?.finish || "C'est parti ! 🚀"}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row lg:flex-col flex-1 overflow-y-auto lg:overflow-visible min-h-0">
 
               {/* UPCOMING EVENTS */}
               <div className="flex-1 p-3 border-b sm:border-b-0 sm:border-r lg:border-r-0 lg:border-b border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden min-h-0">
-                <h2 className="font-bold text-xs mb-2 shrink-0">📅 {lang === "fr" ? "Événements à venir" : "Upcoming Events"}</h2>
+                <h2 className="font-bold text-xs mb-2 shrink-0">📅 {lang==="fr"?"Événements à venir":"Upcoming Events"}</h2>
                 <div className="flex flex-col gap-1.5 overflow-y-auto flex-1 max-h-36 sm:max-h-none">
                   {upcomingEvents.length === 0 ? (
                     <div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs flex items-center gap-2 text-zinc-500">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />{lang === "fr" ? "Aucun événement" : "No upcoming events"}
+                      <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />{lang==="fr"?"Aucun événement":"No upcoming events"}
                     </div>
                   ) : (
-                    upcomingEvents.map((ev, i) => (
-                      <Link key={ev.id + ev.dateKey} href="/calendar" className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-cyan-500 hover:bg-zinc-200/40 dark:hover:bg-zinc-900/60 transition-all cursor-pointer block text-xs group">
+                    upcomingEvents.map((ev,i) => (
+                      <Link key={ev.id+ev.dateKey} href="/calendar" className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-cyan-500 transition-all cursor-pointer block text-xs group">
                         <div className="flex items-center gap-2 font-semibold text-cyan-600 dark:text-cyan-400 mb-0.5 group-hover:text-cyan-500">
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${EVENT_DOT_COLORS[i % EVENT_DOT_COLORS.length]}`} />{ev.title}
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${EVENT_DOT_COLORS[i%EVENT_DOT_COLORS.length]}`} />{ev.title}
                         </div>
                         <div className="text-zinc-500 dark:text-zinc-400 text-[11px]">{diffDaysLabel(ev.diffDays)} · {ev.dateKey}</div>
                       </Link>
@@ -839,19 +792,19 @@ export default function Home() {
 
               {/* STICKIES */}
               <div className="flex-1 p-3 flex flex-col overflow-hidden min-h-0">
-                <h2 className="font-bold text-xs mb-2 shrink-0">🟨 {lang === "fr" ? "Notes" : "Sticky Notes"}</h2>
+                <h2 className="font-bold text-xs mb-2 shrink-0">🟨 {lang==="fr"?"Notes":"Sticky Notes"}</h2>
                 <div className="flex gap-2 mb-2 shrink-0">
-                  {(["yellow", "blue", "green", "pink"] as StickyNote["color"][]).map(color => (
+                  {(["yellow","blue","green","pink"] as StickyNote["color"][]).map(color => (
                     <button key={color} onClick={() => setSelectedColor(color)}
-                      className={`w-5 h-5 rounded-full border-2 transition-all ${STICKY_STYLES[color].dot} ${selectedColor === color ? "border-black dark:border-white scale-110" : "border-transparent opacity-50"}`} />
+                      className={`w-5 h-5 rounded-full border-2 transition-all ${STICKY_STYLES[color].dot} ${selectedColor===color?"border-black dark:border-white scale-110":"border-transparent opacity-50"}`} />
                   ))}
                 </div>
                 <div className="flex gap-2 mb-2 shrink-0">
                   <textarea value={newStickyText} onChange={e => setNewStickyText(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addSticky(); } }}
-                    placeholder={lang === "fr" ? "Note rapide..." : "Quick note..."} rows={2}
+                    onKeyDown={e => { if (e.key==="Enter"&&!e.shiftKey) { e.preventDefault(); addSticky(); } }}
+                    placeholder={lang==="fr"?"Note rapide...":"Quick note..."} rows={2}
                     className={`flex-1 resize-none rounded-lg border p-1.5 text-xs bg-transparent focus:outline-none ${STICKY_STYLES[selectedColor].border} ${STICKY_STYLES[selectedColor].text}`} />
-                  <button onClick={addSticky} className="bg-cyan-600 hover:bg-cyan-500 text-white px-2.5 rounded-lg text-xs font-bold">+ {lang === "fr" ? "Ajouter" : "Add"}</button>
+                  <button onClick={addSticky} className="bg-cyan-600 hover:bg-cyan-500 text-white px-2.5 rounded-lg text-xs font-bold">+ {lang==="fr"?"Ajouter":"Add"}</button>
                 </div>
                 <div className="flex flex-col gap-1.5 overflow-y-auto flex-1 max-h-36 sm:max-h-none">
                   {stickies.map(sticky => {
@@ -877,8 +830,8 @@ export default function Home() {
           <div className={`max-w-md w-full rounded-2xl p-6 shadow-2xl border ${STICKY_STYLES[expandedSticky.color].bg} ${STICKY_STYLES[expandedSticky.color].border} ${STICKY_STYLES[expandedSticky.color].text}`} onClick={e => e.stopPropagation()}>
             <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={6} className="w-full bg-transparent resize-none focus:outline-none text-sm" autoFocus />
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setExpandedSticky(null)} className="px-3 py-1.5 text-xs rounded-lg border border-current opacity-70 hover:opacity-100">{lang === "fr" ? "Annuler" : "Cancel"}</button>
-              <button onClick={saveStickyEdit} className="px-3 py-1.5 text-xs rounded-lg bg-cyan-600 text-white font-bold">{lang === "fr" ? "Sauvegarder" : "Save"}</button>
+              <button onClick={() => setExpandedSticky(null)} className="px-3 py-1.5 text-xs rounded-lg border border-current opacity-70 hover:opacity-100">{lang==="fr"?"Annuler":"Cancel"}</button>
+              <button onClick={saveStickyEdit} className="px-3 py-1.5 text-xs rounded-lg bg-cyan-600 text-white font-bold">{lang==="fr"?"Sauvegarder":"Save"}</button>
             </div>
           </div>
         </div>
@@ -891,8 +844,8 @@ export default function Home() {
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 capitalize">{activeLimitCategory} Limit</h3>
             <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
               {activeLimitCategory === "prompts"
-                ? (lang === "fr" ? "Votre quota mensuel de messages est épuisé. Passez au plan supérieur pour continuer." : "Your monthly message quota has been reached. Upgrade to continue.")
-                : (lang === "fr" ? `Limite d'actions automatisées atteinte pour [${activeLimitCategory}].` : `Automated action limit reached for [${activeLimitCategory}].`)}
+                ? (lang==="fr"?"Votre quota mensuel de messages est épuisé. Passez au plan supérieur pour continuer.":"Your monthly message quota has been reached. Upgrade to continue.")
+                : (lang==="fr"?`Limite d'actions automatisées atteinte pour [${activeLimitCategory}].`:`Automated action limit reached for [${activeLimitCategory}].`)}
             </p>
             <button onClick={() => setShowLimitModal(false)} className="w-full bg-cyan-600 text-white py-2.5 rounded-xl text-xs font-semibold">OK</button>
           </div>
