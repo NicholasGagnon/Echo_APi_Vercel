@@ -7,30 +7,38 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    console.log("INBOUND EMAIL:", body);
+    console.log("INBOUND EMAIL WEBHOOK:", JSON.stringify(body, null, 2));
 
+    // Le webhook Resend envoie { type, created_at, data: { from, to, subject, email_id, ... } }
     const emailData = body.data || {};
 
-const to = Array.isArray(emailData.to)
-  ? emailData.to.join(", ")
-  : emailData.to || "";
+    const to = Array.isArray(emailData.to)
+      ? emailData.to.join(", ")
+      : emailData.to || "";
 
-const from = emailData.from || "unknown";
-const subject = emailData.subject || "No subject";
-    const text =
-      body.text ||
-      body.html ||
-      JSON.stringify(body, null, 2);
+    const from = emailData.from || "unknown";
+    const subject = emailData.subject || "No subject";
+    const emailId = emailData.email_id;
+
+    // Le contenu text/html n'est PAS dans le webhook — il faut le fetch via l'API Resend
+    let text = "";
+    if (emailId) {
+      try {
+        const fetched = await resend.emails.get(emailId);
+        text = (fetched as any).text || (fetched as any).html || "";
+      } catch (e) {
+        console.warn("Impossible de fetch le contenu de l'email:", e);
+        text = `[Contenu non disponible — email_id: ${emailId}]`;
+      }
+    }
+
+    if (!text) {
+      text = JSON.stringify(body, null, 2);
+    }
 
     let prefix = "[EMAIL]";
-
-    if (to.includes("support@echosai.ca")) {
-      prefix = "[SUPPORT]";
-    }
-
-    if (to.includes("contact@echosai.ca")) {
-      prefix = "[CONTACT]";
-    }
+    if (to.includes("support@echosai.ca")) prefix = "[SUPPORT]";
+    if (to.includes("contact@echosai.ca")) prefix = "[CONTACT]";
 
     await resend.emails.send({
       from: "support@echosai.ca",
@@ -42,10 +50,6 @@ const subject = emailData.subject || "No subject";
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
-
-    return NextResponse.json(
-      { success: false },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false }, { status: 500 });
   }
 }
