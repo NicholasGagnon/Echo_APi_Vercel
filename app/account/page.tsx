@@ -786,6 +786,43 @@ export default function AccountPage() {
           </div>
         </div>
       )}
+            {/* SIGN UP MODAL — à insérer après le SIGN IN MODAL */}
+      {showSignUpModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => { setShowSignUpModal(false); clearInputs(); }}>
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <form onSubmit={handleEmailSignUp} className="space-y-6">
+              <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
+                <div>
+                  <h2 className="text-base font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">🛸 {lang === "fr" ? "Créer un Profil" : "Initialize Profile"}</h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">{lang === "fr" ? "Initialisez votre nœud d'identité dans l'écosystème Echo." : "Initialize your identity node within the Echo ecosystem."}</p>
+                </div>
+                <button type="button" onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
+              </div>
+              {signUpError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signUpError}</div>}
+              {signUpSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signUpSuccess}</div>}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Adresse Courriel" : "Identity Node (Email)"}</label>
+                  <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+                </div>
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Mot de Passe" : "Access Token (Password)"}</label>
+                  <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+                  <p className="text-zinc-400 dark:text-zinc-600 text-[10px] mt-1.5 font-mono">{lang === "fr" ? "Minimum 6 caractères requis." : "Minimum 6 characters required."}</p>
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{lang === "fr" ? "Créer mon compte" : "Create my account"}</button>
+              <p className="text-center text-zinc-400 dark:text-zinc-600 text-[10px] font-mono">
+                {lang === "fr" ? "Déjà un compte ? " : "Already have an account? "}
+                <button type="button" onClick={() => { setShowSignUpModal(false); setShowSignInModal(true); clearInputs(); }} className="text-cyan-500 hover:text-cyan-400 underline transition-colors">
+                  {lang === "fr" ? "Se connecter" : "Sign in"}
+                </button>
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
 
       {/* ── 🛰️ POP-UP RECONSTRUIT GRAND LARGE (GOOGLE CALENDAR GUIDANCE) ── */}
       {showGoogleSyncPopup && (
