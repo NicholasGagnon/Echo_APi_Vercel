@@ -4,54 +4,41 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
+import LangDropdown from "../components/LangDropdown";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import { useApp } from "../../context/AppContext";
 
-type BudgetExpense = {
-  id: string;
-  title: string;
-  amount: number;
-  currency: "$" | "€";
-  date: string;
-};
-
-type CalorieLog = {
-  id: string;
-  foodName: string;
-  calories: number;
-  date: string;
-};
-
-type VitalityMessage = {
-  raw: string;
-  imageB64?: string;
-};
+type BudgetExpense = { id: string; title: string; amount: number; currency: "$"|"€"; date: string };
+type CalorieLog    = { id: string; foodName: string; calories: number; date: string };
+type VitalityMessage = { raw: string; imageB64?: string };
 
 export default function VitalityPage() {
-  const { t, lang, theme, userTier } = useApp();
+  const { t, lang, theme, toggleTheme, userTier } = useApp();
   const [isLoaded, setIsLoaded] = useState(false);
-  const [userId, setUserId]     = useState<string | null>(null);
-  const [inputEcho, setInputEcho]     = useState("");
+  const [userId,   setUserId]   = useState<string | null>(null);
+  const [inputEcho,    setInputEcho]    = useState("");
   const [echoMessages, setEchoMessages] = useState<VitalityMessage[]>([]);
-  const bottomRef   = useRef<HTMLDivElement>(null);
+  const bottomRef  = useRef<HTMLDivElement>(null);
   const [echoState, setEchoState] = useState("idle");
-  const [showLimitModal, setShowLimitModal]     = useState(false);
+  const [showLimitModal,      setShowLimitModal]      = useState(false);
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality"|"calendar"|"prompts">("vitality");
   const [isListening, setIsListening] = useState(false);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageName,   setImageName]   = useState<string | null>(null);
-  const fileInputRef  = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
-  const [expenses,      setExpenses]      = useState<BudgetExpense[]>([]);
-  const [caloriesList,  setCaloriesList]  = useState<CalorieLog[]>([]);
+  const [expenses,     setExpenses]     = useState<BudgetExpense[]>([]);
+  const [caloriesList, setCaloriesList] = useState<CalorieLog[]>([]);
 
   const [manualExpenseTitle,    setManualExpenseTitle]    = useState("");
   const [manualExpenseAmount,   setManualExpenseAmount]   = useState("");
   const [manualExpenseCurrency, setManualExpenseCurrency] = useState<"$"|"€">("$");
   const [manualExpenseDate,     setManualExpenseDate]     = useState(new Date().toLocaleDateString("fr-CA"));
-  const [manualFoodName,  setManualFoodName]  = useState("");
-  const [manualCalories,  setManualCalories]  = useState("");
+  const [manualFoodName, setManualFoodName] = useState("");
+  const [manualCalories, setManualCalories] = useState("");
 
   const [budgetGoal,      setBudgetGoal]      = useState(3000);
   const [calorieGoal,     setCalorieGoal]     = useState(2300);
@@ -62,12 +49,12 @@ export default function VitalityPage() {
   const [userWeight, setUserWeight] = useState("");
   const [userHeight, setUserHeight] = useState("");
 
-  const [showProfileModal,   setShowProfileModal]   = useState(false);
-  const [weightUnit,         setWeightUnit]         = useState<"kg"|"lbs">("kg");
-  const [heightUnit,         setHeightUnit]         = useState<"cm"|"ft">("cm");
-  const [modalWeight,        setModalWeight]        = useState("");
-  const [modalHeight,        setModalHeight]        = useState("");
-  const [modalHeightInches,  setModalHeightInches]  = useState("");
+  const [showProfileModal,  setShowProfileModal]  = useState(false);
+  const [weightUnit,        setWeightUnit]        = useState<"kg"|"lbs">("kg");
+  const [heightUnit,        setHeightUnit]        = useState<"cm"|"ft">("cm");
+  const [modalWeight,       setModalWeight]       = useState("");
+  const [modalHeight,       setModalHeight]       = useState("");
+  const [modalHeightInches, setModalHeightInches] = useState("");
   const [modalAge,    setModalAge]    = useState("30");
   const [modalGender, setModalGender] = useState("homme");
 
@@ -94,58 +81,46 @@ export default function VitalityPage() {
     },
   }[lang === "fr" ? "fr" : "en"];
 
-  // ── Keys localStorage (goals + profile + convo — pas de table Supabase dédiée) ──
-  const getBudgetGoalKey      = (uid: string|null) => uid ? `echo-budget-goal-${uid}`      : "echo-budget-goal";
-  const getCalorieGoalKey     = (uid: string|null) => uid ? `echo-calorie-goal-${uid}`     : "echo-calorie-goal";
-  const getVitalityProfileKey = (uid: string|null) => uid ? `echo-vitality-profile-${uid}` : "echo-vitality-profile";
+  const getBudgetGoalKey      = (uid: string|null) => uid ? `echo-budget-goal-${uid}`           : "echo-budget-goal";
+  const getCalorieGoalKey     = (uid: string|null) => uid ? `echo-calorie-goal-${uid}`          : "echo-calorie-goal";
+  const getVitalityProfileKey = (uid: string|null) => uid ? `echo-vitality-profile-${uid}`      : "echo-vitality-profile";
   const getVitalityConvoKey   = (uid: string|null) => uid ? `echo-vitality-conversation-${uid}` : "echo-vitality-conversation";
 
   const lastEchoIndex   = echoMessages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
   const serializeMsgs   = (msgs: VitalityMessage[]) => msgs.map(m => m.raw);
   const deserializeMsgs = (raws: string[]): VitalityMessage[] => raws.map(r => ({ raw: r }));
 
-  // ── BOOTSTRAP : chargement depuis Supabase ────────────────────────────────
+  // ── SETTINGS DROPDOWN ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node))
+        setIsSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
       setUserId(uid);
       try {
         if (uid) {
-          // 1. Expenses → echo_expenses Supabase
           const { data: expRows, error: expErr } = await supabase
-            .from("echo_expenses")
-            .select("*")
-            .eq("user_id", uid)
-            .order("date", { ascending: false });
-          if (expErr) console.error("[Vitality] load expenses:", expErr.message);
-          else setExpenses((expRows || []).map(r => ({
-            id:       r.id,
-            title:    r.title,
-            amount:   r.amount,
-            currency: (r.currency || "$") as "$"|"€",
-            date:     r.date,
-          })));
+            .from("echo_expenses").select("*").eq("user_id", uid).order("date", { ascending: false });
+          if (expErr) console.error("[Vitality] expenses:", expErr.message);
+          else setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"€", date: r.date })));
 
-          // 2. Calories → echo_calories Supabase
           const { data: calRows, error: calErr } = await supabase
-            .from("echo_calories")
-            .select("*")
-            .eq("user_id", uid)
-            .order("date", { ascending: false });
-          if (calErr) console.error("[Vitality] load calories:", calErr.message);
-          else setCaloriesList((calRows || []).map(r => ({
-            id:       r.id,
-            foodName: r.food_name,
-            calories: r.calories,
-            date:     r.date,
-          })));
+            .from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
+          if (calErr) console.error("[Vitality] calories:", calErr.message);
+          else setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
         }
 
-        // 3. Conversation vitality → localStorage (volatile)
         const savedConvo = localStorage.getItem(getVitalityConvoKey(uid));
         if (savedConvo) setEchoMessages(deserializeMsgs(JSON.parse(savedConvo)));
 
-        // Si non connecté : charger expenses + calories depuis localStorage guest
         if (!uid) {
           const guestExp = localStorage.getItem("echo-budget-expenses-guest");
           if (guestExp) setExpenses(JSON.parse(guestExp));
@@ -153,22 +128,20 @@ export default function VitalityPage() {
           if (guestCal) setCaloriesList(JSON.parse(guestCal));
         }
 
-        // 4. Goals + Profile → localStorage
         const savedBGoal = localStorage.getItem(getBudgetGoalKey(uid)) || localStorage.getItem("echo-budget-goal");
         if (savedBGoal) { setBudgetGoal(Number(savedBGoal)); setInputBudgetGoal(savedBGoal); }
-
         const savedCGoal = localStorage.getItem(getCalorieGoalKey(uid)) || localStorage.getItem("echo-calorie-goal");
         if (savedCGoal) { setCalorieGoal(Number(savedCGoal)); setInputCalorieGoal(savedCGoal); }
 
         const savedProfile = localStorage.getItem(getVitalityProfileKey(uid));
         if (savedProfile) {
           const p = JSON.parse(savedProfile);
-          setUserWeight(p.weight || ""); setUserHeight(p.height || "");
-          setModalWeight(p.weight || ""); setModalHeight(p.height || "");
+          setUserWeight(p.weight||""); setUserHeight(p.height||"");
+          setModalWeight(p.weight||""); setModalHeight(p.height||"");
         }
 
         if (!localStorage.getItem("echo-tuto-vitality-done-v1")) setTutorialStep(1);
-      } catch (e) { console.error("Init error", e); }
+      } catch(e) { console.error("Init error", e); }
       setIsLoaded(true);
     });
 
@@ -179,30 +152,27 @@ export default function VitalityPage() {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const uid = session.user.id;
         setUserId(uid);
-
         const { data: expRows } = await supabase.from("echo_expenses").select("*").eq("user_id", uid).order("date", { ascending: false });
-        setExpenses((expRows || []).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"€", date: r.date })));
-
+        setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"€", date: r.date })));
         const { data: calRows } = await supabase.from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
-        setCaloriesList((calRows || []).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
-
+        setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
         const convo = localStorage.getItem(getVitalityConvoKey(uid));
         setEchoMessages(convo ? deserializeMsgs(JSON.parse(convo)) : []);
         const bGoal = localStorage.getItem(getBudgetGoalKey(uid));
         if (bGoal) { setBudgetGoal(Number(bGoal)); setInputBudgetGoal(bGoal); }
         const cGoal = localStorage.getItem(getCalorieGoalKey(uid));
         if (cGoal) { setCalorieGoal(Number(cGoal)); setInputCalorieGoal(cGoal); }
-        const profile = JSON.parse(localStorage.getItem(getVitalityProfileKey(uid)) || "{}");
-        setUserWeight(profile.weight || ""); setUserHeight(profile.height || "");
-        setModalWeight(profile.weight || ""); setModalHeight(profile.height || "");
+        const profile = JSON.parse(localStorage.getItem(getVitalityProfileKey(uid))||"{}");
+        setUserWeight(profile.weight||""); setUserHeight(profile.height||"");
+        setModalWeight(profile.weight||""); setModalHeight(profile.height||"");
       }
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // ── Persistence localStorage (goals + profile + convo uniquement) ─────────
-  useEffect(() => { if (!isLoaded) return; localStorage.setItem(getBudgetGoalKey(userId),      budgetGoal.toString()); },  [budgetGoal, isLoaded, userId]);
-  useEffect(() => { if (!isLoaded) return; localStorage.setItem(getCalorieGoalKey(userId),     calorieGoal.toString()); }, [calorieGoal, isLoaded, userId]);
+  // ── PERSISTENCE ───────────────────────────────────────────────────────────
+  useEffect(() => { if (!isLoaded) return; localStorage.setItem(getBudgetGoalKey(userId),      budgetGoal.toString()); },      [budgetGoal, isLoaded, userId]);
+  useEffect(() => { if (!isLoaded) return; localStorage.setItem(getCalorieGoalKey(userId),     calorieGoal.toString()); },     [calorieGoal, isLoaded, userId]);
   useEffect(() => { if (!isLoaded) return; localStorage.setItem(getVitalityProfileKey(userId), JSON.stringify({ weight: userWeight, height: userHeight })); }, [userWeight, userHeight, isLoaded, userId]);
   useEffect(() => {
     if (!isLoaded) return;
@@ -210,138 +180,100 @@ export default function VitalityPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [echoMessages, isLoaded, userId]);
 
-  // ── Computed ──────────────────────────────────────────────────────────────
-  const totalSpentUSD      = expenses.filter(i => i.currency === "$").reduce((s, i) => s + i.amount, 0);
-  const totalSpentEUR      = expenses.filter(i => i.currency === "€").reduce((s, i) => s + i.amount, 0);
+  // ── COMPUTED ──────────────────────────────────────────────────────────────
+  const totalSpentUSD      = expenses.filter(i => i.currency==="$").reduce((s,i) => s+i.amount, 0);
+  const totalSpentEUR      = expenses.filter(i => i.currency==="€").reduce((s,i) => s+i.amount, 0);
   const totalSpentCombined = totalSpentUSD + totalSpentEUR;
-  const budgetPercentage   = Math.min((totalSpentCombined / budgetGoal) * 100, 100);
-  const totalCaloriesEaten = caloriesList.reduce((s, i) => s + i.calories, 0);
-  const calorieRemaining   = Math.max(calorieGoal - totalCaloriesEaten, 0);
+  const budgetPercentage   = Math.min((totalSpentCombined/budgetGoal)*100, 100);
+  const totalCaloriesEaten = caloriesList.reduce((s,i) => s+i.calories, 0);
+  const calorieRemaining   = Math.max(calorieGoal-totalCaloriesEaten, 0);
 
-  // ── Image compression ─────────────────────────────────────────────────────
+  // ── IMAGE ─────────────────────────────────────────────────────────────────
   const compressImage = (base64: string): Promise<string> =>
     new Promise(resolve => {
       const img = document.createElement("img");
       img.onload = () => {
-        const MAX = 1200;
-        let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h*MAX/w); w=MAX; } else { w=Math.round(w*MAX/h); h=MAX; } }
-        const canvas = document.createElement("canvas");
-        canvas.width=w; canvas.height=h;
+        const MAX=1200; let w=img.width, h=img.height;
+        if (w>MAX||h>MAX) { if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;} }
+        const canvas=document.createElement("canvas"); canvas.width=w; canvas.height=h;
         canvas.getContext("2d")!.drawImage(img,0,0,w,h);
         resolve(canvas.toDataURL("image/jpeg",0.75));
       };
-      img.src = base64;
+      img.src=base64;
     });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]; if (!file) return;
     setImageName(file.name);
     const reader = new FileReader();
     reader.onloadend = async () => { const c = await compressImage(reader.result as string); setImageBase64(c); };
     reader.readAsDataURL(file);
-    e.target.value = "";
+    e.target.value="";
   };
 
-  // ── Clés localStorage fallback (non connecté) ────────────────────────────
-  const LOCAL_EXPENSES  = "echo-budget-expenses-guest";
-  const LOCAL_CALORIES  = "echo-calorie-logs-guest";
+  const LOCAL_EXPENSES = "echo-budget-expenses-guest";
+  const LOCAL_CALORIES = "echo-calorie-logs-guest";
+  const persistLocalExpenses = (list: BudgetExpense[]) => localStorage.setItem(LOCAL_EXPENSES, JSON.stringify(list));
+  const persistLocalCalories = (list: CalorieLog[])    => localStorage.setItem(LOCAL_CALORIES, JSON.stringify(list));
 
-  const persistLocalExpenses = (list: BudgetExpense[]) =>
-    localStorage.setItem(LOCAL_EXPENSES, JSON.stringify(list));
-  const persistLocalCalories = (list: CalorieLog[]) =>
-    localStorage.setItem(LOCAL_CALORIES, JSON.stringify(list));
-
-  // ── CRUD Expenses → Supabase (fallback localStorage si non connecté) ──────
-  const addExpense = async (exp: Omit<BudgetExpense, "id">) => {
+  // ── CRUD EXPENSES ─────────────────────────────────────────────────────────
+  const addExpense = async (exp: Omit<BudgetExpense,"id">) => {
     if (!userId) {
-      const newEntry: BudgetExpense = { id: Date.now().toString(), ...exp };
-      setExpenses(prev => {
-        const next = [newEntry, ...prev];
-        persistLocalExpenses(next);
-        return next;
-      });
-      return;
+      const e: BudgetExpense = { id: Date.now().toString(), ...exp };
+      setExpenses(prev => { const n=[e,...prev]; persistLocalExpenses(n); return n; }); return;
     }
     const { data, error } = await supabase.from("echo_expenses").insert({
-      user_id:  userId,
-      title:    exp.title,
-      amount:   exp.amount,
-      currency: exp.currency,
-      date:     exp.date,
+      user_id: userId, title: exp.title, amount: exp.amount, currency: exp.currency, date: exp.date,
     }).select().single();
     if (error) { console.error("[Vitality] add expense:", error.message); return; }
     setExpenses(prev => [{ id: data.id, title: data.title, amount: data.amount, currency: (data.currency||"$") as "$"|"€", date: data.date }, ...prev]);
   };
 
   const deleteExpense = async (id: string) => {
-    if (userId) {
-      const { error } = await supabase.from("echo_expenses").delete().eq("id", id).eq("user_id", userId);
-      if (error) console.error("[Vitality] delete expense:", error.message);
-    }
-    setExpenses(prev => {
-      const next = prev.filter(i => i.id !== id);
-      if (!userId) persistLocalExpenses(next);
-      return next;
-    });
+    if (userId) { const { error } = await supabase.from("echo_expenses").delete().eq("id",id).eq("user_id",userId); if(error) console.error("[Vitality] delete expense:",error.message); }
+    setExpenses(prev => { const n=prev.filter(i=>i.id!==id); if(!userId)persistLocalExpenses(n); return n; });
   };
 
   const updateExpense = async (id: string, changes: Partial<BudgetExpense>) => {
     if (userId) {
-      const dbChanges: Record<string, unknown> = {};
-      if (changes.title    !== undefined) dbChanges.title    = changes.title;
-      if (changes.amount   !== undefined) dbChanges.amount   = changes.amount;
-      if (changes.currency !== undefined) dbChanges.currency = changes.currency;
-      if (changes.date     !== undefined) dbChanges.date     = changes.date;
-      const { error } = await supabase.from("echo_expenses").update(dbChanges).eq("id", id).eq("user_id", userId);
-      if (error) console.error("[Vitality] update expense:", error.message);
+      const db: Record<string,unknown> = {};
+      if (changes.title    !== undefined) db.title    = changes.title;
+      if (changes.amount   !== undefined) db.amount   = changes.amount;
+      if (changes.currency !== undefined) db.currency = changes.currency;
+      if (changes.date     !== undefined) db.date     = changes.date;
+      const { error } = await supabase.from("echo_expenses").update(db).eq("id",id).eq("user_id",userId);
+      if (error) console.error("[Vitality] update expense:",error.message);
     }
-    setExpenses(prev => prev.map(exp => exp.id === id ? { ...exp, ...changes } : exp));
+    setExpenses(prev => prev.map(e => e.id===id ? {...e,...changes} : e));
   };
 
-  // ── CRUD Calories → Supabase (fallback localStorage si non connecté) ────────
-  const addCalorie = async (cal: Omit<CalorieLog, "id">) => {
+  // ── CRUD CALORIES ─────────────────────────────────────────────────────────
+  const addCalorie = async (cal: Omit<CalorieLog,"id">) => {
     if (!userId) {
-      const newEntry: CalorieLog = { id: Date.now().toString(), ...cal };
-      setCaloriesList(prev => {
-        const next = [newEntry, ...prev];
-        persistLocalCalories(next);
-        return next;
-      });
-      return;
+      const c: CalorieLog = { id: Date.now().toString(), ...cal };
+      setCaloriesList(prev => { const n=[c,...prev]; persistLocalCalories(n); return n; }); return;
     }
     const { data, error } = await supabase.from("echo_calories").insert({
-      user_id:   userId,
-      food_name: cal.foodName,
-      calories:  cal.calories,
-      date:      cal.date,
+      user_id: userId, food_name: cal.foodName, calories: cal.calories, date: cal.date,
     }).select().single();
-    if (error) { console.error("[Vitality] add calorie:", error.message); return; }
+    if (error) { console.error("[Vitality] add calorie:",error.message); return; }
     setCaloriesList(prev => [{ id: data.id, foodName: data.food_name, calories: data.calories, date: data.date }, ...prev]);
   };
 
   const deleteCalorie = async (id: string) => {
-    if (userId) {
-      const { error } = await supabase.from("echo_calories").delete().eq("id", id).eq("user_id", userId);
-      if (error) console.error("[Vitality] delete calorie:", error.message);
-    }
-    setCaloriesList(prev => {
-      const next = prev.filter(i => i.id !== id);
-      if (!userId) persistLocalCalories(next);
-      return next;
-    });
+    if (userId) { const { error } = await supabase.from("echo_calories").delete().eq("id",id).eq("user_id",userId); if(error) console.error("[Vitality] delete calorie:",error.message); }
+    setCaloriesList(prev => { const n=prev.filter(i=>i.id!==id); if(!userId)persistLocalCalories(n); return n; });
   };
 
-  // ── Send Echo ──────────────────────────────────────────────────────────────
+  // ── SEND ECHO ─────────────────────────────────────────────────────────────
   const handleSendEcho = async (forcedText?: string) => {
-    if (echoState === "thinking") return;
+    if (echoState==="thinking") return;
     const textToSubmit = forcedText ?? inputEcho.trim();
     if (!textToSubmit && !imageBase64) return;
 
     const quotaStatus = checkQuota("prompts", safeTier);
     if (!quotaStatus.allowed) {
-      setEchoMessages(prev => [...prev, { raw: lang === "fr" ? "Echo: 🔒 Limite mensuelle atteinte." : "Echo: 🔒 Monthly limit reached." }]);
+      setEchoMessages(prev => [...prev, { raw: lang==="fr"?"Echo: 🔒 Limite mensuelle atteinte.":"Echo: 🔒 Monthly limit reached." }]);
       setActiveLimitCategory("prompts"); setShowLimitModal(true); return;
     }
 
@@ -349,7 +281,7 @@ export default function VitalityPage() {
     const currentName  = imageName;
     const userRaw = forcedText ? `You: ${forcedText}` : textToSubmit
       ? `You: ${textToSubmit}`
-      : `You: Analyse cette image${currentName ? ` (${currentName})` : ""}.`;
+      : `You: Analyse cette image${currentName?` (${currentName})`:""}`;
 
     const userEntry: VitalityMessage = { raw: userRaw, imageB64: currentImage ?? undefined };
     const baseMessages = [...echoMessages, userEntry];
@@ -361,17 +293,18 @@ export default function VitalityPage() {
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const response = await fetch(`${API_URL}/chat`, {
+      const response = await fetch(`${API_URL}/home`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: textToSubmit || `Analyse cette image${currentName ? ` (${currentName})` : ""}.`,
+          message: textToSubmit || `Analyse cette image${currentName?` (${currentName})`:""}`,
           image: currentImage ?? null,
           history: serializeMsgs(baseMessages),
           userTier: safeTier,
           currentExpenses: expenses,
           currentCalories: caloriesList,
-          budgetGoal, calorieGoal,
+          budgetGoal,
+          calorieGoal,
           vitalityProfile: { weight: userWeight, height: userHeight },
           source: "vitality",
         }),
@@ -383,48 +316,42 @@ export default function VitalityPage() {
       let isActionBlocked = false;
       if (data.action) {
         const actionQuota = checkQuota("vitality", safeTier);
-        if (!actionQuota.allowed) {
-          setActiveLimitCategory("vitality"); setShowLimitModal(true); isActionBlocked = true;
-        }
+        if (!actionQuota.allowed) { setActiveLimitCategory("vitality"); setShowLimitModal(true); isActionBlocked=true; }
       }
 
-      const quotaNotice = isActionBlocked ? `\n\n[🔒 Action automatique bloquée par quota Vitalité]` : "";
-      setEchoMessages([...baseMessages, { raw: `Echo: ${data.response || ""}${quotaNotice}` }]);
+      const quotaNotice = isActionBlocked ? "\n\n[🔒 Action automatique bloquée par quota Vitalité]" : "";
+      setEchoMessages([...baseMessages, { raw: `Echo: ${data.response||""}${quotaNotice}` }]);
 
       if (data.action && !isActionBlocked) {
         const { type, payload } = data.action;
 
-        if (type === "ADD_BUDGET_EXPENSE") {
+        if (type==="ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt, currency } = payload;
-          const entryDate = paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA");
-          const detectedCurrency = currency || (textToSubmit?.toLowerCase().includes("euro") || textToSubmit?.includes("€") ? "€" : "$");
-          await addExpense({ title: title || "Purchase", amount: parseFloat(amount ?? spent) || 0, currency: detectedCurrency, date: entryDate });
+          const entryDate = paymentDate||paidAt||date||new Date().toLocaleDateString("fr-CA");
+          const detectedCurrency = currency||(textToSubmit?.toLowerCase().includes("euro")||textToSubmit?.includes("€")?"€":"$");
+          await addExpense({ title: title||"Purchase", amount: parseFloat(amount??spent)||0, currency: detectedCurrency, date: entryDate });
         }
-
-        if (type === "UPDATE_BUDGET_EXPENSE") {
+        if (type==="UPDATE_BUDGET_EXPENSE") {
           const { id, title, amount, currency, date } = payload;
-          await updateExpense(id, { title, amount: amount !== undefined ? parseFloat(amount) : undefined, currency, date });
+          await updateExpense(id, { title, amount: amount!==undefined?parseFloat(amount):undefined, currency, date });
         }
+        if (type==="DELETE_BUDGET_EXPENSE" && payload.id) await deleteExpense(payload.id);
 
-        if (type === "DELETE_BUDGET_EXPENSE" && payload.id) await deleteExpense(payload.id);
-
-        if (type === "ADD_CALORIE_LOG") {
+        if (type==="ADD_CALORIE_LOG") {
           const { foodName, meal, title, calories } = payload;
-          await addCalorie({ foodName: foodName || meal || title || "Food Item", calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA") });
+          await addCalorie({ foodName: foodName||meal||title||"Food Item", calories: parseInt(calories)||0, date: new Date().toLocaleDateString("fr-CA") });
         }
+        if (type==="DELETE_CALORIE_LOG" && payload.id) await deleteCalorie(payload.id);
 
-        if (type === "DELETE_CALORIE_LOG" && payload.id) await deleteCalorie(payload.id);
-
-        if (type === "SET_BUDGET_GOAL" || type === "UPDATE_BUDGET_GOAL") {
-          const nextGoal = parseInt(payload.goal ?? payload.budgetGoal ?? payload.amount ?? payload.spent);
-          if (Number.isFinite(nextGoal) && nextGoal > 0) { setBudgetGoal(nextGoal); setInputBudgetGoal(nextGoal.toString()); }
+        if (type==="SET_BUDGET_GOAL"||type==="UPDATE_BUDGET_GOAL") {
+          const nextGoal = parseInt(payload.goal??payload.budgetGoal??payload.amount??payload.spent);
+          if (Number.isFinite(nextGoal)&&nextGoal>0) { setBudgetGoal(nextGoal); setInputBudgetGoal(nextGoal.toString()); }
         }
-
-        if (type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") {
-          const nextGoal = parseInt(payload.goal ?? payload.calorieGoal ?? payload.calories);
+        if (type==="SET_CALORIE_GOAL"||type==="UPDATE_CALORIE_GOAL") {
+          const nextGoal = parseInt(payload.goal??payload.calorieGoal??payload.calories);
           if (payload.weight) setUserWeight(String(payload.weight));
           if (payload.height) setUserHeight(String(payload.height));
-          if (Number.isFinite(nextGoal) && nextGoal > 0) { setCalorieGoal(nextGoal); setInputCalorieGoal(nextGoal.toString()); }
+          if (Number.isFinite(nextGoal)&&nextGoal>0) { setCalorieGoal(nextGoal); setInputCalorieGoal(nextGoal.toString()); }
         }
       }
     } catch {
@@ -433,37 +360,36 @@ export default function VitalityPage() {
     setTimeout(() => setEchoState("idle"), 10000);
   };
 
-  // ── Profile modal ─────────────────────────────────────────────────────────
+  // ── PROFILE MODAL ─────────────────────────────────────────────────────────
   const handleSubmitModalProfile = (e: React.FormEvent) => {
     e.preventDefault();
     let weightInKg = parseFloat(modalWeight);
-    if (weightUnit === "lbs") weightInKg = weightInKg / 2.20462;
+    if (weightUnit==="lbs") weightInKg = weightInKg/2.20462;
     let heightInCm = parseFloat(modalHeight);
-    if (heightUnit === "ft") heightInCm = (parseFloat(modalHeight)||0)*30.48 + (parseFloat(modalHeightInches)||0)*2.54;
+    if (heightUnit==="ft") heightInCm = (parseFloat(modalHeight)||0)*30.48 + (parseFloat(modalHeightInches)||0)*2.54;
     const a = parseInt(modalAge);
-    if (!weightInKg || !heightInCm || !a) return;
-    let bmr = (10*weightInKg) + (6.25*heightInCm) - (5*a);
-    bmr = modalGender === "homme" ? bmr + 5 : bmr - 161;
-    const tdee = Math.round(bmr * 1.35);
+    if (!weightInKg||!heightInCm||!a) return;
+    let bmr = (10*weightInKg)+(6.25*heightInCm)-(5*a);
+    bmr = modalGender==="homme" ? bmr+5 : bmr-161;
+    const tdee = Math.round(bmr*1.35);
     setUserWeight(String(Math.round(weightInKg)));
     setUserHeight(String(Math.round(heightInCm)));
     setCalorieGoal(tdee); setInputCalorieGoal(String(tdee));
     setShowProfileModal(false);
-    const contextPrompt = `[SYNCHRONISATION PROFIL] : Poids: ${Math.round(weightInKg)}kg, Taille: ${Math.round(heightInCm)}cm, Âge: ${a}ans, Sexe: ${modalGender}. TDEE estimé: ${tdee} kcal. Calcule et recommande mon objectif de déficit calorique optimal.`;
-    handleSendEcho(contextPrompt);
+    handleSendEcho(`[SYNCHRONISATION PROFIL] : Poids: ${Math.round(weightInKg)}kg, Taille: ${Math.round(heightInCm)}cm, Âge: ${a}ans, Sexe: ${modalGender}. TDEE estimé: ${tdee} kcal. Calcule et recommande mon objectif de déficit calorique optimal.`);
   };
 
-  // ── Manual forms ──────────────────────────────────────────────────────────
+  // ── MANUAL FORMS ──────────────────────────────────────────────────────────
   const handleManualExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualExpenseTitle.trim() || !manualExpenseAmount) return;
-    await addExpense({ title: manualExpenseTitle.trim(), amount: parseFloat(manualExpenseAmount)||0, currency: manualExpenseCurrency, date: manualExpenseDate || new Date().toLocaleDateString("fr-CA") });
+    if (!manualExpenseTitle.trim()||!manualExpenseAmount) return;
+    await addExpense({ title: manualExpenseTitle.trim(), amount: parseFloat(manualExpenseAmount)||0, currency: manualExpenseCurrency, date: manualExpenseDate||new Date().toLocaleDateString("fr-CA") });
     setManualExpenseTitle(""); setManualExpenseAmount("");
   };
 
   const handleManualCalorieSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualFoodName.trim() || !manualCalories) return;
+    if (!manualFoodName.trim()||!manualCalories) return;
     await addCalorie({ foodName: manualFoodName.trim(), calories: parseInt(manualCalories)||0, date: new Date().toLocaleDateString("fr-CA") });
     setManualFoodName(""); setManualCalories("");
   };
@@ -472,29 +398,25 @@ export default function VitalityPage() {
   const saveCalorieGoal = () => { setCalorieGoal(parseInt(inputCalorieGoal)||2300); setIsEditingCalories(false); };
 
   const lancerDictation = () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SR = (window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;
     if (!SR) { alert("Speech recognition not supported."); return; }
     const r = new SR();
-    r.lang = lang === "fr" ? "fr-FR" : "en-US";
-    r.onstart = () => setIsListening(true);
-    r.onend   = () => setIsListening(false);
-    r.onerror = () => setIsListening(false);
-    r.onresult = (e: any) => setInputEcho(p => p + (p?" ":"") + e.results[0][0].transcript);
+    r.lang = lang==="fr"?"fr-FR":"en-US";
+    r.onstart=()=>setIsListening(true); r.onend=()=>setIsListening(false); r.onerror=()=>setIsListening(false);
+    r.onresult=(e:any)=>setInputEcho(p=>p+(p?" ":"")+e.results[0][0].transcript);
     r.start();
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // RENDER — identique à l'original, aucun changement UI
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="vitality-page h-screen w-full bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans relative transition-colors duration-200 selection:bg-cyan-500/30">
 
-      {tutorialStep === 1 && (
+      {tutorialStep===1 && (
         <div className="absolute top-44 left-6 sm:left-72 w-80 sm:w-[460px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in duration-300 z-50">
-          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-vitality-done-v1","true"); }} />
+          <TutorialHeaderControls onClose={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} />
           <div className="flex items-center gap-2.5 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
             <span>💸</span>
-            <h4 className="font-black text-xs font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">{lang==="fr"?"ECHO BUDGET (1/2)":"ECHO BUDGET (1/2)"}</h4>
+            <h4 className="font-black text-xs font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">ECHO BUDGET (1/2)</h4>
           </div>
           <div className="text-xs text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4 space-y-2">
             {lang==="fr" ? (
@@ -508,19 +430,19 @@ export default function VitalityPage() {
             )}
           </div>
           <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800 dark:border-zinc-200">
-            <button onClick={() => setTutorialStep(2)} className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
-              {lang==="fr" ? "SUIVANT ➔" : "NEXT ➔"}
+            <button onClick={()=>setTutorialStep(2)} className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
+              {lang==="fr"?"SUIVANT ➔":"NEXT ➔"}
             </button>
           </div>
         </div>
       )}
 
-      {tutorialStep === 2 && (
+      {tutorialStep===2 && (
         <div className="absolute top-64 left-6 sm:left-[450px] w-80 sm:w-[460px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(16,185,129,0.5)] border-2 border-emerald-400 dark:border-emerald-500 animate-in fade-in duration-300 z-50">
-          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-vitality-done-v1","true"); }} />
+          <TutorialHeaderControls onClose={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} />
           <div className="flex items-center gap-2.5 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
             <span>🔥</span>
-            <h4 className="font-black text-xs font-mono uppercase tracking-widest text-emerald-400 dark:text-emerald-600">{lang==="fr"?"ECHO CALORIES (2/2)":"ECHO CALORIES (2/2)"}</h4>
+            <h4 className="font-black text-xs font-mono uppercase tracking-widest text-emerald-400 dark:text-emerald-600">ECHO CALORIES (2/2)</h4>
           </div>
           <div className="text-xs text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4">
             {lang==="fr" ? (
@@ -533,8 +455,8 @@ export default function VitalityPage() {
               • "Fish &amp; Chips, evaluate calories"<br/>• "Two pizza slices"<br/>• "Protein bar 200 calories"</p>
             )}
           </div>
-          <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-vitality-done-v1","true"); }} className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
-            {lang==="fr" ? "C'EST PARTI ! 🚀" : "LET'S LOG ! 🚀"}
+          <button onClick={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
+            {lang==="fr"?"C'EST PARTI ! 🚀":"LET'S LOG ! 🚀"}
           </button>
         </div>
       )}
@@ -693,9 +615,30 @@ export default function VitalityPage() {
 
           {/* ECHO CONTROLLER */}
           <aside className="min-w-0 xl:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative h-full w-full">
-            <div className="p-4 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-900/60 shrink-0 flex items-center gap-2 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-              <h2 className="font-bold text-xs text-zinc-800 dark:text-zinc-100 uppercase font-mono tracking-wider">{dict.ctrlTitle}</h2>
+
+            {/* HEADER avec bouton ⚙️ Settings */}
+            <div className="p-3 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-900/60 shrink-0 flex items-center justify-between gap-2 shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                <h2 className="font-bold text-xs text-zinc-800 dark:text-zinc-100 uppercase font-mono tracking-wider">{dict.ctrlTitle}</h2>
+              </div>
+              <div className="relative" ref={settingsRef}>
+                <button onClick={() => setIsSettingsOpen(v => !v)}
+                  className="p-1.5 rounded-lg bg-zinc-200/80 dark:bg-zinc-800/80 border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:text-cyan-500 hover:border-cyan-500/50 transition-all text-xs flex items-center gap-1">
+                  ⚙️ <span className="font-mono text-[9px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase">{lang}</span>
+                </button>
+                {isSettingsOpen && (
+                  <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 flex flex-col gap-1 z-50">
+                    <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 px-2 py-1 border-b border-zinc-100 dark:border-zinc-900">
+                      {lang==="fr"?"Paramètres":"Settings"}
+                    </div>
+                    <button onClick={toggleTheme} className="text-left px-2 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors">
+                      {theme==="dark"?"☀️ Mode Clair":"🌙 Mode Sombre"}
+                    </button>
+                    <div className="px-2 py-1.5"><LangDropdown /></div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-white dark:bg-black/20">
@@ -745,6 +688,7 @@ export default function VitalityPage() {
               )}
             </div>
 
+            {/* INPUT */}
             <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 shrink-0">
               {imageBase64 && (
                 <div className="mb-2 flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-600 dark:text-emerald-400">
