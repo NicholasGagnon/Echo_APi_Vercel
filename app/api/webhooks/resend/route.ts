@@ -8,18 +8,29 @@ export async function POST(req: Request) {
 
     console.log("INBOUND EMAIL WEBHOOK RECEIVED");
 
-    // 1. Extraction sécurisée des données de l'email
     const emailData = body.data || {};
 
+    // 1. Extraction des infos de base
     const from = emailData.from || "Inconnu";
     const subject = emailData.subject || "Sans objet";
     
-    // Gérer le format du "to" (tableau ou string)
     const toArray = Array.isArray(emailData.to) ? emailData.to : [emailData.to || ""];
     const toFormatted = toArray.join(", ");
 
-    // 2. Récupération stricte du texte du message
-    const messageContent = emailData.text || emailData.html || "[Message vide]";
+    // 2. Extraction du message (Fouille partout si le webhook est restrictif)
+    let messageContent = "[Message vide]";
+
+    if (emailData.text) {
+      messageContent = emailData.text;
+    } else if (emailData.html) {
+      messageContent = emailData.html;
+    } else if (body.text) {
+      messageContent = body.text;
+    } else if (emailData.body?.text) {
+      messageContent = emailData.body.text;
+    } else if (emailData.body?.html) {
+      messageContent = emailData.body.html;
+    }
 
     // 3. Détermination du préfixe selon le destinataire
     let prefix = "[EMAIL]";
@@ -27,7 +38,7 @@ export async function POST(req: Request) {
     if (toLower.includes("support@echosai.ca")) prefix = "[SUPPORT]";
     if (toLower.includes("contact@echosai.ca")) prefix = "[CONTACT]";
 
-    // 4. Envoi de l'email épuré (uniquement le contenu propre)
+    // 4. Envoi de l'email épuré
     await resend.emails.send({
       from: "support@echosai.ca",
       to: "lafailleestouverte@gmail.com",
