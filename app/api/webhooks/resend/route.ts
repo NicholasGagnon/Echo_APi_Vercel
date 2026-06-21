@@ -4,62 +4,40 @@ import { Resend } from "resend";
 export async function POST(req: Request) {
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
-
     const body = await req.json();
 
-    console.log("INBOUND EMAIL WEBHOOK:", JSON.stringify(body, null, 2));
+    console.log("INBOUND EMAIL WEBHOOK RECEIVED");
 
-    // Retransfère le payload brut immédiatement pour debugging
-    await resend.emails.send({
-      from: "support@echosai.ca",
-      to: "lafailleestouverte@gmail.com",
-      subject: "DEBUG RAW PAYLOAD",
-      text: JSON.stringify(body, null, 2),
-    });
-
-    return NextResponse.json({ success: true });
-
-    // Le webhook Resend envoie { type, created_at, data: { from, to, subject, email_id, ... } }
+    // 1. Extraction sécurisée des données de l'email
     const emailData = body.data || {};
 
-    const to = Array.isArray(emailData.to)
-      ? emailData.to.join(", ")
-      : emailData.to || "";
+    const from = emailData.from || "Inconnu";
+    const subject = emailData.subject || "Sans objet";
+    
+    // Gérer le format du "to" (tableau ou string)
+    const toArray = Array.isArray(emailData.to) ? emailData.to : [emailData.to || ""];
+    const toFormatted = toArray.join(", ");
 
-    const from = emailData.from || "unknown";
-    const subject = emailData.subject || "No subject";
-    const emailId = emailData.email_id;
+    // 2. Récupération stricte du texte du message
+    const messageContent = emailData.text || emailData.html || "[Message vide]";
 
-    // Le contenu text/html n'est PAS dans le webhook — il faut le fetch via l'API Resend
-    let text = "";
-    if (emailId) {
-      try {
-        const fetched = await resend.emails.get(emailId);
-        text = (fetched as any).text || (fetched as any).html || "";
-      } catch (e) {
-        console.warn("Impossible de fetch le contenu de l'email:", e);
-        text = `[Contenu non disponible — email_id: ${emailId}]`;
-      }
-    }
-
-    if (!text) {
-      text = JSON.stringify(body, null, 2);
-    }
-
+    // 3. Détermination du préfixe selon le destinataire
     let prefix = "[EMAIL]";
-    if (to.includes("support@echosai.ca")) prefix = "[SUPPORT]";
-    if (to.includes("contact@echosai.ca")) prefix = "[CONTACT]";
+    const toLower = toFormatted.toLowerCase();
+    if (toLower.includes("support@echosai.ca")) prefix = "[SUPPORT]";
+    if (toLower.includes("contact@echosai.ca")) prefix = "[CONTACT]";
 
+    // 4. Envoi de l'email épuré (uniquement le contenu propre)
     await resend.emails.send({
       from: "support@echosai.ca",
       to: "lafailleestouverte@gmail.com",
       subject: `${prefix} ${subject}`,
-      text: `FROM: ${from}\nTO: ${to}\n\n${text}`,
+      text: `De: ${from}\nPour: ${toFormatted}\n\nMessage:\n${messageContent}`,
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error(error);
+    console.error("Erreur Webhook:", error);
     return NextResponse.json({ success: false }, { status: 500 });
   }
 }
