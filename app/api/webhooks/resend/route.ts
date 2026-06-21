@@ -18,14 +18,19 @@ export async function POST(req: Request) {
     const toArray     = Array.isArray(emailData.to) ? emailData.to : [emailData.to || ""];
     const toFormatted = toArray.join(", ");
 
+    // 1. On détecte uniquement le préfixe pour savoir d'où ça vient
     let prefix = "[EMAIL]";
     const toLower = toFormatted.toLowerCase();
-    if (toLower.includes("support@echosai.ca")) prefix = "[SUPPORT]";
-    if (toLower.includes("contact@echosai.ca")) prefix = "[CONTACT]";
+    
+    if (toLower.includes("support@echosai.ca")) {
+      prefix = "[SUPPORT]";
+    } else if (toLower.includes("contact@echosai.ca")) {
+      prefix = "[CONTACT]";
+    }
 
     let messageContent = "[Message vide]";
 
-    // --- STRATÉGIE 1 : Le SDK avec la bonne méthode inbound ---
+    // 2. Récupération robuste du contenu (SDK + Fallback HTTP)
     try {
       const received = await (resend.emails as any).receiving.get(emailId);
       const emailContent = received?.data || received || {};
@@ -33,7 +38,6 @@ export async function POST(req: Request) {
     } catch (err: any) {
       console.error("receiving.get failed:", err?.message);
 
-      // --- STRATÉGIE 2 (FALLBACK) : Appel HTTP Direct sur l'endpoint Inbound correct ---
       try {
         const res = await fetch(`https://api.resend.com/inbound/emails/${emailId}`, {
           headers: { 
@@ -45,18 +49,16 @@ export async function POST(req: Request) {
           const result = await res.json();
           const data = result.data || result;
           messageContent = data.text || data.html || "[Message vide]";
-        } else {
-          console.error("HTTP Fallback status error:", res.status);
         }
       } catch (err2: any) {
         console.error("HTTP fallback failed:", err2?.message);
       }
     }
 
-    // Envoi de l'email retransféré
+    // 3. ENVOI SÉCURISÉ : On livre tout à ton Gmail. Le tag [CONTACT] ou [SUPPORT] fait le tri pour toi.
     await resend.emails.send({
       from: "support@echosai.ca",
-      to: "lafailleestouverte@gmail.com",
+      to: "lafailleestouverte@gmail.com", 
       subject: `${prefix} ${subject}`,
       text: `De: ${from}\nPour: ${toFormatted}\n\nMessage:\n${messageContent}`,
     });
