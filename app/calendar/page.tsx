@@ -99,11 +99,15 @@ export default function CalendarPage() {
 
         setEvents(prev => {
           const updated = { ...prev };
-          // FIX: itérer sur toutes les clés (prev + rebuilt) pour éviter l'empilement
+          // Vider TOUS les non-Google d'abord, puis injecter rebuilt proprement
           const allKeys = new Set([...Object.keys(updated), ...Object.keys(rebuilt)]);
           allKeys.forEach(k => {
             const googleOnly = (updated[k] || []).filter(e => !!e.googleEventId);
-            updated[k] = [...googleOnly, ...(rebuilt[k] || [])];
+            const supabaseEvents = (rebuilt[k] || []);
+            // Dédoublonnage par id avant de merger
+            const seen = new Set(googleOnly.map(e => e.id));
+            const dedupedSupabase = supabaseEvents.filter(e => !seen.has(e.id));
+            updated[k] = [...googleOnly, ...dedupedSupabase];
           });
           return updated;
         });
