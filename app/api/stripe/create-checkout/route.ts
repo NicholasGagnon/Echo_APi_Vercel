@@ -12,34 +12,42 @@ const PRICE_IDS = {
   treasure: process.env.STRIPE_TREASURE_PRICE_ID!, 
 } as const;
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { plan, userId, userEmail } = body;
+const body = await req.json();
+const { plan, userId, userEmail } = body;
 
-    // --- SÉCURITÉ #1 : Validation des données reçues ---
-    if (!plan || !PRICE_IDS[plan as keyof typeof PRICE_IDS]) {
-      return NextResponse.json({ message: "Invalid or missing plan parameter" }, { status: 400 });
-    }
-    if (!userId || !userEmail) {
-      return NextResponse.json({ message: "User authentication missing" }, { status: 401 });
-    }
+// Vérification utilisateur
+if (!userId || !userEmail) {
+  return NextResponse.json(
+    { message: "User authentication missing" },
+    { status: 401 }
+  );
+}
 
-    const priceId = "price_1TkGWTCWU5v7pxiFQiJE4pFT";
+// Mapping des abonnements -> Price IDs Stripe
+const PRICE_IDS = {
+  basic: process.env.STRIPE_BASIC_PRICE_ID!,
+  premium: process.env.STRIPE_PREMIUM_PRICE_ID!,
+  ultra: process.env.STRIPE_ULTRA_PRICE_ID!,
+  founder: process.env.STRIPE_FOUNDER_PRICE_ID!,
+  treasure: process.env.STRIPE_TREASURE_PRICE_ID!,
+} as const;
 
+// Vérification du plan reçu
+if (!plan || !(plan in PRICE_IDS)) {
+  return NextResponse.json(
+    { message: `Invalid plan: ${plan}` },
+    { status: 400 }
+  );
+}
+
+const priceId = PRICE_IDS[plan as keyof typeof PRICE_IDS];
+
+// Logs de debug
 console.log("PLAN REÇU =", plan);
 console.log("PRICE ID UTILISÉ =", priceId);
-console.log("BASIC =", process.env.STRIPE_BASIC_PRICE_ID);
-console.log("PREMIUM =", process.env.STRIPE_PREMIUM_PRICE_ID);
-console.log("ULTRA =", process.env.STRIPE_ULTRA_PRICE_ID);
-console.log("FOUNDER =", process.env.STRIPE_FOUNDER_PRICE_ID);
-console.log("TREASURE =", process.env.STRIPE_TREASURE_PRICE_ID);
+console.log("PRICE_IDS =", PRICE_IDS);
 
 const origin = req.headers.get("origin") ?? "http://localhost:3000";
-
-    // --- SÉCURITÉ #2 : Configuration simplifiée pour le Checkout ---
-    // On laisse l'objet d'abonnement standard à la création pour éviter les bogues TypeScript
-    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {};
 
     // --- SÉCURITÉ #3 : Création de la session Checkout ---
     const session = await stripe.checkout.sessions.create({
