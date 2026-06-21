@@ -9,6 +9,16 @@ export async function POST(req: Request) {
 
     console.log("INBOUND EMAIL WEBHOOK:", JSON.stringify(body, null, 2));
 
+    // Retransfère le payload brut immédiatement pour debugging
+    await resend.emails.send({
+      from: "support@echosai.ca",
+      to: "lafailleestouverte@gmail.com",
+      subject: "DEBUG RAW PAYLOAD",
+      text: JSON.stringify(body, null, 2),
+    });
+
+    return NextResponse.json({ success: true });
+
     // Le webhook Resend envoie { type, created_at, data: { from, to, subject, email_id, ... } }
     const emailData = body.data || {};
 
