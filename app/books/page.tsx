@@ -869,7 +869,9 @@ export default function BooksPage() {
           )}
 
           {/* EDITOR CANVAS */}
-          <div className="flex-1 overflow-hidden min-h-0 relative bg-zinc-900">
+          <div className="flex-1 overflow-hidden min-h-0 relative"
+            style={{backgroundImage:"url('/eauplante2.png')", backgroundSize:"cover", backgroundPosition:"center"}}>
+            <div className="absolute inset-0 bg-black/55 pointer-events-none z-0"/>
             <div className="absolute inset-0 overflow-y-auto z-[2] py-8 flex flex-col items-center gap-6"
               style={{scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent"}}>
 
