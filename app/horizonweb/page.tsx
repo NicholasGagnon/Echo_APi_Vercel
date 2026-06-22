@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useState } from "react";
 
 type HorizonMatrix = {
@@ -16,12 +18,35 @@ const Link = ({ href, children, className }: { href: string; children: React.Rea
   <a href={href} className={className}>{children}</a>
 );
 
-// Inline Supabase client simulation for sandbox preview
-const mockSupabase = {
-  auth: {
-    getSession: async () => ({ data: { session: null } })
-  }
-};
+// Hologramme SVG de secours d'Echo si l'image physique n'est pas trouvée
+const EchoSvgMascot = ({ className = "w-20 h-20" }: { className?: string }) => (
+  <svg className={`${className} animate-pulse drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]`} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="45" fill="url(#cyanGlow)" opacity="0.1" />
+    <circle cx="50" cy="50" r="40" stroke="#06b6d4" strokeWidth="2" strokeDasharray="6 6" className="animate-spin [animation-duration:15s]" />
+    {/* Casque audio */}
+    <rect x="22" y="42" width="8" height="16" rx="4" fill="#06b6d4" />
+    <rect x="70" y="42" width="8" height="16" rx="4" fill="#06b6d4" />
+    <path d="M26 44 Q50 20 74 44" stroke="#06b6d4" strokeWidth="3" fill="none" />
+    {/* Tête robot */}
+    <rect x="28" y="36" width="44" height="32" rx="16" fill="#09090b" stroke="#06b6d4" strokeWidth="3" />
+    {/* Yeux bleus LED */}
+    <circle cx="41" cy="50" r="4" fill="#22d3ee" className="animate-ping [animation-duration:3s]" />
+    <circle cx="41" cy="50" r="3" fill="#ffffff" />
+    <circle cx="59" cy="50" r="4" fill="#22d3ee" className="animate-ping [animation-duration:3s]" />
+    <circle cx="59" cy="50" r="3" fill="#ffffff" />
+    {/* Petit sourire */}
+    <path d="M46 58 Q50 62 54 58" stroke="#22d3ee" strokeWidth="2" strokeLinecap="round" fill="none" />
+    {/* Antennes */}
+    <path d="M50 36 L50 24" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="50" cy="22" r="3" fill="#22d3ee" />
+    <defs>
+      <radialGradient id="cyanGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#06b6d4" />
+        <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
+      </radialGradient>
+    </defs>
+  </svg>
+);
 
 const TRANSLATIONS = {
   fr: {
@@ -100,16 +125,19 @@ export default function App() {
   const [isMatrixExpanded, setIsMatrixExpanded] = useState(false);
   const [activeLens, setActiveLens] = useState<"critical" | "expert" | "strategy" | null>(null);
 
+  // État de détection d'erreur de chargement de l'avatar physique echo.png
+  const [isAvatarBroken, setIsAvatarBroken] = useState(false);
+
   const t = TRANSLATIONS[lang];
 
   useEffect(() => {
-    // 1. Manage first time presentation tutorial popup
+    // 1. Gérer l'affichage initial du tutoriel
     const introSeen = localStorage.getItem("horizon_intro_seen");
     if (!introSeen) {
       setIsPopupOpen(true);
     }
 
-    // 2. Load previous search state if saved
+    // 2. Charger la dernière recherche de la session
     const cachedQuery = localStorage.getItem("horizon_last_query");
     const cachedResponse = localStorage.getItem("horizon_last_response");
     const cachedAttributes = localStorage.getItem("horizon_last_attributes");
@@ -127,7 +155,7 @@ export default function App() {
       try { setMatrix(JSON.parse(cachedMatrix)); } catch (e) {}
     }
 
-    // 3. Sync theme class on HTML element
+    // 3. Appliquer le bon thème de couleur
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
     } else {
@@ -179,7 +207,7 @@ export default function App() {
       }
     } catch (err) {
       console.error("Error Fetching Horizon Search:", err);
-      // Fallback response inside sandbox environment if local server isn't running
+      // Mode simulation hors-ligne si l'API ne répond pas temporairement
       const isPizza = targetQuery.toLowerCase().includes("pizza");
       setEchoResponse(
         isPizza 
@@ -221,7 +249,7 @@ export default function App() {
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
       
-      {/* 1 - PRESENTATION POPUP */}
+      {/* 1 - POPUP DE PRÉSENTATION */}
       {isPopupOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-950 border-2 border-cyan-500/40 p-6 rounded-2xl max-w-lg w-full relative shadow-[0_0_50px_rgba(6,182,212,0.2)]">
@@ -239,7 +267,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 2 - STANDARD SIDEBAR */}
+      {/* 2 - NAVIGATION STANDARD */}
       <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between hidden md:flex">
         <div className="space-y-20">
           <h2 className="font-bold text-lg">
@@ -262,10 +290,10 @@ export default function App() {
         </div>
       </aside>
 
-      {/* 3 - UNIVERSAL EXPLORATOR ENGINE */}
+      {/* 3 - CONTENU PRINCIPAL DE RECHERCHE */}
       <section className="flex-1 flex flex-col min-w-0 bg-white dark:bg-black transition-colors duration-200 relative">
         
-        {/* SETTINGS DRAWER ENGINE */}
+        {/* BOUTON SETTINGS COMPLET */}
         <div className="absolute top-6 right-6 z-10 flex items-center gap-2">
           <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
@@ -309,14 +337,13 @@ export default function App() {
           )}
         </div>
 
-        {}
-        {/* HEADER BLOCK */}
+        {/* EN-TÊTE DE LA PAGE */}
         <div className="p-8 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center text-center shrink-0 pt-16">
           <h1 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase mb-6 font-mono select-none text-cyan-600 dark:text-cyan-400">
             {t.title}
           </h1>
 
-          {/* SEARCH BAR */}
+          {/* CHAMP DE SAISIE */}
           <div className="w-full max-w-3xl relative">
             <input 
               type="text" 
@@ -334,7 +361,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* BEHAVIORAL BUTTONS (UNDERNEATH SEARCH INPUT) */}
+          {/* LENTILLES COMPORTEMENTALES (SOUS L'INPUT) */}
           <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full max-w-3xl justify-center font-mono">
             <button 
               onClick={() => handleLensClick("critical")}
@@ -369,28 +396,32 @@ export default function App() {
           </div>
         </div>
 
-        {}
-        {/* DYNAMIC RESULTS BOARD */}
+        {/* CONTENEUR DE RÉSULTATS DYNAMIQUE */}
         <div className="flex-1 overflow-y-auto p-8 min-h-0 bg-white dark:bg-black transition-colors duration-200 flex flex-col items-center">
           
           {echoState === "thinking" && (
             <div className="h-64 flex flex-col items-center justify-center gap-4 font-mono">
-              <img 
-                src="/echo.png" 
-                alt="Echo Thinking" 
-                className="w-20 h-20 object-contain echo-thinking"
-              />
+              {isAvatarBroken ? (
+                <EchoSvgMascot className="w-20 h-20" />
+              ) : (
+                <img 
+                  src="/echo.png" 
+                  alt="Echo Thinking" 
+                  className="w-20 h-20 object-contain echo-thinking"
+                  onError={() => setIsAvatarBroken(true)}
+                />
+              )}
               <p className="text-cyan-500 dark:text-cyan-400 text-xs uppercase tracking-widest animate-pulse">
                 {lang === "fr" ? "Exploration du sillage..." : "Exploring the wake..."}
               </p>
             </div>
           )}
 
-          {/* CHIPS AND CONVERSATIONAL ANSWERS */}
+          {/* RÉPONSES CONVERSATIONNELLES ET CHIPS */}
           {echoState !== "thinking" && echoResponse && (
             <div className="w-full max-w-3xl space-y-8 animate-in fade-in duration-300 pb-12">
               
-              {/* ACCESSIBLE DECISION CHIPS */}
+              {/* CHIPS DE DÉCISION */}
               {attributes.length > 0 && (
                 <div className="flex gap-2 items-center flex-wrap pb-3 border-b border-zinc-200 dark:border-zinc-900 font-mono text-[10px]">
                   <span className="text-zinc-400 uppercase font-bold">{t.attributes}</span>
@@ -400,17 +431,25 @@ export default function App() {
                 </div>
               )}
 
-              {/* NATURAL RESPIRING ANALYSIS */}
+              {/* L'ANALYSE EN TEXTE ENTIER SANS FILTRE SEO */}
               <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-900 p-8 rounded-2xl shadow-sm leading-relaxed text-[15px] space-y-4 font-sans text-zinc-800 dark:text-zinc-200 whitespace-pre-line">
                 <div className="flex items-center gap-3 mb-4 font-mono text-xs text-cyan-600 dark:text-cyan-400 font-bold uppercase tracking-wider">
-                  <img src="/echo.png" alt="Echo" className="w-8 h-8 object-contain echo-speaking" />
+                  {isAvatarBroken ? (
+                    <EchoSvgMascot className="w-8 h-8" />
+                  ) : (
+                    <img 
+                      src="/echo.png" 
+                      alt="Echo" 
+                      className="w-8 h-8 object-contain echo-speaking"
+                      onError={() => setIsAvatarBroken(true)}
+                    />
+                  )}
                   <span>Echo's Analysis</span>
                 </div>
                 {echoResponse}
               </div>
 
-              {}
-              {/* COLLAPSIBLE MATRIX */}
+              {/* LA MATRICE HORIZON INTERACTIVE (ACCORDÉON PLIABLE) */}
               {matrix && (
                 <div className="border border-zinc-200 dark:border-zinc-900 rounded-2xl overflow-hidden shadow-sm">
                   <button 
@@ -445,14 +484,19 @@ export default function App() {
             </div>
           )}
 
-          {/* ECHO STANDBY ALIVE AVATAR (IDLE STATE) */}
+          {/* AVATAR D'ÉCHO DANS L'ÉTAT D'ATTENTE INITIAL */}
           {echoState === "idle" && !echoResponse && (
             <div className="h-full flex flex-col items-center justify-center text-center py-16">
-              <img 
-                src="/echo.png" 
-                alt="Echo Idle" 
-                className="w-24 h-24 object-contain echo-idle mb-6 select-none"
-              />
+              {isAvatarBroken ? (
+                <EchoSvgMascot className="w-24 h-24" />
+              ) : (
+                <img 
+                  src="/echo.png" 
+                  alt="Echo Idle" 
+                  className="w-24 h-24 object-contain echo-idle mb-6 select-none"
+                  onError={() => setIsAvatarBroken(true)}
+                />
+              )}
               <h4 className="font-mono text-xs uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold mb-1">
                 {t.inactiveTitle}
               </h4>
