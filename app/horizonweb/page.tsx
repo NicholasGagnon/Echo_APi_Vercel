@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { UserTier } from "../../utils/quota";
@@ -17,8 +17,39 @@ type HorizonMatrix = {
   quelle_option_est_recommandee: string;
 };
 
+// Hologramme SVG de secours d'Echo si l'image physique n'est pas trouvée (V4 Fallback)
+const EchoSvgMascot = ({ className = "w-20 h-20" }: { className?: string }) => (
+  <svg className={`${className} animate-pulse drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]`} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="45" fill="url(#cyanGlow)" opacity="0.1" />
+    <circle cx="50" cy="50" r="40" stroke="#06b6d4" strokeWidth="2" strokeDasharray="6 6" className="animate-spin [animation-duration:15s]" />
+    {/* Casque audio */}
+    <rect x="22" y="42" width="8" height="16" rx="4" fill="#06b6d4" />
+    <rect x="70" y="42" width="8" height="16" rx="4" fill="#06b6d4" />
+    <path d="M26 44 Q50 20 74 44" stroke="#06b6d4" strokeWidth="3" fill="none" />
+    {/* Tête robot */}
+    <rect x="28" y="36" width="44" height="32" rx="16" fill="#09090b" stroke="#06b6d4" strokeWidth="3" />
+    {/* Yeux bleus LED */}
+    <circle cx="41" cy="50" r="4" fill="#22d3ee" className="animate-ping [animation-duration:3s]" />
+    <circle cx="41" cy="50" r="3" fill="#ffffff" />
+    <circle cx="59" cy="50" r="4" fill="#22d3ee" className="animate-ping [animation-duration:3s]" />
+    <circle cx="59" cy="50" r="3" fill="#ffffff" />
+    {/* Petit sourire */}
+    <path d="M46 58 Q50 62 54 58" stroke="#22d3ee" strokeWidth="2" strokeLinecap="round" fill="none" />
+    {/* Antennes */}
+    <path d="M50 36 L50 24" stroke="#06b6d4" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="50" cy="22" r="3" fill="#22d3ee" />
+    <defs>
+      <radialGradient id="cyanGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#06b6d4" />
+        <stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
+      </radialGradient>
+    </defs>
+  </svg>
+);
+
 export default function HorizonWebPage() {
   const { t, lang, setLang } = useApp();
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   const [query, setQuery] = useState("");
   const [echoResponse, setEchoResponse] = useState("");
@@ -31,6 +62,9 @@ export default function HorizonWebPage() {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMatrixExpanded, setIsMatrixExpanded] = useState(false);
+
+  // Détection de l'avatar cassé (Fallback V4)
+  const [isAvatarBroken, setIsAvatarBroken] = useState(false);
 
   // Boutons comportementaux
   const [activeLens, setActiveLens] = useState<"critical" | "expert" | "strategy" | null>(null);
@@ -50,7 +84,10 @@ export default function HorizonWebPage() {
     const cachedMatrix = localStorage.getItem("horizon_last_matrix");
 
     if (cachedQuery) setQuery(cachedQuery);
-    if (cachedResponse) setEchoResponse(cachedResponse);
+    if (cachedResponse) {
+      setEchoResponse(cachedResponse);
+      setEchoState("speaking");
+    }
     if (cachedAttributes) {
       try { setAttributes(JSON.parse(cachedAttributes)); } catch (e) {}
     }
@@ -72,7 +109,18 @@ export default function HorizonWebPage() {
         }
       }
     });
-  }, []);
+
+    // 4. Appliquer le thème
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === "dark" ? "light" : "dark");
+  };
 
   // Exécuter l'analyse et gérer la mise en cache locale
   const executeHorizonSearch = async (targetQuery: string, overrideLens?: "critical" | "expert" | "strategy" | null) => {
@@ -86,7 +134,7 @@ export default function HorizonWebPage() {
     const lensToSend = overrideLens !== undefined ? overrideLens : activeLens;
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://echo-api-fixed.onrender.com";
       const res = await fetch(`${API_URL}/horizon`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,28 +245,41 @@ export default function HorizonWebPage() {
         <div className="absolute top-6 right-6 z-10 flex items-center gap-2">
           <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className="p-2.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 dark:text-zinc-300 transition-all shadow-sm"
+            className="p-2.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 dark:text-zinc-300 transition-all shadow-sm flex items-center justify-center text-xs"
             title="Settings"
           >
-            ⚙️
+            ⚙️ <span className="font-mono text-[9px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase ml-1">{lang}</span>
           </button>
           
           {isSettingsOpen && (
-            <div className="absolute right-0 top-12 w-48 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-xl z-20 font-mono text-xs">
-              <h4 className="font-bold text-cyan-500 mb-2 uppercase tracking-wider">Language / Langue</h4>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => { setLang("fr"); setIsSettingsOpen(false); }}
-                  className={`flex-1 py-1.5 rounded-lg border text-center font-bold ${lang === "fr" ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/30" : "border-zinc-200 dark:border-zinc-800"}`}
-                >
-                  FR
-                </button>
-                <button 
-                  onClick={() => { setLang("en"); setIsSettingsOpen(false); }}
-                  className={`flex-1 py-1.5 rounded-lg border text-center font-bold ${lang === "en" ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/30" : "border-zinc-200 dark:border-zinc-800"}`}
-                >
-                  EN
-                </button>
+            <div className="absolute right-0 top-12 w-52 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-xl z-20 font-mono text-xs flex flex-col gap-3">
+              <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 border-b border-zinc-100 dark:border-zinc-900 pb-1">
+                {lang === "fr" ? "Paramètres" : "Settings"}
+              </div>
+
+              <button 
+                onClick={toggleTheme} 
+                className="text-left w-full py-1.5 px-2 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300"
+              >
+                {theme === "dark" ? "☀️ Mode Clair" : "🌙 Mode Sombre"}
+              </button>
+
+              <div>
+                <h4 className="font-bold text-cyan-500 mb-2 uppercase tracking-wider text-[10px]">Language / Langue</h4>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => { setLang("fr"); setIsSettingsOpen(false); }}
+                    className={`flex-1 py-1.5 rounded-lg border text-center font-bold ${lang === "fr" ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/30" : "border-zinc-200 dark:border-zinc-800"}`}
+                  >
+                    FR
+                  </button>
+                  <button 
+                    onClick={() => { setLang("en"); setIsSettingsOpen(false); }}
+                    className={`flex-1 py-1.5 rounded-lg border text-center font-bold ${lang === "en" ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/30" : "border-zinc-200 dark:border-zinc-800"}`}
+                  >
+                    EN
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -301,7 +362,7 @@ export default function HorizonWebPage() {
 
           {/* RÉSULTATS CONVERSATIONNELS D'ÉCHO */}
           {echoState !== "thinking" && echoResponse && (
-            <div className="w-full max-w-3xl space-y-8 animate-in fade-in duration-300">
+            <div className="w-full max-w-3xl space-y-8 animate-in fade-in duration-300 pb-12">
               
               {/* CHIPS DE CRITÈRES DÉTECTÉS */}
               {attributes.length > 0 && (
@@ -316,7 +377,16 @@ export default function HorizonWebPage() {
               {/* BLOC CONVERSATIONNEL D'ÉCHO (RÉPONSE RESPIRANTE & DIRECTE) */}
               <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-900 p-8 rounded-2xl shadow-sm leading-relaxed text-[15px] space-y-4 font-sans text-zinc-800 dark:text-zinc-200 whitespace-pre-line">
                 <div className="flex items-center gap-3 mb-4 font-mono text-xs text-cyan-600 dark:text-cyan-400 font-bold uppercase tracking-wider">
-                  <img src="/echo.png" alt="Echo" className="w-8 h-8 object-contain echo-speaking" />
+                  {isAvatarBroken ? (
+                    <EchoSvgMascot className="w-8 h-8" />
+                  ) : (
+                    <img 
+                      src="/echo.png" 
+                      alt="Echo" 
+                      className="w-8 h-8 object-contain echo-speaking" 
+                      onError={() => setIsAvatarBroken(true)}
+                    />
+                  )}
                   <span>Echo's Analysis</span>
                 </div>
                 {echoResponse}
@@ -327,7 +397,7 @@ export default function HorizonWebPage() {
                 <div className="border border-zinc-200 dark:border-zinc-900 rounded-2xl overflow-hidden shadow-sm">
                   <button 
                     onClick={() => setIsMatrixExpanded(!isMatrixExpanded)}
-                    className="w-full py-4 px-6 bg-zinc-50 dark:bg-zinc-950 flex justify-between items-center hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all font-mono text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-black"
+                    className="w-full py-4 px-6 bg-zinc-50 dark:bg-zinc-950 flex justify-between items-center hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all font-mono text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-black border-none outline-none"
                   >
                     <span>🔬 {lang === "fr" ? "Consulter la Matrice Horizon (8 Piliers)" : "View Horizon Matrix (8 Pillars)"}</span>
                     <span className="text-sm">{isMatrixExpanded ? "▲" : "▼"}</span>
@@ -360,15 +430,20 @@ export default function HorizonWebPage() {
           {/* ÉCRAN DE SILLAGE INACTIF (AVATAR ÉCHO VIVANT) */}
           {echoState === "idle" && !echoResponse && (
             <div className="h-full flex flex-col items-center justify-center text-center py-16">
-              <img 
-                src="/echo.png" 
-                alt="Echo Idle" 
-                className="w-24 h-24 object-contain echo-idle mb-6 select-none"
-              />
+              {isAvatarBroken ? (
+                <EchoSvgMascot className="w-24 h-24 mb-6" />
+              ) : (
+                <img 
+                  src="/echo.png" 
+                  alt="Echo Idle" 
+                  className="w-24 h-24 object-contain echo-idle mb-6 select-none"
+                  onError={() => setIsAvatarBroken(true)}
+                />
+              )}
               <h4 className="font-mono text-xs uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold mb-1">
                 ECHO IDLE
               </h4>
-              <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase max-w-xs">
+              <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase max-w-xs px-4">
                 {lang === "fr" 
                   ? "Entrez une intention pour démarrer la boucle d'exploration." 
                   : "Enter a query to launch the exploration loop."
