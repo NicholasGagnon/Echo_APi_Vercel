@@ -21,19 +21,44 @@ export default function HorizonWebPage() {
   const { t, lang, setLang } = useApp();
 
   const [query, setQuery] = useState("");
+  const [echoResponse, setEchoResponse] = useState("");
   const [matrix, setMatrix] = useState<HorizonMatrix | null>(null);
   const [attributes, setAttributes] = useState<string[]>([]);
-  const [echoState, setEchoState] = useState("idle"); // idle | thinking
+  const [echoState, setEchoState] = useState<"idle" | "thinking" | "speaking">("idle");
   const [userId, setUserId] = useState<string | null>(null);
   const [userTier, setUserTier] = useState<UserTier>("connected_free");
   
-  const [isPopupOpen, setIsPopupOpen] = useState(true);
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMatrixExpanded, setIsMatrixExpanded] = useState(false);
 
-  // Buttons comportementaux intégrés sous la barre de recherche
+  // Boutons comportementaux
   const [activeLens, setActiveLens] = useState<"critical" | "expert" | "strategy" | null>(null);
 
+  // Charger la persistance locale et session Supabase
   useEffect(() => {
+    // 1. Gérer l'introduction (s'affiche une seule fois par navigateur)
+    const introSeen = localStorage.getItem("horizon_intro_seen");
+    if (!introSeen) {
+      setIsPopupOpen(true);
+    }
+
+    // 2. Restaurer la dernière recherche sauvegardée si présente
+    const cachedQuery = localStorage.getItem("horizon_last_query");
+    const cachedResponse = localStorage.getItem("horizon_last_response");
+    const cachedAttributes = localStorage.getItem("horizon_last_attributes");
+    const cachedMatrix = localStorage.getItem("horizon_last_matrix");
+
+    if (cachedQuery) setQuery(cachedQuery);
+    if (cachedResponse) setEchoResponse(cachedResponse);
+    if (cachedAttributes) {
+      try { setAttributes(JSON.parse(cachedAttributes)); } catch (e) {}
+    }
+    if (cachedMatrix) {
+      try { setMatrix(JSON.parse(cachedMatrix)); } catch (e) {}
+    }
+
+    // 3. Charger le profil utilisateur
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
       setUserId(uid);
@@ -49,11 +74,14 @@ export default function HorizonWebPage() {
     });
   }, []);
 
+  // Exécuter l'analyse et gérer la mise en cache locale
   const executeHorizonSearch = async (targetQuery: string, overrideLens?: "critical" | "expert" | "strategy" | null) => {
     if (!targetQuery.trim()) return;
     setQuery(targetQuery);
     setEchoState("thinking");
+    setEchoResponse("");
     setMatrix(null);
+    setAttributes([]);
 
     const lensToSend = overrideLens !== undefined ? overrideLens : activeLens;
 
@@ -65,24 +93,37 @@ export default function HorizonWebPage() {
         body: JSON.stringify({ 
           query: targetQuery, 
           userTier,
-          lang, // On envoie la langue active à l'API
+          lang, 
           selectedButtons: lensToSend ? [lensToSend] : []
         }),
       });
       const data = await res.json();
 
-      if (data.matrix) {
-        setMatrix(data.matrix);
+      if (data.response) {
+        setEchoResponse(data.response);
+        setMatrix(data.matrix || null);
         setAttributes(data.attributes || []);
+        setEchoState("speaking");
+
+        // Sauvegarder dans le localStorage pour persister après rafraîchissement
+        localStorage.setItem("horizon_last_query", targetQuery);
+        localStorage.setItem("horizon_last_response", data.response);
+        localStorage.setItem("horizon_last_attributes", JSON.stringify(data.attributes || []));
+        localStorage.setItem("horizon_last_matrix", JSON.stringify(data.matrix || null));
       } else {
         setAttributes(["erreur_coherence"]);
+        setEchoState("idle");
       }
     } catch (err) {
       console.error("Erreur Horizon Search:", err);
       setAttributes(["erreur_reseau"]);
-    } finally {
       setEchoState("idle");
     }
+  };
+
+  const closePopupAndSave = () => {
+    setIsPopupOpen(false);
+    localStorage.setItem("horizon_intro_seen", "true");
   };
 
   const handleLensClick = (lens: "critical" | "expert" | "strategy") => {
@@ -96,47 +137,37 @@ export default function HorizonWebPage() {
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
       
-      {/* POPUP DE PRÉSENTATION UNIVERSEL */}
+      {/* 1 - POPUP DE PRÉSENTATION TUTO (PERSISTÉ DANS LOCALSTORAGE) */}
       {isPopupOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-950 border-2 border-cyan-500/40 p-6 rounded-2xl max-w-lg w-full relative shadow-[0_0_50px_rgba(6,182,212,0.2)]">
-            <button onClick={() => setIsPopupOpen(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">X</button>
+            <button onClick={closePopupAndSave} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">X</button>
             
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-mono uppercase tracking-widest text-cyan-400 font-bold">📡 HorizonWeb Protocol</h3>
-              <select 
-                value={lang} 
-                onChange={(e) => setLang(e.target.value as "fr" | "en")}
-                className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 font-mono focus:outline-none focus:border-cyan-500"
-              >
-                <option value="fr">Français</option>
-                <option value="en">English</option>
-              </select>
             </div>
 
             <div className="space-y-3 text-xs sm:text-sm text-zinc-300 leading-relaxed font-mono">
               {lang === "fr" ? (
                 <>
-                  <p><span className="text-cyan-400 font-bold">HorizonWeb</span> n'est pas un moteur de recherche traditionnel.</p>
-                  <p>Il déploie une boucle agentique automatique qui arpente le monde extérieur à ta place selon <span className="text-cyan-400">10 filtres universels</span> rigoureux.</p>
-                  <p>Il ne livre pas de listes de liens promotionnels : il extrait la donnée brute, valide sa cohérence intrinsèque, et la fragmente en 8 piliers structurels.</p>
+                  <p><span className="text-cyan-400 font-bold">HorizonWeb</span> déploie un moteur d'exploration externe ultra-rigoureux.</p>
+                  <p>Il ne livre pas de listes de liens publicitaires : il extrait la donnée brute du terrain (prix réels, heures d'ouverture exactes, retours Reddit) pour formuler des conclusions utiles.</p>
                 </>
               ) : (
                 <>
-                  <p><span className="text-cyan-400 font-bold">HorizonWeb</span> is not a traditional search engine.</p>
-                  <p>It deploys an automatic agentic loop that explores the outside world based on <span className="text-cyan-400">10 strict universal filters</span>.</p>
-                  <p>Instead of promotional link spam, it extracts raw data, tests it for coherence, and structures it into 8 decision pillars.</p>
+                  <p><span className="text-cyan-400 font-bold">HorizonWeb</span> deploys an ultra-rigorous external search engine.</p>
+                  <p>It doesn't deliver lists of ads or spam: it extracts raw terrain data (real pricing, exact hours, Reddit reviews) to provide actionable conclusions.</p>
                 </>
               )}
             </div>
-            <button onClick={() => setIsPopupOpen(false)} className="w-full mt-6 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black tracking-widest text-xs uppercase transition-all">
-              {lang === "fr" ? "Lancer l'exploration" : "Initialize exploration"}
+            <button onClick={closePopupAndSave} className="w-full mt-6 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black tracking-widest text-xs uppercase transition-all">
+              {lang === "fr" ? "Démarrer l'exploration" : "Initialize exploration"}
             </button>
           </div>
         </div>
       )}
 
-      {}
+      {/* 2 - NAVIGATION LATÉRALE (SIDEBAR ALIGNÉE SANS AUCUN SAUT VISUEL) */}
       <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between hidden md:flex">
         <div className="space-y-20">
           <h2 className="font-bold text-lg">
@@ -159,10 +190,10 @@ export default function HorizonWebPage() {
         </div>
       </aside>
 
-      {/* ZONE CENTRALE PRINCIPALE AVEC EFFET IMMERSIF */}
+      {/* 3 - ZONE DE L'EXPLORATEUR UNIVERSEL */}
       <section className="flex-1 flex flex-col min-w-0 bg-white dark:bg-black transition-colors duration-200 relative">
         
-        {/* BOUTON PARAMÈTRES / SETTINGS EN HAUT À DROITE */}
+        {/* BOUTON SETTINGS - ALIGNÉ SUR LE CHAT ET SYNCHRONISÉ */}
         <div className="absolute top-6 right-6 z-10 flex items-center gap-2">
           <button 
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
@@ -193,15 +224,13 @@ export default function HorizonWebPage() {
           )}
         </div>
 
-        {/* HEADER & CONTROLEUR DE RECHERCHE */}
+        {/* HEADER DE RECHERCHE UNIFIÉ */}
         <div className="p-8 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center text-center shrink-0 pt-16">
-          
-          {/* GROS TITRE HORIZON WEB SEARCH */}
-          <h1 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase mb-6 font-mono select-none drop-shadow-[0_2px_10px_rgba(6,182,212,0.15)] text-cyan-600 dark:text-cyan-400">
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase mb-6 font-mono select-none text-cyan-600 dark:text-cyan-400">
             HORIZON WEB SEARCH
           </h1>
 
-          {/* BARRE DE RECHERCHE PRINCIPALE */}
+          {/* BARRE DE RECHERCHE */}
           <div className="w-full max-w-3xl relative">
             <input 
               type="text" 
@@ -209,7 +238,7 @@ export default function HorizonWebPage() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && executeHorizonSearch(query)}
               placeholder={lang === "fr" ? "TAPER VOTRE RECHERCHE ICI..." : "TYPE YOUR SEARCH HERE..."}
-              className="w-full bg-white dark:bg-zinc-900 text-black dark:text-white font-mono uppercase text-sm border-2 border-cyan-500/30 focus:border-cyan-500 rounded-2xl py-4 pl-6 pr-32 transition-all shadow-[inner_0_4px_12px_rgba(0,0,0,0.05)] dark:shadow-[inner_0_4px_12px_rgba(0,0,0,0.9)] focus:shadow-[0_0_20px_rgba(6,182,212,0.1)] outline-none"
+              className="w-full bg-white dark:bg-zinc-900 text-black dark:text-white font-mono uppercase text-sm border-2 border-cyan-500/30 focus:border-cyan-500 rounded-2xl py-4 pl-6 pr-32 transition-all outline-none focus:shadow-[0_0_20px_rgba(6,182,212,0.1)]"
             />
             <button 
               onClick={() => executeHorizonSearch(query)}
@@ -219,7 +248,7 @@ export default function HorizonWebPage() {
             </button>
           </div>
 
-          {}
+          {/* 3 BOUTONS COMPORTEMENTAUX DIRECTEMENT SOUS LA RECHERCHE */}
           <div className="flex flex-col sm:flex-row gap-3 mt-4 w-full max-w-3xl justify-center font-mono">
             <button 
               onClick={() => handleLensClick("critical")}
@@ -252,72 +281,100 @@ export default function HorizonWebPage() {
               7♟️ {lang === "fr" ? "STRATÉGIE" : "STRATEGY"}
             </button>
           </div>
-
-          {/* EXEMPLES UNIVERSELS SECONDAIRES */}
-          <div className="flex gap-2 mt-4 w-full max-w-3xl flex-wrap justify-center">
-            <button onClick={() => { setQuery("CRM PME"); executeHorizonSearch("CRM PME"); }} className="py-1 px-3 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 rounded-lg text-[10px] font-mono transition-all">⚡ CRM PME</button>
-            <button onClick={() => { setQuery("Réglementation IA Europe"); executeHorizonSearch("Réglementation IA Europe"); }} className="py-1 px-3 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 rounded-lg text-[10px] font-mono transition-all">🛡️ {lang === "fr" ? "RÉGLEMENTATION IA" : "AI REGULATION"}</button>
-            <button onClick={() => { setQuery("Voitures électriques autonomie"); executeHorizonSearch("Voitures électriques autonomie"); }} className="py-1 px-3 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-400 dark:text-zinc-500 rounded-lg text-[10px] font-mono transition-all">🚗 {lang === "fr" ? "COMPARAISON AUTONOMIE" : "AUTONOMY COMPARISON"}</button>
-          </div>
         </div>
 
-        {/* AFFICHAGE DES RÉSULTATS UNIVERSELS (Grand espace de lecture optimisé) */}
+        {/* ZONE DE LECTURE DES RÉSULTATS (AVEC PRIORITÉ CONVERSATIONNELLE) */}
         <div className="flex-1 overflow-y-auto p-8 min-h-0 bg-white dark:bg-black transition-colors duration-200 flex flex-col items-center">
+          
           {echoState === "thinking" && (
             <div className="h-64 flex flex-col items-center justify-center gap-4 font-mono">
-              <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+              <img 
+                src="/echo.png" 
+                alt="Echo Thinking" 
+                className="w-20 h-20 object-contain echo-thinking"
+              />
               <p className="text-cyan-500 dark:text-cyan-400 text-xs uppercase tracking-widest animate-pulse">
-                {lang === "fr" ? "Analyse agentique et filtrage opérationnel..." : "Agentic analysis and operational filtering..."}
+                {lang === "fr" ? "Exploration du sillage..." : "Exploring the wake..."}
               </p>
             </div>
           )}
 
-          {}
-          {matrix ? (
-            <div className="w-full max-w-4xl space-y-6 animate-in fade-in duration-300">
+          {/* RÉSULTATS CONVERSATIONNELS D'ÉCHO */}
+          {echoState !== "thinking" && echoResponse && (
+            <div className="w-full max-w-3xl space-y-8 animate-in fade-in duration-300">
               
+              {/* CHIPS DE CRITÈRES DÉTECTÉS */}
               {attributes.length > 0 && (
-                <div className="flex gap-2 items-center flex-wrap pb-2 border-b border-zinc-200 dark:border-zinc-900 font-mono text-[11px]">
-                  <span className="text-zinc-500 uppercase font-bold">{lang === "fr" ? "Critères détectés :" : "Detected criteria :"}</span>
+                <div className="flex gap-2 items-center flex-wrap pb-3 border-b border-zinc-200 dark:border-zinc-900 font-mono text-[10px]">
+                  <span className="text-zinc-400 uppercase font-bold">{lang === "fr" ? "Attributs Décisionnels :" : "Decision Criteria :"}</span>
                   {attributes.map((attr, idx) => (
-                    <span key={idx} className="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-md uppercase">{attr}</span>
+                    <span key={idx} className="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-md uppercase font-mono">{attr}</span>
                   ))}
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  { k: lang === "fr" ? "1. C'EST QUOI ?" : "1. WHAT IS IT?", v: matrix.c_est_quoi },
-                  { k: lang === "fr" ? "2. EST-CE BON ?" : "2. IS IT GOOD?", v: matrix.est_ce_bon },
-                  { k: lang === "fr" ? "3. COMBIEN ÇA COÛTE ?" : "3. HOW MUCH DOES IT COST?", v: matrix.combien_ca_coute },
-                  { k: lang === "fr" ? "4. EST-CE DISPONIBLE ?" : "4. IS IT AVAILABLE?", v: matrix.est_ce_disponible },
-                  { k: lang === "fr" ? "5. QU'EN PENSENT LES GENS ?" : "5. WHAT ARE PEOPLE SAYING?", v: matrix.qu_en_pensent_les_gens },
-                  { k: lang === "fr" ? "6. QUELLES SONT LES ALTERNATIVES ?" : "6. WHAT ARE THE ALTERNATIVES?", v: matrix.quelles_sont_les_alternatives },
-                  { k: lang === "fr" ? "7. QUELS SONT LES RISQUES ?" : "7. WHAT ARE THE RISQUES?", v: matrix.quels_sont_les_risques },
-                ].map((item, i) => (
-                  <div key={i} className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 p-5 rounded-2xl shadow-sm hover:border-zinc-300 dark:hover:border-zinc-800 transition-all">
-                    <h4 className="text-xs font-mono font-black text-cyan-600 dark:text-cyan-400 tracking-wider mb-2 uppercase">{item.k}</h4>
-                    <p className="text-zinc-700 dark:text-zinc-300 text-[13.5px] leading-relaxed whitespace-pre-wrap">{item.v}</p>
-                  </div>
-                ))}
+              {/* BLOC CONVERSATIONNEL D'ÉCHO (RÉPONSE RESPIRANTE & DIRECTE) */}
+              <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-900 p-8 rounded-2xl shadow-sm leading-relaxed text-[15px] space-y-4 font-sans text-zinc-800 dark:text-zinc-200 whitespace-pre-line">
+                <div className="flex items-center gap-3 mb-4 font-mono text-xs text-cyan-600 dark:text-cyan-400 font-bold uppercase tracking-wider">
+                  <img src="/echo.png" alt="Echo" className="w-8 h-8 object-contain echo-speaking" />
+                  <span>Echo's Analysis</span>
+                </div>
+                {echoResponse}
+              </div>
 
-                <div className="md:col-span-2 bg-gradient-to-r from-cyan-500/5 to-zinc-50 dark:from-cyan-950/20 dark:to-zinc-950 border-2 border-cyan-500/20 p-6 rounded-2xl shadow-md">
-                  <h4 className="text-sm font-mono font-black text-cyan-600 dark:text-cyan-400 tracking-widest mb-3 uppercase">
-                    {lang === "fr" ? "8. QUELLE OPTION EST RECOMMANDÉE ?" : "8. WHICH OPTION IS RECOMMENDED?"}
-                  </h4>
-                  <p className="text-black dark:text-white text-[14px] leading-relaxed whitespace-pre-wrap">{matrix.quelle_option_est_recommandee}</p>
+              {/* ACCORDÉON / DEPLIANT POUR L'ANALYSE DÉTAILLÉE DE LA MATRICE (8 PILIERS) */}
+              {matrix && (
+                <div className="border border-zinc-200 dark:border-zinc-900 rounded-2xl overflow-hidden shadow-sm">
+                  <button 
+                    onClick={() => setIsMatrixExpanded(!isMatrixExpanded)}
+                    className="w-full py-4 px-6 bg-zinc-50 dark:bg-zinc-950 flex justify-between items-center hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-all font-mono text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 font-black"
+                  >
+                    <span>🔬 {lang === "fr" ? "Consulter la Matrice Horizon (8 Piliers)" : "View Horizon Matrix (8 Pillars)"}</span>
+                    <span className="text-sm">{isMatrixExpanded ? "▲" : "▼"}</span>
+                  </button>
+
+                  {isMatrixExpanded && (
+                    <div className="p-6 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-900 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-200">
+                      {[
+                        { k: lang === "fr" ? "1. C'est Quoi ?" : "1. What is it?", v: matrix.c_est_quoi },
+                        { k: lang === "fr" ? "2. Est-ce Bon ?" : "2. Is it good?", v: matrix.est_ce_bon },
+                        { k: lang === "fr" ? "3. Combien ça coûte ?" : "3. Cost breakdown", v: matrix.combien_ca_coute },
+                        { k: lang === "fr" ? "4. Heures d'ouverture / Disponibilité" : "4. Hours & Availability", v: matrix.est_ce_disponible },
+                        { k: lang === "fr" ? "5. Retour Terrain (Reddit)" : "5. Field feedback (Reddit)", v: matrix.qu_en_pensent_les_gens },
+                        { k: lang === "fr" ? "6. Alternatives concrètes" : "6. Direct alternatives", v: matrix.quelles_sont_les_alternatives },
+                        { k: lang === "fr" ? "7. Risques & Contraintes" : "7. Risks & Limitations", v: matrix.quels_sont_les_risques },
+                        { k: lang === "fr" ? "8. Recommandation tranchée" : "8. Final recommendation", v: matrix.quelle_option_est_recommandee },
+                      ].map((item, i) => (
+                        <div key={i} className={`p-4 rounded-xl border border-zinc-100 dark:border-zinc-900 ${i === 7 ? "md:col-span-2 bg-cyan-500/5 border-cyan-500/20" : "bg-zinc-50/50 dark:bg-zinc-950"}`}>
+                          <h5 className="text-[10px] font-mono font-bold text-cyan-600 dark:text-cyan-400 uppercase mb-1">{item.k}</h5>
+                          <p className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">{item.v}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
-          ) : (
-            echoState === "idle" && (
-              <div className="h-full flex flex-col items-center justify-center text-zinc-400 dark:text-zinc-700 font-mono text-xs uppercase tracking-widest text-center max-w-md gap-2">
-                <div>📡 {lang === "fr" ? "Sillage Horizon inactif" : "Horizon wake inactive"}</div>
-                <div className="text-[10px] text-zinc-500 dark:text-zinc-600 uppercase tracking-normal">
-                  {lang === "fr" ? "Posez une question pour démarrer la boucle d'extraction opérationnelle." : "Ask a question to start the operational extraction loop."}
-                </div>
-              </div>
-            )
+          )}
+
+          {/* ÉCRAN DE SILLAGE INACTIF (AVATAR ÉCHO VIVANT) */}
+          {echoState === "idle" && !echoResponse && (
+            <div className="h-full flex flex-col items-center justify-center text-center py-16">
+              <img 
+                src="/echo.png" 
+                alt="Echo Idle" 
+                className="w-24 h-24 object-contain echo-idle mb-6 select-none"
+              />
+              <h4 className="font-mono text-xs uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold mb-1">
+                ECHO IDLE
+              </h4>
+              <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase max-w-xs">
+                {lang === "fr" 
+                  ? "Entrez une intention pour démarrer la boucle d'exploration." 
+                  : "Enter a query to launch the exploration loop."
+                }
+              </p>
+            </div>
           )}
         </div>
       </section>
