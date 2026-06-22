@@ -673,6 +673,7 @@ export default function App() {
             <Link href="/vitality" className="block hover:text-cyan-500">{T.vitality}</Link>
             <Link href="/services" className="block hover:text-cyan-500">{T.services}</Link>
             <Link href="/account"  className="block hover:text-cyan-500">{T.account}</Link>
+            <Link href="/horizonweb" className="block hover:text-cyan-500">📡 HorizonWeb</Link>
             <hr className="border-zinc-200 dark:border-zinc-800"/>
             <Link href="/history"  className="block hover:text-amber-500">{T.history}</Link>
           </div>

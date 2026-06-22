@@ -622,6 +622,7 @@ export default function CalendarPage() {
               <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang === "fr" ? "Vitalité" : "Vitality"}</Link>
               <Link href="/services" className="block hover:text-cyan-500">💎 Services</Link>
               <Link href="/account"  className="block hover:text-cyan-500">👤 {lang === "fr" ? "Compte" : "Account"}</Link>
+              <Link href="/horizonweb" className="block hover:text-cyan-500">📡 HorizonWeb</Link>
               <hr className="border-zinc-200 dark:border-zinc-800 my-4" />
               <Link href="/history"  className="block hover:text-amber-500">⭐ {lang === "fr" ? "Historique" : "History"}</Link>
             </div>
