@@ -349,9 +349,9 @@ export default function HorizonWebPage() {
           
           {echoState === "thinking" && (
             <div className="h-64 flex flex-col items-center justify-center gap-4 font-mono">
-              <img 
-                src="/echo.png" 
-                alt="Echo Thinking" 
+              <img
+                src="/Echo.png"
+                alt="Echo Thinking"
                 className="w-20 h-20 object-contain echo-thinking"
               />
               <p className="text-cyan-500 dark:text-cyan-400 text-xs uppercase tracking-widest animate-pulse">
@@ -380,10 +380,10 @@ export default function HorizonWebPage() {
                   {isAvatarBroken ? (
                     <EchoSvgMascot className="w-8 h-8" />
                   ) : (
-                    <img 
-                      src="/echo.png" 
-                      alt="Echo" 
-                      className="w-8 h-8 object-contain echo-speaking" 
+                    <img
+                      src="/Echo.png"
+                      alt="Echo"
+                      className="w-8 h-8 object-contain echo-speaking"
                       onError={() => setIsAvatarBroken(true)}
                     />
                   )}
@@ -433,9 +433,9 @@ export default function HorizonWebPage() {
               {isAvatarBroken ? (
                 <EchoSvgMascot className="w-24 h-24 mb-6" />
               ) : (
-                <img 
-                  src="/echo.png" 
-                  alt="Echo Idle" 
+                <img
+                  src="/Echo.png"
+                  alt="Echo Idle"
                   className="w-24 h-24 object-contain echo-idle mb-6 select-none"
                   onError={() => setIsAvatarBroken(true)}
                 />

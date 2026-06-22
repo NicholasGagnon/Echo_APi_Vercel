@@ -19,12 +19,14 @@ interface QuotaResult {
 }
 
 // ── BARÈME ────────────────────────────────────────────────────────────────────
-const LIMITS: Record<UserTier, Record<"prompts"|"buttons"|"calendar"|"vitality", number>> = {
-  connected_free: { prompts: 50,    buttons: 8,     calendar: 4,     vitality: 10    },
-  basic:          { prompts: 2000,  buttons: 32,    calendar: 12,    vitality: 40    },
-  premium:        { prompts: 99999, buttons: 80,    calendar: 40,    vitality: 100   },
-  ultra:          { prompts: 99999, buttons: 240,   calendar: 120,   vitality: 300   },
-  founder:        { prompts: 99999, buttons: 99999, calendar: 99999, vitality: 99999 },
+// /chat /home /vitality /history = JAMAIS bloqués (illimité)
+// Chaque quota est totalement indépendant
+const LIMITS: Record<UserTier, Record<"horizon" | "buttons" | "calendar" | "vitality_actions", number>> = {
+  connected_free: { horizon: 10,    buttons: 8,     calendar: 4,     vitality_actions: 10    },
+  basic:          { horizon: 40,    buttons: 32,    calendar: 12,    vitality_actions: 40    },
+  premium:        { horizon: 100,   buttons: 80,    calendar: 40,    vitality_actions: 100   },
+  ultra:          { horizon: 300,   buttons: 240,   calendar: 120,   vitality_actions: 300   },
+  founder:        { horizon: 99999, buttons: 99999, calendar: 99999, vitality_actions: 99999 },
 };
 
 const LOCAL_KEY   = (uid?: string | null) => uid ? `echo-usage-tracker-${uid}` : "echo-usage-tracker";
@@ -47,126 +49,75 @@ function setTracker(tracker: object, uid?: string | null) {
   localStorage.setItem(LOCAL_KEY(uid), JSON.stringify(tracker));
 }
 
-// ── SYNC SUPABASE (non-bloquant — double écriture user_quotas + global_api_quotas) ──
+// ── SYNC SUPABASE (non-bloquant) ──────────────────────────────────────────────
 async function syncToSupabase(userId: string, tracker: any) {
   try {
     const { supabase } = await import("../app/lib/supabase");
 
-    // 1. user_quotas — table dédiée, structure propre
     const { error } = await supabase.from("user_quotas").upsert({
-      user_id:           userId,
-      cycle_start_time:  new Date(tracker.cycleStartTime).toISOString(),
-      prompts_count:     tracker.prompts?.count        ?? 0,
-      prompts_available: tracker.prompts?.availableCount ?? 50,
-      prompts_last_used: tracker.prompts?.lastUsedTime
-        ? new Date(tracker.prompts.lastUsedTime).toISOString()
-        : new Date().toISOString(),
-      buttons_count:  tracker.buttons?.count  ?? 0,
-      calendar_count: tracker.calendar?.count ?? 0,
-      vitality_count: tracker.vitality?.count ?? 0,
+      user_id:                userId,
+      cycle_start_time:       new Date(tracker.cycleStartTime).toISOString(),
+      horizon_count:          tracker.horizon?.count          ?? 0,
+      buttons_count:          tracker.buttons?.count          ?? 0,
+      calendar_count:         tracker.calendar?.count         ?? 0,
+      vitality_actions_count: tracker.vitality_actions?.count ?? 0,
     }, { onConflict: "user_id" });
-    if (error) throw error;
 
-    // 2. global_api_quotas — fallback legacy pour compatibilité
-    const total = (tracker.prompts?.count  ?? 0)
-                + (tracker.buttons?.count  ?? 0)
-                + (tracker.calendar?.count ?? 0)
-                + (tracker.vitality?.count ?? 0);
-    await supabase.from("global_api_quotas").upsert({
-      id:              userId,
-      request_count:   total,
-      last_reset_date: new Date().toISOString().split("T")[0],
-      updated_at:      new Date().toISOString(),
-    }, { onConflict: "id" });
+    if (error) throw error;
 
   } catch (err) {
     console.warn("[Quota] Sync Supabase non-bloquant:", err);
-    triggerQuotaNotification("warning", "Échec de synchronisation cloud. Quotas sauvegardés localement.");
   }
 }
 
 // ── CHARGEMENT AU LOGIN ───────────────────────────────────────────────────────
-// Priorité : user_quotas > global_api_quotas > localStorage existant
 export async function loadQuotasFromSupabase(userId: string): Promise<void> {
   try {
     const { supabase } = await import("../app/lib/supabase");
     const now = Date.now();
 
-    // 1. Essayer user_quotas en premier
-    const { data: uq, error: uqErr } = await supabase
+    const { data: uq, error } = await supabase
       .from("user_quotas")
       .select("*")
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (uqErr) throw uqErr;
+    if (error) throw error;
 
     if (uq) {
       const cycleStart = new Date(uq.cycle_start_time).getTime();
       const expired    = now - cycleStart > THIRTY_DAYS;
 
       const tracker = expired
-        ? { cycleStartTime: now, prompts: { count: 0, availableCount: 50, lastUsedTime: now }, buttons: { count: 0 }, calendar: { count: 0 }, vitality: { count: 0 } }
+        ? {
+            cycleStartTime:  now,
+            horizon:         { count: 0 },
+            buttons:         { count: 0 },
+            calendar:        { count: 0 },
+            vitality_actions: { count: 0 },
+          }
         : {
-            cycleStartTime: cycleStart,
-            prompts:  { count: uq.prompts_count ?? 0, availableCount: uq.prompts_available ?? 50, lastUsedTime: new Date(uq.prompts_last_used).getTime() },
-            buttons:  { count: uq.buttons_count  ?? 0 },
-            calendar: { count: uq.calendar_count ?? 0 },
-            vitality: { count: uq.vitality_count ?? 0 },
+            cycleStartTime:  cycleStart,
+            horizon:         { count: uq.horizon_count          ?? 0 },
+            buttons:         { count: uq.buttons_count          ?? 0 },
+            calendar:        { count: uq.calendar_count         ?? 0 },
+            vitality_actions: { count: uq.vitality_actions_count ?? 0 },
           };
 
       setTracker(tracker, userId);
-      console.log("[Quota] ✅ Chargé depuis user_quotas");
-      return;
-    }
-
-    // 2. Fallback global_api_quotas
-    const { data: gaq } = await supabase
-      .from("global_api_quotas")
-      .select("request_count, last_reset_date")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (gaq) {
-      const cycleStart = new Date(gaq.last_reset_date).getTime();
-      if (now - cycleStart <= THIRTY_DAYS) {
-        const tracker = getTracker(userId);
-        if (!tracker.cycleStartTime) { tracker.cycleStartTime = cycleStart; setTracker(tracker, userId); }
-      }
-      console.log("[Quota] ✅ Fallback global_api_quotas");
+      console.log("[Quota] Charge depuis user_quotas");
     }
 
   } catch (err) {
-    console.warn("[Quota] Chargement Supabase échoué, fallback localStorage:", err);
-    triggerQuotaNotification("warning", "Échec de connexion au serveur Echo. Reprise avec vos quotas locaux.");
+    console.warn("[Quota] Chargement Supabase echoue, fallback localStorage:", err);
+    triggerQuotaNotification("warning", "Echec de connexion au serveur Echo. Reprise avec vos quotas locaux.");
   }
 }
 
-// ── RECHARGE TEMPORELLE (connected_free uniquement) ───────────────────────────
-const calculateDynamicFreeQuota = (tracker: any, now: number): { currentAvailable: number; maxAllowed: number } => {
-  const INITIAL_POOL = 50;
-  const MAX_LIMIT    = 500;
-
-  if (!tracker.prompts || tracker.prompts.availableCount === undefined) {
-    return { currentAvailable: INITIAL_POOL, maxAllowed: MAX_LIMIT };
-  }
-
-  const elapsedHours = (now - (tracker.prompts.lastUsedTime || now)) / (1000 * 60 * 60);
-  let regained = 0;
-
-  if      (elapsedHours >= 4) regained = 30 + 30 + Math.floor(elapsedHours - 3) * 30;
-  else if (elapsedHours >= 3) regained = 60;
-  else if (elapsedHours >= 2) regained = 30;
-
-  return {
-    currentAvailable: Math.min(MAX_LIMIT, (tracker.prompts.availableCount ?? INITIAL_POOL) + regained),
-    maxAllowed: MAX_LIMIT,
-  };
-};
-
 // ── CHECK QUOTA ───────────────────────────────────────────────────────────────
+// actionType "prompts" n'existe plus — /chat /home /vitality /history sont illimites
 export const checkQuota = (
-  actionType: "prompts" | "buttons" | "calendar" | "vitality",
+  actionType: "horizon" | "buttons" | "calendar" | "vitality_actions",
   tier: UserTier,
   consume = true,
   userId?: string | null
@@ -182,38 +133,29 @@ export const checkQuota = (
   if (!tracker.cycleStartTime) {
     tracker.cycleStartTime = now;
   } else if (now - tracker.cycleStartTime > THIRTY_DAYS) {
-    console.log("🔄 [QUOTA RESET] Cycle 30 jours expiré.");
-    tracker = { cycleStartTime: now, prompts: { count: 0, availableCount: 50, lastUsedTime: now }, buttons: { count: 0 }, calendar: { count: 0 }, vitality: { count: 0 } };
+    console.log("[QUOTA RESET] Cycle 30 jours expire.");
+    tracker = {
+      cycleStartTime:   now,
+      horizon:          { count: 0 },
+      buttons:          { count: 0 },
+      calendar:         { count: 0 },
+      vitality_actions: { count: 0 },
+    };
   }
 
   if (!tracker[actionType]) tracker[actionType] = { count: 0 };
 
-  // ── CAS SPÉCIAL : Recharge dynamique pour connected_free / prompts ──────────
-  if (tier === "connected_free" && actionType === "prompts") {
-    const { currentAvailable, maxAllowed } = calculateDynamicFreeQuota(tracker, now);
-
-    if (currentAvailable <= 0) {
-      const errorMsg = "Énergie Echo épuisée. Attendez qu'un sillage de recharge se forme (+30 d'ici peu). ⚡";
-      triggerQuotaNotification("error", errorMsg);
-      return { allowed: false, remaining: 0, current: 0, max: maxAllowed, error: errorMsg };
-    }
-
-    if (consume) {
-      tracker.prompts = { availableCount: currentAvailable - 1, lastUsedTime: now, count: (tracker.prompts?.count ?? 0) + 1 };
-      setTracker(tracker, userId);
-      if (userId) syncToSupabase(userId, tracker);
-    }
-
-    const finalAvailable = consume ? currentAvailable - 1 : currentAvailable;
-    return { allowed: true, remaining: finalAvailable, current: maxAllowed - finalAvailable, max: maxAllowed };
-  }
-
-  // ── LOGIQUE STANDARD (tous les autres cas) ────────────────────────────────
   const maxAllowed   = LIMITS[tier]?.[actionType] ?? LIMITS.connected_free[actionType];
   const currentCount = tracker[actionType].count ?? 0;
 
   if (currentCount >= maxAllowed) {
-    const errorMsg = `Limite atteinte pour '${actionType}' (${currentCount}/${maxAllowed}).`;
+    const messages: Record<string, string> = {
+      horizon:          "Limite de recherches HorizonWeb atteinte pour ce cycle.",
+      buttons:          "Limite de prompts comportementaux atteinte pour ce cycle.",
+      calendar:         "Limite d'actions calendrier atteinte pour ce cycle.",
+      vitality_actions: "Limite d'actions Vitalite atteinte pour ce cycle.",
+    };
+    const errorMsg = messages[actionType] ?? "Limite atteinte pour ce cycle.";
     triggerQuotaNotification("error", errorMsg);
     return { allowed: false, remaining: 0, current: currentCount, max: maxAllowed, error: errorMsg };
   }

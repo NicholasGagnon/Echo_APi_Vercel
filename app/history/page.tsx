@@ -410,7 +410,7 @@ export default function HistoryPage() {
                     <div key={index} className="whitespace-pre-wrap">
                       {isEcho ? (
                         <div className="flex items-start gap-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 shadow-sm">
-                          <img src="/echo.png" alt="Echo Avatar" className="w-8 h-8 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-700 mt-0.5" />
+                          <img src="/Echo.png" alt="Echo Avatar" className="w-8 h-8 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-700 mt-0.5" />
                           <div className="flex-1 min-w-0 break-words text-zinc-800 dark:text-zinc-100 text-[14px] font-medium leading-relaxed">
                             <span className="text-cyan-600 dark:text-cyan-400 font-extrabold block mb-1 text-[10px] uppercase tracking-wider">Echo:</span>
                             {msg.replace(/^Echo\s*:\s*/i,"")}
