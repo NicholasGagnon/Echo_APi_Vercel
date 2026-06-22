@@ -173,48 +173,20 @@ export default function Home() {
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
   // ── SAVE TO SUPABASE ──────────────────────────────────────────────────────
-  const saveToSupabase = async (
-  uid: string,
-  convId: string | null,
-  raws: string[]
-): Promise<string | null> => {
-
-  // Déclencheur mémoire futur
-  if (raws.length > 3) {
-    console.log("[MEMORY] Résumé requis :", raws.length, "messages");
-  }
-
-  if (convId) {
-    await supabase
-      .from("echo_conversations")
-      .update({
-        messages: raws,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", convId)
-      .eq("user_id", uid);
-
-    return convId;
-  } else {
-    const { data, error } = await supabase
-      .from("echo_conversations")
-      .insert({
-        user_id: uid,
-        source: "chat",
-        messages: raws,
-        updated_at: new Date().toISOString()
-      })
-      .select("id")
-      .single();
-
-    if (error) {
-      console.error("[Home] insert conv:", error.message);
-      return null;
+  const saveToSupabase = async (uid: string, convId: string|null, raws: string[]): Promise<string|null> => {
+    if (convId) {
+      await supabase.from("echo_conversations")
+        .update({ messages: raws, updated_at: new Date().toISOString() })
+        .eq("id", convId).eq("user_id", uid);
+      return convId;
+    } else {
+      const { data, error } = await supabase.from("echo_conversations")
+        .insert({ user_id: uid, source: "chat", messages: raws, updated_at: new Date().toISOString() })
+        .select("id").single();
+      if (error) { console.error("[Home] insert conv:", error.message); return null; }
+      return data?.id ?? null;
     }
-
-    return data?.id ?? null;
-  }
-};
+  };
 
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -660,59 +632,106 @@ export default function Home() {
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center">
                   {!tutorialStep && (
-                    <div className="flex items-center justify-center gap-4 xl:gap-10 w-full px-4">
+                    <div className="flex items-center justify-center gap-3 xl:gap-6 w-full px-4">
 
-                      {/* GAUCHE : CALENDAR + BUDGET */}
-                      <div className="flex flex-col gap-4 shrink-0">
-                        {([
-                          { href:"/calendar", icon:"📅", labelFr:"CALENDRIER", labelEn:"CALENDAR", r:"6,182,212" },
-                          { href:"/vitality", icon:"💰", labelFr:"BUDGET",      labelEn:"BUDGET",   r:"6,182,212" },
-                        ] as const).map(btn => (
-                          <Link key={btn.href+btn.labelFr} href={btn.href}
-                            className="group relative w-28 h-28 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                            style={{background:`linear-gradient(135deg,rgba(${btn.r},0.08) 0%,rgba(${btn.r},0.02) 100%)`,borderColor:`rgba(${btn.r},0.3)`,boxShadow:`0 0 22px rgba(${btn.r},0.08),inset 0 1px 0 rgba(${btn.r},0.15)`}}>
-                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl"
-                              style={{background:`linear-gradient(135deg,rgba(${btn.r},0.18) 0%,rgba(${btn.r},0.06) 100%)`,boxShadow:`inset 0 0 24px rgba(${btn.r},0.2)`}}/>
-                            <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                              style={{background:`linear-gradient(90deg,transparent,rgba(${btn.r},0.9),transparent)`}}/>
-                            <div className="absolute top-2 left-2 w-2 h-2 border-t border-l" style={{borderColor:`rgba(${btn.r},0.5)`}}/>
-                            <div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r" style={{borderColor:`rgba(${btn.r},0.5)`}}/>
-                            <span className="relative z-10 text-3xl xl:text-4xl" style={{filter:`drop-shadow(0 0 10px rgba(${btn.r},0.7))`}}>{btn.icon}</span>
-                            <span className="relative z-10 text-[9px] xl:text-[11px] font-mono font-black tracking-widest uppercase transition-colors" style={{color:`rgba(${btn.r},0.9)`}}>
-                              {lang === "fr" ? btn.labelFr : btn.labelEn}
-                            </span>
-                          </Link>
-                        ))}
+                      {/* GAUCHE : CALENDRIER + BUDGET */}
+                      <div className="flex flex-col gap-3 shrink-0">
+                        {/* CALENDRIER */}
+                        <Link href="/calendar" className="group relative w-32 h-32 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                          style={{background:"linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(37,99,235,0.05) 100%)",borderColor:"rgba(59,130,246,0.35)",boxShadow:"0 0 24px rgba(59,130,246,0.1),inset 0 1px 0 rgba(59,130,246,0.2)"}}>
+                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(59,130,246,0.2) 0%,rgba(59,130,246,0.08) 100%)",boxShadow:"inset 0 0 28px rgba(59,130,246,0.25)"}}/>
+                          <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(59,130,246,1),transparent)"}}/>
+                          <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-blue-400/50"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-blue-400/50"/>
+                          <svg className="relative z-10 w-12 h-12 xl:w-14 xl:h-14" viewBox="0 0 64 64" fill="none">
+                            <rect x="6" y="10" width="52" height="48" rx="8" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.6)" strokeWidth="2"/>
+                            <rect x="6" y="10" width="52" height="16" rx="8" fill="rgba(59,130,246,0.4)"/>
+                            <rect x="6" y="18" width="52" height="8" fill="rgba(59,130,246,0.4)"/>
+                            <circle cx="20" cy="8" r="4" fill="rgba(59,130,246,0.8)"/>
+                            <circle cx="44" cy="8" r="4" fill="rgba(59,130,246,0.8)"/>
+                            <rect x="14" y="34" width="8" height="8" rx="2" fill="rgba(59,130,246,0.7)"/>
+                            <rect x="28" y="34" width="8" height="8" rx="2" fill="rgba(59,130,246,0.5)"/>
+                            <rect x="42" y="34" width="8" height="8" rx="2" fill="rgba(59,130,246,0.5)"/>
+                            <rect x="14" y="46" width="8" height="6" rx="2" fill="rgba(59,130,246,0.4)"/>
+                            <rect x="28" y="46" width="8" height="6" rx="2" fill="rgba(59,130,246,0.4)"/>
+                          </svg>
+                          <span className="relative z-10 text-[10px] xl:text-[11px] font-mono font-black tracking-widest uppercase text-blue-400 group-hover:text-blue-300 transition-colors">
+                            {lang==="fr"?"CALENDRIER":"CALENDAR"}
+                          </span>
+                        </Link>
+
+                        {/* BUDGET */}
+                        <Link href="/vitality" className="group relative w-32 h-32 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                          style={{background:"linear-gradient(135deg,rgba(234,179,8,0.12) 0%,rgba(202,138,4,0.05) 100%)",borderColor:"rgba(234,179,8,0.35)",boxShadow:"0 0 24px rgba(234,179,8,0.1),inset 0 1px 0 rgba(234,179,8,0.2)"}}>
+                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(234,179,8,0.2) 0%,rgba(234,179,8,0.08) 100%)",boxShadow:"inset 0 0 28px rgba(234,179,8,0.25)"}}/>
+                          <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(234,179,8,1),transparent)"}}/>
+                          <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-yellow-400/50"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-yellow-400/50"/>
+                          <svg className="relative z-10 w-12 h-12 xl:w-14 xl:h-14" viewBox="0 0 64 64" fill="none">
+                            <circle cx="32" cy="36" r="22" fill="rgba(234,179,8,0.15)" stroke="rgba(234,179,8,0.6)" strokeWidth="2"/>
+                            <circle cx="32" cy="36" r="16" fill="rgba(234,179,8,0.25)"/>
+                            <text x="32" y="42" textAnchor="middle" fontSize="20" fontWeight="bold" fill="rgba(234,179,8,0.9)">$</text>
+                            <rect x="24" y="8" width="16" height="12" rx="4" fill="rgba(234,179,8,0.5)" stroke="rgba(234,179,8,0.7)" strokeWidth="1.5"/>
+                            <path d="M28 8 Q32 4 36 8" stroke="rgba(234,179,8,0.7)" strokeWidth="1.5" fill="none"/>
+                          </svg>
+                          <span className="relative z-10 text-[10px] xl:text-[11px] font-mono font-black tracking-widest uppercase text-yellow-400 group-hover:text-yellow-300 transition-colors">
+                            BUDGET
+                          </span>
+                        </Link>
                       </div>
 
                       {/* CENTRE : ECHO */}
                       <div className={`relative shrink-0 flex flex-col items-center ${echoState==="idle"?"echo-idle":echoState==="thinking"?"echo-thinking":"echo-speaking"}`}>
-                        <img src="/Echo.png" alt="Echo Core"
-                          className="w-36 h-36 xl:w-48 xl:h-48 object-cover rounded-full border border-zinc-200 dark:border-zinc-800 shadow-xl"/>
+                        <div className="relative w-28 h-28 xl:w-32 xl:h-32 flex items-center justify-center">
+                          {/* Anneau glow */}
+                          <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spin 4s linear infinite"}}/>
+                          <div className="absolute inset-1.5 rounded-full bg-black/80"/>
+                          <img src="/Echo.png" alt="Echo Core" className="relative z-10 w-24 h-24 xl:w-28 xl:h-28 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
+                        </div>
                         <span className="text-zinc-500 dark:text-zinc-600 text-[9px] block mt-2 tracking-widest uppercase font-mono">{echoState}</span>
+                        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
                       </div>
 
-                      {/* DROITE : CALORIES + BOOK */}
-                      <div className="flex flex-col gap-4 shrink-0">
-                        {([
-                          { href:"/vitality", icon:"🍏", labelFr:"CALORIES", labelEn:"CALORIES", r:"16,185,129" },
-                          { href:"/books",    icon:"📚", labelFr:"LIVRE",    labelEn:"BOOK",     r:"139,92,246" },
-                        ] as const).map(btn => (
-                          <Link key={btn.href+btn.labelFr} href={btn.href}
-                            className="group relative w-28 h-28 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                            style={{background:`linear-gradient(135deg,rgba(${btn.r},0.08) 0%,rgba(${btn.r},0.02) 100%)`,borderColor:`rgba(${btn.r},0.3)`,boxShadow:`0 0 22px rgba(${btn.r},0.08),inset 0 1px 0 rgba(${btn.r},0.15)`}}>
-                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl"
-                              style={{background:`linear-gradient(135deg,rgba(${btn.r},0.18) 0%,rgba(${btn.r},0.06) 100%)`,boxShadow:`inset 0 0 24px rgba(${btn.r},0.2)`}}/>
-                            <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                              style={{background:`linear-gradient(90deg,transparent,rgba(${btn.r},0.9),transparent)`}}/>
-                            <div className="absolute top-2 left-2 w-2 h-2 border-t border-l" style={{borderColor:`rgba(${btn.r},0.5)`}}/>
-                            <div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r" style={{borderColor:`rgba(${btn.r},0.5)`}}/>
-                            <span className="relative z-10 text-3xl xl:text-4xl" style={{filter:`drop-shadow(0 0 10px rgba(${btn.r},0.7))`}}>{btn.icon}</span>
-                            <span className="relative z-10 text-[9px] xl:text-[11px] font-mono font-black tracking-widest uppercase transition-colors" style={{color:`rgba(${btn.r},0.9)`}}>
-                              {lang === "fr" ? btn.labelFr : btn.labelEn}
-                            </span>
-                          </Link>
-                        ))}
+                      {/* DROITE : CALORIES + LIVRE */}
+                      <div className="flex flex-col gap-3 shrink-0">
+                        {/* CALORIES */}
+                        <Link href="/vitality" className="group relative w-32 h-32 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                          style={{background:"linear-gradient(135deg,rgba(34,197,94,0.12) 0%,rgba(22,163,74,0.05) 100%)",borderColor:"rgba(34,197,94,0.35)",boxShadow:"0 0 24px rgba(34,197,94,0.1),inset 0 1px 0 rgba(34,197,94,0.2)"}}>
+                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(34,197,94,0.2) 0%,rgba(34,197,94,0.08) 100%)",boxShadow:"inset 0 0 28px rgba(34,197,94,0.25)"}}/>
+                          <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(34,197,94,1),transparent)"}}/>
+                          <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-green-400/50"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-green-400/50"/>
+                          <svg className="relative z-10 w-12 h-12 xl:w-14 xl:h-14" viewBox="0 0 64 64" fill="none">
+                            <ellipse cx="32" cy="38" rx="18" ry="16" fill="rgba(34,197,94,0.2)" stroke="rgba(34,197,94,0.6)" strokeWidth="2"/>
+                            <ellipse cx="32" cy="38" rx="13" ry="11" fill="rgba(34,197,94,0.35)"/>
+                            <path d="M32 22 Q36 14 44 12 Q38 18 32 22Z" fill="rgba(34,197,94,0.8)"/>
+                            <path d="M32 22 Q28 14 20 12 Q26 18 32 22Z" fill="rgba(34,197,94,0.6)"/>
+                            <path d="M32 22 L32 30" stroke="rgba(34,197,94,0.7)" strokeWidth="2"/>
+                          </svg>
+                          <span className="relative z-10 text-[10px] xl:text-[11px] font-mono font-black tracking-widest uppercase text-green-400 group-hover:text-green-300 transition-colors">
+                            CALORIES
+                          </span>
+                        </Link>
+
+                        {/* LIVRE */}
+                        <Link href="/books" className="group relative w-32 h-32 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                          style={{background:"linear-gradient(135deg,rgba(139,92,246,0.12) 0%,rgba(109,40,217,0.05) 100%)",borderColor:"rgba(139,92,246,0.35)",boxShadow:"0 0 24px rgba(139,92,246,0.1),inset 0 1px 0 rgba(139,92,246,0.2)"}}>
+                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(139,92,246,0.2) 0%,rgba(139,92,246,0.08) 100%)",boxShadow:"inset 0 0 28px rgba(139,92,246,0.25)"}}/>
+                          <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(139,92,246,1),transparent)"}}/>
+                          <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-violet-400/50"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-violet-400/50"/>
+                          <svg className="relative z-10 w-12 h-12 xl:w-14 xl:h-14" viewBox="0 0 64 64" fill="none">
+                            <rect x="8"  y="12" width="20" height="40" rx="3" fill="rgba(139,92,246,0.5)" stroke="rgba(139,92,246,0.7)" strokeWidth="1.5"/>
+                            <rect x="10" y="14" width="16" height="36" rx="2" fill="rgba(139,92,246,0.2)"/>
+                            <rect x="30" y="10" width="20" height="42" rx="3" fill="rgba(168,85,247,0.5)" stroke="rgba(168,85,247,0.7)" strokeWidth="1.5"/>
+                            <rect x="32" y="12" width="16" height="38" rx="2" fill="rgba(168,85,247,0.2)"/>
+                            <line x1="13" y1="20" x2="23" y2="20" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
+                            <line x1="13" y1="24" x2="23" y2="24" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
+                            <line x1="13" y1="28" x2="20" y2="28" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2"/>
+                            <line x1="33" y1="18" x2="47" y2="18" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
+                            <line x1="33" y1="22" x2="47" y2="22" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
+                            <line x1="33" y1="26" x2="43" y2="26" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2"/>
+                          </svg>
+                          <span className="relative z-10 text-[10px] xl:text-[11px] font-mono font-black tracking-widest uppercase text-violet-400 group-hover:text-violet-300 transition-colors">
+                            {lang==="fr"?"LIVRE":"BOOK"}
+                          </span>
+                        </Link>
                       </div>
 
                     </div>
