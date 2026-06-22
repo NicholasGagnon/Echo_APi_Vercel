@@ -180,7 +180,7 @@ export default function Home() {
 ): Promise<string | null> => {
 
   // Déclencheur mémoire futur
-  if (raws.length > 600) {
+  if (raws.length > 3) {
     console.log("[MEMORY] Résumé requis :", raws.length, "messages");
   }
 
