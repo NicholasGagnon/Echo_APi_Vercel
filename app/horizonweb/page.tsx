@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
-import { UserTier } from "../../../utils/quota";
-import { useApp } from "../../../context/AppContext";
+import { supabase } from "../lib/supabase";
+import { UserTier } from "../../utils/quota";
+import { useApp } from "../../context/AppContext";
 
 type HorizonMatrix = {
   c_est_quoi: string;
