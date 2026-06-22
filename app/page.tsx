@@ -630,11 +630,63 @@ export default function Home() {
             {/* MESSAGES */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 mt-3 px-2">
               {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center">
+                <div className="h-full flex flex-col items-center justify-center">
                   {!tutorialStep && (
-                    <div className={echoState === "idle" ? "echo-idle" : echoState === "thinking" ? "echo-thinking" : "echo-speaking"}>
-                      <img src="/Echo.png" alt="Echo Core" className="w-[350px] h-[350px] object-cover rounded-full border border-zinc-200 dark:border-zinc-900 shadow-lg" />
-                      <span className="text-zinc-400 dark:text-zinc-600 text-[10px] block mt-4 tracking-widest uppercase font-mono">System Hub Status: {echoState}</span>
+                    <div className="flex items-center justify-center gap-4 xl:gap-10 w-full px-4">
+
+                      {/* GAUCHE : CALENDAR + BUDGET */}
+                      <div className="flex flex-col gap-4 shrink-0">
+                        {([
+                          { href:"/calendar", icon:"📅", labelFr:"CALENDRIER", labelEn:"CALENDAR", r:"6,182,212" },
+                          { href:"/vitality", icon:"💰", labelFr:"BUDGET",      labelEn:"BUDGET",   r:"6,182,212" },
+                        ] as const).map(btn => (
+                          <Link key={btn.href+btn.labelFr} href={btn.href}
+                            className="group relative w-28 h-28 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                            style={{background:`linear-gradient(135deg,rgba(${btn.r},0.08) 0%,rgba(${btn.r},0.02) 100%)`,borderColor:`rgba(${btn.r},0.3)`,boxShadow:`0 0 22px rgba(${btn.r},0.08),inset 0 1px 0 rgba(${btn.r},0.15)`}}>
+                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl"
+                              style={{background:`linear-gradient(135deg,rgba(${btn.r},0.18) 0%,rgba(${btn.r},0.06) 100%)`,boxShadow:`inset 0 0 24px rgba(${btn.r},0.2)`}}/>
+                            <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                              style={{background:`linear-gradient(90deg,transparent,rgba(${btn.r},0.9),transparent)`}}/>
+                            <div className="absolute top-2 left-2 w-2 h-2 border-t border-l" style={{borderColor:`rgba(${btn.r},0.5)`}}/>
+                            <div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r" style={{borderColor:`rgba(${btn.r},0.5)`}}/>
+                            <span className="relative z-10 text-3xl xl:text-4xl" style={{filter:`drop-shadow(0 0 10px rgba(${btn.r},0.7))`}}>{btn.icon}</span>
+                            <span className="relative z-10 text-[9px] xl:text-[11px] font-mono font-black tracking-widest uppercase transition-colors" style={{color:`rgba(${btn.r},0.9)`}}>
+                              {lang === "fr" ? btn.labelFr : btn.labelEn}
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+
+                      {/* CENTRE : ECHO */}
+                      <div className={`relative shrink-0 flex flex-col items-center ${echoState==="idle"?"echo-idle":echoState==="thinking"?"echo-thinking":"echo-speaking"}`}>
+                        <img src="/Echo.png" alt="Echo Core"
+                          className="w-36 h-36 xl:w-48 xl:h-48 object-cover rounded-full border border-zinc-200 dark:border-zinc-800 shadow-xl"/>
+                        <span className="text-zinc-500 dark:text-zinc-600 text-[9px] block mt-2 tracking-widest uppercase font-mono">{echoState}</span>
+                      </div>
+
+                      {/* DROITE : CALORIES + BOOK */}
+                      <div className="flex flex-col gap-4 shrink-0">
+                        {([
+                          { href:"/vitality", icon:"🍏", labelFr:"CALORIES", labelEn:"CALORIES", r:"16,185,129" },
+                          { href:"/books",    icon:"📚", labelFr:"LIVRE",    labelEn:"BOOK",     r:"139,92,246" },
+                        ] as const).map(btn => (
+                          <Link key={btn.href+btn.labelFr} href={btn.href}
+                            className="group relative w-28 h-28 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                            style={{background:`linear-gradient(135deg,rgba(${btn.r},0.08) 0%,rgba(${btn.r},0.02) 100%)`,borderColor:`rgba(${btn.r},0.3)`,boxShadow:`0 0 22px rgba(${btn.r},0.08),inset 0 1px 0 rgba(${btn.r},0.15)`}}>
+                            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl"
+                              style={{background:`linear-gradient(135deg,rgba(${btn.r},0.18) 0%,rgba(${btn.r},0.06) 100%)`,boxShadow:`inset 0 0 24px rgba(${btn.r},0.2)`}}/>
+                            <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                              style={{background:`linear-gradient(90deg,transparent,rgba(${btn.r},0.9),transparent)`}}/>
+                            <div className="absolute top-2 left-2 w-2 h-2 border-t border-l" style={{borderColor:`rgba(${btn.r},0.5)`}}/>
+                            <div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r" style={{borderColor:`rgba(${btn.r},0.5)`}}/>
+                            <span className="relative z-10 text-3xl xl:text-4xl" style={{filter:`drop-shadow(0 0 10px rgba(${btn.r},0.7))`}}>{btn.icon}</span>
+                            <span className="relative z-10 text-[9px] xl:text-[11px] font-mono font-black tracking-widest uppercase transition-colors" style={{color:`rgba(${btn.r},0.9)`}}>
+                              {lang === "fr" ? btn.labelFr : btn.labelEn}
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+
                     </div>
                   )}
                 </div>
