@@ -36,7 +36,7 @@ export default function HistoryPage() {
   const [userTier,      setUserTier]      = useState<UserTier>("connected_free");
   const [isPageBlocked, setIsPageBlocked] = useState(true);
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality"|"calendar"|"prompts">("vitality");
+  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar">("vitality_actions");
 
   const [leftWidth, setLeftWidth] = useState(450);
   const isResizing = useRef(false);
@@ -189,13 +189,7 @@ export default function HistoryPage() {
     const textToSubmit = forcedText ?? input;
     if (!textToSubmit.trim() || !user || isPageBlocked) return;
 
-    const quotaStatus = checkQuota("prompts", userTier);
-    if (!quotaStatus.allowed) {
-      setChatMessages(prev => [...prev, lang === "fr"
-        ? "Echo: 🔒 Limite mensuelle atteinte. Passez au plan supérieur."
-        : "Echo: 🔒 Monthly limit reached. Please upgrade."]);
-      setActiveLimitCategory("prompts"); setShowLimitModal(true); return;
-    }
+    
 
     const baseMessages = [...chatMessages, `You: ${textToSubmit}`];
     setChatMessages([...baseMessages, "Echo: ..."]);
@@ -219,10 +213,10 @@ export default function HistoryPage() {
 
       if (data.action) {
         const { type } = data.action;
-        const qCat = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") ? "vitality" : "calendar";
-        const status = checkQuota(qCat, userTier, true);
+        const qCat: "vitality_actions"|"calendar" = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") ? "vitality_actions" : "calendar";
+        const status = checkQuota(qCat, userTier);
         if (!status.allowed) {
-          setChatMessages([...baseMessages, `Echo: ${echoText}\n\n⚠️ [Action bloquée — quota ${qCat}]`]);
+          setChatMessages([...baseMessages, `Echo: ${echoText}\n\n[Action bloquee — quota ${qCat}]`]);
           setActiveLimitCategory(qCat); setShowLimitModal(true); return;
         }
       }
@@ -506,9 +500,7 @@ export default function HistoryPage() {
             <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">🔒</div>
             <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2 capitalize">{activeLimitCategory} Limit</h3>
             <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
-              {activeLimitCategory==="prompts"
-                ?(lang==="fr"?"Votre quota mensuel de messages est épuisé.":"Your monthly message quota has been reached.")
-                :(lang==="fr"?"Limite d'actions automatisées atteinte.":"Automated action limit reached.")}
+              {lang==="fr"?"Limite d'actions automatisees atteinte.":"Automated action limit reached."}
             </p>
             <div className="flex flex-col gap-3">
               <Link href="/services" onClick={()=>setShowLimitModal(false)} className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl font-bold text-sm transition-all text-center text-white">🚀 Upgrade Plan</Link>
