@@ -125,7 +125,7 @@ export default function App() {
   const [isMatrixExpanded, setIsMatrixExpanded] = useState(false);
   const [activeLens, setActiveLens] = useState<"critical" | "expert" | "strategy" | null>(null);
 
-  // État de détection d'erreur de chargement de l'avatar physique echo.png
+  // État de détection de l'image cassée pour l'avatar d'Echo
   const [isAvatarBroken, setIsAvatarBroken] = useState(false);
 
   const t = TRANSLATIONS[lang];
