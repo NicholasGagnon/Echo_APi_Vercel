@@ -21,7 +21,7 @@ export default function VitalityPage() {
   const bottomRef  = useRef<HTMLDivElement>(null);
   const [echoState, setEchoState] = useState("idle");
   const [showLimitModal,      setShowLimitModal]      = useState(false);
-  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality"|"calendar"|"prompts">("vitality");
+  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar">("vitality_actions");
   const [isListening, setIsListening] = useState(false);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageName,   setImageName]   = useState<string | null>(null);
@@ -62,20 +62,20 @@ export default function VitalityPage() {
 
   const dict = {
     fr: {
-      title:"Configuration Métabolique", desc:"Entrez vos données de base ici. Echo analysera vos besoins énergétiques et orchestrera votre stratégie de déficit calorique.",
-      weight:"Poids", height:"Taille", age:"Âge", gender:"Sexe biologique", male:"Homme", female:"Femme",
-      btnApply:"💾 Appliquer et Synchroniser Echo", btnCalc:"⚖️ Calculer mon Déficit",
-      spent:"Dépensé", remaining:"Restant", goal:"Objectif",
-      fluxFin:"📋 FINANCIAL FLOW", regVit:"🍏 VITALITY LOG", ctrlTitle:"🤖 ECHO VITALITY CONTROLLER",
-      noTrans:"Aucune transaction enregistrée.", noMeal:"Aucun repas enregistré.",
+      title:"Configuration Metabolique", desc:"Entrez vos donnees de base ici. Echo analysera vos besoins energetiques et orchestrera votre strategie de deficit calorique.",
+      weight:"Poids", height:"Taille", age:"Age", gender:"Sexe biologique", male:"Homme", female:"Femme",
+      btnApply:"Appliquer et Synchroniser Echo", btnCalc:"Calculer mon Deficit",
+      spent:"Depense", remaining:"Restant", goal:"Objectif",
+      fluxFin:"FINANCIAL FLOW", regVit:"VITALITY LOG", ctrlTitle:"ECHO VITALITY CONTROLLER",
+      noTrans:"Aucune transaction enregistree.", noMeal:"Aucun repas enregistre.",
       placeholder:"Rentre une transaction ou un repas (ex: Pizza 600 kcal)...",
     },
     en: {
       title:"Metabolic Configuration", desc:"Enter your primary body data here. Echo will analyze your energy needs and personalize your calorie target.",
       weight:"Weight", height:"Height", age:"Age", gender:"Biological Sex", male:"Male", female:"Female",
-      btnApply:"💾 Apply and Sync Echo", btnCalc:"⚖️ Calculate My Deficit",
+      btnApply:"Apply and Sync Echo", btnCalc:"Calculate My Deficit",
       spent:"Spent", remaining:"Remaining", goal:"Goal",
-      fluxFin:"📋 FINANCIAL FLOW", regVit:"🍏 VITALITY LOG", ctrlTitle:"🤖 ECHO VITALITY CONTROLLER",
+      fluxFin:"FINANCIAL FLOW", regVit:"VITALITY LOG", ctrlTitle:"ECHO VITALITY CONTROLLER",
       noTrans:"No transactions recorded.", noMeal:"No meals logged.",
       placeholder:"Log a transaction or meal (e.g. Pizza 600 kcal)...",
     },
@@ -90,7 +90,6 @@ export default function VitalityPage() {
   const serializeMsgs   = (msgs: VitalityMessage[]) => msgs.map(m => m.raw);
   const deserializeMsgs = (raws: string[]): VitalityMessage[] => raws.map(r => ({ raw: r }));
 
-  // ── SETTINGS DROPDOWN ─────────────────────────────────────────────────────
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (settingsRef.current && !settingsRef.current.contains(e.target as Node))
@@ -100,7 +99,6 @@ export default function VitalityPage() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
@@ -170,9 +168,8 @@ export default function VitalityPage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // ── PERSISTENCE ───────────────────────────────────────────────────────────
-  useEffect(() => { if (!isLoaded) return; localStorage.setItem(getBudgetGoalKey(userId),      budgetGoal.toString()); },      [budgetGoal, isLoaded, userId]);
-  useEffect(() => { if (!isLoaded) return; localStorage.setItem(getCalorieGoalKey(userId),     calorieGoal.toString()); },     [calorieGoal, isLoaded, userId]);
+  useEffect(() => { if (!isLoaded) return; localStorage.setItem(getBudgetGoalKey(userId), budgetGoal.toString()); }, [budgetGoal, isLoaded, userId]);
+  useEffect(() => { if (!isLoaded) return; localStorage.setItem(getCalorieGoalKey(userId), calorieGoal.toString()); }, [calorieGoal, isLoaded, userId]);
   useEffect(() => { if (!isLoaded) return; localStorage.setItem(getVitalityProfileKey(userId), JSON.stringify({ weight: userWeight, height: userHeight })); }, [userWeight, userHeight, isLoaded, userId]);
   useEffect(() => {
     if (!isLoaded) return;
@@ -180,7 +177,6 @@ export default function VitalityPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [echoMessages, isLoaded, userId]);
 
-  // ── COMPUTED ──────────────────────────────────────────────────────────────
   const totalSpentUSD      = expenses.filter(i => i.currency==="$").reduce((s,i) => s+i.amount, 0);
   const totalSpentEUR      = expenses.filter(i => i.currency==="€").reduce((s,i) => s+i.amount, 0);
   const totalSpentCombined = totalSpentUSD + totalSpentEUR;
@@ -188,7 +184,6 @@ export default function VitalityPage() {
   const totalCaloriesEaten = caloriesList.reduce((s,i) => s+i.calories, 0);
   const calorieRemaining   = Math.max(calorieGoal-totalCaloriesEaten, 0);
 
-  // ── IMAGE ─────────────────────────────────────────────────────────────────
   const compressImage = (base64: string): Promise<string> =>
     new Promise(resolve => {
       const img = document.createElement("img");
@@ -216,7 +211,6 @@ export default function VitalityPage() {
   const persistLocalExpenses = (list: BudgetExpense[]) => localStorage.setItem(LOCAL_EXPENSES, JSON.stringify(list));
   const persistLocalCalories = (list: CalorieLog[])    => localStorage.setItem(LOCAL_CALORIES, JSON.stringify(list));
 
-  // ── CRUD EXPENSES ─────────────────────────────────────────────────────────
   const addExpense = async (exp: Omit<BudgetExpense,"id">) => {
     if (!userId) {
       const e: BudgetExpense = { id: Date.now().toString(), ...exp };
@@ -247,7 +241,6 @@ export default function VitalityPage() {
     setExpenses(prev => prev.map(e => e.id===id ? {...e,...changes} : e));
   };
 
-  // ── CRUD CALORIES ─────────────────────────────────────────────────────────
   const addCalorie = async (cal: Omit<CalorieLog,"id">) => {
     if (!userId) {
       const c: CalorieLog = { id: Date.now().toString(), ...cal };
@@ -265,23 +258,24 @@ export default function VitalityPage() {
     setCaloriesList(prev => { const n=prev.filter(i=>i.id!==id); if(!userId)persistLocalCalories(n); return n; });
   };
 
-  // ── SEND ECHO ─────────────────────────────────────────────────────────────
   const handleSendEcho = async (forcedText?: string) => {
     if (echoState==="thinking") return;
     const textToSubmit = forcedText ?? inputEcho.trim();
     if (!textToSubmit && !imageBase64) return;
 
-    const quotaStatus = checkQuota("prompts", safeTier);
+    const quotaStatus = checkQuota("vitality_actions", safeTier);
     if (!quotaStatus.allowed) {
-      setEchoMessages(prev => [...prev, { raw: lang==="fr"?"Echo: 🔒 Limite mensuelle atteinte.":"Echo: 🔒 Monthly limit reached." }]);
-      setActiveLimitCategory("prompts"); setShowLimitModal(true); return;
+      setEchoMessages(prev => [...prev, { raw: lang==="fr"?"Echo: Limite atteinte.":"Echo: Limit reached." }]);
+      setActiveLimitCategory("vitality_actions");
+      setShowLimitModal(true);
+      return;
     }
 
     const currentImage = imageBase64;
     const currentName  = imageName;
     const userRaw = forcedText ? `You: ${forcedText}` : textToSubmit
       ? `You: ${textToSubmit}`
-      : `You: Analyse cette image${currentName?` (${currentName})`:""}`;
+      : `You: Analyse cette image${currentName ? ` (${currentName})` : ""}`;
 
     const userEntry: VitalityMessage = { raw: userRaw, imageB64: currentImage ?? undefined };
     const baseMessages = [...echoMessages, userEntry];
@@ -297,7 +291,7 @@ export default function VitalityPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: textToSubmit || `Analyse cette image${currentName?` (${currentName})`:""}`,
+          message: textToSubmit || `Analyse cette image${currentName ? ` (${currentName})` : ""}`,
           image: currentImage ?? null,
           history: serializeMsgs(baseMessages),
           userTier: safeTier,
@@ -315,11 +309,15 @@ export default function VitalityPage() {
 
       let isActionBlocked = false;
       if (data.action) {
-        const actionQuota = checkQuota("vitality", safeTier);
-        if (!actionQuota.allowed) { setActiveLimitCategory("vitality"); setShowLimitModal(true); isActionBlocked=true; }
+        const actionQuota = checkQuota("vitality_actions", safeTier);
+        if (!actionQuota.allowed) {
+          setActiveLimitCategory("vitality_actions");
+          setShowLimitModal(true);
+          isActionBlocked = true;
+        }
       }
 
-      const quotaNotice = isActionBlocked ? "\n\n[🔒 Action automatique bloquée par quota Vitalité]" : "";
+      const quotaNotice = isActionBlocked ? "\n\n[Action bloquee par quota Vitalite]" : "";
       setEchoMessages([...baseMessages, { raw: `Echo: ${data.response||""}${quotaNotice}` }]);
 
       if (data.action && !isActionBlocked) {
@@ -360,7 +358,6 @@ export default function VitalityPage() {
     setTimeout(() => setEchoState("idle"), 10000);
   };
 
-  // ── PROFILE MODAL ─────────────────────────────────────────────────────────
   const handleSubmitModalProfile = (e: React.FormEvent) => {
     e.preventDefault();
     let weightInKg = parseFloat(modalWeight);
@@ -376,10 +373,9 @@ export default function VitalityPage() {
     setUserHeight(String(Math.round(heightInCm)));
     setCalorieGoal(tdee); setInputCalorieGoal(String(tdee));
     setShowProfileModal(false);
-    handleSendEcho(`[SYNCHRONISATION PROFIL] : Poids: ${Math.round(weightInKg)}kg, Taille: ${Math.round(heightInCm)}cm, Âge: ${a}ans, Sexe: ${modalGender}. TDEE estimé: ${tdee} kcal. Calcule et recommande mon objectif de déficit calorique optimal.`);
+    handleSendEcho(`[SYNCHRONISATION PROFIL] : Poids: ${Math.round(weightInKg)}kg, Taille: ${Math.round(heightInCm)}cm, Age: ${a}ans, Sexe: ${modalGender}. TDEE estime: ${tdee} kcal. Calcule et recommande mon objectif de deficit calorique optimal.`);
   };
 
-  // ── MANUAL FORMS ──────────────────────────────────────────────────────────
   const handleManualExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualExpenseTitle.trim()||!manualExpenseAmount) return;
@@ -407,7 +403,6 @@ export default function VitalityPage() {
     r.start();
   };
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="vitality-page h-screen w-full bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans relative transition-colors duration-200 selection:bg-cyan-500/30">
 
@@ -420,18 +415,14 @@ export default function VitalityPage() {
           </div>
           <div className="text-xs text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4 space-y-2">
             {lang==="fr" ? (
-              <p>Hey! 👋 Je suis aussi là pour garder le contrôle sur ton budget. Définis ton objectif financier en haut, puis parle-moi dans le chat — je m'occupe du reste. ✨<br/><br/>
-              <span className="text-cyan-400 dark:text-cyan-600 font-mono text-[11px]">EXEMPLES :</span><br/>
-              • "Ajoute une facture d'électricité de 200$"<br/>• "Épicerie 145$"<br/>• "60$ d'essence"</p>
+              <p>Hey! 👋 Je suis aussi la pour garder le controle sur ton budget. Definis ton objectif financier en haut, puis parle-moi dans le chat — je m'occupe du reste. ✨</p>
             ) : (
-              <p>Hey! 👋 I'm here to help you stay on track with finances. Set your goal above, then just tell me what you spent — I'll handle the rest. ✨<br/><br/>
-              <span className="text-cyan-400 dark:text-cyan-600 font-mono text-[11px]">EXAMPLES:</span><br/>
-              • "Add a $200 electricity bill"<br/>• "Groceries $145"<br/>• "Gas $60"</p>
+              <p>Hey! 👋 I am here to help you stay on track with finances. Set your goal above, then just tell me what you spent — I will handle the rest. ✨</p>
             )}
           </div>
           <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800 dark:border-zinc-200">
             <button onClick={()=>setTutorialStep(2)} className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
-              {lang==="fr"?"SUIVANT ➔":"NEXT ➔"}
+              {lang==="fr"?"SUIVANT":"NEXT"}
             </button>
           </div>
         </div>
@@ -446,39 +437,34 @@ export default function VitalityPage() {
           </div>
           <div className="text-xs text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4">
             {lang==="fr" ? (
-              <p>Salut! 😋 Chaque repas devient une donnée utile. Parle-moi de ce que tu manges et je calcule tout automatiquement.<br/><br/>
-              <span className="text-emerald-400 dark:text-emerald-600 font-mono text-[11px]">EXEMPLES :</span><br/>
-              • "Fish &amp; Chips, calcule les calories"<br/>• "Deux pointes de pizza"<br/>• "Barre protéinée 200 calories"</p>
+              <p>Salut! 😋 Chaque repas devient une donnee utile. Parle-moi de ce que tu manges et je calcule tout automatiquement.</p>
             ) : (
-              <p>Hi! 😋 Every meal is useful data. Tell me what you ate and I'll calculate everything automatically.<br/><br/>
-              <span className="text-emerald-400 dark:text-emerald-600 font-mono text-[11px]">EXAMPLES:</span><br/>
-              • "Fish &amp; Chips, evaluate calories"<br/>• "Two pizza slices"<br/>• "Protein bar 200 calories"</p>
+              <p>Hi! 😋 Every meal is useful data. Tell me what you ate and I will calculate everything automatically.</p>
             )}
           </div>
           <button onClick={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
-            {lang==="fr"?"C'EST PARTI ! 🚀":"LET'S LOG ! 🚀"}
+            {lang==="fr"?"C'EST PARTI !":"LET'S LOG !"}
           </button>
         </div>
       )}
 
       <div className="flex flex-1 overflow-hidden min-h-0 w-full">
 
-        {/* SIDEBAR */}
         <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
               <Link href="/" className="hover:text-cyan-500 dark:hover:text-cyan-400">{t.sidebar.home}</Link>
             </h2>
             <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
-              <Link href="/chat"     className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
-              <Link href="/books"    className="block hover:text-cyan-500">{t.sidebar.books}</Link>
-              <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
-              <Link href="/vitality" className="block text-cyan-600 dark:text-cyan-400 font-bold">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
-              <Link href="/services" className="block hover:text-cyan-500">💎 Services</Link>
-              <Link href="/account"  className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
+              <Link href="/chat"       className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
+              <Link href="/books"      className="block hover:text-cyan-500">{t.sidebar.books}</Link>
+              <Link href="/calendar"   className="block hover:text-cyan-500">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
+              <Link href="/vitality"   className="block text-cyan-600 dark:text-cyan-400 font-bold">📈 {lang==="fr"?"Vitalite":"Vitality"}</Link>
+              <Link href="/services"   className="block hover:text-cyan-500">💎 Services</Link>
+              <Link href="/account"    className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
               <Link href="/horizonweb" className="block hover:text-cyan-500">📡 HorizonWeb</Link>
               <hr className="border-zinc-200 dark:border-zinc-800 my-4" />
-              <Link href="/history"  className="block hover:text-amber-500">⭐ {lang==="fr"?"Historique":"History"}</Link>
+              <Link href="/history"    className="block hover:text-amber-500">⭐ {lang==="fr"?"Historique":"History"}</Link>
             </div>
           </div>
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
@@ -486,7 +472,6 @@ export default function VitalityPage() {
           </div>
         </aside>
 
-        {/* 3-COLUMN GRID */}
         <div className="flex-1 grid grid-cols-1 xl:grid-cols-[1.1fr_1.1fr_2.8fr] overflow-hidden bg-white dark:bg-black h-full w-full">
 
           {/* FINANCES */}
@@ -546,7 +531,7 @@ export default function VitalityPage() {
                 <div key={exp.id} className="flex justify-between items-center bg-white dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-900/80 px-3 py-2 rounded-xl hover:border-cyan-500/30 shadow-sm transition">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-zinc-700 dark:text-zinc-200 truncate text-[13px]">{exp.title}</p>
-                    <span className="text-[10px] text-zinc-400">📅 {exp.date} <span className="opacity-50 font-mono">#{exp.id.slice(-4)}</span></span>
+                    <span className="text-[10px] text-zinc-400">📅 {exp.date}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-2">
                     <span className={`font-mono font-bold text-sm ${exp.currency==="€"?"text-emerald-400":"text-cyan-400"}`}>
@@ -603,7 +588,7 @@ export default function VitalityPage() {
                 <div key={cal.id} className="flex justify-between items-center bg-white dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-900/80 px-3 py-2 rounded-xl hover:border-emerald-500/30 shadow-sm transition">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-zinc-700 dark:text-zinc-300 truncate text-[13px]">{cal.foodName}</p>
-                    <span className="text-[10px] text-zinc-400">📅 {cal.date} <span className="opacity-50 font-mono">#{cal.id.slice(-4)}</span></span>
+                    <span className="text-[10px] text-zinc-400">📅 {cal.date}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-2">
                     <span className="font-mono text-emerald-400 font-bold text-sm">{cal.calories} kcal</span>
@@ -617,7 +602,6 @@ export default function VitalityPage() {
           {/* ECHO CONTROLLER */}
           <aside className="min-w-0 xl:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative h-full w-full">
 
-            {/* HEADER avec bouton ⚙️ Settings */}
             <div className="p-3 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-900/60 shrink-0 flex items-center justify-between gap-2 shadow-sm">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
@@ -631,10 +615,10 @@ export default function VitalityPage() {
                 {isSettingsOpen && (
                   <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 flex flex-col gap-1 z-50">
                     <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 px-2 py-1 border-b border-zinc-100 dark:border-zinc-900">
-                      {lang==="fr"?"Paramètres":"Settings"}
+                      {lang==="fr"?"Parametres":"Settings"}
                     </div>
                     <button onClick={toggleTheme} className="text-left px-2 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors">
-                      {theme==="dark"?"☀️ Mode Clair":"🌙 Mode Sombre"}
+                      {theme==="dark"?"Mode Clair":"Mode Sombre"}
                     </button>
                     <div className="px-2 py-1.5"><LangDropdown /></div>
                   </div>
@@ -651,7 +635,7 @@ export default function VitalityPage() {
                     </div>
                   )}
                   <p className="text-zinc-400 dark:text-zinc-600 text-xs italic text-center">
-                    {lang==="fr"?"En attente d'instructions financières ou métaboliques...":"Awaiting financial or metabolic commands..."}
+                    {lang==="fr"?"En attente d'instructions...":"Awaiting commands..."}
                   </p>
                 </div>
               ) : (
@@ -689,15 +673,14 @@ export default function VitalityPage() {
               )}
             </div>
 
-            {/* INPUT */}
             <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 shrink-0">
               {imageBase64 && (
                 <div className="mb-2 flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-600 dark:text-emerald-400">
                   <div className="flex items-center gap-2 truncate">
                     <img src={imageBase64} alt="preview" className="w-8 h-8 rounded object-cover border border-emerald-500/30 shrink-0" />
-                    <span className="truncate font-medium">{imageName||(lang==="fr"?"Image prête":"Image ready")}</span>
+                    <span className="truncate font-medium">{imageName||(lang==="fr"?"Image prete":"Image ready")}</span>
                   </div>
-                  <button onClick={()=>{setImageBase64(null);setImageName(null);}} className="text-zinc-400 hover:text-red-500 font-bold ml-2 shrink-0">✕</button>
+                  <button onClick={()=>{setImageBase64(null);setImageName(null);}} className="text-zinc-400 hover:text-red-500 font-bold ml-2 shrink-0">X</button>
                 </div>
               )}
               <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
@@ -710,15 +693,15 @@ export default function VitalityPage() {
                 <div className="flex flex-col gap-2 w-12 shrink-0 self-end">
                   <button type="button" onClick={()=>fileInputRef.current?.click()}
                     className={`h-9 w-full rounded-xl flex items-center justify-center border text-sm transition-all ${imageBase64?"border-emerald-500/40 text-emerald-400 bg-emerald-500/10":"border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 bg-white dark:bg-zinc-900"}`}>
-                    {imageBase64?"✓":"🖼️"}
+                    {imageBase64?"V":"IMG"}
                   </button>
                   <button type="button" onClick={lancerDictation}
                     className={`h-9 w-full rounded-xl flex items-center justify-center border text-sm transition-all ${isListening?"bg-red-600 border-red-500 text-white animate-pulse":"border-cyan-500/30 text-cyan-500 bg-cyan-500/10 hover:border-cyan-400"}`}>
-                    {isListening?"🔴":"🎤"}
+                    {isListening?"●":"MIC"}
                   </button>
                   <button onClick={()=>handleSendEcho()}
                     className="h-9 w-full bg-cyan-600 hover:bg-cyan-500 rounded-xl flex items-center justify-center text-white text-sm font-bold transition-all shadow-md">
-                    ➔
+                    OK
                   </button>
                 </div>
               </div>
@@ -733,8 +716,8 @@ export default function VitalityPage() {
           <form onSubmit={handleSubmitModalProfile}
             className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-6 rounded-2xl max-w-sm w-full shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200 text-xs text-zinc-800 dark:text-zinc-100">
             <div className="flex justify-between items-center border-b border-zinc-100 dark:border-zinc-900/60 pb-2">
-              <h3 className="text-base font-bold text-emerald-400 flex items-center gap-1.5">⚖️ {dict.title}</h3>
-              <button type="button" onClick={()=>setShowProfileModal(false)} className="text-zinc-400 hover:text-red-500 font-bold text-sm">✕</button>
+              <h3 className="text-base font-bold text-emerald-400 flex items-center gap-1.5">{dict.title}</h3>
+              <button type="button" onClick={()=>setShowProfileModal(false)} className="text-zinc-400 hover:text-red-500 font-bold text-sm">X</button>
             </div>
             <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed text-[11px]">{dict.desc}</p>
             <div className="flex flex-col gap-1">
@@ -815,15 +798,17 @@ export default function VitalityPage() {
               {lang==="fr"?"Limite de Quota Atteinte":"Plan Cycle Limit Reached"}
             </h3>
             <p className="text-zinc-500 dark:text-zinc-400 mb-5 leading-relaxed font-medium">
-              {activeLimitCategory==="prompts"
-                ? (lang==="fr"?"Votre quota mensuel d'échanges avec Echo est saturé pour ce forfait.":"Your monthly prompt quota has been saturated on this tier.")
+              {activeLimitCategory==="vitality_actions"
+                ? (lang==="fr"
+                    ? "Votre quota d'actions Vitalite est atteint pour ce cycle."
+                    : "Your Vitality action quota has been reached for this cycle.")
                 : (lang==="fr"
-                    ? `Limite d'actions automatisées atteinte pour [${activeLimitCategory}]. La réponse d'Echo a été générée mais la donnée n'a pas pu s'enregistrer.`
-                    : `Automated action limit reached for [${activeLimitCategory}]. Echo's response was generated but data sync is locked.`)}
+                    ? "Limite d'actions calendrier atteinte pour ce cycle."
+                    : "Calendar action limit reached for this cycle.")}
             </p>
             <Link href="/services" onClick={()=>setShowLimitModal(false)}
               className="bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl py-2.5 px-4 font-bold transition block text-center uppercase tracking-wider text-[11px]">
-              {lang==="fr"?"Voir les abonnements 🚀":"Upgrade Plan Tier 🚀"}
+              {lang==="fr"?"Voir les abonnements":"Upgrade Plan Tier"}
             </Link>
           </div>
         </div>

@@ -56,7 +56,7 @@ export default function ChatPage() {
   const [selectedImageName, setSelectedImageName] = useState("");
   const [echoState, setEchoState] = useState("idle");
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality"|"calendar"|"prompts"|"surprise">("vitality");
+  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar"|"surprise">("vitality_actions");
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
@@ -321,11 +321,7 @@ export default function ChatPage() {
   // ── SEND ──────────────────────────────────────────────────────────────────
   const sendMessage = async () => {
     if (!input.trim() && !selectedImage) return;
-    const quotaStatus = checkQuota("prompts", userTier);
-    if (!quotaStatus.allowed) {
-      setMessages(prev => [...prev, { raw: lang === "fr" ? "Echo: 🔒 Limite mensuelle atteinte." : "Echo: 🔒 Monthly limit reached." }]);
-      setActiveLimitCategory("prompts"); setShowLimitModal(true); return;
-    }
+    
     const userMessage = input.trim() || (lang === "fr" ? "Analyse cette image." : "Analyze this image.");
     const imageToSend = selectedImage;
     const userRaw     = `${lang === "fr" ? "Toi" : "You"}: ${userMessage}`;
@@ -400,10 +396,10 @@ export default function ChatPage() {
       setEchoState("speaking");
 
       let isActionBlocked = false;
-      let blockedCategory: "vitality"|"calendar"|null = null;
+      let blockedCategory: "vitality_actions"|"calendar"|null = null;
       if (data.action) {
         const { type } = data.action;
-        const qCat = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") ? "vitality" : "calendar";
+        const qCat: "vitality_actions"|"calendar" = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") ? "vitality_actions" : "calendar";
         const status = checkQuota(qCat, userTier);
         if (!status.allowed) { setActiveLimitCategory(qCat); setShowLimitModal(true); isActionBlocked = true; blockedCategory = qCat; }
       }
@@ -791,8 +787,6 @@ export default function ChatPage() {
             <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
               {activeLimitCategory==="surprise"
                 ?(lang==="fr"?"L'émergence nécessite un abonnement Premium.":"Emergence requires a Premium subscription.")
-                :activeLimitCategory==="prompts"
-                ?(lang==="fr"?"Quota mensuel épuisé. Passez au plan supérieur.":"Monthly quota reached. Upgrade your plan.")
                 :(lang==="fr"?`Limite atteinte pour [${activeLimitCategory}].`:`Limit reached for [${activeLimitCategory}].`)}
             </p>
             <div className="flex flex-col gap-3">

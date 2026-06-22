@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
-import { UserTier } from "../../utils/quota";
+import { checkQuota, UserTier } from "../../utils/quota";
 import { useApp } from "../../context/AppContext";
 
 type HorizonMatrix = {
@@ -132,6 +132,14 @@ export default function HorizonWebPage() {
     setAttributes([]);
 
     const lensToSend = overrideLens !== undefined ? overrideLens : activeLens;
+
+    const quotaStatus = checkQuota("horizon", userTier);
+    if (!quotaStatus.allowed) {
+      setEchoResponse(lang === "fr" ? "Limite de recherches HorizonWeb atteinte pour ce cycle." : "HorizonWeb search limit reached for this cycle.");
+      setAttributes(["quota_atteint"]);
+      setEchoState("speaking");
+      return;
+    }
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://echo-api-fixed.onrender.com";

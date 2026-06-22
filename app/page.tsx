@@ -148,7 +148,7 @@ export default function Home() {
   const [selectedButtons,        setSelectedButtons]        = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
   const [showLimitModal,        setShowLimitModal]    = useState(false);
-  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality"|"calendar"|"prompts">("vitality");
+  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar">("vitality_actions");
 
   const localButtonsLabels: Record<"fr"|"en", Record<string,string>> = {
     fr: { clarity:"1🧠 Clarté", humain:"2👤 Humain", critical:"3⚔️ Regard critique", expert:"4🎓 Expert", precision:"5🎯 Précision", philosophy:"6🏛️ Philosophie", strategy:"7♟️ Stratégie", decompose:"8🧩 Décomposer", refine:"9❓ Affiner", double:"10⚡ Double Regard" },
@@ -172,7 +172,7 @@ export default function Home() {
   const deserializeMsgs = (raws: string[]): EchoMessage[] => raws.map(r => ({ raw: r }));
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
-  // ── SAVE TO SUPABASE (shared with chat) ───────────────────────────────────
+  // ── SAVE TO SUPABASE ──────────────────────────────────────────────────────
   const saveToSupabase = async (uid: string, convId: string|null, raws: string[]): Promise<string|null> => {
     if (convId) {
       await supabase.from("echo_conversations")
@@ -196,7 +196,6 @@ export default function Home() {
 
       try {
         if (uid) {
-          // 1. Charger la conversation la plus récente (partagée avec Chat)
           const { data: convRows } = await supabase
             .from("echo_conversations")
             .select("id, messages")
@@ -210,14 +209,12 @@ export default function Home() {
             setMessages(deserializeMsgs(convRows[0].messages || []));
           }
 
-          // 2. Stickies
           const { data: stickyRows } = await supabase
             .from("echo_stickies").select("*").eq("user_id", uid)
             .order("created_at", { ascending: true });
           if (stickyRows?.length)
             setStickies(stickyRows.map(r => ({ id: r.id, text: r.text, color: r.color as StickyNote["color"] })));
 
-          // 3. Calendrier
           const { data: calRows } = await supabase
             .from("echo_calendar").select("*").eq("user_id", uid);
           if (calRows?.length) {
@@ -230,10 +227,8 @@ export default function Home() {
             setCalendarEvents(rebuilt);
           }
 
-          // 4. Tier
           setUserTier(await fetchUserTier(uid));
         } else {
-          // Guest : localStorage
           const saved = localStorage.getItem("echo-conversation-v2");
           if (saved) setMessages(deserializeMsgs(JSON.parse(saved)));
         }
@@ -316,15 +311,9 @@ export default function Home() {
       img.src = base64;
     });
 
-  // ── ENVOYER ───────────────────────────────────────────────────────────────
+  // ── ENVOYER — /home est ILLIMITÉ, pas de checkQuota sur les messages ──────
   const envoyer = async () => {
     if (!message.trim() && !selectedImage) return;
-
-    const quotaStatus = checkQuota("prompts", userTier);
-    if (!quotaStatus.allowed) {
-      setMessages(prev => [...prev, { raw: lang === "fr" ? "Echo: 🔒 Limite mensuelle atteinte." : "Echo: 🔒 Monthly limit reached." }]);
-      setActiveLimitCategory("prompts"); setShowLimitModal(true); return;
-    }
 
     const userMessage  = message.trim();
     const currentImage = selectedImage;
@@ -357,11 +346,12 @@ export default function Home() {
       const data = await response.json();
       setEchoState("speaking");
 
+      // Quota uniquement sur les ACTIONS automatiques (calendar / vitality_actions)
       let isActionBlocked = false;
-      let blockedCategory: "vitality"|"calendar"|null = null;
+      let blockedCategory: "vitality_actions"|"calendar"|null = null;
       if (data.action) {
         const { type } = data.action;
-        const qCat = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG") ? "vitality" : "calendar";
+        const qCat: "vitality_actions"|"calendar" = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG") ? "vitality_actions" : "calendar";
         const status = checkQuota(qCat, userTier);
         if (!status.allowed) { setActiveLimitCategory(qCat); setShowLimitModal(true); isActionBlocked = true; blockedCategory = qCat; }
       }
@@ -378,19 +368,10 @@ export default function Home() {
           const finalTitle = title || "Achat";
           const finalAmount = parseFloat(amount ?? spent) || 0;
           const finalDate = paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA");
-
           if (userId) {
-            const { error } = await supabase.from("echo_expenses").insert({
-              user_id: userId, title: finalTitle,
-              amount: finalAmount,
-              date: finalDate,
-            });
-            if (error) {
-              console.error("[Home] echo_expenses:", error.message);
-              triggerToast("error", lang === "fr" ? `Erreur dépense : ${error.message}` : `Expense error: ${error.message}`);
-            } else {
-              triggerToast("info", lang === "fr" ? `📈 Dépense de ${finalAmount}$ ajoutée !` : `📈 Expense of ${finalAmount}$ added!`);
-            }
+            const { error } = await supabase.from("echo_expenses").insert({ user_id: userId, title: finalTitle, amount: finalAmount, date: finalDate });
+            if (error) triggerToast("error", lang === "fr" ? `Erreur dépense : ${error.message}` : `Expense error: ${error.message}`);
+            else triggerToast("info", lang === "fr" ? `📈 Dépense de ${finalAmount}$ ajoutée !` : `📈 Expense of ${finalAmount}$ added!`);
           }
         }
 
@@ -398,19 +379,10 @@ export default function Home() {
           const { foodName, title, food_name, calories } = payload;
           const finalFoodName = title || foodName || food_name || "Aliment";
           const finalCalories = parseInt(calories) || 0;
-
           if (userId) {
-            const { error } = await supabase.from("echo_calories").insert({
-              user_id: userId, food_name: finalFoodName,
-              calories: finalCalories,
-              date: new Date().toLocaleDateString("fr-CA"),
-            });
-            if (error) {
-              console.error("[Home] echo_calories:", error.message);
-              triggerToast("error", lang === "fr" ? `Erreur calorie : ${error.message}` : `Calorie error: ${error.message}`);
-            } else {
-              triggerToast("info", lang === "fr" ? `🍎 ${finalFoodName} (${finalCalories} kcal) ajouté !` : `🍎 ${finalFoodName} (${finalCalories} kcal) added!`);
-            }
+            const { error } = await supabase.from("echo_calories").insert({ user_id: userId, food_name: finalFoodName, calories: finalCalories, date: new Date().toLocaleDateString("fr-CA") });
+            if (error) triggerToast("error", lang === "fr" ? `Erreur calorie : ${error.message}` : `Calorie error: ${error.message}`);
+            else triggerToast("info", lang === "fr" ? `🍎 ${finalFoodName} (${finalCalories} kcal) ajouté !` : `🍎 ${finalFoodName} (${finalCalories} kcal) added!`);
           }
         }
 
@@ -431,63 +403,31 @@ export default function Home() {
 
           if (dateKey && userId) {
             try {
-              // On utilise select() sans single() pour éviter un crash d'autorisation RLS
               const { data: insertedList, error } = await supabase.from("echo_calendar").insert({
-                user_id:      userId,
-                title:        finalTitle,
-                start_date:   dateKey,
-                end_date:     dateKey,
-                notes:        finalNotes,
-                is_from_echo: true,
+                user_id: userId, title: finalTitle, start_date: dateKey, end_date: dateKey, notes: finalNotes, is_from_echo: true,
               }).select();
 
               let finalId = `temp-${Date.now()}`;
               if (error) {
-                console.warn("[Home] Échec insertion calendrier standard, repli sans 'is_from_echo' :", error.message);
-                // Repli sans 'is_from_echo' au cas où la colonne n'est pas encore synchronisée
                 const { data: retryList, error: retryError } = await supabase.from("echo_calendar").insert({
-                  user_id:      userId,
-                  title:        finalTitle,
-                  start_date:   dateKey,
-                  end_date:     dateKey,
-                  notes:        finalNotes,
+                  user_id: userId, title: finalTitle, start_date: dateKey, end_date: dateKey, notes: finalNotes,
                 }).select();
-
-                if (!retryError && retryList && retryList.length > 0) {
-                  finalId = retryList[0].id;
-                } else {
-                  console.error("[Home] Échec total du repli de calendrier :", retryError?.message);
-                }
-              } else if (insertedList && insertedList.length > 0) {
+                if (!retryError && retryList?.length) finalId = retryList[0].id;
+              } else if (insertedList?.length) {
                 finalId = insertedList[0].id;
               }
 
-              // Extraction intelligente d'horaires pour synchroniser l'affichage
               let extractedStart = "";
               const timeMatch = finalNotes.match(/(?:Heure\s*:\s*)?(\d{1,2}h(?:\d{2})?\s*(?:à|to)\s*\d{1,2}h(?:\d{2})?)/i);
-              if (timeMatch) {
-                extractedStart = timeMatch[1];
-              }
+              if (timeMatch) extractedStart = timeMatch[1];
 
-              const newEvent = { 
-                id: finalId, 
-                title: finalTitle, 
-                start: extractedStart, 
-                end: "", 
-                notes: finalNotes 
-              };
-
-              // Injection instantanée de l'événement dans le state
               setCalendarEvents(prev => {
                 const currentList = prev[dateKey] || [];
-                if (currentList.some(ev => ev.title === finalTitle && ev.notes === finalNotes)) {
-                  return prev;
-                }
-                return { ...prev, [dateKey]: [...currentList, newEvent] };
+                if (currentList.some(ev => ev.title === finalTitle && ev.notes === finalNotes)) return prev;
+                return { ...prev, [dateKey]: [...currentList, { id: finalId, title: finalTitle, start: extractedStart, end: "", notes: finalNotes }] };
               });
 
               triggerToast("info", lang === "fr" ? `📅 Événement "${finalTitle}" ajouté !` : `📅 Event "${finalTitle}" added!`);
-
             } catch (err: any) {
               console.error("[Home] Crash insertion calendrier :", err);
             }
@@ -504,19 +444,15 @@ export default function Home() {
   // ── STICKIES ──────────────────────────────────────────────────────────────
   const addSticky = async () => {
     if (!newStickyText.trim()) return;
-
     if (!userId) {
-      // Guest : localStorage
       const id = `local-${Date.now()}`;
       setStickies(prev => [...prev, { id, text: newStickyText.trim(), color: selectedColor }]);
       setNewStickyText("");
       return;
     }
-
     const { data: inserted, error } = await supabase.from("echo_stickies").insert({
       user_id: userId, text: newStickyText.trim(), color: selectedColor,
     }).select().single();
-
     if (error) { console.error("[Home] echo_stickies insert:", error.message); return; }
     setStickies(prev => [...prev, { id: inserted.id, text: inserted.text, color: inserted.color }]);
     setNewStickyText("");
@@ -810,7 +746,6 @@ export default function Home() {
           <aside style={isDesktop ? { width: rightPanelWidth, flexBasis: rightPanelWidth } : undefined}
             className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 p-3 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
 
-            {/* HUB HEADER — LangDropdown + thème */}
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0" onClick={e => e.stopPropagation()}>
               <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold">Hub</span>
               <div className="flex items-center gap-2">
@@ -914,9 +849,9 @@ export default function Home() {
           <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 capitalize">{activeLimitCategory} Limit</h3>
             <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
-              {activeLimitCategory === "prompts"
-                ? (lang==="fr"?"Votre quota mensuel de messages est épuisé. Passez au plan supérieur pour continuer.":"Your monthly message quota has been reached. Upgrade to continue.")
-                : (lang==="fr"?`Limite d'actions automatisées atteinte pour [${activeLimitCategory}].`:`Automated action limit reached for [${activeLimitCategory}].`)}
+              {lang==="fr"
+                ? `Limite d'actions automatisées atteinte pour [${activeLimitCategory}]. Passez au plan supérieur pour continuer.`
+                : `Automated action limit reached for [${activeLimitCategory}]. Upgrade to continue.`}
             </p>
             <button onClick={() => setShowLimitModal(false)} className="w-full bg-cyan-600 text-white py-2.5 rounded-xl text-xs font-semibold">OK</button>
           </div>
