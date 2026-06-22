@@ -173,20 +173,48 @@ export default function Home() {
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
   // ── SAVE TO SUPABASE ──────────────────────────────────────────────────────
-  const saveToSupabase = async (uid: string, convId: string|null, raws: string[]): Promise<string|null> => {
-    if (convId) {
-      await supabase.from("echo_conversations")
-        .update({ messages: raws, updated_at: new Date().toISOString() })
-        .eq("id", convId).eq("user_id", uid);
-      return convId;
-    } else {
-      const { data, error } = await supabase.from("echo_conversations")
-        .insert({ user_id: uid, source: "chat", messages: raws, updated_at: new Date().toISOString() })
-        .select("id").single();
-      if (error) { console.error("[Home] insert conv:", error.message); return null; }
-      return data?.id ?? null;
+  const saveToSupabase = async (
+  uid: string,
+  convId: string | null,
+  raws: string[]
+): Promise<string | null> => {
+
+  // Déclencheur mémoire futur
+  if (raws.length > 600) {
+    console.log("[MEMORY] Résumé requis :", raws.length, "messages");
+  }
+
+  if (convId) {
+    await supabase
+      .from("echo_conversations")
+      .update({
+        messages: raws,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", convId)
+      .eq("user_id", uid);
+
+    return convId;
+  } else {
+    const { data, error } = await supabase
+      .from("echo_conversations")
+      .insert({
+        user_id: uid,
+        source: "chat",
+        messages: raws,
+        updated_at: new Date().toISOString()
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("[Home] insert conv:", error.message);
+      return null;
     }
-  };
+
+    return data?.id ?? null;
+  }
+};
 
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
