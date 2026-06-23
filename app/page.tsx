@@ -183,7 +183,7 @@ export default function Home() {
   let finalSummary = memorySummary;
 let finalMessages = raws;
 
-if (raws.length > 600) {
+if (raws.length > 10) {
   try {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -210,12 +210,25 @@ if (raws.length > 600) {
 }
     if (convId) {
       await supabase.from("echo_conversations")
-        .update({ messages: raws, updated_at: new Date().toISOString() })
-        .eq("id", convId).eq("user_id", uid);
+  .update({
+    messages: finalMessages,
+    summary: finalSummary,
+    summary_updated_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  })
+  .eq("id", convId)
+  .eq("user_id", uid);
       return convId;
     } else {
       const { data, error } = await supabase.from("echo_conversations")
-        .insert({ user_id: uid, source: "chat", messages: raws, updated_at: new Date().toISOString() })
+        .insert({
+  user_id: uid,
+  source: "chat",
+  messages: finalMessages,
+  summary: finalSummary,
+  summary_updated_at: new Date().toISOString(),
+  updated_at: new Date().toISOString()
+})
         .select("id").single();
       if (error) { console.error("[Home] insert conv:", error.message); return null; }
       return data?.id ?? null;
@@ -285,7 +298,7 @@ if (raws.length > 600) {
         const uid = session.user.id;
         setUserId(uid);
         const { data: convRows } = await supabase
-          .from("echo_conversations").select("id, messages")
+          .from("echo_conversations").select("id, messages, summary")
           .eq("user_id", uid).eq("source", "chat")
           .order("updated_at", { ascending: false }).limit(1);
         if (convRows?.length) {
