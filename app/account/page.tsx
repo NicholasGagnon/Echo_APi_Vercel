@@ -66,7 +66,8 @@ export default function AccountPage() {
   const [newPassword, setNewPassword] = useState("");
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
-  const [deleteStage, setDeleteStage] = useState<"idle" | "confirm" | "final">("idle");
+  const [deleteStage, setDeleteStage] = useState<"idle" | "confirm" | "final" | "purged">("idle");
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   const [user, setUser] = useState<any>(null);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
@@ -89,6 +90,17 @@ export default function AccountPage() {
     const timer = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  // Déclencheur du pop-up cool de bienvenue à la première arrivée
+  useEffect(() => {
+    if (!user) {
+      const hasVisited = sessionStorage.getItem("echo-visited-gateway");
+      if (!hasVisited) {
+        setShowWelcomeModal(true);
+        sessionStorage.setItem("echo-visited-gateway", "true");
+      }
+    }
+  }, [user]);
 
   const saveGoogleTokenToDB = async (uid: string, token: string, currentTier: string, refreshToken?: string | null) => {
     await supabase.from("user_tokens").upsert(
@@ -319,11 +331,8 @@ export default function AccountPage() {
       await supabase.from("profiles").delete().eq("id", user.id);
       await supabase.auth.signOut();
       
-      alert(lang === "fr" 
-        ? "Votre compte et vos données associées ont été supprimés de nos serveurs." 
-        : "Your account and associated data have been completely removed from our nodes."
-      );
-      setDeleteStage("idle");
+      // Bascule vers le pop-up stylisé à la cool d'Echo au lieu de la boîte d'alerte laide
+      setDeleteStage("purged");
     } catch (err: any) {
       alert(`Error during data purge: ${err.message}`);
     }
@@ -625,7 +634,7 @@ export default function AccountPage() {
               </div>
               <div className="shrink-0 flex flex-col items-center sm:items-end font-mono">
                 <span className="text-[10px] text-zinc-400 dark:text-zinc-600 uppercase tracking-widest block">System Build</span>
-                <span className="text-sm font-extrabold text-cyan-600 dark:text-cyan-400 filter drop-shadow-[0_0_8px_rgba(6,182,212,0.3)]">v10.0.10</span>
+                <span className="text-sm font-extrabold text-cyan-600 dark:text-cyan-400 filter drop-shadow-[0_0_8px_rgba(6,182,212,0.3)]">v10.1.10</span>
               </div>
             </div>
           </div>
@@ -757,10 +766,10 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* SIGN IN MODAL */}
+      {/* SIGN IN MODAL - CLIC EXTÉRIEUR ANCRÉ */}
       {showSignInModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => { setShowSignInModal(false); clearInputs(); }}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
             <form onSubmit={handleEmailSignIn} className="space-y-6">
               <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
                 <div>
@@ -787,10 +796,11 @@ export default function AccountPage() {
           </div>
         </div>
       )}
-            {/* SIGN UP MODAL — à insérer après le SIGN IN MODAL */}
+
+      {/* SIGN UP MODAL - CLIC EXTÉRIEUR ANCRÉ */}
       {showSignUpModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => { setShowSignUpModal(false); clearInputs(); }}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
             <form onSubmit={handleEmailSignUp} className="space-y-6">
               <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
                 <div>
@@ -823,7 +833,6 @@ export default function AccountPage() {
           </div>
         </div>
       )}
-
 
       {/* ── 🛰️ POP-UP RECONSTRUIT GRAND LARGE (GOOGLE CALENDAR GUIDANCE) ── */}
       {showGoogleSyncPopup && (
@@ -904,7 +913,7 @@ export default function AccountPage() {
       {/* ── 🏴‍☠️ POP-UP SURPRISE DU TRÉSOR (RESTORED EASTER EGG OFFER ULTRA) ── */}
       {showTreasureModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto relative">
+          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={() => setShowTreasureModal(false)}
@@ -923,7 +932,7 @@ export default function AccountPage() {
                 🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉
               </h3>
               <p className="text-zinc-400 text-[11px] font-semibold leading-relaxed">
-                Tu viens de découvrir un Easter Egg caché dans les profondeurs d'Echo AI... et ça mérite une récompense. 😎
+                Tu viens de découvrir un Easter Egg caché dans les深度 de Echo AI... et ça mérite une récompense. 😎
               </p>
             </div>
 
@@ -959,6 +968,50 @@ export default function AccountPage() {
                 Laisser le secret tranquille
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 🌟 POP-UP INTERNE STYLE ECHO DE PREMIÈRE ARRIVÉE ── */}
+      {showWelcomeModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10000] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center relative shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="absolute top-4 right-4">
+              <img src="/echo.png" alt="Echo" className="w-8 h-8 rounded-lg object-contain" />
+            </div>
+            <div className="pt-4 text-zinc-900 dark:text-zinc-100 font-sans text-sm sm:text-base font-semibold leading-relaxed">
+              {lang === "fr" 
+                ? "ReSalut c'est ici que tu peux connecter ton compte, si tu fait c'est pas mal plus le fun :D " 
+                : "Hi again! This is where you can connect your account, doing so makes everything way more fun :D "}
+            </div>
+            <button 
+              onClick={() => setShowWelcomeModal(false)}
+              className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md"
+            >
+              {lang === "fr" ? "C'est parti ! 🚀" : "Let's go! 🚀"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 🗑️ POP-UP INTERNE COOL DE COMPTE SUPPRIMÉ ── */}
+      {deleteStage === "purged" && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[10000] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-red-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center relative shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="absolute top-4 right-4">
+              <img src="/echo.png" alt="Echo" className="w-8 h-8 rounded-lg object-contain" />
+            </div>
+            <div className="pt-4 text-red-600 dark:text-red-400 font-mono text-sm sm:text-base font-bold leading-relaxed">
+              {lang === "fr"
+                ? "Voila toute tes donner ont été supprimer dommage :("
+                : "There you go, all your data has been deleted, too bad :("}
+            </div>
+            <button 
+              onClick={() => setDeleteStage("idle")}
+              className="w-full py-2.5 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-950 font-mono text-xs font-bold rounded-xl transition-all shadow-md"
+            >
+              ✕ {lang === "fr" ? "Fermer" : "Close"}
+            </button>
           </div>
         </div>
       )}

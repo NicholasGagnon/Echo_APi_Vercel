@@ -8,8 +8,8 @@ import { useApp } from "../../context/AppContext";
 type Particle = { id: number; x: number; y: number; size: number; speed: number; opacity: number; color: string };
 
 const FEATURES = [
-  { icon: "📈", fr: "Flux Financier & Budget",     en: "Financial Flow & Budget"     },
-  { icon: "📅", fr: "Calendrier & Evenements",      en: "Calendar & Events"           },
+  { icon: "📈", fr: "Flux Financier & Budget",      en: "Financial Flow & Budget"     },
+  { icon: "📅", fr: "Calendrier & Evenements",       en: "Calendar & Events"           },
   { icon: "🍏", fr: "Suivi Nutrition & Sante",      en: "Nutrition & Health Tracking" },
   { icon: "📚", fr: "Ecriture de Livre",             en: "Book Writing"                },
   { icon: "✅", fr: "Boutons comportementaux",       en: "Behavioral Buttons"          },
@@ -27,6 +27,29 @@ export default function WelcomePage() {
   const [echoPhase, setEchoPhase] = useState(0);
   const [showLang, setShowLang]   = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
+
+  // ÉTATS DE LA REPRÉSENTATION D'ECHO (POP-UP INTERNE)
+  const [dots, setDots] = useState("");
+  const [echoStep, setEchoStep] = useState<"loading" | "activated" | "typing" | "closed">("loading");
+  const [displayedText, setDisplayedText] = useState("");
+  const [showSecondBlock, setShowSecondBlock] = useState(false);
+
+  // ÉTATS DES MODALS ANCRÉS (DEPUIS ACCOUNT)
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
+  const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
+
+  const fullTextPart1 = fr 
+    ? "Bonjour Je suis Echo. \n\nC'est mon nom, \nJe suis une Présence augmentée, Synchronisée à votre réalité... "
+    : "Hello I am Echo. \n\nThat's my name, \nI am an Augmented Presence, Synchronized with your reality... ";
+
+  const fullTextPart2 = fr
+    ? "\n\nIci commence un voyage entre Gestion, découverte, création et exploration.\nPréparez-vous à découvrir l'inattendu a mes cotés.\nJe resterai Connectée à votre parcours.\n\nVenez avec moi ------------------------------"
+    : "\n\nHere begins a journey between Management, discovery, creation and exploration.\nGet ready to discover the unexpected by my side.\nI will stay Connected to your path.\n\nCome with me ------------------------------";
 
   // ── PARTICULES ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -70,6 +93,52 @@ export default function WelcomePage() {
     return () => { cancelAnimationFrame(animRef.current); window.removeEventListener("resize", onResize); };
   }, []);
 
+  // ── SÉQUENCE POP-UP ECHO (SIMULATION FAST) ────────────────────────────────
+  useEffect(() => {
+    let count = 0;
+    const interval = setInterval(() => {
+      count++;
+      setDots((prev) => prev + ".");
+      if (count >= 160) {
+        clearInterval(interval);
+        setTimeout(() => setEchoStep("activated"), 150);
+      }
+    }, 2);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (echoStep === "activated") {
+      setTimeout(() => setEchoStep("typing"), 800);
+    }
+  }, [echoStep]);
+
+  useEffect(() => {
+    if (echoStep !== "typing") return;
+    let currentIndex = 0;
+    const typeInterval = setInterval(() => {
+      if (currentIndex < fullTextPart1.length) {
+        setDisplayedText(fullTextPart1.substring(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        clearInterval(typeInterval);
+        setTimeout(() => {
+          setShowSecondBlock(true);
+          let secondIndex = 0;
+          const secondInterval = setInterval(() => {
+            if (secondIndex < fullTextPart2.length) {
+              setDisplayedText(fullTextPart1 + fullTextPart2.substring(0, secondIndex + 1));
+              secondIndex++;
+            } else {
+              clearInterval(secondInterval);
+            }
+          }, 12);
+        }, 1100);
+      }
+    }, 18);
+    return () => clearInterval(typeInterval);
+  }, [echoStep, lang]);
+
   // ── ECHO PHASE ────────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setEchoPhase(p => (p+1)%3), 3000);
@@ -85,8 +154,89 @@ export default function WelcomePage() {
 
   const echoClass = ["echo-idle","echo-speaking","echo-thinking"][echoPhase];
 
-  // Toute la page est cliquable → /account, SAUF les boutons interactifs
+  // ── PROTOCOLES CONNEXIONS OAUTH NORMAL ────────────────────────────────────
+  const handleGoogleConnectNormal = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/account`,
+          scopes: "openid profile email",
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error(err.message);
+    }
+  };
+
+  const handleMicrosoftConnectNormal = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "azure",
+        options: {
+          redirectTo: `${window.location.origin}/account`,
+          scopes: "openid profile email User.Read",
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error(err.message);
+    }
+  };
+
+  // ── METHODES FORMULAIRES ANCRÉS ───────────────────────────────────────────
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignInError(null);
+    if (!email.trim() || !password.trim()) {
+      setSignInError(fr ? "Veuillez entrer vos identifiants" : "Please enter your credentials");
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) {
+      setSignInError(error.message);
+    } else {
+      router.push("/account");
+    }
+  };
+
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignUpError(null);
+    setSignUpSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setSignUpError(fr ? "Veuillez entrer un courriel et un mot de passe" : "Please enter an email and password");
+      return;
+    }
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/account` },
+    });
+    if (error) {
+      setSignUpError(error.message);
+    } else {
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setSignUpError(fr ? "Un compte avec cet e-mail existe déjà." : "An account with this email already exists.");
+        return;
+      }
+      setSignUpSuccess(fr ? "Inscription réussie ! Vérifiez votre boîte de réception." : "Registration success! Check your inbox.");
+    }
+  };
+
+  const clearInputs = () => {
+    setEmail("");
+    setPassword("");
+    setSignInError(null);
+    setSignUpError(null);
+    setSignUpSuccess(null);
+  };
+
+  // ── GESTION CLIC GLOBAL PAGE (SAUF EXCEPTIONS) ────────────────────────────
   const handlePageClick = (e: React.MouseEvent) => {
+    if (echoStep !== "closed") return; // Exception 1 : Bloqué tant que le nouveau pop-up n'est pas fermé
     const tag = (e.target as HTMLElement).closest("button,a,input,select,textarea,[data-stop]");
     if (!tag) router.push("/account");
   };
@@ -107,7 +257,7 @@ export default function WelcomePage() {
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.025]"
         style={{backgroundImage:"linear-gradient(rgba(6,182,212,1) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,1) 1px, transparent 1px)", backgroundSize:"60px 60px"}}/>
 
-      {/* LANG DROPDOWN — top right */}
+      {/* LANG DROPDOWN & DROPDOWN ANCHOR (Exception 2) */}
       <div ref={langRef} className="absolute top-5 right-5 z-50" data-stop="">
         <button onClick={e => { e.stopPropagation(); setShowLang(v=>!v); }}
           className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 hover:border-cyan-500/50 rounded-xl px-3 py-2 text-xs font-mono font-bold text-zinc-300 transition-all">
@@ -180,35 +330,82 @@ export default function WelcomePage() {
         {/* DEUX BLOCS COTE A COTE */}
         <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-5 mt-2">
 
-          {/* BLOC GAUCHE — ECOSYSTEME */}
-          <div className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
-            <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-4">
-              {fr ? "Un ecosysteme concu pour gerer l'essentiel :" : "An ecosystem built to manage the essentials:"}
-            </p>
-            <div className="flex flex-col gap-3">
-              {FEATURES.map((f, i) => (
-                <div key={i} className="flex items-center gap-3 text-sm text-zinc-200 font-medium">
-                  <span className="text-lg w-7 text-center shrink-0">{f.icon}</span>
-                  <span>{fr ? f.fr : f.en}</span>
+          {/* BLOC GAUCHE — ECOSYSTEME / OU POP-UP ECHO INTERNE DYNAMIQUE */}
+          {echoStep !== "closed" ? (
+            <div className="bg-zinc-950/95 border-2 border-cyan-500/40 rounded-2xl p-6 backdrop-blur-md relative flex flex-col justify-between min-h-[340px]" data-stop="">
+              {/* Bouton de Fermeture Gros X */}
+              <button 
+                onClick={(e) => { e.stopPropagation(); setEchoStep("closed"); }}
+                className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors p-1 z-30"
+                title="Fermer"
+              >
+                ✕
+              </button>
+
+              {/* Logo Flottant Interne */}
+              <div className="absolute top-4 right-14 opacity-40 animate-pulse">
+                <img src="/echo.png" alt="Echo Icon" className="w-7 h-7 object-contain" />
+              </div>
+
+              {/* Loader des points ultra-rapides */}
+              <div className="text-xs text-zinc-500 break-all font-mono select-none leading-normal">
+                {fr ? "Syncronisation du systeme en cours" : "System synchronization in progress"} {dots}
+                {echoStep !== "loading" && (
+                  <span className="text-emerald-400 font-bold block mt-1.5 font-mono">
+                    {fr ? "Compagnon numérique activé..." : "Digital companion activated..."}
+                  </span>
+                )}
+              </div>
+
+              {/* Machine à écrire */}
+              {(echoStep === "typing" || showSecondBlock) && (
+                <div className="text-sm sm:text-base text-zinc-100 font-medium whitespace-pre-wrap leading-relaxed font-sans tracking-wide pt-4 flex-1">
+                  {displayedText}
+                  
+                  {/* Image flottante qui s'estompe vers les boutons */}
+                  {displayedText.includes("------------------------------") && (
+                    <div className="inline-block ml-2 align-middle">
+                      <img 
+                        src="/echo.png" 
+                        alt="Echo Link" 
+                        className="w-7 h-7 inline object-contain opacity-70 animate-bounce duration-1000" 
+                      />
+                    </div>
+                  )}
                 </div>
-              ))}
+              )}
             </div>
-            <div className="mt-5 pt-4 border-t border-zinc-800 text-center">
-              <span className="text-cyan-400 font-bold text-sm font-mono">
-                {fr ? "Tout est synchronise." : "Everything is synchronized."}
-              </span>
+          ) : (
+            /* BLOC SÉCURISÉ PAR DÉFAUT APRÈS FERMETURE */
+            <div className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+              <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-4">
+                {fr ? "Un ecosysteme concu pour gerer l'essentiel :" : "An ecosystem built to manage the essentials:"}
+              </p>
+              <div className="flex flex-col gap-3">
+                {FEATURES.map((f, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm text-zinc-200 font-medium">
+                    <span className="text-lg w-7 text-center shrink-0">{f.icon}</span>
+                    <span>{fr ? f.fr : f.en}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 pt-4 border-t border-zinc-800 text-center">
+                <span className="text-cyan-400 font-bold text-sm font-mono">
+                  {fr ? "Tout est synchronise." : "Everything is synchronized."}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* BLOC DROIT — CONNEXION */}
-          <div className="bg-zinc-950/90 border border-cyan-500/25 rounded-2xl p-6 backdrop-blur-sm shadow-[0_0_40px_rgba(6,182,212,0.06)] flex flex-col gap-4">
+          <div className="bg-zinc-950/90 border border-cyan-500/25 rounded-2xl p-6 backdrop-blur-sm shadow-[0_0_40px_rgba(6,182,212,0.06)] flex flex-col gap-4" data-stop="">
             <p className="text-center text-white font-bold text-lg">
               {fr ? "Connectez-vous pour commencer" : "Sign in to get started"}
             </p>
 
             <div className="flex flex-col gap-3">
-              {/* GOOGLE */}
-              <button onClick={e => { e.stopPropagation(); window.location.href="/account"; }}
+              {/* GOOGLE DIRECT SUPABASE */}
+              <button onClick={e => { e.stopPropagation(); handleGoogleConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-sm rounded-xl transition-all shadow-md">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -219,8 +416,8 @@ export default function WelcomePage() {
                 <span className="flex-1 text-center">{fr ? "Continuer avec Google" : "Continue with Google"}</span>
               </button>
 
-              {/* MICROSOFT */}
-              <button onClick={e => { e.stopPropagation(); window.location.href="/account"; }}
+              {/* MICROSOFT DIRECT SUPABASE */}
+              <button onClick={e => { e.stopPropagation(); handleMicrosoftConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl transition-all border border-zinc-700">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 23 23" fill="none">
                   <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
@@ -238,13 +435,13 @@ export default function WelcomePage() {
                 <div className="flex-1 h-px bg-zinc-800"/>
               </div>
 
-              {/* EMAIL + CREER COMPTE — redirige vers /account */}
+              {/* EMAIL OUVRE LES MODALS INTEGRÉES */}
               <div className="grid grid-cols-2 gap-3">
-                <button onClick={e => { e.stopPropagation(); window.location.href="/account"; }}
+                <button onClick={e => { e.stopPropagation(); setShowSignInModal(true); }}
                   className="h-12 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm rounded-xl transition-all shadow-md">
                   {fr ? "Se connecter" : "Sign in"}
                 </button>
-                <button onClick={e => { e.stopPropagation(); window.location.href="/account"; }}
+                <button onClick={e => { e.stopPropagation(); setShowSignUpModal(true); }}
                   className="h-12 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-sm rounded-xl transition-all border border-zinc-700">
                   {fr ? "Creer un compte" : "Create account"}
                 </button>
@@ -270,6 +467,65 @@ export default function WelcomePage() {
           {fr ? "Cliquez n'importe ou pour continuer" : "Click anywhere to continue"} · © {new Date().getFullYear()} Echo AI
         </p>
       </div>
+
+      {/* ── SIGN IN MODAL ANCRÉ ET SÉCURISÉ ── */}
+      {showSignInModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" data-stop="">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <form onSubmit={handleEmailSignIn} className="space-y-6">
+              <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
+                <div>
+                  <h2 className="text-base font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">🛸 {fr ? "Accès Écosystème" : "Account Access"}</h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">{fr ? "Entrez vos paramètres d'authentification pour synchroniser votre profil." : "Input your encryption parameters to sync your profile."}</p>
+                </div>
+                <button type="button" onClick={() => { setShowSignInModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
+              </div>
+              {signInError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signInError}</div>}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{fr ? "Adresse Courriel" : "Identity Node (Email)"}</label>
+                  <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+                </div>
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{fr ? "Mot de Passe" : "Access Token (Password)"}</label>
+                  <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{fr ? "Se connecter à votre compte" : "Login to your account"}</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── SIGN UP MODAL ANCRÉ ET SÉCURISÉ ── */}
+      {showSignUpModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" data-stop="">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <form onSubmit={handleEmailSignUp} className="space-y-6">
+              <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
+                <div>
+                  <h2 className="text-base font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">🛸 {fr ? "Créer un Profil" : "Initialize Profile"}</h2>
+                  <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">{fr ? "Initialisez votre nœud d'identité dans l'écosystème Echo." : "Initialize your identity node within the Echo ecosystem."}</p>
+                </div>
+                <button type="button" onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
+              </div>
+              {signUpError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signUpError}</div>}
+              {signUpSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signUpSuccess}</div>}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{fr ? "Adresse Courriel" : "Identity Node (Email)"}</label>
+                  <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+                </div>
+                <div>
+                  <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{fr ? "Mot de Passe" : "Access Token (Password)"}</label>
+                  <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-700 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner" />
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 py-3.5 rounded-xl text-xs font-bold uppercase tracking-wider text-white transition-all shadow-md">{fr ? "Créer mon compte" : "Create my account"}</button>
+            </form>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes spinRadar { 100% { transform: rotate(360deg); } }
