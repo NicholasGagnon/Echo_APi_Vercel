@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, UserTier } from "../../utils/quota";
@@ -48,7 +48,7 @@ const EchoSvgMascot = ({ className = "w-20 h-20" }: { className?: string }) => (
 );
 
 export default function HorizonWebPage() {
-  const { t, lang } = useApp();
+  const { t, lang, setLang } = useApp();
 
   const [query, setQuery] = useState("");
   const [echoResponse, setEchoResponse] = useState("");
@@ -60,6 +60,16 @@ export default function HorizonWebPage() {
   
   const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [isMatrixExpanded, setIsMatrixExpanded] = useState(false);
+  const [isIntroLangOpen, setIsIntroLangOpen] = useState(false);
+  const introLangRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const closeOnOutside = (e: MouseEvent) => {
+      if (introLangRef.current && !introLangRef.current.contains(e.target as Node)) setIsIntroLangOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+    return () => document.removeEventListener("mousedown", closeOnOutside);
+  }, []);
 
   // Détection de l'avatar cassé (Fallback V4)
   const [isAvatarBroken, setIsAvatarBroken] = useState(false);
@@ -185,9 +195,40 @@ export default function HorizonWebPage() {
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-950 border-2 border-cyan-500/40 p-6 rounded-2xl max-w-lg w-full relative shadow-[0_0_50px_rgba(6,182,212,0.2)]">
             <button onClick={closePopupAndSave} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">X</button>
-            
-            <div className="flex justify-between items-center mb-4">
+
+            <div className="flex justify-between items-center mb-4 pr-8">
               <h3 className="text-sm font-mono uppercase tracking-widest text-cyan-400 font-bold">📡 HorizonWeb Protocol</h3>
+
+              <div ref={introLangRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsIntroLangOpen(o => !o)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-cyan-500/60 hover:text-cyan-400 transition-all text-[11px] font-mono font-bold"
+                >
+                  🌐 {lang === "fr" ? "Français" : "English"}
+                  <svg className={`w-2.5 h-2.5 transition-transform ${isIntroLangOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25 12 15.75 4.5 8.25" />
+                  </svg>
+                </button>
+                {isIntroLangOpen && (
+                  <div className="absolute right-0 mt-1.5 w-32 rounded-xl border border-zinc-800 bg-zinc-950 p-1.5 shadow-xl z-10">
+                    <button
+                      type="button"
+                      onClick={() => { setLang("fr"); setIsIntroLangOpen(false); }}
+                      className={`w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold text-left transition-colors ${lang === "fr" ? "bg-cyan-500/10 text-cyan-400" : "text-zinc-400 hover:bg-zinc-900"}`}
+                    >
+                      Français
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setLang("en"); setIsIntroLangOpen(false); }}
+                      className={`w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold text-left transition-colors ${lang === "en" ? "bg-cyan-500/10 text-cyan-400" : "text-zinc-400 hover:bg-zinc-900"}`}
+                    >
+                      English
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3 text-xs sm:text-sm text-zinc-300 leading-relaxed font-mono">
