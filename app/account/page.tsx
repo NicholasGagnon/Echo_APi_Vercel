@@ -68,7 +68,6 @@ export default function AccountPage() {
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
   const [deleteStage, setDeleteStage] = useState<"idle" | "confirm" | "final" | "purged">("idle");
-  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   const [user, setUser] = useState<any>(null);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
@@ -91,17 +90,6 @@ export default function AccountPage() {
     const timer = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(timer);
   }, [toast]);
-
-  // Déclencheur du pop-up cool de bienvenue à la première arrivée
-  useEffect(() => {
-    if (!user) {
-      const hasVisited = sessionStorage.getItem("echo-visited-gateway");
-      if (!hasVisited) {
-        setShowWelcomeModal(true);
-        sessionStorage.setItem("echo-visited-gateway", "true");
-      }
-    }
-  }, [user]);
 
   const saveGoogleTokenToDB = async (uid: string, token: string, currentTier: string, refreshToken?: string | null) => {
     await supabase.from("user_tokens").upsert(
@@ -1009,28 +997,6 @@ export default function AccountPage() {
                 {lang === "fr" ? "Plus tard" : "Later"}
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── 🌟 POP-UP INTERNE STYLE ECHO DE PREMIÈRE ARRIVÉE ── */}
-      {showWelcomeModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10000] p-6 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center relative shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
-            <div className="absolute top-4 right-4">
-              <img src="/echo.png" alt="Echo" className="w-8 h-8 rounded-lg object-contain" />
-            </div>
-            <div className="pt-4 text-zinc-900 dark:text-zinc-100 font-sans text-sm sm:text-base font-semibold leading-relaxed">
-              {lang === "fr" 
-                ? "ReSalut c'est ici que tu peux connecter ton compte, si tu fait c'est pas mal plus le fun :D " 
-                : "Hi again! This is where you can connect your account, doing so makes everything way more fun :D "}
-            </div>
-            <button 
-              onClick={() => setShowWelcomeModal(false)}
-              className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md"
-            >
-              {lang === "fr" ? "C'est parti ! 🚀" : "Let's go! 🚀"}
-            </button>
           </div>
         </div>
       )}
