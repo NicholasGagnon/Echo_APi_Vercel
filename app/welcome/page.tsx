@@ -560,7 +560,7 @@ export default function WelcomePage() {
         }
 
         .animate-echo-slide-out {
-          animation: echoSlideOut 10s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+          animation: echoSlideOut 16s cubic-bezier(0.25, 1, 0.5, 1) forwards;
         }
       `}</style>
     </main>
