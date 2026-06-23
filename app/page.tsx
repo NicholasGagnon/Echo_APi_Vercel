@@ -174,7 +174,18 @@ export default function Home() {
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
   // ── SAVE TO SUPABASE ──────────────────────────────────────────────────────
-  const saveToSupabase = async (uid: string, convId: string|null, raws: string[]): Promise<string|null> => {
+  const saveToSupabase = async (
+  uid: string,
+  convId: string|null,
+  raws: string[]
+): Promise<string|null> => {
+  
+  let finalSummary = memorySummary;
+let finalMessages = raws;
+
+if (raws.length > 600) {
+  console.log("[MEMORY] Trigger");
+}
     if (convId) {
       await supabase.from("echo_conversations")
         .update({ messages: raws, updated_at: new Date().toISOString() })
