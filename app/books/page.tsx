@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
@@ -94,6 +94,150 @@ const ECHO_MODES: { id: EchoMode; key: "creative"|"ideas"|"critical"; emoji: str
 const A4_W = 860;
 const A4_H = 1122;
 
+// ── SVG ICONS ────────────────────────────────────────────────────────────────
+const Icons: Record<string, ReactNode> = {
+  // STRUCT
+  T1: <span className="font-black text-[11px] leading-none font-serif">T<sup className="text-[7px]">1</sup></span>,
+  T2: <span className="font-black text-[11px] leading-none font-serif">T<sup className="text-[7px]">2</sup></span>,
+  T3: <span className="font-bold text-[11px] leading-none font-serif">T<sup className="text-[7px]">3</sup></span>,
+  Abc: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+      <text x="1" y="12" fontSize="10" fontFamily="serif" fontWeight="500">¶</text>
+    </svg>
+  ),
+  // TEXTE
+  B: <span className="font-black text-[13px] font-serif leading-none" style={{fontFamily:"Georgia,serif"}}>B</span>,
+  I: <span className="italic font-semibold text-[13px] font-serif leading-none" style={{fontFamily:"Georgia,serif",fontStyle:"italic"}}>I</span>,
+  indent: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <line x1="2" y1="4" x2="14" y2="4"/>
+      <line x1="6" y1="8" x2="14" y2="8"/>
+      <line x1="6" y1="12" x2="14" y2="12"/>
+      <polyline points="2,7 4,9 2,11" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+  // ALIGNEMENT
+  alignL: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <line x1="2" y1="4" x2="14" y2="4"/>
+      <line x1="2" y1="7" x2="10" y2="7"/>
+      <line x1="2" y1="10" x2="13" y2="10"/>
+      <line x1="2" y1="13" x2="8" y2="13"/>
+    </svg>
+  ),
+  alignC: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <line x1="2" y1="4" x2="14" y2="4"/>
+      <line x1="4" y1="7" x2="12" y2="7"/>
+      <line x1="2" y1="10" x2="14" y2="10"/>
+      <line x1="5" y1="13" x2="11" y2="13"/>
+    </svg>
+  ),
+  alignR: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <line x1="2" y1="4" x2="14" y2="4"/>
+      <line x1="6" y1="7" x2="14" y2="7"/>
+      <line x1="3" y1="10" x2="14" y2="10"/>
+      <line x1="8" y1="13" x2="14" y2="13"/>
+    </svg>
+  ),
+  alignJ: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <line x1="2" y1="4" x2="14" y2="4"/>
+      <line x1="2" y1="7" x2="14" y2="7"/>
+      <line x1="2" y1="10" x2="14" y2="10"/>
+      <line x1="2" y1="13" x2="14" y2="13"/>
+    </svg>
+  ),
+  // PAGES
+  pilcrow: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+      <path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/>
+    </svg>
+  ),
+  pageBreak: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <line x1="2" y1="5" x2="14" y2="5"/>
+      <line x1="2" y1="11" x2="14" y2="11" strokeDasharray="2 1.5"/>
+      <line x1="2" y1="8" x2="5" y2="8"/>
+      <line x1="11" y1="8" x2="14" y2="8"/>
+      <polyline points="6,6 8,8 10,6" fill="none"/>
+      <polyline points="6,10 8,8 10,10" fill="none"/>
+    </svg>
+  ),
+  // POLICE
+  fontSmaller: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+      <text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700">A</text>
+      <text x="9" y="13" fontSize="7" fontFamily="serif">−</text>
+    </svg>
+  ),
+  fontLarger: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+      <text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700">A</text>
+      <text x="9" y="13" fontSize="7" fontFamily="serif">+</text>
+    </svg>
+  ),
+  // MEDIA
+  importTxt: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6z"/>
+      <polyline points="9,2 9,6 13,6"/>
+      <line x1="8" y1="10" x2="8" y2="14" transform="translate(0,-3)"/>
+      <polyline points="6,9 8,7 10,9"/>
+    </svg>
+  ),
+  openBook: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 3h4a2 2 0 0 1 2 2v8a1.5 1.5 0 0 0-2-1.5H2z"/>
+      <path d="M14 3h-4a2 2 0 0 0-2 2v8a1.5 1.5 0 0 1 2-1.5h4z"/>
+    </svg>
+  ),
+  importFont: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+      <text x="1" y="12" fontSize="12" fontFamily="serif" fontWeight="700" fontStyle="italic">𝒜</text>
+      <line x1="12" y1="9" x2="12" y2="14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="9.5" y1="11.5" x2="14.5" y2="11.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  ),
+  // LIVRE
+  settings: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="2"/>
+      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+    </svg>
+  ),
+  addChapter: (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <line x1="8" y1="3" x2="8" y2="13"/>
+      <line x1="3" y1="8" x2="13" y2="8"/>
+    </svg>
+  ),
+  // PRESETS
+  presetCustom: (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="2.5"/>
+      <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>
+    </svg>
+  ),
+  presetPrint: (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="6" width="10" height="7" rx="1"/>
+      <path d="M5 6V3h6v3"/>
+      <rect x="5" y="9" width="6" height="1.5" rx="0.5" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+  presetKindle: (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="1" width="10" height="14" rx="1.5"/>
+      <line x1="5" y1="4" x2="11" y2="4"/>
+      <line x1="5" y1="6.5" x2="11" y2="6.5"/>
+      <line x1="5" y1="9" x2="9" y2="9"/>
+      <circle cx="8" cy="12.5" r="0.8" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+};
+
 function downloadBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -136,7 +280,6 @@ export default function BooksPage() {
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
   const chapterDropRef = useRef<HTMLDivElement>(null);
 
-  // Settings
   const [mirrorMargins, setMirrorMargins]       = useState(false);
   const [showPageNumbers, setShowPageNumbers]   = useState(true);
   const [showHeader, setShowHeader]             = useState(false);
@@ -157,7 +300,6 @@ export default function BooksPage() {
     if (!localStorage.getItem("echo-tuto-books-done-v1")) setTutorialStep(1);
   }, []);
 
-  // Pagination
   const [pageCount, setPageCount] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -178,7 +320,6 @@ export default function BooksPage() {
     return () => window.removeEventListener("resize", updatePageCount);
   }, [updatePageCount]);
 
-  // ── TIPTAP ────────────────────────────────────────────────────────────────
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1,2,3] } }),
@@ -204,7 +345,6 @@ export default function BooksPage() {
     },
   });
 
-  // Sync editor content when switching chapters
   useEffect(() => {
     if (!editor || view !== "edit") return;
     const cur = chapters.find(c => c.id === activeChapter);
@@ -214,7 +354,6 @@ export default function BooksPage() {
     }
   }, [activeChapter, view]);
 
-  // Sync font family to editor
   useEffect(() => {
     if (editor) editor.commands.setFontFamily(fontFamily);
   }, [fontFamily, editor]);
@@ -236,10 +375,7 @@ export default function BooksPage() {
     }
   };
 
-  const insertIndent = () => {
-    editor?.chain().focus().insertContent('\u00a0\u00a0\u00a0\u00a0').run();
-  };
-
+  const insertIndent    = () => { editor?.chain().focus().insertContent('\u00a0\u00a0\u00a0\u00a0').run(); };
   const insertPageBreak = () => {
     editor?.commands.insertContent(
       `<div data-page-break="true" contenteditable="false" style="user-select:none;border-top:2px dashed rgba(6,182,212,0.4);margin:2rem 0;text-align:center;font-size:9px;color:rgba(6,182,212,0.5);letter-spacing:0.3em;padding-top:6px;font-family:monospace;">── ${fr?"SAUT DE PAGE":"PAGE BREAK"} ──</div><p></p>`
@@ -270,22 +406,14 @@ export default function BooksPage() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  // ── SAVE ──────────────────────────────────────────────────────────────────
   const [saveStatus, setSaveStatus] = useState<"saved"|"saving"|"unsaved">("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
 
   const saveToSupabase = useCallback(async (currentChapters: Chapter[], currentTitle: string) => {
     const payload = { bookTitle: currentTitle, chapters: currentChapters };
     const payloadStr = JSON.stringify(payload);
-
-    // Always save to localStorage as backup
     localStorage.setItem("echo-books-manuscript", payloadStr);
-
-    if (!userId) {
-      setSaveStatus("saved");
-      return;
-    }
-
+    if (!userId) { setSaveStatus("saved"); return; }
     setSaveStatus("saving");
     try {
       if (bookDbId) {
@@ -300,19 +428,14 @@ export default function BooksPage() {
         if (error) console.error("[Books] insert:", error.message);
         else if (data?.id) setBookDbId(data.id);
       }
-    } catch (e) {
-      console.error("[Books] save error:", e);
-    }
+    } catch (e) { console.error("[Books] save error:", e); }
     setSaveStatus("saved");
   }, [userId, bookDbId]);
 
-  // Trigger autosave whenever chapters or title change
   useEffect(() => {
     setSaveStatus("unsaved");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      saveToSupabase(chapters, bookTitle);
-    }, 1500);
+    saveTimer.current = setTimeout(() => { saveToSupabase(chapters, bookTitle); }, 1500);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [chapters, bookTitle]);
 
@@ -323,12 +446,10 @@ export default function BooksPage() {
     setTimeout(() => setShowSaveConfirm(false), 2000);
   };
 
-  // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
       setUserId(uid);
-
       if (uid) {
         const { data: rows } = await supabase.from("echo_conversations")
           .select("id,messages").eq("user_id", uid).eq("source", "books")
@@ -342,40 +463,29 @@ export default function BooksPage() {
             if (p?.chapters?.length) {
               setChapters(p.chapters);
               setActiveChapter(p.chapters[0].id);
-              // Sync editor after a tick
-              setTimeout(() => {
-                if (editor) editor.commands.setContent(p.chapters[0].content || "<p></p>");
-              }, 100);
+              setTimeout(() => { if (editor) editor.commands.setContent(p.chapters[0].content || "<p></p>"); }, 100);
             }
-            setSaveStatus("saved");
-            return;
+            setSaveStatus("saved"); return;
           } catch (e) { console.error("[Books]", e); }
         }
       }
-
-      // Fallback to localStorage
       const raw = localStorage.getItem("echo-books-manuscript");
       if (raw) {
         try {
           const { bookTitle: t, chapters: c } = JSON.parse(raw);
           if (t) setBookTitle(t);
           if (c && c.length) {
-            setChapters(c);
-            setActiveChapter(c[0].id);
-            setTimeout(() => {
-              if (editor) editor.commands.setContent(c[0].content || "<p></p>");
-            }, 100);
+            setChapters(c); setActiveChapter(c[0].id);
+            setTimeout(() => { if (editor) editor.commands.setContent(c[0].content || "<p></p>"); }, 100);
           }
         } catch {}
       }
       setSaveStatus("saved");
     });
-
     const { data: listener } = supabase.auth.onAuthStateChange((_, s) => setUserId(s?.user?.id || null));
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // ── PANEL RESIZE ──────────────────────────────────────────────────────────
   const [echoPanelWidth, setEchoPanelWidth] = useState(280);
   const [isDesktop, setIsDesktop] = useState(false);
   const resizingRef = useRef(false);
@@ -403,7 +513,6 @@ export default function BooksPage() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
-  // ── IMPORT CUSTOM FONT ────────────────────────────────────────────────────
   const fontInputRef = useRef<HTMLInputElement>(null);
   const handleFontImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; e.target.value = "";
@@ -414,13 +523,11 @@ export default function BooksPage() {
     face.load().then(loaded => {
       document.fonts.add(loaded);
       setCustomFonts(prev => [...prev, name]);
-      // Apply immediately
       setFontFamily(`"${name}", serif`);
       if (editor) editor.commands.setFontFamily(`"${name}", serif`);
     }).catch(err => console.error("[Font import]", err));
   };
 
-  // ── IMPORTS TXT / JSON ────────────────────────────────────────────────────
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const importJsonRef = useRef<HTMLInputElement>(null);
 
@@ -451,7 +558,6 @@ export default function BooksPage() {
     reader.readAsText(file);
   };
 
-  // ── EXPORT ────────────────────────────────────────────────────────────────
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -464,15 +570,12 @@ export default function BooksPage() {
     setShowExportMenu(false);
     const slug = bookTitle.replace(/\s+/g, "_");
     const currentHtml = chapters.find(c => c.id===activeChapter)?.content || "";
-
     if (fmt === "txt") {
       const txt = chapters.map(c => `=== ${c.title} ===\n\n${c.content.replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ")}`).join("\n\n\n");
-      downloadBlob(new Blob([txt], {type:"text/plain"}), `${slug}.txt`);
-      return;
+      downloadBlob(new Blob([txt], {type:"text/plain"}), `${slug}.txt`); return;
     }
     if (fmt === "json") {
-      downloadBlob(new Blob([JSON.stringify({bookTitle,chapters},null,2)], {type:"application/json"}), `${slug}.echo-book.json`);
-      return;
+      downloadBlob(new Blob([JSON.stringify({bookTitle,chapters},null,2)], {type:"application/json"}), `${slug}.echo-book.json`); return;
     }
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -487,7 +590,6 @@ export default function BooksPage() {
     } catch(e) { alert(`Cannot reach export server: ${e}`); }
   };
 
-  // ── ECHO ──────────────────────────────────────────────────────────────────
   const [echoMode, setEchoMode]           = useState<EchoMode|null>(null);
   const [echoMessages, setEchoMessages]   = useState<BookMessage[]>([]);
   const [echoInput, setEchoInput]         = useState("");
@@ -496,44 +598,26 @@ export default function BooksPage() {
 
   const sendEcho = async () => {
     if (!echoInput.trim() || echoThinking) return;
-
-    // Check quota for books actions
     const quotaStatus = checkQuota("vitality_actions", safeTier);
-    if (!quotaStatus.allowed) {
-      setShowLimitModal(true);
-      return;
-    }
-
+    if (!quotaStatus.allowed) { setShowLimitModal(true); return; }
     const msg = echoInput.trim();
     setEchoInput("");
     setEchoMessages(prev => [...prev, {role:"user", text:msg}]);
     setEchoThinking(true);
-
     const history = echoMessages.map(m => m.role==="user" ? `You: ${m.text}` : `Echo: ${m.text}`);
     const excerpt = editor?.getText()?.slice(0, 300) || "";
-
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
       const res = await fetch(`${API_URL}/books`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `[Livre: "${bookTitle}" | Extrait: "${excerpt}"]\n\n${msg}`,
-          history,
-          selectedButtons: echoMode ? [echoMode] : [],
-          userTier: safeTier,
-          bookTitle,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: `[Livre: "${bookTitle}" | Extrait: "${excerpt}"]\n\n${msg}`, history, selectedButtons: echoMode ? [echoMode] : [], userTier: safeTier, bookTitle }),
       });
-
       if (!res.ok) throw new Error("Server error");
       const data = await res.json();
       const reply = data.response || "...";
-
       if (data.inject && (data.inject_text || data.injected_text)) {
         const injected = data.inject_text || data.injected_text;
         injectTextAtEnd(injected);
-        // Save after injection
         const updatedChapters = chapters.map(c => c.id === activeChapter ? {...c, content: editor?.getHTML() || c.content} : c);
         saveToSupabase(updatedChapters, bookTitle);
         setEchoMessages(prev => [...prev, {role:"echo", text:`${reply}\n\n${fr?"Texte injecte dans le chapitre.":"Text injected into chapter."}`}]);
@@ -542,9 +626,7 @@ export default function BooksPage() {
       }
     } catch {
       setEchoMessages(prev => [...prev, {role:"echo", text:T.serverErr}]);
-    } finally {
-      setEchoThinking(false);
-    }
+    } finally { setEchoThinking(false); }
   };
 
   const handleManualInject = () => {
@@ -583,14 +665,27 @@ export default function BooksPage() {
   const currentContent  = currentChapter?.content || "";
   const pageBgStyle     = { backgroundColor:`rgba(${theme==="dark"?"9,9,11":"255,255,255"},${pageOpacity/100})` };
 
-  const TB = ({icon, label, active, onClick}: {icon:string; label:string; active?:boolean; onClick:()=>void}) => (
+  // ── TOOLBAR BUTTON COMPONENT ──────────────────────────────────────────────
+  const TB = ({icon, label, active, onClick}: {
+  icon: ReactNode;
+  label:string;
+  active?:boolean;
+  onClick:()=>void;
+}) => (
     <button onClick={onClick} title={label}
-      className={`group relative w-[46px] h-7 flex items-center justify-center rounded-lg text-[13px] transition-all border select-none ${active?"bg-cyan-500/15 border-cyan-500/40 text-cyan-400":"border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"}`}>
-      {icon}
+      className={`group relative w-[46px] h-8 flex items-center justify-center rounded-lg transition-all border select-none ${
+        active
+          ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400"
+          : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"
+      }`}>
+      {typeof icon === "string" ? <span className="text-[11px] font-mono">{icon}</span> : icon}
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5 rounded bg-zinc-800 text-[9px] text-zinc-200 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 border border-zinc-700 shadow-lg">
+        {label}
+      </span>
     </button>
   );
 
-  // PRESENT MODE
+  // ── PRESENT MODE ──────────────────────────────────────────────────────────
   if (view === "present") return (
     <div className="fixed inset-0 bg-black flex flex-col z-50">
       <div className="flex items-center justify-between px-8 py-3 border-b border-zinc-800">
@@ -600,7 +695,7 @@ export default function BooksPage() {
             <button key={ch.id} onClick={() => setActiveChapter(ch.id)}
               className={`text-[9px] px-2 py-0.5 rounded border transition-all ${activeChapter===ch.id?"border-cyan-500/40 text-cyan-400":"border-zinc-800 text-zinc-600 hover:text-zinc-400"}`}>{i+1}</button>
           ))}
-          <button onClick={() => setView("edit")} className="text-[10px] px-3 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-red-500/40 hover:text-red-400 transition-all">X {T.closePres}</button>
+          <button onClick={() => setView("edit")} className="text-[10px] px-3 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-red-500/40 hover:text-red-400 transition-all">✕ {T.closePres}</button>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto flex items-start justify-center px-8 py-12">
@@ -633,7 +728,7 @@ export default function BooksPage() {
           </div>
           <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
             <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
-              <img src="/echo1.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
+              <img src="/Echo.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
             </div>
             <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
               {fr
@@ -686,80 +781,98 @@ export default function BooksPage() {
         {/* TOOLBAR */}
         <div className="w-[130px] shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col py-2 overflow-y-auto overflow-x-hidden">
 
+          {/* STRUCT */}
           <div className="px-2 pb-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.struct}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="T1" label={T.t1} active={editor?.isActive("heading",{level:1})} onClick={() => { editor?.chain().focus().toggleHeading({level:1}).run(); setTimeout(() => manualSave(), 500); }}/>
-              <TB icon="T2" label={T.t2} active={editor?.isActive("heading",{level:2})} onClick={() => { editor?.chain().focus().toggleHeading({level:2}).run(); setTimeout(() => manualSave(), 500); }}/>
-              <TB icon="T3" label={T.t3} active={editor?.isActive("heading",{level:3})} onClick={() => { editor?.chain().focus().toggleHeading({level:3}).run(); setTimeout(() => manualSave(), 500); }}/>
-              <TB icon="Abc" label={T.normal} active={editor?.isActive("paragraph")} onClick={() => { editor?.chain().focus().setParagraph().run(); setTimeout(() => manualSave(), 500); }}/>
+              <TB icon={Icons.T1}  label={T.t1}     active={editor?.isActive("heading",{level:1})} onClick={() => { editor?.chain().focus().toggleHeading({level:1}).run(); setTimeout(() => manualSave(), 500); }}/>
+              <TB icon={Icons.T2}  label={T.t2}     active={editor?.isActive("heading",{level:2})} onClick={() => { editor?.chain().focus().toggleHeading({level:2}).run(); setTimeout(() => manualSave(), 500); }}/>
+              <TB icon={Icons.T3}  label={T.t3}     active={editor?.isActive("heading",{level:3})} onClick={() => { editor?.chain().focus().toggleHeading({level:3}).run(); setTimeout(() => manualSave(), 500); }}/>
+              <TB icon={Icons.Abc} label={T.normal} active={editor?.isActive("paragraph")}         onClick={() => { editor?.chain().focus().setParagraph().run(); setTimeout(() => manualSave(), 500); }}/>
             </div>
           </div>
 
+          {/* TEXTE */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.texte}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="B"  label={T.bold}   active={editor?.isActive("bold")}   onClick={toggleBold}/>
-              <TB icon="I"  label={T.italic} active={editor?.isActive("italic")} onClick={toggleItalic}/>
-              <TB icon="→"  label={T.indent} onClick={insertIndent}/>
+              <TB icon={Icons.B}      label={T.bold}   active={editor?.isActive("bold")}   onClick={toggleBold}/>
+              <TB icon={Icons.I}      label={T.italic} active={editor?.isActive("italic")} onClick={toggleItalic}/>
+              <TB icon={Icons.indent} label={T.indent} onClick={insertIndent}/>
             </div>
           </div>
 
+          {/* ALIGNEMENT */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.align}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="L" label={T.alignLeft}    active={editor?.isActive({textAlign:"left"})}    onClick={() => { editor?.chain().focus().setTextAlign("left").run(); setIsJustified(false); setActivePreset("custom"); }}/>
-              <TB icon="C" label={T.alignCenter}  active={editor?.isActive({textAlign:"center"})}  onClick={() => { editor?.chain().focus().setTextAlign("center").run(); setIsJustified(false); setActivePreset("custom"); }}/>
-              <TB icon="R" label={T.alignRight}   active={editor?.isActive({textAlign:"right"})}   onClick={() => { editor?.chain().focus().setTextAlign("right").run(); setIsJustified(false); setActivePreset("custom"); }}/>
-              <TB icon="J" label={T.alignJustify} active={editor?.isActive({textAlign:"justify"})} onClick={() => { editor?.chain().focus().setTextAlign("justify").run(); setIsJustified(true); setActivePreset("custom"); }}/>
+              <TB icon={Icons.alignL} label={T.alignLeft}    active={editor?.isActive({textAlign:"left"})}    onClick={() => { editor?.chain().focus().setTextAlign("left").run();    setIsJustified(false); setActivePreset("custom"); }}/>
+              <TB icon={Icons.alignC} label={T.alignCenter}  active={editor?.isActive({textAlign:"center"})}  onClick={() => { editor?.chain().focus().setTextAlign("center").run();  setIsJustified(false); setActivePreset("custom"); }}/>
+              <TB icon={Icons.alignR} label={T.alignRight}   active={editor?.isActive({textAlign:"right"})}   onClick={() => { editor?.chain().focus().setTextAlign("right").run();   setIsJustified(false); setActivePreset("custom"); }}/>
+              <TB icon={Icons.alignJ} label={T.alignJustify} active={editor?.isActive({textAlign:"justify"})} onClick={() => { editor?.chain().focus().setTextAlign("justify").run(); setIsJustified(true);  setActivePreset("custom"); }}/>
             </div>
           </div>
 
+          {/* PAGES */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.pages}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="P" label={T.showMarks} active={showInvisibleChars} onClick={() => setShowInvisibleChars(v=>!v)}/>
-              <TB icon="--" label={fr?"Saut de page":"Page break"} onClick={insertPageBreak}/>
+              <TB icon={Icons.pilcrow}   label={T.showMarks}               active={showInvisibleChars} onClick={() => setShowInvisibleChars(v=>!v)}/>
+              <TB icon={Icons.pageBreak} label={fr?"Saut de page":"Page break"}                        onClick={insertPageBreak}/>
             </div>
           </div>
 
+          {/* POLICE */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.police}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="A-" label={T.smaller} onClick={() => changeFontSize(-1)}/>
-              <TB icon="A+" label={T.larger}  onClick={() => changeFontSize(+1)}/>
+              <TB icon={Icons.fontSmaller} label={T.smaller} onClick={() => changeFontSize(-1)}/>
+              <TB icon={Icons.fontLarger}  label={T.larger}  onClick={() => changeFontSize(+1)}/>
             </div>
             <div className="text-center font-mono text-[9px] text-zinc-500 mt-0.5">{fontSize}px</div>
           </div>
 
+          {/* MEDIA */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.media}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="IN" label={T.importTxt}  onClick={() => fileInputRef.current?.click()}/>
-              <TB icon="OP" label={T.openBook}   onClick={() => importJsonRef.current?.click()}/>
-              <TB icon="FT" label={T.importFont} onClick={() => fontInputRef.current?.click()}/>
+              <TB icon={Icons.importTxt}  label={T.importTxt}  onClick={() => fileInputRef.current?.click()}/>
+              <TB icon={Icons.openBook}   label={T.openBook}   onClick={() => importJsonRef.current?.click()}/>
+              <TB icon={Icons.importFont} label={T.importFont} onClick={() => fontInputRef.current?.click()}/>
             </div>
           </div>
 
+          {/* LIVRE */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.livre}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon="SG" label={T.settings}   active={showSettings} onClick={() => setShowSettings(v=>!v)}/>
-              <TB icon="+"  label={T.newChapter} onClick={addChapter}/>
+              <TB icon={Icons.settings}   label={T.settings}   active={showSettings} onClick={() => setShowSettings(v=>!v)}/>
+              <TB icon={Icons.addChapter} label={T.newChapter} onClick={addChapter}/>
             </div>
           </div>
 
+          {/* PRESETS */}
           <div className="px-2 py-1.5">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.presets}</div>
             <div className="flex flex-col gap-1">
               {(["print","kindle"] as const).map(p => (
                 <button key={p} onClick={() => triggerPreset(p)}
-                  className={`w-full px-1.5 py-1 rounded-lg text-[9px] font-medium border transition-all text-left ${activePreset===p?"bg-cyan-500/15 border-cyan-500/40 text-cyan-400":"border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"}`}>
+                  className={`w-full px-1.5 py-1.5 rounded-lg text-[9px] font-medium border transition-all flex items-center gap-1.5 ${
+                    activePreset===p
+                      ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400"
+                      : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"
+                  }`}>
+                  <span className="shrink-0">{p === "print" ? Icons.presetPrint : Icons.presetKindle}</span>
                   {p==="print" ? T.presetPrint : T.presetKindle}
                 </button>
               ))}
               <button onClick={() => { setActivePreset("custom"); setShowSettings(true); }}
-                className={`w-full px-1.5 py-1 rounded-lg text-[9px] font-medium border transition-all text-left ${activePreset==="custom"?"bg-cyan-500/15 border-cyan-500/40 text-cyan-400":"border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"}`}>
+                className={`w-full px-1.5 py-1.5 rounded-lg text-[9px] font-medium border transition-all flex items-center gap-1.5 ${
+                  activePreset==="custom"
+                    ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400"
+                    : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"
+                }`}>
+                <span className="shrink-0">{Icons.presetCustom}</span>
                 {T.presetCustom}
               </button>
             </div>
@@ -778,12 +891,11 @@ export default function BooksPage() {
               </button>
             ))}
 
-            {/* CHAPTER DROPDOWN */}
             <div className="relative flex-1 mx-1" ref={chapterDropRef}>
               <button onClick={() => setShowChapterDropdown(v=>!v)}
                 className="w-full flex items-center justify-between gap-1 px-2 py-1 rounded-lg border border-zinc-700 text-zinc-300 hover:border-cyan-500/40 hover:text-cyan-400 transition-all text-[9px] font-mono">
                 <span className="truncate">{currentChapter?.title || T.chapterSelect}</span>
-                <span className="shrink-0">V</span>
+                <span className="shrink-0">▾</span>
               </button>
               {showChapterDropdown && (
                 <div className="absolute top-full left-0 mt-1 w-full min-w-[160px] max-w-[280px] rounded-xl bg-zinc-950 border border-zinc-800 shadow-2xl p-1 z-50 flex flex-col gap-0.5 max-h-60 overflow-y-auto">
@@ -808,23 +920,21 @@ export default function BooksPage() {
               <span className="text-[9px] font-mono text-zinc-400">{saveLabel.text}</span>
             </div>
 
-            {/* SAVE */}
             <div className="relative shrink-0">
               <button onClick={manualSave} className="text-[9px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-all font-mono">
                 {T.save}
               </button>
               {showSaveConfirm && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 rounded-xl bg-emerald-900/90 border border-emerald-500/40 text-emerald-400 text-[10px] font-mono whitespace-nowrap shadow-lg">
-                  {T.saved}
+                  ✓ {T.saved}
                 </div>
               )}
             </div>
 
-            {/* EXPORT */}
             <div className="relative shrink-0" ref={exportRef}>
               <button onClick={() => setShowExportMenu(v=>!v)}
                 className={`text-[9px] px-2 py-1 rounded border transition-all font-mono flex items-center gap-1 ${showExportMenu?"bg-cyan-500/10 border-cyan-500/30 text-cyan-400":"border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400"}`}>
-                {T.export} V
+                {T.export} ▾
               </button>
               {showExportMenu && (
                 <div className="absolute right-0 mt-1 w-40 rounded-xl bg-zinc-950 border border-zinc-800 shadow-2xl p-1 z-50 flex flex-col gap-0.5">
@@ -844,10 +954,10 @@ export default function BooksPage() {
               )}
             </div>
 
-            {/* SETTINGS */}
             <div className="relative ml-1 shrink-0" ref={settingsRef}>
-              <button onClick={() => setIsSettingsOpen(v=>!v)} className="text-[10px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">
-                SG <span className="font-mono text-[8px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase ml-0.5">{fr?"FR":"EN"}</span>
+              <button onClick={() => setIsSettingsOpen(v=>!v)} className="text-[10px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all flex items-center gap-1">
+                <svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><circle cx="7" cy="7" r="1.8"/><path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.9 2.9l1 1M10.1 10.1l1 1M2.9 11.1l1-1M10.1 3.9l1-1"/></svg>
+                <span className="font-mono text-[8px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase">{fr?"FR":"EN"}</span>
               </button>
               {isSettingsOpen && (
                 <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 flex flex-col gap-1 z-50">
@@ -897,7 +1007,7 @@ export default function BooksPage() {
                 </select>
                 <button onClick={() => fontInputRef.current?.click()} className="text-[9px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">+ {T.importFont}</button>
               </div>
-              <button onClick={() => setShowSettings(false)} className="ml-auto text-zinc-500 hover:text-zinc-200 text-base">X</button>
+              <button onClick={() => setShowSettings(false)} className="ml-auto text-zinc-500 hover:text-zinc-200 text-base leading-none">✕</button>
             </div>
           )}
 
@@ -908,64 +1018,45 @@ export default function BooksPage() {
             <div className="absolute inset-0 overflow-y-auto z-[2] py-8 flex flex-col items-center gap-6"
               style={{scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent"}}>
 
-              {/* EDITABLE TITLE — outside the white page so it doesn't interfere */}
               <div className="w-[860px] flex items-center gap-3 px-2">
                 {isEditingTitle ? (
-                  <input
-                    ref={titleInputRef}
-                    value={bookTitle}
-                    onChange={e => setBookTitle(e.target.value)}
+                  <input ref={titleInputRef} value={bookTitle} onChange={e => setBookTitle(e.target.value)}
                     onBlur={() => setIsEditingTitle(false)}
                     onKeyDown={e => { if (e.key==="Enter") setIsEditingTitle(false); }}
-                    className="flex-1 text-2xl font-bold bg-transparent border-b-2 border-cyan-500 outline-none text-white pb-1"
-                    autoFocus
-                  />
+                    className="flex-1 text-2xl font-bold bg-transparent border-b-2 border-cyan-500 outline-none text-white pb-1" autoFocus/>
                 ) : (
-                  <h1
-                    onDoubleClick={() => { setIsEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 50); }}
+                  <h1 onDoubleClick={() => { setIsEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 50); }}
                     title={T.titleHint}
-                    className="text-2xl font-bold text-white cursor-text pb-1 border-b-2 border-transparent hover:border-cyan-500/30 transition-colors select-none"
-                  >
+                    className="text-2xl font-bold text-white cursor-text pb-1 border-b-2 border-transparent hover:border-cyan-500/30 transition-colors select-none">
                     {bookTitle}
                   </h1>
                 )}
                 <span className="text-[10px] text-zinc-500 font-mono shrink-0">({T.titleHint})</span>
               </div>
 
-              <div
-                ref={containerRef}
-                className={`relative shadow-2xl ${showInvisibleChars?"echo-editor-show-symbols":""}`}
+              <div ref={containerRef} className={`relative shadow-2xl ${showInvisibleChars?"echo-editor-show-symbols":""}`}
                 style={{
-                  width:`${A4_W}px`,
-                  minHeight:`${A4_H}px`,
-                  paddingTop:"52px",
-                  paddingBottom:"64px",
-                  paddingLeft: mirrorMargins ? "90px" : "72px",
-                  paddingRight:"72px",
+                  width:`${A4_W}px`, minHeight:`${A4_H}px`,
+                  paddingTop:"52px", paddingBottom:"64px",
+                  paddingLeft: mirrorMargins ? "90px" : "72px", paddingRight:"72px",
                   ...pageBgStyle,
-                  border:"1px solid rgba(255,255,255,0.08)",
-                  borderRadius:"2px",
+                  border:"1px solid rgba(255,255,255,0.08)", borderRadius:"2px",
                   boxShadow:"0 4px 40px rgba(0,0,0,0.5)",
                 }}>
 
-                {/* Page separator lines */}
                 {Array.from({length: Math.max(0, pageCount - 1)}).map((_,i) => (
                   <div key={i} className="absolute left-0 right-0 pointer-events-none"
                     style={{top:`${(i+1)*A4_H}px`, borderTop:"1px dashed rgba(6,182,212,0.12)", zIndex:10}}>
-                    <span style={{position:"absolute",right:"8px",top:"-10px",fontSize:"8px",color:"rgba(6,182,212,0.3)",fontFamily:"monospace"}}>
-                      p.{i+2}
-                    </span>
+                    <span style={{position:"absolute",right:"8px",top:"-10px",fontSize:"8px",color:"rgba(6,182,212,0.3)",fontFamily:"monospace"}}>p.{i+2}</span>
                   </div>
                 ))}
 
-                {/* HEADER — inside the page, only visible and editable when enabled */}
                 {showHeader && (
                   <div className="absolute top-0 left-0 right-0 h-10 border-b border-zinc-700/30 flex items-center px-4">
                     <span className="text-[9px] font-mono tracking-widest uppercase text-zinc-400">{bookTitle}</span>
                   </div>
                 )}
 
-                {/* Chapter title inside page */}
                 <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-400 dark:text-zinc-500 mb-3 font-mono">{currentChapter?.title}</div>
 
                 <EditorContent
@@ -974,7 +1065,6 @@ export default function BooksPage() {
                   style={{fontSize:`${fontSize}px`, lineHeight, fontFamily}}
                 />
 
-                {/* Page numbers */}
                 {showPageNumbers && Array.from({length: pageCount}).map((_, i) => (
                   <div key={`pn-${i}`} className="absolute left-0 right-0 text-center text-[10px] text-zinc-400 font-mono pointer-events-none"
                     style={{top:`${(i+1)*A4_H - 30}px`, zIndex:10}}>
@@ -982,7 +1072,6 @@ export default function BooksPage() {
                   </div>
                 ))}
               </div>
-
               <div className="h-32 shrink-0"/>
             </div>
           </div>
@@ -1011,7 +1100,7 @@ export default function BooksPage() {
           <div className="flex gap-1 p-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
             {ECHO_MODES.map(m => (
               <button key={m.id} onClick={() => setEchoMode(echoMode===m.id ? null : m.id)}
-                className={`flex-1 text-[11px] py-1 rounded-lg border transition-all text-center ${echoMode===m.id?"bg-cyan-500/10 border-cyan-500/40 text-cyan-400":"border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
+                className={`flex-1 text-[11px] py-1.5 rounded-lg border transition-all text-center font-medium ${echoMode===m.id?"bg-cyan-500/10 border-cyan-500/40 text-cyan-400":"border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
                 {m.emoji} {T[m.key]}
               </button>
             ))}
@@ -1021,7 +1110,7 @@ export default function BooksPage() {
             {echoMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-3 pb-4">
                 <div className="w-16 h-16 rounded-full overflow-hidden border border-zinc-700 shadow-lg echo-idle">
-                  <img src="/echo1.png" alt="Echo" className="w-full h-full object-cover"/>
+                  <img src="/Echo.png" alt="Echo" className="w-full h-full object-cover"/>
                 </div>
                 <div className="text-[13px] text-zinc-500 text-center leading-relaxed px-2 whitespace-pre-line">{T.echoPlaceholder}</div>
               </div>
@@ -1081,7 +1170,7 @@ export default function BooksPage() {
           margin-top:1.2em !important; margin-bottom:0.4em !important;
         }
         .echo-editor-show-symbols .ProseMirror p:after {
-          content: " P" !important; color: rgba(6,182,212,0.35) !important;
+          content: " ¶" !important; color: rgba(6,182,212,0.35) !important;
           font-size: 0.85em !important; font-family: monospace !important;
         }
         [contenteditable="false"] {
