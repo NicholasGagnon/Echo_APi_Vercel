@@ -676,17 +676,17 @@ export default function BooksPage() {
       {/* NAV SIDEBAR */}
       <aside className="w-44 shrink-0 border-r border-zinc-200 dark:border-zinc-800 px-5 py-6 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
         <div className="space-y-20">
-          <h2 className="font-bold"><Link href="/" className="text-cyan-600 dark:text-cyan-400">{T.home}</Link></h2>
+          <h2 className="font-bold"><Link href="/" className="text-cyan-600 dark:text-cyan-400">🏢{T.home}</Link></h2>
           <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium text-sm">
-            <Link href="/chat"       className="block hover:text-cyan-500">{T.chat}</Link>
-            <Link href="/books"      className="block text-cyan-500 font-bold">{T.books}</Link>
-            <Link href="/calendar"   className="block hover:text-cyan-500">{T.calendar}</Link>
-            <Link href="/vitality"   className="block hover:text-cyan-500">{T.vitality}</Link>
-            <Link href="/services"   className="block hover:text-cyan-500">{T.services}</Link>
-            <Link href="/account"    className="block hover:text-cyan-500">{T.account}</Link>
-            <Link href="/horizonweb" className="block hover:text-cyan-500">HorizonWeb</Link>
+            <Link href="/chat"       className="block hover:text-cyan-500">💬{T.chat}</Link>
+            <Link href="/books"      className="block text-cyan-500 font-bold">📚{T.books}</Link>
+            <Link href="/calendar"   className="block hover:text-cyan-500">📅{T.calendar}</Link>
+            <Link href="/vitality"   className="block hover:text-cyan-500">📈{T.vitality}</Link>
+            <Link href="/services"   className="block hover:text-cyan-500">💎{T.services}</Link>
+            <Link href="/account"    className="block hover:text-cyan-500">👤{T.account}</Link>
+            <Link href="/horizonweb" className="block hover:text-cyan-500">📡HorizonWeb</Link>
             <hr className="border-zinc-200 dark:border-zinc-800"/>
-            <Link href="/history"    className="block hover:text-amber-500">{T.history}</Link>
+            <Link href="/history"    className="block hover:text-amber-500">⭐{T.history}</Link>
           </div>
         </div>
         <div className="text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800 pt-3">
