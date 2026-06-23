@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
 import { checkQuota, UserTier } from "../../utils/quota";
 import LangDropdown from "../components/LangDropdown";
+import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -150,6 +151,11 @@ export default function BooksPage() {
   const [showSettings, setShowSettings]         = useState(true);
   const [showSaveConfirm, setShowSaveConfirm]   = useState(false);
   const [showLimitModal, setShowLimitModal]     = useState(false);
+  const [tutorialStep, setTutorialStep] = useState<number|null>(null);
+
+  useEffect(() => {
+    if (!localStorage.getItem("echo-tuto-books-done-v1")) setTutorialStep(1);
+  }, []);
 
   // Pagination
   const [pageCount, setPageCount] = useState(1);
@@ -613,7 +619,34 @@ export default function BooksPage() {
   );
 
   return (
-    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30">
+    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
+
+      {/* TUTORIAL */}
+      {tutorialStep === 1 && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[92vw] max-w-[460px] sm:max-w-[640px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
+          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-books-done-v1","true"); }} />
+          <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
+            <span className="text-xl">📚</span>
+            <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
+              {fr ? "ECHO LIVRES (1/1)" : "ECHO BOOKS (1/1)"}
+            </h4>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
+            <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
+              <img src="/Echo.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
+            </div>
+            <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
+              {fr
+                ? <>Bienvenue dans l'atelier d'écriture ! 📖{"\n"}Texte de présentation à remplacer.</>
+                : <>Welcome to the writing studio! 📖{"\n"}Placeholder presentation text to replace.</>}
+            </div>
+          </div>
+          <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-books-done-v1","true"); }}
+            className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase">
+            {fr ? "C'EST PARTI 🚀" : "LET'S GO 🚀"}
+          </button>
+        </div>
+      )}
 
       {/* LIMIT MODAL */}
       {showLimitModal && (
