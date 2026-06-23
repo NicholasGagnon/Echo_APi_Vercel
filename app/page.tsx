@@ -63,6 +63,7 @@ export default function Home() {
   const [isLoaded,  setIsLoaded]  = useState(false);
   const [userId,    setUserId]    = useState<string|null>(null);
   const [activeConvId, setActiveConvId] = useState<string|null>(null);
+  const [memorySummary, setMemorySummary] = useState("");
 
   const bottomRef     = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -198,16 +199,17 @@ export default function Home() {
         if (uid) {
           const { data: convRows } = await supabase
             .from("echo_conversations")
-            .select("id, messages")
+            .select("id, messages, summary")
             .eq("user_id", uid)
             .eq("source", "chat")
             .order("updated_at", { ascending: false })
             .limit(1);
 
           if (convRows?.length) {
-            setActiveConvId(convRows[0].id);
-            setMessages(deserializeMsgs(convRows[0].messages || []));
-          }
+          setActiveConvId(convRows[0].id);
+          setMessages(deserializeMsgs(convRows[0].messages || []));
+          setMemorySummary(convRows[0].summary || "");
+      }
 
           const { data: stickyRows } = await supabase
             .from("echo_stickies").select("*").eq("user_id", uid)
