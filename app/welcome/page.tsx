@@ -28,13 +28,16 @@ export default function WelcomePage() {
   const [showLang, setShowLang]   = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
 
-  // ÉTATS DE LA REPRÉSENTATION D'ECHO (POP-UP INTERNE)
-  const [dots, setDots] = useState("");
-  const [echoStep, setEchoStep] = useState<"loading" | "activated" | "typing" | "closed">("loading");
+  // ÉTATS DE SÉQUENCE INTERNE D'ECHO
+  const [echoStep, setEchoStep] = useState<"lang_select" | "loading" | "typing" | "closed">("lang_select");
+  const [dotsLine1, setDotsLine1] = useState("");
+  const [dotsLine2Part1, setDotsLine2Part1] = useState("");
+  const [dotsLine2Part2, setDotsLine2Part2] = useState("");
+  const [showCompanionStatus, setShowCompanionStatus] = useState(false);
   const [displayedText, setDisplayedText] = useState("");
   const [showSecondBlock, setShowSecondBlock] = useState(false);
 
-  // ÉTATS DES MODALS ANCRÉS (DEPUIS ACCOUNT)
+  // MODALS D'AUTHENTIFICATION SUPABASE
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [email, setEmail] = useState("");
@@ -93,26 +96,32 @@ export default function WelcomePage() {
     return () => { cancelAnimationFrame(animRef.current); window.removeEventListener("resize", onResize); };
   }, []);
 
-  // ── SÉQUENCE POP-UP ECHO (SIMULATION FAST) ────────────────────────────────
+  // ── SÉQUENCE SYNCHRONISATION PRÉCISE DES POINTS ───────────────────────────
   useEffect(() => {
-    let count = 0;
-    const interval = setInterval(() => {
-      count++;
-      setDots((prev) => prev + ".");
-      if (count >= 220) { // Ligne longue complète de points
-        clearInterval(interval);
-        setTimeout(() => setEchoStep("activated"), 100);
-      }
-    }, 1); // Encore plus rapide
-    return () => clearInterval(interval);
-  }, []);
+    if (echoStep !== "loading") return;
 
-  useEffect(() => {
-    if (echoStep === "activated") {
-      setTimeout(() => setEchoStep("typing"), 600);
-    }
+    let currentDot = 0;
+    const interval = setInterval(() => {
+      currentDot++;
+      
+      if (currentDot <= 90) {
+        setDotsLine1((prev) => prev + ".");
+      } else if (currentDot <= 130) {
+        setDotsLine2Part1((prev) => prev + ".");
+      } else if (currentDot === 131) {
+        setShowCompanionStatus(true);
+      } else if (currentDot <= 141) {
+        setDotsLine2Part2((prev) => prev + ".");
+      } else {
+        clearInterval(interval);
+        setTimeout(() => setEchoStep("typing"), 650);
+      }
+    }, 2);
+
+    return () => clearInterval(interval);
   }, [echoStep]);
 
+  // ── SÉQUENCE MACHINE À ÉCRIRE ─────────────────────────────────────────────
   useEffect(() => {
     if (echoStep !== "typing") return;
     let currentIndex = 0;
@@ -132,20 +141,19 @@ export default function WelcomePage() {
             } else {
               clearInterval(secondInterval);
             }
-          }, 10);
-        }, 900);
+          }, 12);
+        }, 1000);
       }
     }, 15);
     return () => clearInterval(typeInterval);
   }, [echoStep, lang]);
 
-  // ── ECHO PHASE ────────────────────────────────────────────────────────────
+  // ── AUTRES EFFETS ET UTILS ────────────────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setEchoPhase(p => (p+1)%3), 3000);
     return () => clearInterval(t);
   }, []);
 
-  // ── LANG DROPDOWN CLOSE ───────────────────────────────────────────────────
   useEffect(() => {
     const h = (e: MouseEvent) => { if (langRef.current && !langRef.current.contains(e.target as Node)) setShowLang(false); };
     document.addEventListener("mousedown", h);
@@ -154,7 +162,6 @@ export default function WelcomePage() {
 
   const echoClass = ["echo-idle","echo-speaking","echo-thinking"][echoPhase];
 
-  // ── PROTOCOLES CONNEXIONS OAUTH NORMAL ────────────────────────────────────
   const handleGoogleConnectNormal = async () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -186,7 +193,6 @@ export default function WelcomePage() {
     }
   };
 
-  // ── METHODES FORMULAIRES ANCRÉS ───────────────────────────────────────────
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignInError(null);
@@ -234,11 +240,15 @@ export default function WelcomePage() {
     setSignUpSuccess(null);
   };
 
-  // ── GESTION CLIC GLOBAL PAGE (SAUF EXCEPTIONS) ────────────────────────────
   const handlePageClick = (e: React.MouseEvent) => {
     if (echoStep !== "closed") return; 
     const tag = (e.target as HTMLElement).closest("button,a,input,select,textarea,[data-stop]");
     if (!tag) router.push("/account");
+  };
+
+  const initSequence = (selectedLang: "fr" | "en") => {
+    setLang(selectedLang);
+    setEchoStep("loading");
   };
 
   return (
@@ -257,11 +267,11 @@ export default function WelcomePage() {
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.025]"
         style={{backgroundImage:"linear-gradient(rgba(6,182,212,1) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,1) 1px, transparent 1px)", backgroundSize:"60px 60px"}}/>
 
-      {/* LANG DROPDOWN */}
+      {/* LANG DROPDOWN COIN DROIT */}
       <div ref={langRef} className="absolute top-5 right-5 z-50" data-stop="">
         <button onClick={e => { e.stopPropagation(); setShowLang(v=>!v); }}
           className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 hover:border-cyan-500/50 rounded-xl px-3 py-2 text-xs font-mono font-bold text-zinc-300 transition-all">
-          <span>{lang === "fr" ? "🇫🇷 FR" : "🇬🇧 EN"}</span>
+          <span>{fr ? "🇫🇷 FR" : "🇬🇧 EN"}</span>
           <span className="text-zinc-600">{showLang ? "▲" : "▼"}</span>
         </button>
         {showLang && (
@@ -287,7 +297,7 @@ export default function WelcomePage() {
           Echo AI Ecosystem
         </div>
 
-        {/* ECHO FLOTTANT */}
+        {/* ECHO FLOTTANT CENTRAL */}
         <div className="flex flex-col items-center gap-3">
           <div className="relative w-44 h-44 flex items-center justify-center">
             <div className="absolute inset-0 rounded-full"
@@ -322,54 +332,63 @@ export default function WelcomePage() {
         </div>
 
         {/* DEUX BLOCS COTE A COTE */}
-        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-5 mt-2 items-start">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2 items-start">
 
-          {/* BLOC GAUCHE — POP-UP REHAUSSÉ BLANC/CYAN TRANSLUCIDE */}
-          {echoStep !== "closed" ? (
-            <div className="bg-white/[0.07] backdrop-blur-xl border-2 border-cyan-400/60 rounded-2xl p-6 relative flex flex-col justify-between min-h-[380px] -mt-6 lg:-ml-4 shadow-[0_0_30px_rgba(6,182,212,0.15)]" data-stop="">
-              {/* Bouton de Fermeture Gros X */}
-              <button 
-                onClick={(e) => { e.stopPropagation(); setEchoStep("closed"); }}
-                className="absolute top-4 right-5 text-zinc-400 hover:text-cyan-300 font-mono text-xl font-bold transition-colors p-1 z-30"
-                title="Fermer"
-              >
+          {/* BLOC GAUCHE — PANNEAU INTERACTIF D'ECHO */}
+          {echoStep === "lang_select" && (
+            <div className="bg-white/[0.04] backdrop-blur-xl border-2 border-cyan-500/40 rounded-2xl p-8 flex flex-col justify-center items-center min-h-[380px] -mt-8 lg:-ml-6 shadow-[0_0_30px_rgba(6,182,212,0.15)] gap-6" data-stop="">
+              <h3 className="text-white font-mono text-xs uppercase tracking-widest font-bold text-center">
+                Select System Language / Choisir la langue
+              </h3>
+              <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
+                <button onClick={() => initSequence("fr")} className="flex-1 py-3.5 rounded-xl border-2 border-cyan-400 bg-cyan-500/10 text-white font-mono text-sm font-bold tracking-wider hover:bg-cyan-500/30 transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                  🇫🇷 Français
+                </button>
+                <button onClick={() => initSequence("en")} className="flex-1 py-3.5 rounded-xl border-2 border-cyan-400 bg-cyan-500/10 text-white font-mono text-sm font-bold tracking-wider hover:bg-cyan-500/30 transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                  🇬🇧 English
+                </button>
+              </div>
+            </div>
+          )}
+
+          {echoStep !== "lang_select" && echoStep !== "closed" && (
+            <div className="bg-white/[0.06] backdrop-blur-xl border-2 border-cyan-400/50 rounded-2xl p-6 relative flex flex-col justify-between min-h-[380px] -mt-8 lg:-ml-6 shadow-[0_0_35px_rgba(6,182,212,0.2)]" data-stop="">
+              {/* Bouton Fermer */}
+              <button onClick={(e) => { e.stopPropagation(); setEchoStep("closed"); }}
+                className="absolute top-4 right-5 text-zinc-400 hover:text-cyan-300 font-mono text-xl font-bold transition-colors p-1 z-30">
                 ✕
               </button>
 
-              {/* Logo Corrigé (/Echo.png) */}
-              <div className="absolute top-4 right-14">
-                <img src="/Echo.png" alt="Echo Icon" className="w-8 h-8 object-contain filter drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
+              {/* Gros Echo Flottant (Transition vers les boutons à la fermeture) */}
+              <div className={`absolute top-4 right-14 transition-all duration-1000 ${
+                echoStep === "typing" ? "opacity-90 scale-100 rotate-0" : "opacity-0 scale-75 translate-x-20"
+              }`}>
+                <img src="/Echo.png" alt="Echo Icon" className="w-14 h-14 rounded-full border border-cyan-500/30 object-contain shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
               </div>
 
-              {/* Loader des points complet */}
-              <div className="text-xs text-zinc-400 break-all font-mono select-none leading-normal">
-                Syncronisation du systeme en cours {dots}
-                {echoStep !== "loading" && (
-                  <span className="text-cyan-300 font-bold block mt-2 font-mono tracking-wide">
-                    Compagnon numérique activé...
+              {/* Terminal de points millimétré */}
+              <div className="text-xs font-mono select-none text-zinc-400 break-all leading-relaxed pr-8">
+                <div>{fr ? "Syncronisation du systeme en cours" : "System synchronization in progress"}</div>
+                <div className="tracking-tighter opacity-70">{dotsLine1}</div>
+                <div className="inline tracking-tighter opacity-70">{dotsLine2Part1}</div>
+                {showCompanionStatus && (
+                  <span className="text-cyan-300 font-bold mx-1 font-mono tracking-wide">
+                    {fr ? "Compagnon numérique activé..." : "Digital companion activated..."}
                   </span>
                 )}
+                <div className="inline tracking-tighter opacity-70">{dotsLine2Part2}</div>
               </div>
 
-              {/* Machine à écrire */}
-              {(echoStep === "typing" || showSecondBlock) && (
+              {/* Zone Machine à écrire */}
+              {echoStep === "typing" && (
                 <div className="text-sm sm:text-base text-white font-medium whitespace-pre-wrap leading-relaxed font-sans tracking-wide pt-4 flex-1">
                   {displayedText}
-                  
-                  {/* Image flottante finale corrigée (/Echo.png) */}
-                  {displayedText.includes("------------------------------") && (
-                    <div className="inline-block ml-2 align-middle">
-                      <img 
-                        src="/Echo.png" 
-                        alt="Echo Link" 
-                        className="w-7 h-7 inline object-contain opacity-90 animate-bounce" 
-                      />
-                    </div>
-                  )}
                 </div>
               )}
             </div>
-          ) : (
+          )}
+
+          {echoStep === "closed" && (
             <div className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
               <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-4">
                 {fr ? "Un ecosysteme concu pour gerer l'essentiel :" : "An ecosystem built to manage the essentials:"}
@@ -390,7 +409,7 @@ export default function WelcomePage() {
             </div>
           )}
 
-          {/* BLOC DROIT — CONNEXION */}
+          {/* BLOC DROIT — FORMULAIRE DE CONNEXION */}
           <div className="bg-zinc-950/90 border border-cyan-500/25 rounded-2xl p-6 backdrop-blur-sm shadow-[0_0_40px_rgba(6,182,212,0.06)] flex flex-col gap-4" data-stop="">
             <p className="text-center text-white font-bold text-lg">
               {fr ? "Connectez-vous pour commencer" : "Sign in to get started"}
@@ -456,7 +475,7 @@ export default function WelcomePage() {
         </p>
       </div>
 
-      {/* MODAL SIGN IN */}
+      {/* MODAL SUPABASE SIGN IN */}
       {showSignInModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" data-stop="">
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
@@ -485,7 +504,7 @@ export default function WelcomePage() {
         </div>
       )}
 
-      {/* MODAL SIGN UP */}
+      {/* MODAL SUPABASE SIGN UP */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" data-stop="">
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
