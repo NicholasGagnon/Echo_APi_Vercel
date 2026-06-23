@@ -79,7 +79,7 @@ export default function Sidebar({ userTier = "free" }: SidebarProps) {
       <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
         {lang === "fr" ? "Statut" : "Status"} :{" "}
         <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">
-          {userTier === "connected_free" || userTier === "free" ? "Accès libre" : userTier}
+          {userTier === "connected_free" || userTier === "free" ? (lang === "fr" ? "Accès libre" : "FreeConnect") : userTier}
         </span>
       </div>
     </aside>

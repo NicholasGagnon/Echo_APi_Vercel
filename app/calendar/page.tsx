@@ -539,7 +539,7 @@ export default function CalendarPage() {
             </div>
           </div>
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
-            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{safeTier === "connected_free" ? "Accès libre" : safeTier}</span>
+            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{safeTier === "connected_free" ? (lang === "fr" ? "Accès libre" : "FreeConnect") : safeTier}</span>
           </div>
         </aside>
 

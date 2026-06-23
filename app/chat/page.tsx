@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
+import PremiumRequiredModal from "../components/PremiumRequiredModal";
 import { useApp } from "../../context/AppContext";
 
 type ChatMessage = { raw: string; imageB64?: string };
@@ -71,6 +72,7 @@ export default function ChatPage() {
   const [isListening, setIsListening] = useState(false);
   const [selectedImage,     setSelectedImage]     = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
+  const [showPremiumModal, setShowPremiumModal]   = useState(false);
   const [echoState, setEchoState] = useState("idle");
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar"|"surprise">("vitality_actions");
@@ -599,7 +601,7 @@ export default function ChatPage() {
               {isPressingSurprise ? "💎 Émergence 💎" : "💎 Surprise 💎"}
             </button>
             <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
-              Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier === "connected_free" ? "Accès libre" : userTier}</span>
+              Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier === "connected_free" ? (lang === "fr" ? "Accès libre" : "FreeConnect") : userTier}</span>
             </div>
           </div>
         </aside>
@@ -786,7 +788,8 @@ export default function ChatPage() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="grid grid-cols-3 gap-3 flex-1">
                   <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
-                  <button type="button" disabled={isImageLocked} onClick={() => imageInputRef.current?.click()}
+                  <button type="button" onClick={() => isImageLocked ? setShowPremiumModal(true) : imageInputRef.current?.click()}
+                    title={isImageLocked ? (lang==="fr"?"Plan Premium requis":"Premium plan required") : ""}
                     className={`h-12 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border transition-all ${
                       isImageLocked
                         ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
@@ -794,7 +797,7 @@ export default function ChatPage() {
                           ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
                           : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"}`}>
                     <span>{isImageLocked?"🔒":selectedImage?"✓":"🖼️"}</span>
-                    <span>{selectedImage?(lang==="fr"?"Image":"Image"):(lang==="fr"?"Analyse image":"Image")}</span>
+                    <span>{isImageLocked?(lang==="fr"?"Image":"Image"):selectedImage?(lang==="fr"?"Image prête":"Image Ready"):(lang==="fr"?"Analyse image":"Image Analysis")}</span>
                   </button>
 
                   <button onClick={lancerDictation}

@@ -677,7 +677,7 @@ export default function BooksPage() {
           </div>
         </div>
         <div className="text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800 pt-3">
-          {T.mode} : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-black tracking-wider block">{safeTier === "connected_free" ? "Accès libre" : safeTier}</span>
+          {T.mode} : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-black tracking-wider block">{safeTier === "connected_free" ? (fr ? "Accès libre" : "FreeConnect") : safeTier}</span>
         </div>
       </aside>
 

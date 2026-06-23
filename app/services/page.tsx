@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
+import LangDropdown from "../components/LangDropdown";
 
 const localT = {
   fr: {
@@ -141,7 +142,7 @@ const localT = {
     },
     plans: {
       connected_free: {
-        title: "Accès libre",
+        title: "FreeConnect",
         sub: "FOREVER FREE",
         f1: "✅ AI Standard Model",
         f2: "✅ WebSearch Integration",
@@ -402,7 +403,7 @@ export default function ServicesPage() {
             </div>
           </div>
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
-            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier === "connected_free" ? "Accès libre" : userTier}</span>
+            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier === "connected_free" ? (lang === "fr" ? "Accès libre" : "FreeConnect") : userTier}</span>
           </div>
         </aside>
 
@@ -666,7 +667,7 @@ export default function ServicesPage() {
 
       {/* ── 🔐 POP-UP CONNEXION REQUISE (CONVIVIAL) ── */}
       {showLoginRequiredModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10000] p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowLoginRequiredModal(false)}>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100000] p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowLoginRequiredModal(false)}>
           <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center relative shadow-2xl space-y-4 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <img src="/echo1.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
             <p className="text-zinc-900 dark:text-zinc-100 font-sans text-sm font-semibold leading-relaxed">
@@ -677,7 +678,7 @@ export default function ServicesPage() {
             <div className="flex flex-col gap-2">
               <Link
                 href="/account"
-                onClick={() => setShowLoginRequiredModal(false)}
+                onClick={() => { localStorage.setItem("echo-treasure-redirect","1"); setShowLoginRequiredModal(false); }}
                 className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md text-center"
               >
                 {lang === "fr" ? "Se connecter" : "Log in"}
@@ -697,14 +698,17 @@ export default function ServicesPage() {
       {showTreasureModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
           <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto relative">
-            <button
-              type="button"
-              onClick={() => setShowTreasureModal(false)}
-              className="absolute top-4 right-5 text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1"
-              title={activeT.treasureEgg.closePortal}
-            >
-              ✕
-            </button>
+            <div className="absolute top-4 right-5 flex items-center gap-2 z-10">
+              <LangDropdown />
+              <button
+                type="button"
+                onClick={() => setShowTreasureModal(false)}
+                className="text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1"
+                title={activeT.treasureEgg.closePortal}
+              >
+                ✕
+              </button>
+            </div>
 
             <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">
               👑
