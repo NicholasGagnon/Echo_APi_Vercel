@@ -569,70 +569,101 @@ export default function Home() {
           {/* MAIN SECTION */}
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
 
-            {/* BOUTONS COMPORTEMENTAUX */}
-            <div className="w-full max-w-4xl mx-auto bg-zinc-50/50 dark:bg-zinc-950/40 backdrop-blur-md border border-zinc-200 dark:border-zinc-900 rounded-2xl p-3 shadow-lg relative">
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 w-full">
-                {buttonsData.map(btn => {
-                  const isSelected     = selectedButtons.includes(btn.id);
-                  const isDoubleRegard = btn.id === "double";
-                  let isLocked = false;
-                  if (!isDoubleRegard) {
-                    if (selectedButtons.length === 1 && !isSelected && !isDoubleRegardUnlocked) isLocked = true;
-                    else if (selectedButtons.length === 2 && !isSelected) isLocked = true;
-                  } else {
-                    if (selectedButtons.length === 0 || selectedButtons.length === 2) isLocked = true;
-                  }
-                  const currentLabel = localButtonsLabels[lang]?.[btn.id] || localButtonsLabels.fr[btn.id];
-                  return (
-                    <button key={btn.id} disabled={isLocked} onClick={() => handleButtonClick(btn.id)} title={currentLabel}
-                      className={`h-6 px-1.5 rounded-full text-[10px] font-semibold tracking-wide transition-all duration-200 border select-none truncate flex items-center justify-center ${
-                        isLocked
-                          ? "opacity-30 cursor-not-allowed bg-transparent border-zinc-200 dark:border-zinc-900 text-zinc-400"
-                          : isSelected || (isDoubleRegard && isDoubleRegardUnlocked)
-                            ? "bg-cyan-500 text-white border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.5)]"
-                            : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-cyan-400 hover:text-cyan-600 dark:hover:text-cyan-400"}`}>
-                      {currentLabel}
-                    </button>
-                  );
-                })}
+            {/* DASHBOARD ECHO — TOUJOURS VISIBLE EN HAUT */}
+            <div className="w-full shrink-0 flex items-center justify-center gap-3 xl:gap-5 py-3">
+
+              {/* GAUCHE : CALENDRIER + BUDGET */}
+              <div className="flex gap-3 shrink-0">
+                <Link href="/calendar" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                  style={{background:"linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(37,99,235,0.05) 100%)",borderColor:"rgba(59,130,246,0.35)",boxShadow:"0 0 20px rgba(59,130,246,0.1),inset 0 1px 0 rgba(59,130,246,0.2)"}}>
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(59,130,246,0.2) 0%,rgba(59,130,246,0.08) 100%)"}}/>
+                  <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(59,130,246,1),transparent)"}}/>
+                  <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-blue-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-blue-400/50"/>
+                  <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
+                    <rect x="6" y="10" width="52" height="48" rx="8" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.6)" strokeWidth="2"/>
+                    <rect x="6" y="10" width="52" height="20" rx="8" fill="rgba(59,130,246,0.4)"/>
+                    <rect x="6" y="22" width="52" height="8" fill="rgba(59,130,246,0.4)"/>
+                    <circle cx="20" cy="8" r="4" fill="rgba(59,130,246,0.8)"/><circle cx="44" cy="8" r="4" fill="rgba(59,130,246,0.8)"/>
+                    <rect x="14" y="36" width="8" height="7" rx="2" fill="rgba(59,130,246,0.7)"/>
+                    <rect x="28" y="36" width="8" height="7" rx="2" fill="rgba(59,130,246,0.5)"/>
+                    <rect x="42" y="36" width="8" height="7" rx="2" fill="rgba(59,130,246,0.5)"/>
+                    <rect x="14" y="47" width="8" height="5" rx="2" fill="rgba(59,130,246,0.3)"/>
+                    <rect x="28" y="47" width="8" height="5" rx="2" fill="rgba(59,130,246,0.3)"/>
+                  </svg>
+                  <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-blue-400">{lang==="fr"?"CALENDRIER":"CALENDAR"}</span>
+                </Link>
+
+                <Link href="/vitality" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                  style={{background:"linear-gradient(135deg,rgba(234,179,8,0.12) 0%,rgba(202,138,4,0.05) 100%)",borderColor:"rgba(234,179,8,0.35)",boxShadow:"0 0 20px rgba(234,179,8,0.1),inset 0 1px 0 rgba(234,179,8,0.2)"}}>
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(234,179,8,0.2) 0%,rgba(234,179,8,0.08) 100%)"}}/>
+                  <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(234,179,8,1),transparent)"}}/>
+                  <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-yellow-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-yellow-400/50"/>
+                  <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
+                    <circle cx="32" cy="36" r="22" fill="rgba(234,179,8,0.15)" stroke="rgba(234,179,8,0.6)" strokeWidth="2"/>
+                    <circle cx="32" cy="36" r="15" fill="rgba(234,179,8,0.25)"/>
+                    <text x="32" y="43" textAnchor="middle" fontSize="20" fontWeight="bold" fill="rgba(234,179,8,0.9)">$</text>
+                    <rect x="24" y="8" width="16" height="12" rx="4" fill="rgba(234,179,8,0.5)" stroke="rgba(234,179,8,0.7)" strokeWidth="1.5"/>
+                    <path d="M28 8 Q32 4 36 8" stroke="rgba(234,179,8,0.7)" strokeWidth="1.5" fill="none"/>
+                  </svg>
+                  <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-yellow-400">BUDGET</span>
+                </Link>
               </div>
 
-              {tutorialStep === 1 && (
-                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-[92vw] max-w-[460px] sm:max-w-[700px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
-                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
-                  <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }} />
-                  <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
-                    <span className="text-xl">✨</span>
-                    <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">ECHO AI (1/2)</h4>
-                  </div>
-                  <div className="grid grid-cols-[72px_1fr] sm:grid-cols-[96px_1fr] gap-4 sm:gap-5 mb-5 items-start">
-                    <div className="relative w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 bg-zinc-900 dark:bg-zinc-100 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner overflow-hidden isolate">
-                      <img src="/Echo.png" alt="Echo Avatar" className="block w-full h-full object-cover" />
-                    </div>
-                    <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line min-w-0">
-                      {lang === "fr" ? (
-                        <>Hey bienvenue ! 👋{"\n"}Je suis Echo, l'IA un peu légèrement déjantée qui se promène partout sur ce site.{"\n"}Les boutons que tu vois en haut influencent ma façon de voir les choses.{"\n"}Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux et espiègle. 😄{"\n"}Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}Adiooo ! ✨</>
-                      ) : (
-                        <>Hey, welcome! 👋{"\n"}I am Echo, the slightly crazy AI roaming around this entire site.{"\n"}The buttons above shape how I see things.{"\n"}With no button active, you meet me in my natural state: curious and playful! 😄{"\n"}And Double Regard merges two perspectives at once. 👀{"\n"}Adiooo! ✨</>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2.5 items-center border-t border-zinc-800 dark:border-zinc-200 pt-4">
-                    <button onClick={() => setTutorialStep(2)}
-                      className="w-full text-center px-8 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase">
-                      {lang === "fr" ? "SUIVANT ➔" : "NEXT ➔"}
-                    </button>
-                  </div>
+              {/* CENTRE : ECHO */}
+              <div className={`relative shrink-0 flex flex-col items-center ${echoState==="idle"?"echo-idle":echoState==="thinking"?"echo-thinking":"echo-speaking"}`}>
+                <div className="relative w-24 h-24 flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spinDash 4s linear infinite"}}/>
+                  <div className="absolute inset-1.5 rounded-full bg-black/80"/>
+                  <img src="/Echo.png" alt="Echo" className="relative z-10 w-20 h-20 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
                 </div>
-              )}
+                <span className="text-zinc-600 text-[8px] mt-1 tracking-widest uppercase font-mono">{echoState}</span>
+              </div>
+
+              {/* DROITE : CALORIES + LIVRE */}
+              <div className="flex gap-3 shrink-0">
+                <Link href="/vitality" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                  style={{background:"linear-gradient(135deg,rgba(34,197,94,0.12) 0%,rgba(22,163,74,0.05) 100%)",borderColor:"rgba(34,197,94,0.35)",boxShadow:"0 0 20px rgba(34,197,94,0.1),inset 0 1px 0 rgba(34,197,94,0.2)"}}>
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(34,197,94,0.2) 0%,rgba(34,197,94,0.08) 100%)"}}/>
+                  <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(34,197,94,1),transparent)"}}/>
+                  <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-green-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-green-400/50"/>
+                  <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
+                    <ellipse cx="32" cy="38" rx="18" ry="16" fill="rgba(34,197,94,0.2)" stroke="rgba(34,197,94,0.6)" strokeWidth="2"/>
+                    <ellipse cx="32" cy="38" rx="12" ry="10" fill="rgba(34,197,94,0.35)"/>
+                    <path d="M32 22 Q36 14 44 12 Q38 18 32 22Z" fill="rgba(34,197,94,0.8)"/>
+                    <path d="M32 22 Q28 14 20 12 Q26 18 32 22Z" fill="rgba(34,197,94,0.6)"/>
+                    <path d="M32 22 L32 30" stroke="rgba(34,197,94,0.7)" strokeWidth="2"/>
+                  </svg>
+                  <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-green-400">CALORIES</span>
+                </Link>
+
+                <Link href="/books" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
+                  style={{background:"linear-gradient(135deg,rgba(139,92,246,0.12) 0%,rgba(109,40,217,0.05) 100%)",borderColor:"rgba(139,92,246,0.35)",boxShadow:"0 0 20px rgba(139,92,246,0.1),inset 0 1px 0 rgba(139,92,246,0.2)"}}>
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(139,92,246,0.2) 0%,rgba(139,92,246,0.08) 100%)"}}/>
+                  <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(139,92,246,1),transparent)"}}/>
+                  <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-violet-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-violet-400/50"/>
+                  <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
+                    <rect x="8"  y="12" width="20" height="40" rx="3" fill="rgba(139,92,246,0.5)" stroke="rgba(139,92,246,0.7)" strokeWidth="1.5"/>
+                    <rect x="10" y="14" width="16" height="36" rx="2" fill="rgba(139,92,246,0.2)"/>
+                    <rect x="30" y="10" width="20" height="42" rx="3" fill="rgba(168,85,247,0.5)" stroke="rgba(168,85,247,0.7)" strokeWidth="1.5"/>
+                    <rect x="32" y="12" width="16" height="38" rx="2" fill="rgba(168,85,247,0.2)"/>
+                    <line x1="13" y1="20" x2="23" y2="20" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
+                    <line x1="13" y1="25" x2="23" y2="25" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
+                    <line x1="33" y1="18" x2="47" y2="18" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
+                    <line x1="33" y1="23" x2="47" y2="23" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
+                  </svg>
+                  <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-violet-400">{lang==="fr"?"LIVRE":"BOOK"}</span>
+                </Link>
+              </div>
+
             </div>
+            <style>{`@keyframes spinDash { 100% { transform: rotate(360deg); } }`}</style>
 
             {/* MESSAGES */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 mt-3 px-2">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 mt-2 px-2">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center">
                   {!tutorialStep && (
-                    <div className="flex items-center justify-center gap-3 xl:gap-6 w-full px-4">
+                    <div className="hidden">
 
                       {/* GAUCHE : CALENDRIER + BUDGET */}
                       <div className="flex flex-col gap-3 shrink-0">
