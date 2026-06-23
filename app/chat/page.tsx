@@ -31,6 +31,24 @@ const deriveTitle = (raws: string[], lang: string): string => {
 const isDefaultTitle = (title: string) =>
   title === "Nouvelle conversation" || title === "New conversation";
 
+// ── LOCAL STORAGE HELPERS ─────────────────────────────────────────────────
+const LOCAL_CONVOS_KEY = "echo-chat-local-convos";
+
+const saveLocalConvos = (convos: Conversation[]) => {
+  try {
+    const localOnly = convos.filter(c => c.id.startsWith("local-") || c.id === "new");
+    localStorage.setItem(LOCAL_CONVOS_KEY, JSON.stringify(localOnly));
+  } catch (e) { console.error("localStorage save:", e); }
+};
+
+const loadLocalConvos = (): Conversation[] => {
+  try {
+    const raw = localStorage.getItem(LOCAL_CONVOS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as Conversation[];
+  } catch { return []; }
+};
+
 export default function ChatPage() {
   const { t, lang, theme, toggleTheme } = useApp();
 
@@ -61,12 +79,23 @@ export default function ChatPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
 
-  const DEFAULT_INPUT_HEIGHT = 200;
+  // ── DELETE CONFIRM MODAL ──────────────────────────────────────────────────
+  const [deleteConfirmId,    setDeleteConfirmId]    = useState<string | null>(null);
+  const [deleteConfirmEvent, setDeleteConfirmEvent] = useState<React.MouseEvent | null>(null);
+
+  // ── RENAME STATE ──────────────────────────────────────────────────────────
+  const [renamingId,    setRenamingId]    = useState<string | null>(null);
+  const [renameValue,   setRenameValue]   = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // ── INPUT HEIGHT ──────────────────────────────────────────────────────────
+  const DEFAULT_INPUT_HEIGHT = 80; // 1 - déjà bas par défaut pour un look plus propre
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
 
   const shrinkInput = () => {
     const el = textareaRef.current;
-    const next = Math.max(60, Math.round((el ? el.getBoundingClientRect().height : inputHeight) / 2));
+    const current = el ? el.getBoundingClientRect().height : inputHeight;
+    const next = Math.max(48, Math.round(current / 2));
     if (el) el.style.height = `${next}px`;
     setInputHeight(next);
   };
@@ -102,7 +131,6 @@ export default function ChatPage() {
       setSelectedButtons(next);
       if (next.length < 2) setIsDoubleRegardUnlocked(false);
     } else {
-      const next = [...selectedButtons, id];
       if (selectedButtons.length === 0) { setSelectedButtons([id]); setIsDoubleRegardUnlocked(false); }
       else if (selectedButtons.length === 1 && isDoubleRegardUnlocked) setSelectedButtons(p => [...p, id]);
     }
@@ -135,7 +163,7 @@ export default function ChatPage() {
 
   const saveConversationToDB = async (uid: string, convId: string | null, raws: string[]) => {
     if (!convId || convId === "new") return null;
-    if (convId.startsWith("local-")) return convId; // Local storage handling
+    if (convId.startsWith("local-")) return convId;
     
     const { error } = await supabase.from("echo_conversations")
       .update({ messages: raws, updated_at: new Date().toISOString() })
@@ -147,13 +175,21 @@ export default function ChatPage() {
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   const initForUser = async (uid: string | null) => {
     if (!uid) {
-      const empty: Conversation = { id: "new", title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() };
-      setConversations([empty]); setActiveConversationId("new"); setMessages([]); return;
+      // FIX 1 : charger les convos locales depuis localStorage pour les visiteurs
+      const localConvos = loadLocalConvos();
+      if (localConvos.length > 0) {
+        setConversations(localConvos);
+        setActiveConversationId(localConvos[0].id);
+        setMessages(deserializeMsgs(localConvos[0].messages));
+      } else {
+        const empty: Conversation = { id: "new", title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() };
+        setConversations([empty]); setActiveConversationId("new"); setMessages([]);
+      }
+      return;
     }
     const list = await loadConversationsFromDB(uid);
     let finalList: Conversation[];
     if (list.length === 0) {
-      // Create memory-only new draft so empty conversations aren't auto-saved
       finalList = [{ id: "new", title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() }];
     } else { finalList = list; }
     setConversations(finalList);
@@ -188,6 +224,12 @@ export default function ChatPage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  // FIX 1 : sync conversations locales dans localStorage à chaque changement
+  useEffect(() => {
+    if (!isLoaded || userId) return; // seulement pour les visiteurs non connectés
+    saveLocalConvos(conversations);
+  }, [conversations, isLoaded, userId]);
+
   useEffect(() => {
     if (!isLoaded || !userId || !activeConversationId || activeConversationId === "new" || activeConversationId.startsWith("local-")) return;
     const raws = serializeMsgs(messages);
@@ -202,6 +244,17 @@ export default function ChatPage() {
     }, 1500);
     return () => { if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current); };
   }, [messages, isLoaded]);
+
+  // FIX 1 : sync convos locales quand les messages changent et qu'on est en mode visiteur
+  useEffect(() => {
+    if (!isLoaded || userId || !activeConversationId || activeConversationId === "new") return;
+    const raws = serializeMsgs(messages);
+    setConversations(prev => prev.map(c =>
+      c.id === activeConversationId
+        ? { ...c, messages: raws, updatedAt: Date.now(), title: raws.length > 0 && isDefaultTitle(c.title) ? deriveTitle(raws, lang) : c.title }
+        : c
+    ));
+  }, [messages, isLoaded, userId]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -242,39 +295,19 @@ export default function ChatPage() {
 
   // ── CONVERSATIONS ─────────────────────────────────────────────────────────
   const startNewConversation = () => {
-    // If the current screen is already blank, do nothing
     if (activeConversationId === "new") {
-      setInput("");
-      setSelectedImage(null);
-      setSelectedImageName("");
-      return;
+      setInput(""); setSelectedImage(null); setSelectedImageName(""); return;
     }
-
-    // Check if there is already an empty draft in conversations to jump to it
     const emptyDraft = conversations.find(c => c.id === "new" || c.messages.length === 0);
     if (emptyDraft) {
       setActiveConversationId(emptyDraft.id);
       setMessages(deserializeMsgs(emptyDraft.messages));
-      setInput("");
-      setSelectedImage(null);
-      setSelectedImageName("");
-      return;
+      setInput(""); setSelectedImage(null); setSelectedImageName(""); return;
     }
-
-    // Instanciate a pristine in-memory draft
-    const empty: Conversation = { 
-      id: "new", 
-      title: lang === "fr" ? "Nouvelle conversation" : "New conversation", 
-      messages: [], 
-      updatedAt: Date.now() 
-    };
-
-    setConversations(p => [empty, ...p.filter(c => c.id !== "new")]); 
-    setActiveConversationId("new"); 
-    setMessages([]);
-    setInput("");
-    setSelectedImage(null);
-    setSelectedImageName("");
+    const empty: Conversation = { id: "new", title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], updatedAt: Date.now() };
+    setConversations(p => [empty, ...p.filter(c => c.id !== "new")]);
+    setActiveConversationId("new"); setMessages([]);
+    setInput(""); setSelectedImage(null); setSelectedImageName("");
   };
 
   const switchConversation = (id: string) => {
@@ -284,8 +317,17 @@ export default function ChatPage() {
     setActiveConversationId(id); setMessages(deserializeMsgs(target.messages));
   };
 
-  const deleteConversation = async (id: string, e: React.MouseEvent) => {
+  // FIX 2 : demander confirmation avant de supprimer
+  const askDeleteConversation = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    setDeleteConfirmId(id);
+    setDeleteConfirmEvent(e);
+  };
+
+  const confirmDeleteConversation = async () => {
+    const id = deleteConfirmId;
+    setDeleteConfirmId(null);
+    if (!id) return;
     if (userId && id !== "local" && id !== "new") {
       const { error } = await supabase.from("echo_conversations").delete().eq("id", id).eq("user_id", userId);
       if (error) console.error("[Chat] delete:", error.message);
@@ -296,6 +338,25 @@ export default function ChatPage() {
       if (id === activeConversationId) { setActiveConversationId(finalList[0].id); setMessages(deserializeMsgs(finalList[0].messages)); }
       return finalList;
     });
+  };
+
+  // FIX 3 : renommer une conversation
+  const startRenaming = (id: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenamingId(id);
+    setRenameValue(currentTitle);
+    setTimeout(() => renameInputRef.current?.focus(), 50);
+  };
+
+  const commitRename = async () => {
+    if (!renamingId) return;
+    const newTitle = renameValue.trim() || (lang === "fr" ? "Nouvelle conversation" : "New conversation");
+    setConversations(prev => prev.map(c => c.id === renamingId ? { ...c, title: newTitle } : c));
+    // Persiste en base si connecté
+    if (userId && renamingId !== "new" && !renamingId.startsWith("local-")) {
+      await supabase.from("echo_conversations").update({ updated_at: new Date().toISOString() }).eq("id", renamingId).eq("user_id", userId);
+    }
+    setRenamingId(null);
   };
 
   // ── PASTE IMAGE ───────────────────────────────────────────────────────────
@@ -331,58 +392,33 @@ export default function ChatPage() {
     setMessages([...baseMessages, { raw: "Echo: ..." }]);
     setInput(""); setSelectedImage(null); setSelectedImageName("");
 
-    // ── GESTION INTÉGRALE DES COMPORTEMENTS DE TRANSITION À L'ENVOI DU PREMIER MESSAGE ──
     let activeConvoId = activeConversationId;
     if (activeConversationId === "new") {
       try {
         if (userId) {
-          // Création physique en base de données Supabase dès que l'utilisateur rédige son premier mot
           const { data, error } = await supabase.from("echo_conversations")
-            .insert({ 
-              user_id: userId, 
-              source: "chat", 
-              messages: serializeMsgs([userEntry]), 
-              updated_at: new Date().toISOString() 
-            })
+            .insert({ user_id: userId, source: "chat", messages: serializeMsgs([userEntry]), updated_at: new Date().toISOString() })
             .select("id").single();
           if (error) throw error;
           if (data?.id) {
             activeConvoId = data.id;
             setActiveConversationId(data.id);
-            // On remplace le brouillon par la vraie conversation persistée dans le menu
-            const newConvo: Conversation = {
-              id: data.id,
-              title: deriveTitle(serializeMsgs([userEntry]), lang),
-              messages: serializeMsgs([userEntry]),
-              updatedAt: Date.now()
-            };
-            setConversations(prev => {
-              const filtered = prev.filter(c => c.id !== "new");
-              return [newConvo, ...filtered];
-            });
+            const newConvo: Conversation = { id: data.id, title: deriveTitle(serializeMsgs([userEntry]), lang), messages: serializeMsgs([userEntry]), updatedAt: Date.now() };
+            setConversations(prev => [newConvo, ...prev.filter(c => c.id !== "new")]);
           }
         } else {
-          // Mode invité
           const localId = `local-${Date.now()}`;
           activeConvoId = localId;
           setActiveConversationId(localId);
-          const newConvo: Conversation = {
-            id: localId,
-            title: deriveTitle(serializeMsgs([userEntry]), lang),
-            messages: serializeMsgs([userEntry]),
-            updatedAt: Date.now()
-          };
-          setConversations(prev => {
-            const filtered = prev.filter(c => c.id !== "new");
-            return [newConvo, ...filtered];
-          });
-          localStorage.setItem("echo-books-manuscript-local", JSON.stringify([newConvo]));
+          const newConvo: Conversation = { id: localId, title: deriveTitle(serializeMsgs([userEntry]), lang), messages: serializeMsgs([userEntry]), updatedAt: Date.now() };
+          setConversations(prev => [newConvo, ...prev.filter(c => c.id !== "new")]);
+          // FIX 1 : save immédiate pour visiteur
+          saveLocalConvos([newConvo, ...conversations.filter(c => c.id !== "new")]);
         }
       } catch (err) {
         console.error("[Chat] Échec de la création à la volée :", err);
         setMessages([...messages, { raw: "Echo: Échec d'initialisation de la session." }]);
-        setEchoState("idle");
-        return;
+        setEchoState("idle"); return;
       }
     }
 
@@ -407,56 +443,31 @@ export default function ChatPage() {
       const generatedMsgs = [...baseMessages, { raw: `Echo: ${data.response || ""}${isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${blockedCategory}"]` : ""}` }];
       setMessages(generatedMsgs);
 
-      // On s'assure de synchroniser à l'instant le sidebar pour refléter le bon titre et contenu
       setConversations(prev => prev.map(c =>
         c.id === activeConvoId
-          ? { 
-              ...c, 
-              messages: serializeMsgs(generatedMsgs), 
-              updatedAt: Date.now(), 
-              title: isDefaultTitle(c.title) ? deriveTitle(serializeMsgs(generatedMsgs), lang) : c.title 
-            }
+          ? { ...c, messages: serializeMsgs(generatedMsgs), updatedAt: Date.now(), title: isDefaultTitle(c.title) ? deriveTitle(serializeMsgs(generatedMsgs), lang) : c.title }
           : c
       ));
 
       if (data.action && !isActionBlocked && userId) {
         const { type, payload } = data.action;
-
         if (type === "ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt } = payload;
-          const { error } = await supabase.from("echo_expenses").insert({
-            user_id: userId, title: title || "Purchase",
-            amount: parseFloat(amount ?? spent) || 0,
-            date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
-          });
-          if (error) console.error("[Chat] expenses:", error.message);
+          await supabase.from("echo_expenses").insert({ user_id: userId, title: title || "Purchase", amount: parseFloat(amount ?? spent) || 0, date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA") });
         }
-
         if (type === "ADD_CALORIE_LOG") {
           const { foodName, meal, title, calories } = payload;
-          const { error } = await supabase.from("echo_calories").insert({
-            user_id: userId, food_name: foodName || meal || title || "Food Item",
-            calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA"),
-          });
-          if (error) console.error("[Chat] calories:", error.message);
+          await supabase.from("echo_calories").insert({ user_id: userId, food_name: foodName || meal || title || "Food Item", calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA") });
         }
-
         if (type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") {
           const { goal, calorieGoal, calories } = payload;
           const nextGoal = parseInt(goal ?? calorieGoal ?? calories);
           if (Number.isFinite(nextGoal) && nextGoal > 0) localStorage.setItem("echo-calorie-goal", nextGoal.toString());
         }
-
         if (type === "ADD_CALENDAR_EVENT") {
-          const { title, start, end, notes = "" } = payload;
+          const { title, start, notes = "" } = payload;
           const dateKey = start?.split("T")[0] || start || "";
-          if (dateKey) {
-            const { error } = await supabase.from("echo_calendar").insert({
-              user_id: userId, title: title || "Untitled Event",
-              start_date: dateKey, end_date: dateKey, notes: notes || "", is_from_echo: true,
-            });
-            if (error) console.error("[Chat] calendar:", error.message);
-          }
+          if (dateKey) await supabase.from("echo_calendar").insert({ user_id: userId, title: title || "Untitled Event", start_date: dateKey, end_date: dateKey, notes: notes || "", is_from_echo: true });
         }
       }
     } catch {
@@ -489,6 +500,49 @@ export default function ChatPage() {
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
+
+      {/* FIX 2 : DELETE CONFIRM MODAL */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setDeleteConfirmId(null)}>
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-7 rounded-2xl max-w-sm w-full shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+            {/* Echo avatar */}
+            <div className="flex flex-col items-center gap-3 mb-5">
+              <div className="w-16 h-16 rounded-full border-2 border-cyan-400/60 overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.3)]">
+                <img src="/Echo.png" alt="Echo" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-center">
+                <p className="text-cyan-500 font-mono text-[10px] uppercase tracking-widest font-bold mb-1">Echo</p>
+                {lang === "fr" ? (
+                  <p className="text-zinc-800 dark:text-zinc-100 font-bold text-base leading-snug">
+                    Hé hé… attention ! 👀
+                  </p>
+                ) : (
+                  <p className="text-zinc-800 dark:text-zinc-100 font-bold text-base leading-snug">
+                    Hey hey… hold on! 👀
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <p className="text-zinc-500 dark:text-zinc-400 text-sm text-center leading-relaxed mb-6">
+              {lang === "fr"
+                ? <>Tout ce qu'il y a dans cette conversation… <span className="text-rose-400 font-semibold">poof</span> — ça disparaît à jamais. T'es vraiment sûr·e de vouloir faire ça ? 😉</>
+                : <>Everything in this conversation… <span className="text-rose-400 font-semibold">poof</span> — gone forever. You really sure about this? 😉</>}
+            </p>
+
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors">
+                {lang === "fr" ? "Annuler" : "Cancel"}
+              </button>
+              <button onClick={confirmDeleteConversation}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold transition-colors shadow-md">
+                {lang === "fr" ? "Oui, supprimer 🗑️" : "Yes, delete 🗑️"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TUTORIAL */}
       {tutorialStep === 1 && (
@@ -576,16 +630,45 @@ export default function ChatPage() {
                 className="m-2 shrink-0 flex items-center justify-center gap-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold py-2.5 rounded-xl transition-colors">
                 + {lang==="fr"?"Nouvelle conversation":"New conversation"}
               </button>
+
               <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1 min-h-0">
                 {conversations.slice().sort((a,b) => b.updatedAt - a.updatedAt).map(c => (
-                  <div key={c.id} onClick={() => switchConversation(c.id)}
-                    className={`group w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between gap-2 cursor-pointer ${
+                  <div key={c.id} onClick={() => { if (renamingId !== c.id) switchConversation(c.id); }}
+                    className={`group w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-between gap-1 cursor-pointer ${
                       c.id === activeConversationId
                         ? "bg-cyan-500/10 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400"
                         : "border border-transparent text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900"}`}>
-                    <span className="truncate flex-1">{c.title}</span>
-                    <button onClick={e => deleteConversation(c.id, e)}
-                      className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 shrink-0 transition-opacity">✕</button>
+
+                    {/* FIX 3 : inline rename input */}
+                    {renamingId === c.id ? (
+                      <input
+                        ref={renameInputRef}
+                        value={renameValue}
+                        onChange={e => setRenameValue(e.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
+                        onClick={e => e.stopPropagation()}
+                        className="flex-1 bg-white dark:bg-zinc-900 border border-cyan-400/60 rounded-md px-1.5 py-0.5 text-xs text-black dark:text-white outline-none min-w-0"
+                      />
+                    ) : (
+                      <span className="truncate flex-1">{c.title}</span>
+                    )}
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Rename pencil — visible on hover */}
+                      {renamingId !== c.id && (
+                        <button
+                          onClick={e => startRenaming(c.id, c.title, e)}
+                          title={lang === "fr" ? "Renommer" : "Rename"}
+                          className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-cyan-400 transition-opacity text-[10px] p-0.5">
+                          ✏️
+                        </button>
+                      )}
+                      {/* Delete X */}
+                      <button onClick={e => askDeleteConversation(c.id, e)}
+                        title={lang === "fr" ? "Supprimer" : "Delete"}
+                        className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 transition-opacity text-[10px] p-0.5">✕</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -661,8 +744,6 @@ export default function ChatPage() {
 
             {/* BOUTONS COMPORTEMENTAUX + SETTINGS */}
             <div className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-100 dark:border-zinc-900/60 flex flex-col bg-zinc-50/20 dark:bg-zinc-950/10 overflow-hidden max-h-[42vh] lg:max-h-none lg:h-full">
-
-              {/* Header avec bouton Settings ⚙️ */}
               <div className="p-3 border-b border-zinc-100 dark:border-zinc-900/80 flex items-center justify-between shrink-0">
                 <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">Modes</span>
                 <div className="relative" ref={settingsRef}>
@@ -729,10 +810,7 @@ export default function ChatPage() {
                 style={{ height: inputHeight }}
                 className="w-full bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 resize-y text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400 dark:placeholder-zinc-700 transition-colors leading-relaxed shadow-inner" />
 
-              {/* ACTION BUTTONS & SHRINK/RESET INLINE CONTROLS */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                
-                {/* 3 Main Action Buttons Grid */}
                 <div className="grid grid-cols-3 gap-3 flex-1">
                   <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
                   <button type="button" disabled={isImageLocked} onClick={() => imageInputRef.current?.click()}
@@ -757,7 +835,6 @@ export default function ChatPage() {
                   </button>
                 </div>
 
-                {/* Small Shrink / Reset Buttons aligned to the right side */}
                 <div className="flex items-center gap-2 shrink-0 justify-center sm:justify-end">
                   <button type="button" onClick={shrinkInput} title={lang === "fr" ? "Réduire l'éditeur" : "Shrink input"}
                     className="h-12 w-12 rounded-xl border border-zinc-200 dark:border-zinc-300 bg-zinc-100/30 dark:bg-zinc-900/40 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-sm shadow-sm">

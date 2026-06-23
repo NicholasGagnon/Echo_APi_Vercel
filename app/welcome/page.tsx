@@ -99,17 +99,17 @@ export default function WelcomePage() {
     const interval = setInterval(() => {
       count++;
       setDots((prev) => prev + ".");
-      if (count >= 160) {
+      if (count >= 220) { // Ligne longue complète de points
         clearInterval(interval);
-        setTimeout(() => setEchoStep("activated"), 150);
+        setTimeout(() => setEchoStep("activated"), 100);
       }
-    }, 2);
+    }, 1); // Encore plus rapide
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     if (echoStep === "activated") {
-      setTimeout(() => setEchoStep("typing"), 800);
+      setTimeout(() => setEchoStep("typing"), 600);
     }
   }, [echoStep]);
 
@@ -132,10 +132,10 @@ export default function WelcomePage() {
             } else {
               clearInterval(secondInterval);
             }
-          }, 12);
-        }, 1100);
+          }, 10);
+        }, 900);
       }
-    }, 18);
+    }, 15);
     return () => clearInterval(typeInterval);
   }, [echoStep, lang]);
 
@@ -236,7 +236,7 @@ export default function WelcomePage() {
 
   // ── GESTION CLIC GLOBAL PAGE (SAUF EXCEPTIONS) ────────────────────────────
   const handlePageClick = (e: React.MouseEvent) => {
-    if (echoStep !== "closed") return; // Exception 1 : Bloqué tant que le nouveau pop-up n'est pas fermé
+    if (echoStep !== "closed") return; 
     const tag = (e.target as HTMLElement).closest("button,a,input,select,textarea,[data-stop]");
     if (!tag) router.push("/account");
   };
@@ -257,7 +257,7 @@ export default function WelcomePage() {
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.025]"
         style={{backgroundImage:"linear-gradient(rgba(6,182,212,1) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,1) 1px, transparent 1px)", backgroundSize:"60px 60px"}}/>
 
-      {/* LANG DROPDOWN & DROPDOWN ANCHOR (Exception 2) */}
+      {/* LANG DROPDOWN */}
       <div ref={langRef} className="absolute top-5 right-5 z-50" data-stop="">
         <button onClick={e => { e.stopPropagation(); setShowLang(v=>!v); }}
           className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 hover:border-cyan-500/50 rounded-xl px-3 py-2 text-xs font-mono font-bold text-zinc-300 transition-all">
@@ -287,22 +287,17 @@ export default function WelcomePage() {
           Echo AI Ecosystem
         </div>
 
-        {/* ECHO FLOTTANT — centré en haut */}
+        {/* ECHO FLOTTANT */}
         <div className="flex flex-col items-center gap-3">
           <div className="relative w-44 h-44 flex items-center justify-center">
-            {/* Anneau ext */}
             <div className="absolute inset-0 rounded-full"
               style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.45) 80%, #06b6d4 100%)", animation:"spinRadar 3s linear infinite"}}/>
-            {/* Anneau int inverse */}
             <div className="absolute inset-2 rounded-full"
               style={{background:"conic-gradient(from 180deg, transparent 55%, rgba(16,185,129,0.25) 80%, #10b981 100%)", animation:"spinRadar 5s linear infinite reverse"}}/>
-            {/* Fond */}
             <div className="absolute inset-3 rounded-full bg-black/85 border border-cyan-500/20"/>
-            {/* Echo */}
             <div className={`relative z-10 w-32 h-32 rounded-full overflow-hidden border-2 border-cyan-500/70 shadow-[0_0_40px_rgba(6,182,212,0.6)] ${echoClass}`}>
               <img src="/Echo.png" alt="Echo" className="w-full h-full object-cover"/>
             </div>
-            {/* Orbitaux */}
             {[0,1,2,3,4,5].map(i => (
               <div key={i} className="absolute w-2 h-2 rounded-full bg-cyan-400"
                 style={{
@@ -314,7 +309,6 @@ export default function WelcomePage() {
             ))}
           </div>
 
-          {/* Titre grand */}
           <div className="text-center">
             <h1 className="text-5xl sm:text-6xl font-black tracking-tighter text-white font-mono leading-none">
               ECHO <span className="text-cyan-400">AI</span>
@@ -328,47 +322,47 @@ export default function WelcomePage() {
         </div>
 
         {/* DEUX BLOCS COTE A COTE */}
-        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-5 mt-2">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-5 mt-2 items-start">
 
-          {/* BLOC GAUCHE — ECOSYSTEME / OU POP-UP ECHO INTERNE DYNAMIQUE */}
+          {/* BLOC GAUCHE — POP-UP REHAUSSÉ BLANC/CYAN TRANSLUCIDE */}
           {echoStep !== "closed" ? (
-            <div className="bg-zinc-950/95 border-2 border-cyan-500/40 rounded-2xl p-6 backdrop-blur-md relative flex flex-col justify-between min-h-[340px]" data-stop="">
+            <div className="bg-white/[0.07] backdrop-blur-xl border-2 border-cyan-400/60 rounded-2xl p-6 relative flex flex-col justify-between min-h-[380px] -mt-6 lg:-ml-4 shadow-[0_0_30px_rgba(6,182,212,0.15)]" data-stop="">
               {/* Bouton de Fermeture Gros X */}
               <button 
                 onClick={(e) => { e.stopPropagation(); setEchoStep("closed"); }}
-                className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors p-1 z-30"
+                className="absolute top-4 right-5 text-zinc-400 hover:text-cyan-300 font-mono text-xl font-bold transition-colors p-1 z-30"
                 title="Fermer"
               >
                 ✕
               </button>
 
-              {/* Logo Flottant Interne */}
-              <div className="absolute top-4 right-14 opacity-40 animate-pulse">
-                <img src="/echo.png" alt="Echo Icon" className="w-7 h-7 object-contain" />
+              {/* Logo Corrigé (/Echo.png) */}
+              <div className="absolute top-4 right-14">
+                <img src="/Echo.png" alt="Echo Icon" className="w-8 h-8 object-contain filter drop-shadow-[0_0_8px_rgba(6,182,212,0.4)]" />
               </div>
 
-              {/* Loader des points ultra-rapides */}
-              <div className="text-xs text-zinc-500 break-all font-mono select-none leading-normal">
-                {fr ? "Syncronisation du systeme en cours" : "System synchronization in progress"} {dots}
+              {/* Loader des points complet */}
+              <div className="text-xs text-zinc-400 break-all font-mono select-none leading-normal">
+                Syncronisation du systeme en cours {dots}
                 {echoStep !== "loading" && (
-                  <span className="text-emerald-400 font-bold block mt-1.5 font-mono">
-                    {fr ? "Compagnon numérique activé..." : "Digital companion activated..."}
+                  <span className="text-cyan-300 font-bold block mt-2 font-mono tracking-wide">
+                    Compagnon numérique activé...
                   </span>
                 )}
               </div>
 
               {/* Machine à écrire */}
               {(echoStep === "typing" || showSecondBlock) && (
-                <div className="text-sm sm:text-base text-zinc-100 font-medium whitespace-pre-wrap leading-relaxed font-sans tracking-wide pt-4 flex-1">
+                <div className="text-sm sm:text-base text-white font-medium whitespace-pre-wrap leading-relaxed font-sans tracking-wide pt-4 flex-1">
                   {displayedText}
                   
-                  {/* Image flottante qui s'estompe vers les boutons */}
+                  {/* Image flottante finale corrigée (/Echo.png) */}
                   {displayedText.includes("------------------------------") && (
                     <div className="inline-block ml-2 align-middle">
                       <img 
-                        src="/echo.png" 
+                        src="/Echo.png" 
                         alt="Echo Link" 
-                        className="w-7 h-7 inline object-contain opacity-70 animate-bounce duration-1000" 
+                        className="w-7 h-7 inline object-contain opacity-90 animate-bounce" 
                       />
                     </div>
                   )}
@@ -376,7 +370,6 @@ export default function WelcomePage() {
               )}
             </div>
           ) : (
-            /* BLOC SÉCURISÉ PAR DÉFAUT APRÈS FERMETURE */
             <div className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
               <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-4">
                 {fr ? "Un ecosysteme concu pour gerer l'essentiel :" : "An ecosystem built to manage the essentials:"}
@@ -404,7 +397,6 @@ export default function WelcomePage() {
             </p>
 
             <div className="flex flex-col gap-3">
-              {/* GOOGLE DIRECT SUPABASE */}
               <button onClick={e => { e.stopPropagation(); handleGoogleConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-sm rounded-xl transition-all shadow-md">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
@@ -416,7 +408,6 @@ export default function WelcomePage() {
                 <span className="flex-1 text-center">{fr ? "Continuer avec Google" : "Continue with Google"}</span>
               </button>
 
-              {/* MICROSOFT DIRECT SUPABASE */}
               <button onClick={e => { e.stopPropagation(); handleMicrosoftConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl transition-all border border-zinc-700">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 23 23" fill="none">
@@ -428,14 +419,12 @@ export default function WelcomePage() {
                 <span className="flex-1 text-center">{fr ? "Continuer avec Microsoft" : "Continue with Microsoft"}</span>
               </button>
 
-              {/* DIVIDER */}
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-zinc-800"/>
                 <span className="text-zinc-600 text-[10px] font-mono uppercase">{fr ? "ou par email" : "or by email"}</span>
                 <div className="flex-1 h-px bg-zinc-800"/>
               </div>
 
-              {/* EMAIL OUVRE LES MODALS INTEGRÉES */}
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={e => { e.stopPropagation(); setShowSignInModal(true); }}
                   className="h-12 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm rounded-xl transition-all shadow-md">
@@ -448,7 +437,6 @@ export default function WelcomePage() {
               </div>
             </div>
 
-            {/* ACCUEIL SANS COMPTE */}
             <div className="mt-1">
               <button onClick={e => { e.stopPropagation(); window.location.href="/"; }}
                 className="w-full h-11 flex items-center justify-center gap-2 bg-transparent border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 font-semibold text-sm rounded-xl transition-all">
@@ -468,7 +456,7 @@ export default function WelcomePage() {
         </p>
       </div>
 
-      {/* ── SIGN IN MODAL ANCRÉ ET SÉCURISÉ ── */}
+      {/* MODAL SIGN IN */}
       {showSignInModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" data-stop="">
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
@@ -497,7 +485,7 @@ export default function WelcomePage() {
         </div>
       )}
 
-      {/* ── SIGN UP MODAL ANCRÉ ET SÉCURISÉ ── */}
+      {/* MODAL SIGN UP */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" data-stop="">
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
