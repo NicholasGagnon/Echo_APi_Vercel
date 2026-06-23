@@ -14,6 +14,24 @@ const localT = {
     connecting: "Connexion...",
     upgrade: "🚀 AMÉLIORER",
     joinFounder: "👑 REJOINDRE",
+    treasureEgg: {
+      closePortal: "Fermer le portail",
+      title: "🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉",
+      subtitle: "Tu viens de découvrir un Easter Egg caché dans les profondeurs d'Echo AI... et ça mérite une récompense. 😎",
+      congrats: "🏆 FÉLICITATIONS!",
+      unlock: "Tu débloques un accès à l'abonnement ULTRA avec une réduction exceptionnelle de 40 % pendant 1 mois.",
+      rare: "Peu de gens tombent sur cette surprise. Encore moins prennent le temps d'explorer suffisamment pour la trouver. 👀",
+      bonusTitle: "💎 Ton bonus :",
+      bonus1: "• 40 % de réduction sur ULTRA pendant 1 mois",
+      bonus2: "• Accès complet aux fonctionnalités avancées",
+      bonus3: "• Le droit officiel de te vanter d'avoir trouvé un secret caché d'Echo AI",
+      disclaimer: "⚠️ Cette récompense est valable pour un seul mois d'abonnement ULTRA et ne peut être combinée avec d'autres promotions.",
+      urgency: "Profites-en tant que le portail est encore ouvert... les Easter Eggs ont tendance à disparaître aussi mystérieusement qu'ils apparaissent. 😉",
+      outro: "🚀 Bien joué. Echo te regardait depuis le début.",
+      claim: "RÉCLAMER LE TRÉSOR (9.99$) ➔",
+      connecting: "CONNEXION...",
+      leaveIt: "Laisser le secret tranquille",
+    },
     plans: {
       connected_free: {
         title: "Connected Free",
@@ -103,6 +121,24 @@ const localT = {
     connecting: "Connecting...",
     upgrade: "🚀 UPGRADE",
     joinFounder: "👑 BECOME A FOUNDER",
+    treasureEgg: {
+      closePortal: "Close the portal",
+      title: "🎉✨ HEY THERE, DIGITAL EXPLORER! ✨🎉",
+      subtitle: "You just discovered an Easter Egg hidden deep within Echo AI... and that deserves a reward. 😎",
+      congrats: "🏆 CONGRATULATIONS!",
+      unlock: "You're unlocking access to the ULTRA subscription with an exceptional 40% discount for 1 month.",
+      rare: "Few people stumble onto this surprise. Even fewer take the time to explore enough to find it. 👀",
+      bonusTitle: "💎 Your bonus:",
+      bonus1: "• 40% off ULTRA for 1 month",
+      bonus2: "• Full access to advanced features",
+      bonus3: "• The official right to brag about finding a hidden Echo AI secret",
+      disclaimer: "⚠️ This reward is valid for a single month of ULTRA subscription and cannot be combined with other promotions.",
+      urgency: "Take advantage while the portal is still open... Easter Eggs tend to vanish as mysteriously as they appear. 😉",
+      outro: "🚀 Well played. Echo was watching you the whole time.",
+      claim: "CLAIM THE TREASURE ($9.99) ➔",
+      connecting: "CONNECTING...",
+      leaveIt: "Leave the secret alone",
+    },
     plans: {
       connected_free: {
         title: "Connected Free",
@@ -635,54 +671,54 @@ export default function ServicesPage() {
               type="button"
               onClick={() => setShowTreasureModal(false)}
               className="absolute top-4 right-5 text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1"
-              title="Fermer le portail"
+              title={activeT.treasureEgg.closePortal}
             >
               ✕
             </button>
-            
+
             <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">
               👑
             </div>
 
             <div className="space-y-1">
               <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">
-                🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉
+                {activeT.treasureEgg.title}
               </h3>
               <p className="text-zinc-400 text-[11px] font-semibold leading-relaxed">
-                Tu viens de découvrir un Easter Egg caché dans les profondeurs d'Echo AI... et ça mérite une récompense. 😎
+                {activeT.treasureEgg.subtitle}
               </p>
             </div>
 
             <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-left text-[12px] sm:text-[13px] leading-relaxed text-zinc-100 font-semibold space-y-3">
-              <p className="text-center font-black text-amber-400 text-sm">🏆 FÉLICITATIONS!</p>
-              <p>Tu débloques un accès à l'abonnement ULTRA avec une réduction exceptionnelle de 40 % pendant 1 mois.</p>
-              <p>Peu de gens tombent sur cette surprise. Encore moins prennent le temps d'explorer suffisamment pour la trouver. 👀</p>
+              <p className="text-center font-black text-amber-400 text-sm">{activeT.treasureEgg.congrats}</p>
+              <p>{activeT.treasureEgg.unlock}</p>
+              <p>{activeT.treasureEgg.rare}</p>
               <div className="pt-1 text-cyan-400 font-mono space-y-0.5">
-                <p>💎 Ton bonus :</p>
-                <p>• 40 % de réduction sur ULTRA pendant 1 mois</p>
-                <p>• Accès complet aux fonctionnalités avancées</p>
-                <p>• Le droit officiel de te vanter d'avoir trouvé un secret caché d'Echo AI</p>
+                <p>{activeT.treasureEgg.bonusTitle}</p>
+                <p>{activeT.treasureEgg.bonus1}</p>
+                <p>{activeT.treasureEgg.bonus2}</p>
+                <p>{activeT.treasureEgg.bonus3}</p>
               </div>
-              <p className="text-[11px] text-zinc-400 italic">⚠️ Cette récompense est valable pour un seul mois d'abonnement ULTRA et ne peut être combinée avec d'autres promotions.</p>
-              <p className="text-zinc-300 font-medium">Profites-en tant que le portail est encore ouvert... les Easter Eggs ont tendance à disparaître aussi mystérieusement qu'ils apparaissent. 😉</p>
-              <p className="text-center font-bold text-emerald-400 pt-1">🚀 Bien joué. Echo te regardait depuis le début.</p>
+              <p className="text-[11px] text-zinc-400 italic">{activeT.treasureEgg.disclaimer}</p>
+              <p className="text-zinc-300 font-medium">{activeT.treasureEgg.urgency}</p>
+              <p className="text-center font-bold text-emerald-400 pt-1">{activeT.treasureEgg.outro}</p>
             </div>
 
             <div className="flex flex-col gap-2">
-              <button 
+              <button
                 type="button"
                 disabled={isLoadingTreasure}
                 onClick={() => handleUpgradeWithStripe("treasure")}
                 className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md"
               >
-                {isLoadingTreasure ? "CONNECTING GATEWAY..." : "RÉCLAMER LE TRÉSOR (9.99$) ➔"}
+                {isLoadingTreasure ? activeT.treasureEgg.connecting : activeT.treasureEgg.claim}
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={() => setShowTreasureModal(false)}
                 className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800"
               >
-                Laisser le secret tranquille
+                {activeT.treasureEgg.leaveIt}
               </button>
             </div>
           </div>

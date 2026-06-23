@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
-import LangDropdown from "../components/LangDropdown";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import { useApp } from "../../context/AppContext";
 
@@ -50,7 +49,7 @@ const loadLocalConvos = (): Conversation[] => {
 };
 
 export default function ChatPage() {
-  const { t, lang, theme, toggleTheme } = useApp();
+  const { t, lang } = useApp();
 
   const [messages,   setMessages]   = useState<ChatMessage[]>([]);
   const [input,     setInput]     = useState("");
@@ -76,8 +75,6 @@ export default function ChatPage() {
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar"|"surprise">("vitality_actions");
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
 
   // ── DELETE CONFIRM MODAL ──────────────────────────────────────────────────
   const [deleteConfirmId,    setDeleteConfirmId]    = useState<string | null>(null);
@@ -284,13 +281,6 @@ export default function ChatPage() {
     };
     window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-  }, []);
-
-  // ── SETTINGS DROPDOWN ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setIsSettingsOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
   }, []);
 
   // ── CONVERSATIONS ─────────────────────────────────────────────────────────
@@ -746,23 +736,6 @@ export default function ChatPage() {
             <div className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-100 dark:border-zinc-900/60 flex flex-col bg-zinc-50/20 dark:bg-zinc-950/10 overflow-hidden max-h-[42vh] lg:max-h-none lg:h-full">
               <div className="p-3 border-b border-zinc-100 dark:border-zinc-900/80 flex items-center justify-between shrink-0">
                 <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">Modes</span>
-                <div className="relative" ref={settingsRef}>
-                  <button onClick={() => setIsSettingsOpen(v => !v)}
-                    className="p-1.5 rounded-lg bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:text-cyan-500 hover:border-cyan-500/50 transition-all text-xs flex items-center gap-1">
-                    ⚙️ <span className="font-mono text-[9px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase">{lang}</span>
-                  </button>
-                  {isSettingsOpen && (
-                    <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 flex flex-col gap-1 z-50">
-                      <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 px-2 py-1 border-b border-zinc-100 dark:border-zinc-900">
-                        {lang==="fr"?"Paramètres":"Settings"}
-                      </div>
-                      <button onClick={toggleTheme} className="text-left px-2 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors">
-                        {theme==="dark"?"☀️ Mode Clair":"🌙 Mode Sombre"}
-                      </button>
-                      <div className="px-2 py-1.5"><LangDropdown /></div>
-                    </div>
-                  )}
-                </div>
               </div>
 
               <div className="flex-1 p-3 overflow-y-auto grid grid-cols-2 lg:flex lg:flex-col gap-2 content-start">

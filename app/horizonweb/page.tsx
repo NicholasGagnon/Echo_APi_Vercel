@@ -48,8 +48,7 @@ const EchoSvgMascot = ({ className = "w-20 h-20" }: { className?: string }) => (
 );
 
 export default function HorizonWebPage() {
-  const { t, lang, setLang } = useApp();
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const { t, lang } = useApp();
 
   const [query, setQuery] = useState("");
   const [echoResponse, setEchoResponse] = useState("");
@@ -60,7 +59,6 @@ export default function HorizonWebPage() {
   const [userTier, setUserTier] = useState<UserTier>("connected_free");
   
   const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMatrixExpanded, setIsMatrixExpanded] = useState(false);
 
   // Détection de l'avatar cassé (Fallback V4)
@@ -109,18 +107,7 @@ export default function HorizonWebPage() {
         }
       }
     });
-
-    // 4. Appliquer le thème
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === "dark" ? "light" : "dark");
-  };
+  }, []);
 
   // Exécuter l'analyse et gérer la mise en cache locale
   const executeHorizonSearch = async (targetQuery: string, overrideLens?: "critical" | "expert" | "strategy" | null) => {
@@ -249,50 +236,6 @@ export default function HorizonWebPage() {
       {/* 3 - ZONE DE L'EXPLORATEUR UNIVERSEL */}
       <section className="flex-1 flex flex-col min-w-0 bg-white dark:bg-black transition-colors duration-200 relative">
         
-        {/* BOUTON SETTINGS - ALIGNÉ SUR LE CHAT ET SYNCHRONISÉ */}
-        <div className="absolute top-6 right-6 z-10 flex items-center gap-2">
-          <button 
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className="p-2.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 dark:text-zinc-300 transition-all shadow-sm flex items-center justify-center text-xs"
-            title="Settings"
-          >
-            ⚙️ <span className="font-mono text-[9px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase ml-1">{lang}</span>
-          </button>
-          
-          {isSettingsOpen && (
-            <div className="absolute right-0 top-12 w-52 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-xl z-20 font-mono text-xs flex flex-col gap-3">
-              <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 border-b border-zinc-100 dark:border-zinc-900 pb-1">
-                {lang === "fr" ? "Paramètres" : "Settings"}
-              </div>
-
-              <button 
-                onClick={toggleTheme} 
-                className="text-left w-full py-1.5 px-2 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300"
-              >
-                {theme === "dark" ? "☀️ Mode Clair" : "🌙 Mode Sombre"}
-              </button>
-
-              <div>
-                <h4 className="font-bold text-cyan-500 mb-2 uppercase tracking-wider text-[10px]">Language / Langue</h4>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => { setLang("fr"); setIsSettingsOpen(false); }}
-                    className={`flex-1 py-1.5 rounded-lg border text-center font-bold ${lang === "fr" ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/30" : "border-zinc-200 dark:border-zinc-800"}`}
-                  >
-                    FR
-                  </button>
-                  <button 
-                    onClick={() => { setLang("en"); setIsSettingsOpen(false); }}
-                    className={`flex-1 py-1.5 rounded-lg border text-center font-bold ${lang === "en" ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/30" : "border-zinc-200 dark:border-zinc-800"}`}
-                  >
-                    EN
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* HEADER DE RECHERCHE UNIFIÉ */}
         <div className="p-8 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center text-center shrink-0 pt-16">
           <h1 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase mb-6 font-mono select-none text-cyan-600 dark:text-cyan-400">

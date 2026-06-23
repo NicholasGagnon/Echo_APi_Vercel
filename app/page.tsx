@@ -150,6 +150,8 @@ export default function Home() {
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
   const [showLimitModal,        setShowLimitModal]    = useState(false);
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar">("vitality_actions");
+  const [showTreasureModal, setShowTreasureModal] = useState(false);
+  const [isLoadingTreasure, setIsLoadingTreasure] = useState(false);
 
   const localButtonsLabels: Record<"fr"|"en", Record<string,string>> = {
     fr: { clarity:"1🧠 Clarté", humain:"2👤 Humain", critical:"3⚔️ Regard critique", expert:"4🎓 Expert", precision:"5🎯 Précision", philosophy:"6🏛️ Philosophie", strategy:"7♟️ Stratégie", decompose:"8🧩 Décomposer", refine:"9❓ Affiner", double:"10⚡ Double Regard" },
@@ -539,6 +541,30 @@ if (raws.length > 10) {
     recognition.start();
   };
 
+  const handleTreasureCheckout = async () => {
+    const { data } = await supabase.auth.getUser();
+    const user = data.user;
+    if (!user) {
+      alert(lang === "fr" ? "Connectez-vous avant de réclamer le trésor." : "Please log in before claiming the treasure.");
+      return;
+    }
+    try {
+      setIsLoadingTreasure(true);
+      const response = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "treasure", userId: user.id, userEmail: user.email }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Checkout error");
+      if (result.url) window.location.href = result.url;
+    } catch (err: any) {
+      alert(`Erreur : ${err.message}`);
+    } finally {
+      setIsLoadingTreasure(false);
+    }
+  };
+
   const handleImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]; event.target.value = "";
     if (!file) return;
@@ -663,6 +689,12 @@ if (raws.length > 10) {
                   <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spinDash 4s linear infinite"}}/>
                   <div className="absolute inset-1.5 rounded-full bg-black/80"/>
                   <img src="/Echo.png" alt="Echo" className="relative z-10 w-20 h-20 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
+                  <button
+                    type="button"
+                    onClick={() => setShowTreasureModal(true)}
+                    className="absolute inset-0 z-20 rounded-full opacity-0 cursor-default"
+                    title="..."
+                  />
                 </div>
                 <span className="text-zinc-600 text-[8px] mt-1 tracking-widest uppercase font-mono">{echoState}</span>
               </div>
@@ -1032,6 +1064,80 @@ if (raws.length > 10) {
                 : `Automated action limit reached for [${activeLimitCategory}]. Upgrade to continue.`}
             </p>
             <button onClick={() => setShowLimitModal(false)} className="w-full bg-cyan-600 text-white py-2.5 rounded-xl text-xs font-semibold">OK</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 🏴‍☠️ POP-UP SURPRISE DU TRÉSOR (EASTER EGG OFFRE ULTRA) ── */}
+      {showTreasureModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setShowTreasureModal(false)}
+              className="absolute top-4 right-5 text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1"
+              title={lang === "fr" ? "Fermer le portail" : "Close the portal"}
+            >
+              ✕
+            </button>
+
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">
+              👑
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">
+                {lang === "fr" ? "🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉" : "🎉✨ HEY THERE, DIGITAL EXPLORER! ✨🎉"}
+              </h3>
+              <p className="text-zinc-400 text-[11px] font-semibold leading-relaxed">
+                {lang === "fr"
+                  ? "Tu viens de découvrir un Easter Egg caché dans les profondeurs d'Echo AI... et ça mérite une récompense. 😎"
+                  : "You just discovered an Easter Egg hidden deep within Echo AI... and that deserves a reward. 😎"}
+              </p>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-left text-[12px] sm:text-[13px] leading-relaxed text-zinc-100 font-semibold space-y-3">
+              <p className="text-center font-black text-amber-400 text-sm">{lang === "fr" ? "🏆 FÉLICITATIONS!" : "🏆 CONGRATULATIONS!"}</p>
+              <p>{lang === "fr"
+                ? "Tu débloques un accès à l'abonnement ULTRA avec une réduction exceptionnelle de 40 % pendant 1 mois."
+                : "You're unlocking access to the ULTRA subscription with an exceptional 40% discount for 1 month."}</p>
+              <p>{lang === "fr"
+                ? "Peu de gens tombent sur cette surprise. Encore moins prennent le temps d'explorer suffisamment pour la trouver. 👀"
+                : "Few people stumble onto this surprise. Even fewer take the time to explore enough to find it. 👀"}</p>
+              <div className="pt-1 text-cyan-400 font-mono space-y-0.5">
+                <p>{lang === "fr" ? "💎 Ton bonus :" : "💎 Your bonus:"}</p>
+                <p>{lang === "fr" ? "• 40 % de réduction sur ULTRA pendant 1 mois" : "• 40% off ULTRA for 1 month"}</p>
+                <p>{lang === "fr" ? "• Accès complet aux fonctionnalités avancées" : "• Full access to advanced features"}</p>
+                <p>{lang === "fr"
+                  ? "• Le droit officiel de te vanter d'avoir trouvé un secret caché d'Echo AI"
+                  : "• The official right to brag about finding a hidden Echo AI secret"}</p>
+              </div>
+              <p className="text-[11px] text-zinc-400 italic">{lang === "fr"
+                ? "⚠️ Cette récompense est valable pour un seul mois d'abonnement ULTRA et ne peut être combinée avec d'autres promotions."
+                : "⚠️ This reward is valid for a single month of ULTRA subscription and cannot be combined with other promotions."}</p>
+              <p className="text-zinc-300 font-medium">{lang === "fr"
+                ? "Profites-en tant que le portail est encore ouvert... les Easter Eggs ont tendance à disparaître aussi mystérieusement qu'ils apparaissent. 😉"
+                : "Take advantage while the portal is still open... Easter Eggs tend to vanish as mysteriously as they appear. 😉"}</p>
+              <p className="text-center font-bold text-emerald-400 pt-1">{lang === "fr" ? "🚀 Bien joué. Echo te regardait depuis le début." : "🚀 Well played. Echo was watching you the whole time."}</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={isLoadingTreasure}
+                onClick={handleTreasureCheckout}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md text-center"
+              >
+                {isLoadingTreasure ? (lang === "fr" ? "CONNEXION..." : "CONNECTING...") : (lang === "fr" ? "RÉCLAMER LE TRÉSOR (9.99$) ➔" : "CLAIM THE TREASURE ($9.99) ➔")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowTreasureModal(false)}
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800"
+              >
+                {lang === "fr" ? "Laisser le secret tranquille" : "Leave the secret alone"}
+              </button>
+            </div>
           </div>
         </div>
       )}

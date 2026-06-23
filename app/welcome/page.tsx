@@ -47,11 +47,11 @@ export default function WelcomePage() {
   const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
 
   const fullTextPart1 = fr 
-    ? "Bonjour Je suis Echo. \n\nC'est mon nom, \nJe suis une Présence augmentée, Synchronisée à votre réalité... "
-    : "Hello I am Echo. \n\nThat's my name, \nI am an Augmented Presence, Synchronized with your reality... ";
+    ? "Bonjour Je suis Echo. \n\nC'est mon nom... J'ai vraiment dit ça 💀💀💀, \nJe suis une Présence augmentée, Synchronisée à votre réalité... "
+    : "Hello I am Echo. \n\nThat's my name... Did I really just say that? 💀💀💀, \nI am an Augmented Presence, Synchronized with your reality... ";
 
   const fullTextPart2 = fr
-    ? "\n\nIci commence un voyage entre Gestion, découverte, création et exploration.\nPréparez-vous à découvrir l'inattendu a mes cotés.\nJe resterai Connectée à votre parcours.\n\nVenez avec moi ------------------------------"
+    ? "\n\nIci commence un voyage entre Gestion, découverte, création et exploration.\nPréparez-vous à découvrir l'inattendu à mes côtés.\nJe resterai Connectée à votre parcours.\n\nVenez avec moi ------------------------------"
     : "\n\nHere begins a journey between Management, discovery, creation and exploration.\nGet ready to discover the unexpected by my side.\nI will stay Connected to your path.\n\nCome with me ------------------------------";
 
   // ── PARTICULES ────────────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ export default function WelcomePage() {
           <div className="absolute right-0 mt-1.5 w-32 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50">
             <button onClick={e => { e.stopPropagation(); setLang("fr"); setShowLang(false); }}
               className={`w-full text-left px-3 py-2.5 text-xs font-mono flex items-center gap-2 transition-colors ${lang==="fr"?"bg-cyan-500/10 text-cyan-400":"text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`}>
-              🇫🇷 Francais
+              🇫🇷 Français
             </button>
             <button onClick={e => { e.stopPropagation(); setLang("en"); setShowLang(false); }}
               className={`w-full text-left px-3 py-2.5 text-xs font-mono flex items-center gap-2 transition-colors ${lang==="en"?"bg-cyan-500/10 text-cyan-400":"text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`}>
@@ -323,11 +323,11 @@ export default function WelcomePage() {
             <h1 className="text-5xl sm:text-6xl font-black tracking-tighter text-white font-mono leading-none">
               ECHO <span className="text-cyan-400">AI</span>
             </h1>
-            <p className="text-zinc-300 text-base mt-2 font-semibold tracking-wide">
+            <h2 className="text-zinc-300 text-base mt-2 font-semibold tracking-wide">
               {fr
                 ? "L'IA Agentique qui transforme chaque interaction en résultat"
                 : "The Agentic AI that transforms every interaction into results"}
-            </p>
+            </h2>
           </div>
         </div>
 
@@ -359,16 +359,14 @@ export default function WelcomePage() {
                 ✕
               </button>
 
-              {/* Gros Echo Flottant (Transition vers les boutons à la fermeture) */}
-              <div className={`absolute top-4 right-14 transition-all duration-1000 ${
-                echoStep === "typing" ? "opacity-90 scale-100 rotate-0" : "opacity-0 scale-75 translate-x-20"
-              }`}>
+              {/* Bébé Echo Flottant Unique - Animation de descente vers la droite vers les boutons de connexion */}
+              <div className={`absolute top-4 right-14 ${echoStep === "typing" ? "animate-echo-slide-out" : "opacity-0"}`}>
                 <img src="/Echo.png" alt="Echo Icon" className="w-14 h-14 rounded-full border border-cyan-500/30 object-contain shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
               </div>
 
               {/* Terminal de points millimétré */}
               <div className="text-xs font-mono select-none text-zinc-400 break-all leading-relaxed pr-8">
-                <div>{fr ? "Syncronisation du systeme en cours" : "System synchronization in progress"}</div>
+                <div>{fr ? "Synchronisation du système en cours" : "System synchronization in progress"}</div>
                 <div className="tracking-tighter opacity-70">{dotsLine1}</div>
                 <div className="inline tracking-tighter opacity-70">{dotsLine2Part1}</div>
                 {showCompanionStatus && (
@@ -391,7 +389,7 @@ export default function WelcomePage() {
           {echoStep === "closed" && (
             <div className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
               <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-4">
-                {fr ? "Un ecosysteme concu pour gerer l'essentiel :" : "An ecosystem built to manage the essentials:"}
+                {fr ? "Un écosystème conçu pour gérer l'essentiel :" : "An ecosystem built to manage the essentials:"}
               </p>
               <div className="flex flex-col gap-3">
                 {FEATURES.map((f, i) => (
@@ -403,7 +401,7 @@ export default function WelcomePage() {
               </div>
               <div className="mt-5 pt-4 border-t border-zinc-800 text-center">
                 <span className="text-cyan-400 font-bold text-sm font-mono">
-                  {fr ? "Tout est synchronise." : "Everything is synchronized."}
+                  {fr ? "Tout est synchronisé." : "Everything is synchronized."}
                 </span>
               </div>
             </div>
@@ -451,7 +449,7 @@ export default function WelcomePage() {
                 </button>
                 <button onClick={e => { e.stopPropagation(); setShowSignUpModal(true); }}
                   className="h-12 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-sm rounded-xl transition-all border border-zinc-700">
-                  {fr ? "Creer un compte" : "Create account"}
+                  {fr ? "Créer un compte" : "Create account"}
                 </button>
               </div>
             </div>
@@ -460,10 +458,10 @@ export default function WelcomePage() {
               <button onClick={e => { e.stopPropagation(); window.location.href="/"; }}
                 className="w-full h-11 flex items-center justify-center gap-2 bg-transparent border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 font-semibold text-sm rounded-xl transition-all">
                 <span>🏠</span>
-                <span>{fr ? "Acceder a l'accueil sans compte" : "Access home without account"}</span>
+                <span>{fr ? "Accéder à l'accueil sans compte" : "Access home without account"}</span>
               </button>
               <p className="text-center text-zinc-600 text-[10px] font-mono mt-1.5">
-                {fr ? "Fonctionnalites limitees en mode invite" : "Limited features in guest mode"}
+                {fr ? "Fonctionnalités limitées en mode invité" : "Limited features in guest mode"}
               </p>
             </div>
           </div>
@@ -471,7 +469,7 @@ export default function WelcomePage() {
 
         {/* FOOTER */}
         <p className="text-zinc-700 text-[10px] font-mono mt-2">
-          {fr ? "Cliquez n'importe ou pour continuer" : "Click anywhere to continue"} · © {new Date().getFullYear()} Echo AI
+          {fr ? "Cliquez n'importe où pour continuer" : "Click anywhere to continue"} · © {new Date().getFullYear()} Echo AI
         </p>
       </div>
 
@@ -536,6 +534,29 @@ export default function WelcomePage() {
 
       <style>{`
         @keyframes spinRadar { 100% { transform: rotate(360deg); } }
+        
+        @keyframes echoSlideOut {
+          0% {
+            opacity: 0;
+            transform: scale(0.7) translate(0, 0);
+          }
+          15% {
+            opacity: 0.9;
+            transform: scale(1) translate(0, 0);
+          }
+          75% {
+            opacity: 0.8;
+            transform: scale(1) translate(40px, 80px);
+          }
+          100% {
+            opacity: 0;
+            transform: scale(0.5) translate(160px, 260px);
+          }
+        }
+
+        .animate-echo-slide-out {
+          animation: echoSlideOut 5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
       `}</style>
     </main>
   );

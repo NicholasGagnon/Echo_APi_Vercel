@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
-import LangDropdown from "../components/LangDropdown";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import { useApp } from "../../context/AppContext";
 
@@ -13,7 +12,7 @@ type CalorieLog    = { id: string; foodName: string; calories: number; date: str
 type VitalityMessage = { raw: string; imageB64?: string };
 
 export default function VitalityPage() {
-  const { t, lang, theme, toggleTheme, userTier } = useApp();
+  const { t, lang, theme, userTier } = useApp();
   const [isLoaded, setIsLoaded] = useState(false);
   const [userId,   setUserId]   = useState<string | null>(null);
   const [inputEcho,    setInputEcho]    = useState("");
@@ -27,8 +26,6 @@ export default function VitalityPage() {
   const [imageName,   setImageName]   = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
 
   const [expenses,     setExpenses]     = useState<BudgetExpense[]>([]);
   const [caloriesList, setCaloriesList] = useState<CalorieLog[]>([]);
@@ -89,15 +86,6 @@ export default function VitalityPage() {
   const lastEchoIndex   = echoMessages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
   const serializeMsgs   = (msgs: VitalityMessage[]) => msgs.map(m => m.raw);
   const deserializeMsgs = (raws: string[]): VitalityMessage[] => raws.map(r => ({ raw: r }));
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node))
-        setIsSettingsOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -606,23 +594,6 @@ export default function VitalityPage() {
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
                 <h2 className="font-bold text-xs text-zinc-800 dark:text-zinc-100 uppercase font-mono tracking-wider">{dict.ctrlTitle}</h2>
-              </div>
-              <div className="relative" ref={settingsRef}>
-                <button onClick={() => setIsSettingsOpen(v => !v)}
-                  className="p-1.5 rounded-lg bg-zinc-200/80 dark:bg-zinc-800/80 border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:text-cyan-500 hover:border-cyan-500/50 transition-all text-xs flex items-center gap-1">
-                  ⚙️ <span className="font-mono text-[9px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase">{lang}</span>
-                </button>
-                {isSettingsOpen && (
-                  <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 flex flex-col gap-1 z-50">
-                    <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 px-2 py-1 border-b border-zinc-100 dark:border-zinc-900">
-                      {lang==="fr"?"Parametres":"Settings"}
-                    </div>
-                    <button onClick={toggleTheme} className="text-left px-2 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors">
-                      {theme==="dark"?"Mode Clair":"Mode Sombre"}
-                    </button>
-                    <div className="px-2 py-1.5"><LangDropdown /></div>
-                  </div>
-                )}
               </div>
             </div>
 
