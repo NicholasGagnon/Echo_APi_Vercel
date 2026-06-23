@@ -28,6 +28,9 @@ export default function WelcomePage() {
   const [showLang, setShowLang]   = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
 
+  // RÉFÉRENCES AUDIO
+  const typingAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // ÉTATS DE SÉQUENCE INTERNE D'ECHO
   const [echoStep, setEchoStep] = useState<"lang_select" | "loading" | "typing" | "closed">("lang_select");
   const [dotsLine1, setDotsLine1] = useState("");
@@ -121,9 +124,17 @@ export default function WelcomePage() {
     return () => clearInterval(interval);
   }, [echoStep]);
 
-  // ── SÉQUENCE MACHINE À ÉCRIRE ─────────────────────────────────────────────
+  // ── SÉQUENCE MACHINE À ÉCRIRE + TIMING AUDIO ──────────────────────────────
   useEffect(() => {
     if (echoStep !== "typing") return;
+
+    // Instanciation et lancement du son de clavier en boucle
+    const typingAudio = new Audio("/sounds/futur.mp3");
+    typingAudio.volume = 0.2;
+    typingAudio.loop = true;
+    typingAudioRef.current = typingAudio;
+    typingAudio.play().catch(o => console.log("Audio d'écriture en attente", o));
+
     let currentIndex = 0;
     const typeInterval = setInterval(() => {
       if (currentIndex < fullTextPart1.length) {
@@ -131,8 +142,14 @@ export default function WelcomePage() {
         currentIndex++;
       } else {
         clearInterval(typeInterval);
+        // On coupe temporairement le son pendant la respiration entre les blocs
+        if (typingAudioRef.current) typingAudioRef.current.pause();
+
         setTimeout(() => {
           setShowSecondBlock(true);
+          // Relance du son pour le deuxième bloc
+          if (typingAudioRef.current) typingAudioRef.current.play().catch(() => {});
+          
           let secondIndex = 0;
           const secondInterval = setInterval(() => {
             if (secondIndex < fullTextPart2.length) {
@@ -140,13 +157,33 @@ export default function WelcomePage() {
               secondIndex++;
             } else {
               clearInterval(secondInterval);
+              // Fin définitive du texte : On éteint le son du clavier
+              if (typingAudioRef.current) {
+                typingAudioRef.current.pause();
+                typingAudioRef.current = null;
+              }
             }
           }, 12);
         }, 1000);
       }
     }, 15);
-    return () => clearInterval(typeInterval);
+
+    return () => {
+      clearInterval(typeInterval);
+      if (typingAudioRef.current) {
+        typingAudioRef.current.pause();
+        typingAudioRef.current = null;
+      }
+    };
   }, [echoStep, lang]);
+
+  // Nettoyage de sécurité si le composant démonte ou si l'utilisateur ferme le pop-up
+  useEffect(() => {
+    if (echoStep === "closed" && typingAudioRef.current) {
+      typingAudioRef.current.pause();
+      typingAudioRef.current = null;
+    }
+  }, [echoStep]);
 
   // ── AUTRES EFFETS ET UTILS ────────────────────────────────────────────────
   useEffect(() => {
@@ -241,14 +278,20 @@ export default function WelcomePage() {
   };
 
   const handlePageClick = (e: React.MouseEvent) => {
-    if (echoStep !== "closed") return; // Le panneau interactif bloque tout clic vers /account tant qu'il est ouvert
+    if (echoStep !== "closed") return; 
     const tag = (e.target as HTMLElement).closest("[data-stop]");
     if (!tag) router.push("/account");
   };
 
+  // INITIALISATION DU SYSTÈME AVEC DECLENCHEMENT DU PREMIER SON
   const initSequence = (selectedLang: "fr" | "en") => {
     setLang(selectedLang);
     setEchoStep("loading");
+
+    // Lancement immédiat du son de démarrage (Autorisé grâce au clic)
+    const bootAudio = new Audio("/sounds/system_activation.mp3");
+    bootAudio.volume = 0.35;
+    bootAudio.play().catch(o => console.log("Audio d'initialisation bloqué", o));
   };
 
   return (
@@ -407,14 +450,13 @@ export default function WelcomePage() {
             </div>
           )}
 
-          {/* BLOC DROIT — FORMULAIRE DE CONNEXION (Sans data-stop global pour garder le fond cliquable) */}
+          {/* BLOC DROIT — FORMULAIRE DE CONNEXION */}
           <div className="bg-zinc-950/90 border border-cyan-500/25 rounded-2xl p-6 backdrop-blur-sm shadow-[0_0_40px_rgba(6,182,212,0.06)] flex flex-col gap-4">
             <p className="text-center text-white font-bold text-lg">
               {fr ? "Connectez-vous pour commencer" : "Sign in to get started"}
             </p>
 
             <div className="flex flex-col gap-3">
-              {/* BOUTON 1: GOOGLE */}
               <button data-stop="" onClick={e => { e.stopPropagation(); handleGoogleConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-sm rounded-xl transition-all shadow-md">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
@@ -426,7 +468,6 @@ export default function WelcomePage() {
                 <span className="flex-1 text-center">{fr ? "Continuer avec Google" : "Continue with Google"}</span>
               </button>
 
-              {/* BOUTON 2: MICROSOFT */}
               <button data-stop="" onClick={e => { e.stopPropagation(); handleMicrosoftConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl transition-all border border-zinc-700">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 23 23" fill="none">
@@ -445,12 +486,10 @@ export default function WelcomePage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {/* BOUTON 3: SIGN IN */}
                 <button data-stop="" onClick={e => { e.stopPropagation(); setShowSignInModal(true); }}
                   className="h-12 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm rounded-xl transition-all shadow-md">
                   {fr ? "Se connecter" : "Sign in"}
                 </button>
-                {/* BOUTON 4: CREATE COMPTE */}
                 <button data-stop="" onClick={e => { e.stopPropagation(); setShowSignUpModal(true); }}
                   className="h-12 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-sm rounded-xl transition-all border border-zinc-700">
                   {fr ? "Créer un compte" : "Create account"}
