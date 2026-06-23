@@ -257,18 +257,35 @@ export default function WelcomePage() {
     if (!tag) router.push("/account");
   };
 
-  // INITIALISATION DU SYSTÈME AVEC DEPART TIME DE TON EFFET SCI-FI
+  // INITIALISATION DU SYSTÈME AVEC MODE DEBUGEUR DE CHATGPT
   const initSequence = (selectedLang: "fr" | "en") => {
     setLang(selectedLang);
     setEchoStep("loading");
 
-    // Lancement du son futuriste calé exactement au moment du drop (15s)
+    console.log("🔊 Tentative de lecture audio lancée...");
+
     const sciFiAudio = new Audio("/sounds/futur.mp3");
-    sciFiAudio.currentTime = 15; // Démarre pile à l'action HUD de ta capture d'écran
-    sciFiAudio.volume = 0.25;
-    globalAudioRef.current = sciFiAudio;
     
-    sciFiAudio.play().catch(o => console.log("Audio d'initialisation en attente", o));
+    // Debug ChatGPT : Démarrage à 0 pour éviter le crash si longueur incorrecte
+    sciFiAudio.currentTime = 0; 
+    
+    // Vol maximum pour être certain que le problème ne vienne pas d'un gain trop faible
+    sciFiAudio.volume = 1.0; 
+    
+    globalAudioRef.current = sciFiAudio;
+
+    // Logs de surveillance dans la console (F12)
+    sciFiAudio.onloadeddata = () => {
+      console.log("✅ Fichier audio chargé avec succès depuis /public/sounds/futur.mp3");
+    };
+
+    sciFiAudio.onerror = (e) => {
+      console.error("❌ Erreur critique de chargement audio : Le fichier n'existe pas ou le chemin est incorrect.", e);
+    };
+
+    sciFiAudio.play()
+      .then(() => console.log("🎉 Audio en cours de lecture !"))
+      .catch(o => console.error("⚠️ Lecture bloquée par le navigateur :", o));
   };
 
   return (
