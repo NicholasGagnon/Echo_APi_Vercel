@@ -270,7 +270,7 @@ export default function WelcomePage() {
     sciFiAudio.currentTime = 0; 
     
     // Vol maximum pour être certain que le problème ne vienne pas d'un gain trop faible
-    sciFiAudio.volume = 1.0; 
+    sciFiAudio.volume = 0.5; 
     
     globalAudioRef.current = sciFiAudio;
 
