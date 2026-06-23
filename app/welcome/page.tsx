@@ -28,8 +28,8 @@ export default function WelcomePage() {
   const [showLang, setShowLang]   = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
 
-  // RÉFÉRENCES AUDIO
-  const typingAudioRef = useRef<HTMLAudioElement | null>(null);
+  // RÉFÉRENCE DE SÉCURITÉ POUR L'AUDIO GLOBAL
+  const globalAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // ÉTATS DE SÉQUENCE INTERNE D'ECHO
   const [echoStep, setEchoStep] = useState<"lang_select" | "loading" | "typing" | "closed">("lang_select");
@@ -124,17 +124,9 @@ export default function WelcomePage() {
     return () => clearInterval(interval);
   }, [echoStep]);
 
-  // ── SÉQUENCE MACHINE À ÉCRIRE + TIMING AUDIO ──────────────────────────────
+  // ── SÉQUENCE MACHINE À ÉCRIRE ─────────────────────────────────────────────
   useEffect(() => {
     if (echoStep !== "typing") return;
-
-    // Instanciation et lancement du son de clavier en boucle
-    const typingAudio = new Audio("/sounds/futur.mp3");
-    typingAudio.volume = 0.2;
-    typingAudio.loop = true;
-    typingAudioRef.current = typingAudio;
-    typingAudio.play().catch(o => console.log("Audio d'écriture en attente", o));
-
     let currentIndex = 0;
     const typeInterval = setInterval(() => {
       if (currentIndex < fullTextPart1.length) {
@@ -142,14 +134,8 @@ export default function WelcomePage() {
         currentIndex++;
       } else {
         clearInterval(typeInterval);
-        // On coupe temporairement le son pendant la respiration entre les blocs
-        if (typingAudioRef.current) typingAudioRef.current.pause();
-
         setTimeout(() => {
           setShowSecondBlock(true);
-          // Relance du son pour le deuxième bloc
-          if (typingAudioRef.current) typingAudioRef.current.play().catch(() => {});
-          
           let secondIndex = 0;
           const secondInterval = setInterval(() => {
             if (secondIndex < fullTextPart2.length) {
@@ -157,31 +143,19 @@ export default function WelcomePage() {
               secondIndex++;
             } else {
               clearInterval(secondInterval);
-              // Fin définitive du texte : On éteint le son du clavier
-              if (typingAudioRef.current) {
-                typingAudioRef.current.pause();
-                typingAudioRef.current = null;
-              }
             }
           }, 12);
         }, 1000);
       }
     }, 15);
-
-    return () => {
-      clearInterval(typeInterval);
-      if (typingAudioRef.current) {
-        typingAudioRef.current.pause();
-        typingAudioRef.current = null;
-      }
-    };
+    return () => clearInterval(typeInterval);
   }, [echoStep, lang]);
 
-  // Nettoyage de sécurité si le composant démonte ou si l'utilisateur ferme le pop-up
+  // Coupe le son immédiatement dès que l'utilisateur décide de fermer le panneau
   useEffect(() => {
-    if (echoStep === "closed" && typingAudioRef.current) {
-      typingAudioRef.current.pause();
-      typingAudioRef.current = null;
+    if (echoStep === "closed" && globalAudioRef.current) {
+      globalAudioRef.current.pause();
+      globalAudioRef.current = null;
     }
   }, [echoStep]);
 
@@ -283,15 +257,18 @@ export default function WelcomePage() {
     if (!tag) router.push("/account");
   };
 
-  // INITIALISATION DU SYSTÈME AVEC DECLENCHEMENT DU PREMIER SON
+  // INITIALISATION DU SYSTÈME AVEC DEPART TIME DE TON EFFET SCI-FI
   const initSequence = (selectedLang: "fr" | "en") => {
     setLang(selectedLang);
     setEchoStep("loading");
 
-    // Lancement immédiat du son de démarrage (Autorisé grâce au clic)
-    const bootAudio = new Audio("/sounds/system_activation.mp3");
-    bootAudio.volume = 0.35;
-    bootAudio.play().catch(o => console.log("Audio d'initialisation bloqué", o));
+    // Lancement du son futuriste calé exactement au moment du drop (15s)
+    const sciFiAudio = new Audio("/sounds/futur.mp3");
+    sciFiAudio.currentTime = 15; // Démarre pile à l'action HUD de ta capture d'écran
+    sciFiAudio.volume = 0.25;
+    globalAudioRef.current = sciFiAudio;
+    
+    sciFiAudio.play().catch(o => console.log("Audio d'initialisation en attente", o));
   };
 
   return (
@@ -299,14 +276,11 @@ export default function WelcomePage() {
       onClick={handlePageClick}
       className="relative min-h-screen w-full bg-black overflow-x-hidden flex flex-col items-center cursor-pointer"
     >
-      {/* CANVAS */}
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-0"/>
 
-      {/* RADIAL GLOW */}
       <div className="absolute inset-0 z-0 pointer-events-none"
         style={{background:"radial-gradient(ellipse 80% 55% at 50% 0%, rgba(6,182,212,0.10) 0%, transparent 70%)"}}/>
 
-      {/* GRID */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.025]"
         style={{backgroundImage:"linear-gradient(rgba(6,182,212,1) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,1) 1px, transparent 1px)", backgroundSize:"60px 60px"}}/>
 
@@ -331,7 +305,6 @@ export default function WelcomePage() {
         )}
       </div>
 
-      {/* CONTENU PRINCIPAL */}
       <div className="relative z-10 w-full max-w-6xl mx-auto px-6 pt-10 pb-16 flex flex-col items-center gap-6">
 
         {/* BADGE */}
@@ -396,7 +369,6 @@ export default function WelcomePage() {
 
           {echoStep !== "lang_select" && echoStep !== "closed" && (
             <div className="bg-white/[0.06] backdrop-blur-xl border-2 border-cyan-400/50 rounded-2xl p-6 relative flex flex-col justify-between min-h-[380px] -mt-8 lg:-ml-6 shadow-[0_0_35px_rgba(6,182,212,0.2)]" data-stop="">
-              {/* Bouton Fermer */}
               <button onClick={(e) => { e.stopPropagation(); setEchoStep("closed"); }}
                 className="absolute top-4 right-5 text-zinc-400 hover:text-cyan-300 font-mono text-xl font-bold transition-colors p-1 z-30">
                 ✕
