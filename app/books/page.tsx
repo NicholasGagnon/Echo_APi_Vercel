@@ -13,10 +13,10 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { TextAlign } from "@tiptap/extension-text-align";
 
-type EchoMode   = "creative" | "ideas" | "critical";
-type BookView   = "edit" | "present";
+type EchoMode    = "creative" | "ideas" | "critical";
+type BookView    = "edit" | "present";
 type BookMessage = { role: "user" | "echo"; text: string };
-type Chapter    = { id: string; title: string; content: string };
+type Chapter     = { id: string; title: string; content: string };
 
 const I: Record<"fr"|"en", Record<string,string>> = {
   fr: {
@@ -27,28 +27,24 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     save:"Sauv.", newChapter:"Nouveau chapitre",
     settings:"Parametres", lightMode:"Mode Clair", darkMode:"Mode Sombre",
     mirror:"Miroir marges", pageNum:"N pages", header:"En-tete",
-    justify:"Justifie", lineH:"Interligne", font:"Police",
-    opacity:"Opacite page",
+    justify:"Justifie", lineH:"Interligne", font:"Police", opacity:"Opacite page",
     struct:"struct", texte:"texte", pages:"pages", police:"police",
     media:"media", livre:"livre", presets:"presets", align:"alignement",
     t1:"Titre 1", t2:"Titre 2", t3:"Titre 3", normal:"Texte normal",
-    bold:"Gras", italic:"Italique", indent:"Alinea",
-    showMarks:"Marques",
+    bold:"Gras", italic:"Italique", indent:"Alinea", showMarks:"Marques",
     smaller:"Reduire", larger:"Agrandir",
     importTxt:"Import TXT", openBook:"Ouvrir .echo-book",
     alignLeft:"Gauche", alignCenter:"Centre", alignRight:"Droite", alignJustify:"Justifie",
     creative:"Creatif", ideas:"Idees", critical:"Critique",
     echoPlaceholder:"Demande a Echo d'ecrire un passage...\n\nDis-lui 'injecte' pour qu'il ajoute le texte dans ton livre.",
-    echoInput:"Demande a Echo...",
-    export:"Export",
+    echoInput:"Demande a Echo...", export:"Export",
     noContent:"Aucun contenu.", titleHint:"Double-cliquer pour modifier",
+    chapterHint:"Double-cliquer pour renommer",
     prevChapter:"Precedent", nextChapter:"Suivant", closePres:"Fermer",
     serverErr:"Impossible de joindre le serveur.",
     presetPrint:"Impression", presetKindle:"Kindle", presetCustom:"Personnalise",
-    importFont:"Importer police",
-    pageOf:"sur",
-    chapterSelect:"Selectionner chapitre",
-    inject:"Injecter",
+    importFont:"Importer police", pageOf:"sur",
+    chapterSelect:"Selectionner chapitre", inject:"Injecter",
     quotaLimit:"Limite d'actions Echo atteinte pour ce cycle.",
   },
   en: {
@@ -59,181 +55,184 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     save:"Save", newChapter:"New chapter",
     settings:"Settings", lightMode:"Light Mode", darkMode:"Dark Mode",
     mirror:"Mirror margins", pageNum:"Page #", header:"Header",
-    justify:"Justify", lineH:"Line-h", font:"Font",
-    opacity:"Page opacity",
+    justify:"Justify", lineH:"Line-h", font:"Font", opacity:"Page opacity",
     struct:"struct", texte:"text", pages:"pages", police:"size",
     media:"media", livre:"book", presets:"presets", align:"align",
     t1:"Title 1", t2:"Title 2", t3:"Title 3", normal:"Normal text",
-    bold:"Bold", italic:"Italic", indent:"Indent",
-    showMarks:"Show marks",
+    bold:"Bold", italic:"Italic", indent:"Indent", showMarks:"Show marks",
     smaller:"Smaller", larger:"Larger",
     importTxt:"Import TXT", openBook:"Open .echo-book",
     alignLeft:"Left", alignCenter:"Center", alignRight:"Right", alignJustify:"Justify",
     creative:"Creative", ideas:"Ideas", critical:"Critical",
     echoPlaceholder:"Ask Echo to write a passage...\n\nSay 'inject' to have Echo add the text into your book.",
-    echoInput:"Ask Echo...",
-    export:"Export",
+    echoInput:"Ask Echo...", export:"Export",
     noContent:"No content yet.", titleHint:"Double-click to edit",
+    chapterHint:"Double-click to rename",
     prevChapter:"Previous", nextChapter:"Next", closePres:"Close",
     serverErr:"Cannot reach the server.",
     presetPrint:"Print", presetKindle:"Kindle", presetCustom:"Custom",
-    importFont:"Import Font",
-    pageOf:"of",
-    chapterSelect:"Select chapter",
-    inject:"Inject",
+    importFont:"Import Font", pageOf:"of",
+    chapterSelect:"Select chapter", inject:"Inject",
     quotaLimit:"Echo action limit reached for this cycle.",
   },
 };
 
-const ECHO_MODES: { id: EchoMode; key: "creative"|"ideas"|"critical"; emoji: string }[] = [
-  { id:"creative", key:"creative", emoji:"✍️" },
-  { id:"ideas",    key:"ideas",    emoji:"💡" },
-  { id:"critical", key:"critical", emoji:"🔍" },
+// ── ECHO MODE TABS — SVG icons so they never disappear ───────────────────────
+const ECHO_MODES: { id: EchoMode; key: "creative"|"ideas"|"critical"; icon: ReactNode }[] = [
+  {
+    id: "creative", key: "creative",
+    icon: (
+      <svg viewBox="0 0 18 18" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 15l2-5L13 2a2 2 0 0 1 3 3L8 13z"/>
+        <line x1="11" y1="4" x2="14" y2="7"/>
+        <line x1="3" y1="15" x2="5" y2="10"/>
+      </svg>
+    ),
+  },
+  {
+    id: "ideas", key: "ideas",
+    icon: (
+      <svg viewBox="0 0 18 18" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="7" r="4"/>
+        <line x1="9" y1="11" x2="9" y2="13"/>
+        <line x1="7" y1="15" x2="11" y2="15"/>
+        <line x1="6" y1="13" x2="12" y2="13"/>
+      </svg>
+    ),
+  },
+  {
+    id: "critical", key: "critical",
+    icon: (
+      <svg viewBox="0 0 18 18" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="9" r="7"/>
+        <line x1="9" y1="5" x2="9" y2="9"/>
+        <circle cx="9" cy="12" r="0.8" fill="currentColor" stroke="none"/>
+      </svg>
+    ),
+  },
 ];
 
 const A4_W = 860;
 const A4_H = 1122;
 
-// ── SVG ICONS ────────────────────────────────────────────────────────────────
+// ── TOOLBAR SVG ICONS ─────────────────────────────────────────────────────────
 const Icons: Record<string, ReactNode> = {
-  // STRUCT
-  T1: <span className="font-black text-[11px] leading-none font-serif">T<sup className="text-[7px]">1</sup></span>,
-  T2: <span className="font-black text-[11px] leading-none font-serif">T<sup className="text-[7px]">2</sup></span>,
-  T3: <span className="font-bold text-[11px] leading-none font-serif">T<sup className="text-[7px]">3</sup></span>,
+  T1: <span className="font-black text-[12px] leading-none" style={{fontFamily:"Georgia,serif"}}>T<sup className="text-[8px]">1</sup></span>,
+  T2: <span className="font-black text-[12px] leading-none" style={{fontFamily:"Georgia,serif"}}>T<sup className="text-[8px]">2</sup></span>,
+  T3: <span className="font-bold  text-[12px] leading-none" style={{fontFamily:"Georgia,serif"}}>T<sup className="text-[8px]">3</sup></span>,
   Abc: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
-      <text x="1" y="12" fontSize="10" fontFamily="serif" fontWeight="500">¶</text>
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor">
+      <path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/>
     </svg>
   ),
-  // TEXTE
-  B: <span className="font-black text-[13px] font-serif leading-none" style={{fontFamily:"Georgia,serif"}}>B</span>,
-  I: <span className="italic font-semibold text-[13px] font-serif leading-none" style={{fontFamily:"Georgia,serif",fontStyle:"italic"}}>I</span>,
+  B: <span className="font-black text-[15px] leading-none" style={{fontFamily:"Georgia,serif"}}>B</span>,
+  I: <span className="font-semibold text-[15px] leading-none" style={{fontFamily:"Georgia,serif", fontStyle:"italic"}}>I</span>,
   indent: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
       <line x1="2" y1="4" x2="14" y2="4"/>
       <line x1="6" y1="8" x2="14" y2="8"/>
       <line x1="6" y1="12" x2="14" y2="12"/>
       <polyline points="2,7 4,9 2,11" fill="currentColor" stroke="none"/>
     </svg>
   ),
-  // ALIGNEMENT
   alignL: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-      <line x1="2" y1="4" x2="14" y2="4"/>
-      <line x1="2" y1="7" x2="10" y2="7"/>
-      <line x1="2" y1="10" x2="13" y2="10"/>
-      <line x1="2" y1="13" x2="8" y2="13"/>
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="10" y2="7"/>
+      <line x1="2" y1="10" x2="13" y2="10"/><line x1="2" y1="13" x2="8" y2="13"/>
     </svg>
   ),
   alignC: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-      <line x1="2" y1="4" x2="14" y2="4"/>
-      <line x1="4" y1="7" x2="12" y2="7"/>
-      <line x1="2" y1="10" x2="14" y2="10"/>
-      <line x1="5" y1="13" x2="11" y2="13"/>
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <line x1="2" y1="4" x2="14" y2="4"/><line x1="4" y1="7" x2="12" y2="7"/>
+      <line x1="2" y1="10" x2="14" y2="10"/><line x1="5" y1="13" x2="11" y2="13"/>
     </svg>
   ),
   alignR: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-      <line x1="2" y1="4" x2="14" y2="4"/>
-      <line x1="6" y1="7" x2="14" y2="7"/>
-      <line x1="3" y1="10" x2="14" y2="10"/>
-      <line x1="8" y1="13" x2="14" y2="13"/>
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="7" x2="14" y2="7"/>
+      <line x1="3" y1="10" x2="14" y2="10"/><line x1="8" y1="13" x2="14" y2="13"/>
     </svg>
   ),
   alignJ: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-      <line x1="2" y1="4" x2="14" y2="4"/>
-      <line x1="2" y1="7" x2="14" y2="7"/>
-      <line x1="2" y1="10" x2="14" y2="10"/>
-      <line x1="2" y1="13" x2="14" y2="13"/>
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="14" y2="7"/>
+      <line x1="2" y1="10" x2="14" y2="10"/><line x1="2" y1="13" x2="14" y2="13"/>
     </svg>
   ),
-  // PAGES
   pilcrow: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor">
       <path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/>
     </svg>
   ),
   pageBreak: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
       <line x1="2" y1="5" x2="14" y2="5"/>
       <line x1="2" y1="11" x2="14" y2="11" strokeDasharray="2 1.5"/>
-      <line x1="2" y1="8" x2="5" y2="8"/>
-      <line x1="11" y1="8" x2="14" y2="8"/>
-      <polyline points="6,6 8,8 10,6" fill="none"/>
-      <polyline points="6,10 8,8 10,10" fill="none"/>
+      <line x1="2" y1="8" x2="5" y2="8"/><line x1="11" y1="8" x2="14" y2="8"/>
+      <polyline points="6,6 8,8 10,6" fill="none"/><polyline points="6,10 8,8 10,10" fill="none"/>
     </svg>
   ),
-  // POLICE
   fontSmaller: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor">
       <text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700">A</text>
       <text x="9" y="13" fontSize="7" fontFamily="serif">−</text>
     </svg>
   ),
   fontLarger: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor">
       <text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700">A</text>
       <text x="9" y="13" fontSize="7" fontFamily="serif">+</text>
     </svg>
   ),
-  // MEDIA
   importTxt: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6z"/>
       <polyline points="9,2 9,6 13,6"/>
-      <line x1="8" y1="10" x2="8" y2="14" transform="translate(0,-3)"/>
-      <polyline points="6,9 8,7 10,9"/>
+      <line x1="8" y1="7" x2="8" y2="11"/><polyline points="6,9 8,7 10,9"/>
     </svg>
   ),
   openBook: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 3h4a2 2 0 0 1 2 2v8a1.5 1.5 0 0 0-2-1.5H2z"/>
       <path d="M14 3h-4a2 2 0 0 0-2 2v8a1.5 1.5 0 0 1 2-1.5h4z"/>
     </svg>
   ),
   importFont: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
-      <text x="1" y="12" fontSize="12" fontFamily="serif" fontWeight="700" fontStyle="italic">𝒜</text>
-      <line x1="12" y1="9" x2="12" y2="14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-      <line x1="9.5" y1="11.5" x2="14.5" y2="11.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700" fontStyle="italic" fill="currentColor" stroke="none">A</text>
+      <line x1="11" y1="8" x2="11" y2="14"/><line x1="8.5" y1="11" x2="13.5" y2="11"/>
     </svg>
   ),
-  // LIVRE
   settings: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="8" cy="8" r="2"/>
       <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
     </svg>
   ),
   addChapter: (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <line x1="8" y1="3" x2="8" y2="13"/>
-      <line x1="3" y1="8" x2="13" y2="8"/>
-    </svg>
-  ),
-  // PRESETS
-  presetCustom: (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="8" cy="8" r="2.5"/>
-      <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>
+    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/>
     </svg>
   ),
   presetPrint: (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="6" width="10" height="7" rx="1"/>
-      <path d="M5 6V3h6v3"/>
-      <rect x="5" y="9" width="6" height="1.5" rx="0.5" fill="currentColor" stroke="none"/>
+    <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="5" width="10" height="6" rx="1"/>
+      <path d="M4 5V3h6v2"/>
+      <rect x="4" y="8" width="6" height="1.5" rx="0.5" fill="currentColor" stroke="none"/>
     </svg>
   ),
   presetKindle: (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="1" width="10" height="14" rx="1.5"/>
-      <line x1="5" y1="4" x2="11" y2="4"/>
-      <line x1="5" y1="6.5" x2="11" y2="6.5"/>
-      <line x1="5" y1="9" x2="9" y2="9"/>
-      <circle cx="8" cy="12.5" r="0.8" fill="currentColor" stroke="none"/>
+    <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="1" width="10" height="12" rx="1.5"/>
+      <line x1="4" y1="4" x2="10" y2="4"/><line x1="4" y1="6" x2="10" y2="6"/>
+      <line x1="4" y1="8" x2="8" y2="8"/>
+      <circle cx="7" cy="11" r="0.8" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+  presetCustom: (
+    <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7" cy="7" r="2.2"/>
+      <path d="M7 1.5v1.5M7 11v1.5M1.5 7H3M11 7h1.5M3.2 3.2l1 1M9.8 9.8l1 1M3.2 10.8l1-1M9.8 4.2l1-1"/>
     </svg>
   ),
 };
@@ -247,12 +246,9 @@ function downloadBlob(blob: Blob, name: string) {
 }
 
 function applyPreset(preset: "print"|"kindle", s: {
-  setMirrorMargins:(v:boolean)=>void;
-  setShowPageNumbers:(v:boolean)=>void;
-  setShowHeader:(v:boolean)=>void;
-  setLineHeight:(v:number)=>void;
-  setFontSize:(v:number)=>void;
-  setIsJustified:(v:boolean)=>void;
+  setMirrorMargins:(v:boolean)=>void; setShowPageNumbers:(v:boolean)=>void;
+  setShowHeader:(v:boolean)=>void; setLineHeight:(v:number)=>void;
+  setFontSize:(v:number)=>void; setIsJustified:(v:boolean)=>void;
 }) {
   if (preset === "print") {
     s.setMirrorMargins(true); s.setShowPageNumbers(true); s.setShowHeader(true);
@@ -275,26 +271,28 @@ export default function BooksPage() {
   const [activeChapter, setActiveChapter] = useState("ch1");
   const [bookTitle, setBookTitle] = useState(fr?"Mon Premier Livre":"My First Book");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingChapterTitle, setIsEditingChapterTitle] = useState(false);
   const [view, setView] = useState<BookView>("edit");
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef        = useRef<HTMLInputElement>(null);
+  const chapterTitleInputRef = useRef<HTMLInputElement>(null);
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
   const chapterDropRef = useRef<HTMLDivElement>(null);
 
-  const [mirrorMargins, setMirrorMargins]       = useState(false);
-  const [showPageNumbers, setShowPageNumbers]   = useState(true);
-  const [showHeader, setShowHeader]             = useState(false);
-  const [fontSize, setFontSize]                 = useState(14);
-  const [fontFamily, setFontFamily]             = useState("Georgia, serif");
-  const [customFonts, setCustomFonts]           = useState<string[]>([]);
-  const [lineHeight, setLineHeight]             = useState(1.8);
-  const [isJustified, setIsJustified]           = useState(true);
-  const [activePreset, setActivePreset]         = useState<"print"|"kindle"|"custom"|null>(null);
-  const [pageOpacity, setPageOpacity]           = useState(95);
+  const [mirrorMargins, setMirrorMargins]         = useState(false);
+  const [showPageNumbers, setShowPageNumbers]     = useState(true);
+  const [showHeader, setShowHeader]               = useState(false);
+  const [fontSize, setFontSize]                   = useState(14);
+  const [fontFamily, setFontFamily]               = useState("Georgia, serif");
+  const [customFonts, setCustomFonts]             = useState<string[]>([]);
+  const [lineHeight, setLineHeight]               = useState(1.8);
+  const [isJustified, setIsJustified]             = useState(true);
+  const [activePreset, setActivePreset]           = useState<"print"|"kindle"|"custom"|null>(null);
+  const [pageOpacity, setPageOpacity]             = useState(95);
   const [showInvisibleChars, setShowInvisibleChars] = useState(false);
-  const [showSettings, setShowSettings]         = useState(true);
-  const [showSaveConfirm, setShowSaveConfirm]   = useState(false);
-  const [showLimitModal, setShowLimitModal]     = useState(false);
-  const [tutorialStep, setTutorialStep] = useState<number|null>(null);
+  const [showSettings, setShowSettings]           = useState(true);
+  const [showSaveConfirm, setShowSaveConfirm]     = useState(false);
+  const [showLimitModal, setShowLimitModal]       = useState(false);
+  const [tutorialStep, setTutorialStep]           = useState<number|null>(null);
 
   useEffect(() => {
     if (!localStorage.getItem("echo-tuto-books-done-v1")) setTutorialStep(1);
@@ -304,21 +302,12 @@ export default function BooksPage() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const updatePageCount = useCallback(() => {
-    if (containerRef.current) {
-      const height = containerRef.current.scrollHeight;
-      setPageCount(Math.max(1, Math.ceil(height / A4_H)));
-    }
+    if (containerRef.current)
+      setPageCount(Math.max(1, Math.ceil(containerRef.current.scrollHeight / A4_H)));
   }, []);
 
-  useEffect(() => {
-    const t = setTimeout(updatePageCount, 150);
-    return () => clearTimeout(t);
-  }, [chapters, activeChapter, view, updatePageCount]);
-
-  useEffect(() => {
-    window.addEventListener("resize", updatePageCount);
-    return () => window.removeEventListener("resize", updatePageCount);
-  }, [updatePageCount]);
+  useEffect(() => { const t = setTimeout(updatePageCount, 150); return () => clearTimeout(t); }, [chapters, activeChapter, view, updatePageCount]);
+  useEffect(() => { window.addEventListener("resize", updatePageCount); return () => window.removeEventListener("resize", updatePageCount); }, [updatePageCount]);
 
   const editor = useEditor({
     extensions: [
@@ -327,13 +316,7 @@ export default function BooksPage() {
       TextAlign.configure({ types: ["heading","paragraph"] }),
       TextStyle.extend({
         addAttributes() {
-          return {
-            fontSize: {
-              default: null,
-              parseHTML: el => el.style.fontSize || null,
-              renderHTML: attrs => attrs.fontSize ? { style:`font-size:${attrs.fontSize}` } : {},
-            },
-          };
+          return { fontSize: { default: null, parseHTML: el => el.style.fontSize || null, renderHTML: attrs => attrs.fontSize ? { style:`font-size:${attrs.fontSize}` } : {} } };
         },
       }),
     ],
@@ -349,14 +332,10 @@ export default function BooksPage() {
     if (!editor || view !== "edit") return;
     const cur = chapters.find(c => c.id === activeChapter);
     const newContent = cur?.content || "<p></p>";
-    if (editor.getHTML() !== newContent) {
-      editor.commands.setContent(newContent);
-    }
+    if (editor.getHTML() !== newContent) editor.commands.setContent(newContent);
   }, [activeChapter, view]);
 
-  useEffect(() => {
-    if (editor) editor.commands.setFontFamily(fontFamily);
-  }, [fontFamily, editor]);
+  useEffect(() => { if (editor) editor.commands.setFontFamily(fontFamily); }, [fontFamily, editor]);
 
   const toggleBold   = () => editor?.chain().focus().toggleBold().run();
   const toggleItalic = () => editor?.chain().focus().toggleItalic().run();
@@ -389,21 +368,15 @@ export default function BooksPage() {
   };
 
   const addChapter = () => {
-    const id  = `ch${Date.now()}`;
-    const num = chapters.length + 1;
-    const newChapter = { id, title:fr?`Chapitre ${num}`:`Chapter ${num}`, content:"" };
-    setChapters(prev => [...prev, newChapter]);
+    const id = `ch${Date.now()}`;
+    setChapters(prev => [...prev, { id, title:fr?`Chapitre ${prev.length+1}`:`Chapter ${prev.length+1}`, content:"" }]);
     setActiveChapter(id);
     setShowChapterDropdown(false);
   };
 
   useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (chapterDropRef.current && !chapterDropRef.current.contains(e.target as Node))
-        setShowChapterDropdown(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    const h = (e: MouseEvent) => { if (chapterDropRef.current && !chapterDropRef.current.contains(e.target as Node)) setShowChapterDropdown(false); };
+    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, []);
 
   const [saveStatus, setSaveStatus] = useState<"saved"|"saving"|"unsaved">("saved");
@@ -411,31 +384,24 @@ export default function BooksPage() {
 
   const saveToSupabase = useCallback(async (currentChapters: Chapter[], currentTitle: string) => {
     const payload = { bookTitle: currentTitle, chapters: currentChapters };
-    const payloadStr = JSON.stringify(payload);
-    localStorage.setItem("echo-books-manuscript", payloadStr);
+    localStorage.setItem("echo-books-manuscript", JSON.stringify(payload));
     if (!userId) { setSaveStatus("saved"); return; }
     setSaveStatus("saving");
     try {
       if (bookDbId) {
-        const { error } = await supabase.from("echo_conversations")
-          .update({ messages: [payload], updated_at: new Date().toISOString() })
-          .eq("id", bookDbId).eq("user_id", userId);
-        if (error) console.error("[Books] update:", error.message);
+        await supabase.from("echo_conversations").update({ messages: [payload], updated_at: new Date().toISOString() }).eq("id", bookDbId).eq("user_id", userId);
       } else {
-        const { data, error } = await supabase.from("echo_conversations")
-          .insert({ user_id:userId, source:"books", messages:[payload], updated_at:new Date().toISOString() })
-          .select("id").single();
-        if (error) console.error("[Books] insert:", error.message);
-        else if (data?.id) setBookDbId(data.id);
+        const { data } = await supabase.from("echo_conversations").insert({ user_id:userId, source:"books", messages:[payload], updated_at:new Date().toISOString() }).select("id").single();
+        if (data?.id) setBookDbId(data.id);
       }
-    } catch (e) { console.error("[Books] save error:", e); }
+    } catch (e) { console.error("[Books] save:", e); }
     setSaveStatus("saved");
   }, [userId, bookDbId]);
 
   useEffect(() => {
     setSaveStatus("unsaved");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => { saveToSupabase(chapters, bookTitle); }, 1500);
+    saveTimer.current = setTimeout(() => saveToSupabase(chapters, bookTitle), 1500);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [chapters, bookTitle]);
 
@@ -451,18 +417,15 @@ export default function BooksPage() {
       const uid = session?.user?.id || null;
       setUserId(uid);
       if (uid) {
-        const { data: rows } = await supabase.from("echo_conversations")
-          .select("id,messages").eq("user_id", uid).eq("source", "books")
-          .order("updated_at", { ascending: false }).limit(1);
-        if (rows && rows[0]) {
+        const { data: rows } = await supabase.from("echo_conversations").select("id,messages").eq("user_id", uid).eq("source", "books").order("updated_at", { ascending: false }).limit(1);
+        if (rows?.[0]) {
           setBookDbId(rows[0].id);
           try {
             const raw = rows[0].messages?.[0];
             const p = typeof raw === "string" ? JSON.parse(raw) : raw;
             if (p?.bookTitle) setBookTitle(p.bookTitle);
             if (p?.chapters?.length) {
-              setChapters(p.chapters);
-              setActiveChapter(p.chapters[0].id);
+              setChapters(p.chapters); setActiveChapter(p.chapters[0].id);
               setTimeout(() => { if (editor) editor.commands.setContent(p.chapters[0].content || "<p></p>"); }, 100);
             }
             setSaveStatus("saved"); return;
@@ -474,10 +437,7 @@ export default function BooksPage() {
         try {
           const { bookTitle: t, chapters: c } = JSON.parse(raw);
           if (t) setBookTitle(t);
-          if (c && c.length) {
-            setChapters(c); setActiveChapter(c[0].id);
-            setTimeout(() => { if (editor) editor.commands.setContent(c[0].content || "<p></p>"); }, 100);
-          }
+          if (c?.length) { setChapters(c); setActiveChapter(c[0].id); setTimeout(() => { if (editor) editor.commands.setContent(c[0].content || "<p></p>"); }, 100); }
         } catch {}
       }
       setSaveStatus("saved");
@@ -492,28 +452,24 @@ export default function BooksPage() {
 
   useEffect(() => {
     const c = () => setIsDesktop(window.innerWidth >= 1024);
-    c(); window.addEventListener("resize", c);
-    return () => window.removeEventListener("resize", c);
+    c(); window.addEventListener("resize", c); return () => window.removeEventListener("resize", c);
   }, []);
 
   const startResizeEcho = (e: React.MouseEvent) => {
     e.preventDefault(); resizingRef.current = true;
     document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
   };
-
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (resizingRef.current) setEchoPanelWidth(Math.min(520, Math.max(220, window.innerWidth - e.clientX)));
-    };
-    const onUp = () => {
-      if (!resizingRef.current) return;
-      resizingRef.current = false; document.body.style.cursor = ""; document.body.style.userSelect = "";
-    };
+    const onMove = (e: MouseEvent) => { if (resizingRef.current) setEchoPanelWidth(Math.min(520, Math.max(220, window.innerWidth - e.clientX))); };
+    const onUp   = () => { if (!resizingRef.current) return; resizingRef.current = false; document.body.style.cursor = ""; document.body.style.userSelect = ""; };
     window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
-  const fontInputRef = useRef<HTMLInputElement>(null);
+  const fontInputRef  = useRef<HTMLInputElement>(null);
+  const fileInputRef  = useRef<HTMLInputElement>(null);
+  const importJsonRef = useRef<HTMLInputElement>(null);
+
   const handleFontImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
@@ -521,15 +477,10 @@ export default function BooksPage() {
     const name = file.name.replace(/\.[^.]+$/, "");
     const face = new FontFace(name, `url(${url})`);
     face.load().then(loaded => {
-      document.fonts.add(loaded);
-      setCustomFonts(prev => [...prev, name]);
-      setFontFamily(`"${name}", serif`);
-      if (editor) editor.commands.setFontFamily(`"${name}", serif`);
-    }).catch(err => console.error("[Font import]", err));
+      document.fonts.add(loaded); setCustomFonts(prev => [...prev, name]);
+      setFontFamily(`"${name}", serif`); if (editor) editor.commands.setFontFamily(`"${name}", serif`);
+    }).catch(err => console.error("[Font]", err));
   };
-
-  const fileInputRef  = useRef<HTMLInputElement>(null);
-  const importJsonRef = useRef<HTMLInputElement>(null);
 
   const handleImportTxt = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; e.target.value = "";
@@ -551,8 +502,7 @@ export default function BooksPage() {
     reader.onload = () => {
       try {
         const { bookTitle: t, chapters: c } = JSON.parse(reader.result as string);
-        if (t) setBookTitle(t);
-        if (c?.length) { setChapters(c); setActiveChapter(c[0].id); }
+        if (t) setBookTitle(t); if (c?.length) { setChapters(c); setActiveChapter(c[0].id); }
       } catch { alert(fr?"Fichier invalide.":"Invalid file."); }
     };
     reader.readAsText(file);
@@ -562,8 +512,7 @@ export default function BooksPage() {
   const exportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = (e: MouseEvent) => { if (exportRef.current && !exportRef.current.contains(e.target as Node)) setShowExportMenu(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, []);
 
   const handleExport = async (fmt: string) => {
@@ -574,44 +523,33 @@ export default function BooksPage() {
       const txt = chapters.map(c => `=== ${c.title} ===\n\n${c.content.replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ")}`).join("\n\n\n");
       downloadBlob(new Blob([txt], {type:"text/plain"}), `${slug}.txt`); return;
     }
-    if (fmt === "json") {
-      downloadBlob(new Blob([JSON.stringify({bookTitle,chapters},null,2)], {type:"application/json"}), `${slug}.echo-book.json`); return;
-    }
+    if (fmt === "json") { downloadBlob(new Blob([JSON.stringify({bookTitle,chapters},null,2)], {type:"application/json"}), `${slug}.echo-book.json`); return; }
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const res = await fetch(`${API_URL}/export`, {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({format:fmt, title:bookTitle, html:currentHtml}),
-      });
+      const res = await fetch(`${API_URL}/export`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({format:fmt, title:bookTitle, html:currentHtml}) });
       if (!res.ok) { const err = await res.json(); alert(`Export error: ${err.error}`); return; }
       const blob = await res.blob();
-      const ext = fmt==="pdf"?".pdf":fmt==="docx"?".docx":".epub";
-      downloadBlob(blob, `${slug}${ext}`);
+      downloadBlob(blob, `${slug}${fmt==="pdf"?".pdf":fmt==="docx"?".docx":".epub"}`);
     } catch(e) { alert(`Cannot reach export server: ${e}`); }
   };
 
-  const [echoMode, setEchoMode]           = useState<EchoMode|null>(null);
-  const [echoMessages, setEchoMessages]   = useState<BookMessage[]>([]);
-  const [echoInput, setEchoInput]         = useState("");
-  const [echoThinking, setEchoThinking]   = useState(false);
+  const [echoMode, setEchoMode]         = useState<EchoMode|null>(null);
+  const [echoMessages, setEchoMessages] = useState<BookMessage[]>([]);
+  const [echoInput, setEchoInput]       = useState("");
+  const [echoThinking, setEchoThinking] = useState(false);
   const echoBottomRef = useRef<HTMLDivElement>(null);
 
   const sendEcho = async () => {
     if (!echoInput.trim() || echoThinking) return;
     const quotaStatus = checkQuota("vitality_actions", safeTier);
     if (!quotaStatus.allowed) { setShowLimitModal(true); return; }
-    const msg = echoInput.trim();
-    setEchoInput("");
-    setEchoMessages(prev => [...prev, {role:"user", text:msg}]);
-    setEchoThinking(true);
+    const msg = echoInput.trim(); setEchoInput("");
+    setEchoMessages(prev => [...prev, {role:"user", text:msg}]); setEchoThinking(true);
     const history = echoMessages.map(m => m.role==="user" ? `You: ${m.text}` : `Echo: ${m.text}`);
     const excerpt = editor?.getText()?.slice(0, 300) || "";
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const res = await fetch(`${API_URL}/books`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: `[Livre: "${bookTitle}" | Extrait: "${excerpt}"]\n\n${msg}`, history, selectedButtons: echoMode ? [echoMode] : [], userTier: safeTier, bookTitle }),
-      });
+      const res = await fetch(`${API_URL}/books`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ message:`[Livre: "${bookTitle}" | Extrait: "${excerpt}"]\n\n${msg}`, history, selectedButtons:echoMode?[echoMode]:[], userTier:safeTier, bookTitle }) });
       if (!res.ok) throw new Error("Server error");
       const data = await res.json();
       const reply = data.response || "...";
@@ -621,12 +559,9 @@ export default function BooksPage() {
         const updatedChapters = chapters.map(c => c.id === activeChapter ? {...c, content: editor?.getHTML() || c.content} : c);
         saveToSupabase(updatedChapters, bookTitle);
         setEchoMessages(prev => [...prev, {role:"echo", text:`${reply}\n\n${fr?"Texte injecte dans le chapitre.":"Text injected into chapter."}`}]);
-      } else {
-        setEchoMessages(prev => [...prev, {role:"echo", text:reply}]);
-      }
-    } catch {
-      setEchoMessages(prev => [...prev, {role:"echo", text:T.serverErr}]);
-    } finally { setEchoThinking(false); }
+      } else { setEchoMessages(prev => [...prev, {role:"echo", text:reply}]); }
+    } catch { setEchoMessages(prev => [...prev, {role:"echo", text:T.serverErr}]); }
+    finally { setEchoThinking(false); }
   };
 
   const handleManualInject = () => {
@@ -651,34 +586,21 @@ export default function BooksPage() {
   const settingsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = (e: MouseEvent) => { if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setIsSettingsOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const saveLabel = {
-    saved:   { dot:"bg-emerald-400",             text:T.saved   },
-    saving:  { dot:"bg-amber-400 animate-pulse",  text:T.saving  },
-    unsaved: { dot:"bg-zinc-500",                 text:T.unsaved },
-  }[saveStatus];
+  const saveLabel = { saved:{dot:"bg-emerald-400",text:T.saved}, saving:{dot:"bg-amber-400 animate-pulse",text:T.saving}, unsaved:{dot:"bg-zinc-500",text:T.unsaved} }[saveStatus];
+  const currentChapter = chapters.find(c => c.id === activeChapter);
+  const currentContent = currentChapter?.content || "";
+  const pageBgStyle    = { backgroundColor:`rgba(${theme==="dark"?"9,9,11":"255,255,255"},${pageOpacity/100})` };
 
-  const currentChapter  = chapters.find(c => c.id === activeChapter);
-  const currentContent  = currentChapter?.content || "";
-  const pageBgStyle     = { backgroundColor:`rgba(${theme==="dark"?"9,9,11":"255,255,255"},${pageOpacity/100})` };
-
-  // ── TOOLBAR BUTTON COMPONENT ──────────────────────────────────────────────
-  const TB = ({icon, label, active, onClick}: {
-  icon: ReactNode;
-  label:string;
-  active?:boolean;
-  onClick:()=>void;
-}) => (
+  // ── TOOLBAR BUTTON ────────────────────────────────────────────────────────
+  const TB = ({icon, label, active, onClick}: {icon:ReactNode; label:string; active?:boolean; onClick:()=>void}) => (
     <button onClick={onClick} title={label}
-      className={`group relative w-[46px] h-8 flex items-center justify-center rounded-lg transition-all border select-none ${
-        active
-          ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400"
-          : "border-cyan-500/20 text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-cyan-500/40"
+      className={`group relative w-[46px] h-9 flex items-center justify-center rounded-lg transition-all border select-none ${
+        active ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-400" : "border-cyan-500/15 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100 hover:border-cyan-500/35"
       }`}>
-      {typeof icon === "string" ? <span className="text-[11px] font-mono">{icon}</span> : icon}
+      {icon}
       <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5 rounded bg-zinc-800 text-[9px] text-zinc-200 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 border border-zinc-700 shadow-lg">
         {label}
       </span>
@@ -722,23 +644,19 @@ export default function BooksPage() {
           <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-books-done-v1","true"); }} />
           <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
             <span className="text-xl">📚</span>
-            <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
-              {fr ? "ECHO LIVRES (1/1)" : "ECHO BOOKS (1/1)"}
-            </h4>
+            <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">{fr?"ECHO LIVRES (1/1)":"ECHO BOOKS (1/1)"}</h4>
           </div>
           <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
             <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
               <img src="/echo1.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
             </div>
             <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
-              {fr
-                ? <>Bienvenue dans l'atelier d'écriture ! 📖{"\n"}Texte de présentation à remplacer.</>
-                : <>Welcome to the writing studio! 📖{"\n"}Placeholder presentation text to replace.</>}
+              {fr ? <>Bienvenue dans l'atelier d'écriture ! 📖{"\n"}Texte de présentation à remplacer.</> : <>Welcome to the writing studio! 📖{"\n"}Placeholder presentation text to replace.</>}
             </div>
           </div>
           <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-books-done-v1","true"); }}
             className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase">
-            {fr ? "C'EST PARTI 🚀" : "LET'S GO 🚀"}
+            {fr?"C'EST PARTI 🚀":"LET'S GO 🚀"}
           </button>
         </div>
       )}
@@ -781,18 +699,16 @@ export default function BooksPage() {
         {/* TOOLBAR */}
         <div className="w-[130px] shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col py-2 overflow-y-auto overflow-x-hidden">
 
-          {/* STRUCT */}
           <div className="px-2 pb-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.struct}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon={Icons.T1}  label={T.t1}     active={editor?.isActive("heading",{level:1})} onClick={() => { editor?.chain().focus().toggleHeading({level:1}).run(); setTimeout(() => manualSave(), 500); }}/>
-              <TB icon={Icons.T2}  label={T.t2}     active={editor?.isActive("heading",{level:2})} onClick={() => { editor?.chain().focus().toggleHeading({level:2}).run(); setTimeout(() => manualSave(), 500); }}/>
-              <TB icon={Icons.T3}  label={T.t3}     active={editor?.isActive("heading",{level:3})} onClick={() => { editor?.chain().focus().toggleHeading({level:3}).run(); setTimeout(() => manualSave(), 500); }}/>
-              <TB icon={Icons.Abc} label={T.normal} active={editor?.isActive("paragraph")}         onClick={() => { editor?.chain().focus().setParagraph().run(); setTimeout(() => manualSave(), 500); }}/>
+              <TB icon={Icons.T1}  label={T.t1}     active={editor?.isActive("heading",{level:1})} onClick={() => { editor?.chain().focus().toggleHeading({level:1}).run(); setTimeout(manualSave,500); }}/>
+              <TB icon={Icons.T2}  label={T.t2}     active={editor?.isActive("heading",{level:2})} onClick={() => { editor?.chain().focus().toggleHeading({level:2}).run(); setTimeout(manualSave,500); }}/>
+              <TB icon={Icons.T3}  label={T.t3}     active={editor?.isActive("heading",{level:3})} onClick={() => { editor?.chain().focus().toggleHeading({level:3}).run(); setTimeout(manualSave,500); }}/>
+              <TB icon={Icons.Abc} label={T.normal} active={editor?.isActive("paragraph")}         onClick={() => { editor?.chain().focus().setParagraph().run(); setTimeout(manualSave,500); }}/>
             </div>
           </div>
 
-          {/* TEXTE */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.texte}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -802,7 +718,6 @@ export default function BooksPage() {
             </div>
           </div>
 
-          {/* ALIGNEMENT */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.align}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -813,7 +728,6 @@ export default function BooksPage() {
             </div>
           </div>
 
-          {/* PAGES */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.pages}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -822,7 +736,6 @@ export default function BooksPage() {
             </div>
           </div>
 
-          {/* POLICE */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.police}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -832,7 +745,6 @@ export default function BooksPage() {
             <div className="text-center font-mono text-[9px] text-zinc-500 mt-0.5">{fontSize}px</div>
           </div>
 
-          {/* MEDIA */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.media}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -842,7 +754,6 @@ export default function BooksPage() {
             </div>
           </div>
 
-          {/* LIVRE */}
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.livre}</div>
             <div className="grid grid-cols-2 gap-0.5">
@@ -851,27 +762,18 @@ export default function BooksPage() {
             </div>
           </div>
 
-          {/* PRESETS */}
           <div className="px-2 py-1.5">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.presets}</div>
             <div className="flex flex-col gap-1">
               {(["print","kindle"] as const).map(p => (
                 <button key={p} onClick={() => triggerPreset(p)}
-                  className={`w-full px-1.5 py-1.5 rounded-lg text-[9px] font-medium border transition-all flex items-center gap-1.5 ${
-                    activePreset===p
-                      ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400"
-                      : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"
-                  }`}>
-                  <span className="shrink-0">{p === "print" ? Icons.presetPrint : Icons.presetKindle}</span>
-                  {p==="print" ? T.presetPrint : T.presetKindle}
+                  className={`w-full px-1.5 py-1.5 rounded-lg text-[9px] font-medium border transition-all flex items-center gap-1.5 ${activePreset===p?"bg-cyan-500/15 border-cyan-500/40 text-cyan-400":"border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"}`}>
+                  <span className="shrink-0">{p==="print"?Icons.presetPrint:Icons.presetKindle}</span>
+                  {p==="print"?T.presetPrint:T.presetKindle}
                 </button>
               ))}
               <button onClick={() => { setActivePreset("custom"); setShowSettings(true); }}
-                className={`w-full px-1.5 py-1.5 rounded-lg text-[9px] font-medium border transition-all flex items-center gap-1.5 ${
-                  activePreset==="custom"
-                    ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-400"
-                    : "border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"
-                }`}>
+                className={`w-full px-1.5 py-1.5 rounded-lg text-[9px] font-medium border transition-all flex items-center gap-1.5 ${activePreset==="custom"?"bg-cyan-500/15 border-cyan-500/40 text-cyan-400":"border-transparent text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 hover:border-zinc-700"}`}>
                 <span className="shrink-0">{Icons.presetCustom}</span>
                 {T.presetCustom}
               </button>
@@ -887,7 +789,7 @@ export default function BooksPage() {
             {(["edit","present"] as BookView[]).map(v => (
               <button key={v} onClick={() => setView(v)}
                 className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all ${view===v?"bg-cyan-500/10 border-cyan-500/30 text-cyan-400":"border-transparent text-zinc-500 hover:text-zinc-300"}`}>
-                {v==="edit" ? T.edit : T.present}
+                {v==="edit"?T.edit:T.present}
               </button>
             ))}
 
@@ -907,9 +809,7 @@ export default function BooksPage() {
                     </button>
                   ))}
                   <div className="border-t border-zinc-800 mt-0.5 pt-0.5">
-                    <button onClick={addChapter} className="w-full text-left px-2.5 py-1.5 text-[10px] rounded-lg transition-all text-cyan-500 hover:bg-cyan-500/10">
-                      + {T.newChapter}
-                    </button>
+                    <button onClick={addChapter} className="w-full text-left px-2.5 py-1.5 text-[10px] rounded-lg transition-all text-cyan-500 hover:bg-cyan-500/10">+ {T.newChapter}</button>
                   </div>
                 </div>
               )}
@@ -921,13 +821,9 @@ export default function BooksPage() {
             </div>
 
             <div className="relative shrink-0">
-              <button onClick={manualSave} className="text-[9px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-all font-mono">
-                {T.save}
-              </button>
+              <button onClick={manualSave} className="text-[9px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:border-cyan-500/40 hover:text-cyan-400 transition-all font-mono">{T.save}</button>
               {showSaveConfirm && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 rounded-xl bg-emerald-900/90 border border-emerald-500/40 text-emerald-400 text-[10px] font-mono whitespace-nowrap shadow-lg">
-                  ✓ {T.saved}
-                </div>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 rounded-xl bg-emerald-900/90 border border-emerald-500/40 text-emerald-400 text-[10px] font-mono whitespace-nowrap shadow-lg">✓ {T.saved}</div>
               )}
             </div>
 
@@ -938,17 +834,8 @@ export default function BooksPage() {
               </button>
               {showExportMenu && (
                 <div className="absolute right-0 mt-1 w-40 rounded-xl bg-zinc-950 border border-zinc-800 shadow-2xl p-1 z-50 flex flex-col gap-0.5">
-                  {[
-                    {key:"pdf",  label:"PDF"},
-                    {key:"docx", label:"Word (.docx)"},
-                    {key:"epub", label:"EPUB"},
-                    {key:"txt",  label:"TXT"},
-                    {key:"json", label:".echo-book"},
-                  ].map(({key,label}) => (
-                    <button key={key} onClick={() => handleExport(key)}
-                      className="w-full text-left px-2.5 py-1.5 text-[10px] text-zinc-300 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-lg transition-all font-mono">
-                      {label}
-                    </button>
+                  {[{key:"pdf",label:"PDF"},{key:"docx",label:"Word (.docx)"},{key:"epub",label:"EPUB"},{key:"txt",label:"TXT"},{key:"json",label:".echo-book"}].map(({key,label}) => (
+                    <button key={key} onClick={() => handleExport(key)} className="w-full text-left px-2.5 py-1.5 text-[10px] text-zinc-300 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-lg transition-all font-mono">{label}</button>
                   ))}
                 </div>
               )}
@@ -1018,32 +905,59 @@ export default function BooksPage() {
             <div className="absolute inset-0 overflow-y-auto z-[2] py-8 flex flex-col items-center gap-6"
               style={{scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent"}}>
 
-              <div className="w-[860px] flex items-center gap-3 px-2">
-                {isEditingTitle ? (
-                  <input ref={titleInputRef} value={bookTitle} onChange={e => setBookTitle(e.target.value)}
-                    onBlur={() => setIsEditingTitle(false)}
-                    onKeyDown={e => { if (e.key==="Enter") setIsEditingTitle(false); }}
-                    className="flex-1 text-2xl font-bold bg-transparent border-b-2 border-cyan-500 outline-none text-white pb-1" autoFocus/>
-                ) : (
-                  <h1 onDoubleClick={() => { setIsEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 50); }}
-                    title={T.titleHint}
-                    className="text-2xl font-bold text-white cursor-text pb-1 border-b-2 border-transparent hover:border-cyan-500/30 transition-colors select-none">
-                    {bookTitle}
-                  </h1>
-                )}
-                <span className="text-[10px] text-zinc-500 font-mono shrink-0">({T.titleHint})</span>
-              </div>
-
               <div ref={containerRef} className={`relative shadow-2xl ${showInvisibleChars?"echo-editor-show-symbols":""}`}
                 style={{
                   width:`${A4_W}px`, minHeight:`${A4_H}px`,
                   paddingTop:"52px", paddingBottom:"64px",
-                  paddingLeft: mirrorMargins ? "90px" : "72px", paddingRight:"72px",
+                  paddingLeft:mirrorMargins?"90px":"72px", paddingRight:"72px",
                   ...pageBgStyle,
                   border:"1px solid rgba(255,255,255,0.08)", borderRadius:"2px",
                   boxShadow:"0 4px 40px rgba(0,0,0,0.5)",
                 }}>
 
+                {/* ── TITRE DU LIVRE dans la page ── */}
+                <div className="mb-6 pb-5 border-b border-zinc-700/20">
+                  {isEditingTitle ? (
+                    <input ref={titleInputRef} value={bookTitle}
+                      onChange={e => setBookTitle(e.target.value)}
+                      onBlur={() => setIsEditingTitle(false)}
+                      onKeyDown={e => { if (e.key==="Enter") setIsEditingTitle(false); }}
+                      className="w-full text-3xl font-bold bg-transparent border-b-2 border-cyan-500 outline-none text-black dark:text-zinc-100 pb-1"
+                      style={{fontFamily}} autoFocus/>
+                  ) : (
+                    <h1
+                      onDoubleClick={() => { setIsEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 50); }}
+                      title={T.titleHint}
+                      className="text-3xl font-bold text-black dark:text-zinc-100 cursor-text select-none hover:opacity-80 transition-opacity"
+                      style={{fontFamily}}>
+                      {bookTitle}
+                      <span className="ml-3 text-[10px] text-zinc-400 dark:text-zinc-600 font-normal normal-case tracking-normal font-mono align-middle">({T.titleHint})</span>
+                    </h1>
+                  )}
+                </div>
+
+                {/* ── TITRE DU CHAPITRE — double-clic pour renommer ── */}
+                {isEditingChapterTitle ? (
+                  <input ref={chapterTitleInputRef}
+                    value={currentChapter?.title || ""}
+                    onChange={e => setChapters(prev => prev.map(c => c.id===activeChapter ? {...c, title:e.target.value} : c))}
+                    onBlur={() => setIsEditingChapterTitle(false)}
+                    onKeyDown={e => { if (e.key==="Enter"||e.key==="Escape") setIsEditingChapterTitle(false); }}
+                    className="text-[9px] uppercase tracking-[0.18em] font-mono bg-transparent border-b border-cyan-500/60 outline-none text-cyan-400 mb-3 w-full"
+                    autoFocus/>
+                ) : (
+                  <div
+                    onDoubleClick={() => { setIsEditingChapterTitle(true); setTimeout(() => chapterTitleInputRef.current?.focus(), 50); }}
+                    title={T.chapterHint}
+                    className="group text-[9px] uppercase tracking-[0.18em] text-zinc-400 dark:text-zinc-500 mb-3 font-mono cursor-text hover:text-cyan-500/70 transition-colors select-none flex items-center gap-2">
+                    {currentChapter?.title}
+                    <svg className="opacity-0 group-hover:opacity-60 transition-opacity" viewBox="0 0 12 12" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 10l1.5-3.5L9 1a1.5 1.5 0 0 1 2 2L4 9.5z"/><line x1="7" y1="3" x2="9" y2="5"/>
+                    </svg>
+                  </div>
+                )}
+
+                {/* Page separators */}
                 {Array.from({length: Math.max(0, pageCount - 1)}).map((_,i) => (
                   <div key={i} className="absolute left-0 right-0 pointer-events-none"
                     style={{top:`${(i+1)*A4_H}px`, borderTop:"1px dashed rgba(6,182,212,0.12)", zIndex:10}}>
@@ -1057,15 +971,13 @@ export default function BooksPage() {
                   </div>
                 )}
 
-                <div className="text-[9px] uppercase tracking-[0.18em] text-zinc-400 dark:text-zinc-500 mb-3 font-mono">{currentChapter?.title}</div>
-
                 <EditorContent
                   editor={editor}
                   className={`outline-none text-black dark:text-zinc-100 caret-cyan-400 books-editor-tiptap ${isJustified?"text-justify":""}`}
                   style={{fontSize:`${fontSize}px`, lineHeight, fontFamily}}
                 />
 
-                {showPageNumbers && Array.from({length: pageCount}).map((_, i) => (
+                {showPageNumbers && Array.from({length: pageCount}).map((_,i) => (
                   <div key={`pn-${i}`} className="absolute left-0 right-0 text-center text-[10px] text-zinc-400 font-mono pointer-events-none"
                     style={{top:`${(i+1)*A4_H - 30}px`, zIndex:10}}>
                     — {i+1} —
@@ -1097,11 +1009,17 @@ export default function BooksPage() {
             </button>
           </div>
 
+          {/* ── ONGLETS ECHO — SVG icons toujours présents ── */}
           <div className="flex gap-1 p-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
             {ECHO_MODES.map(m => (
               <button key={m.id} onClick={() => setEchoMode(echoMode===m.id ? null : m.id)}
-                className={`flex-1 text-[11px] py-1.5 rounded-lg border transition-all text-center font-medium ${echoMode===m.id?"bg-cyan-500/10 border-cyan-500/40 text-cyan-400":"border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"}`}>
-                {m.emoji} {T[m.key]}
+                className={`flex-1 py-1.5 rounded-lg border transition-all flex items-center justify-center gap-1.5 text-[11px] font-medium ${
+                  echoMode===m.id
+                    ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-400"
+                    : "border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+                }`}>
+                <span className="shrink-0">{m.icon}</span>
+                <span>{T[m.key]}</span>
               </button>
             ))}
           </div>
@@ -1140,42 +1058,18 @@ export default function BooksPage() {
         </aside>
       </div>
 
-      <input ref={fileInputRef}  type="file" accept=".txt,.md,.markdown" onChange={handleImportTxt}  className="hidden"/>
-      <input ref={importJsonRef} type="file" accept=".json"              onChange={handleImportJson} className="hidden"/>
+      <input ref={fileInputRef}  type="file" accept=".txt,.md,.markdown"      onChange={handleImportTxt}  className="hidden"/>
+      <input ref={importJsonRef} type="file" accept=".json"                   onChange={handleImportJson} className="hidden"/>
       <input ref={fontInputRef}  type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontImport} className="hidden"/>
 
       <style>{`
-        .books-editor-tiptap .ProseMirror {
-          min-height: ${A4_H - 120}px;
-          outline: none;
-          color: inherit;
-        }
-        .books-editor-tiptap .ProseMirror p, .books-present p {
-          margin-top: 0 !important;
-          margin-bottom: 0.75em !important;
-          line-height: inherit !important;
-        }
-        .books-editor-tiptap .ProseMirror h1 {
-          font-size:1.6em; font-weight:700;
-          margin-top:1.2em !important; margin-bottom:0.6em !important;
-          border-bottom:1px solid rgba(6,182,212,0.1); padding-bottom:.12em;
-        }
-        .books-editor-tiptap .ProseMirror h2 {
-          font-size:1.2em; font-weight:600;
-          margin-top:1.6em !important; margin-bottom:0.5em !important;
-          text-transform:uppercase; color:rgb(6,182,212);
-        }
-        .books-editor-tiptap .ProseMirror h3 {
-          font-size:1.05em; font-weight:600;
-          margin-top:1.2em !important; margin-bottom:0.4em !important;
-        }
-        .echo-editor-show-symbols .ProseMirror p:after {
-          content: " ¶" !important; color: rgba(6,182,212,0.35) !important;
-          font-size: 0.85em !important; font-family: monospace !important;
-        }
-        [contenteditable="false"] {
-          user-select:none; -webkit-user-select:none; cursor:default; pointer-events:none;
-        }
+        .books-editor-tiptap .ProseMirror { min-height:${A4_H - 200}px; outline:none; color:inherit; }
+        .books-editor-tiptap .ProseMirror p, .books-present p { margin-top:0!important; margin-bottom:.75em!important; line-height:inherit!important; }
+        .books-editor-tiptap .ProseMirror h1 { font-size:1.6em; font-weight:700; margin-top:1.2em!important; margin-bottom:.6em!important; border-bottom:1px solid rgba(6,182,212,0.1); padding-bottom:.12em; }
+        .books-editor-tiptap .ProseMirror h2 { font-size:1.2em; font-weight:600; margin-top:1.6em!important; margin-bottom:.5em!important; text-transform:uppercase; color:rgb(6,182,212); }
+        .books-editor-tiptap .ProseMirror h3 { font-size:1.05em; font-weight:600; margin-top:1.2em!important; margin-bottom:.4em!important; }
+        .echo-editor-show-symbols .ProseMirror p:after { content:" ¶"!important; color:rgba(6,182,212,0.35)!important; font-size:.85em!important; font-family:monospace!important; }
+        [contenteditable="false"] { user-select:none; -webkit-user-select:none; cursor:default; pointer-events:none; }
       `}</style>
     </main>
   );
