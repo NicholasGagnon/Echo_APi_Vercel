@@ -152,6 +152,7 @@ export default function Home() {
   const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar">("vitality_actions");
   const [showTreasureModal, setShowTreasureModal] = useState(false);
   const [isLoadingTreasure, setIsLoadingTreasure] = useState(false);
+  const [showLoginRequiredModal, setShowLoginRequiredModal] = useState(false);
 
   const localButtonsLabels: Record<"fr"|"en", Record<string,string>> = {
     fr: { clarity:"1🧠 Clarté", humain:"2👤 Humain", critical:"3⚔️ Regard critique", expert:"4🎓 Expert", precision:"5🎯 Précision", philosophy:"6🏛️ Philosophie", strategy:"7♟️ Stratégie", decompose:"8🧩 Décomposer", refine:"9❓ Affiner", double:"10⚡ Double Regard" },
@@ -545,7 +546,7 @@ if (raws.length > 10) {
     const { data } = await supabase.auth.getUser();
     const user = data.user;
     if (!user) {
-      alert(lang === "fr" ? "Connectez-vous avant de réclamer le trésor." : "Please log in before claiming the treasure.");
+      setShowLoginRequiredModal(true);
       return;
     }
     try {
@@ -630,7 +631,7 @@ if (raws.length > 10) {
             </div>
           </div>
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
-            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier}</span>
+            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier === "connected_free" ? "Accès libre" : userTier}</span>
           </div>
         </aside>
 
@@ -1093,6 +1094,35 @@ if (raws.length > 10) {
                 : `Automated action limit reached for [${activeLimitCategory}]. Upgrade to continue.`}
             </p>
             <button onClick={() => setShowLimitModal(false)} className="w-full bg-cyan-600 text-white py-2.5 rounded-xl text-xs font-semibold">OK</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 🔐 POP-UP CONNEXION REQUISE (CONVIVIAL) ── */}
+      {showLoginRequiredModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10000] p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowLoginRequiredModal(false)}>
+          <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center relative shadow-2xl space-y-4 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <img src="/Echo.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
+            <p className="text-zinc-900 dark:text-zinc-100 font-sans text-sm font-semibold leading-relaxed">
+              {lang === "fr"
+                ? "Connecte-toi d'abord, je te garde la surprise au chaud ! 😉"
+                : "Log in first, I'll keep the surprise warm for you! 😉"}
+            </p>
+            <div className="flex flex-col gap-2">
+              <Link
+                href="/account"
+                onClick={() => setShowLoginRequiredModal(false)}
+                className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md text-center"
+              >
+                {lang === "fr" ? "Se connecter" : "Log in"}
+              </Link>
+              <button
+                onClick={() => setShowLoginRequiredModal(false)}
+                className="w-full py-1.5 text-zinc-500 font-mono text-[11px] hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+              >
+                {lang === "fr" ? "Plus tard" : "Later"}
+              </button>
+            </div>
           </div>
         </div>
       )}

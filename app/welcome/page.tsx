@@ -151,7 +151,6 @@ export default function WelcomePage() {
     return () => clearInterval(typeInterval);
   }, [echoStep, lang]);
 
-  // Coupe le son immédiatement dès que l'utilisateur décide de fermer le panneau
   useEffect(() => {
     if (echoStep === "closed" && globalAudioRef.current) {
       globalAudioRef.current.pause();
@@ -251,41 +250,38 @@ export default function WelcomePage() {
     setSignUpSuccess(null);
   };
 
+  // ── GESTION CORRIGÉE ET INFAILLIBLE DES CLICS DE REDIRECTION ──
   const handlePageClick = (e: React.MouseEvent) => {
+    // Si l'overlay de démarrage ou le sélecteur initial est là, on bloque.
     if (echoStep !== "closed") return; 
-    const tag = (e.target as HTMLElement).closest("[data-stop]");
-    if (!tag) router.push("/account");
+
+    // On vérifie si l'utilisateur a cliqué sur un bouton, un input, ou dans un modal Supabase ouvert
+    const targetElement = e.target as HTMLElement;
+    const isActionButton = targetElement.closest("button, a, input, textarea, [role='button']");
+    const isInsideModal = targetElement.closest(".fixed.inset-0.z-50"); // Repère nos fenêtres d'inscriptions
+
+    // Si ce n'est NI un bouton NI l'intérieur d'un modal d'inscription, REDIRECTION !
+    if (!isActionButton && !isInsideModal) {
+      router.push("/account");
+    }
   };
 
-  // INITIALISATION DU SYSTÈME AVEC MODE DEBUGEUR DE CHATGPT
   const initSequence = (selectedLang: "fr" | "en") => {
     setLang(selectedLang);
     setEchoStep("loading");
 
     console.log("🔊 Tentative de lecture audio lancée...");
-
     const sciFiAudio = new Audio("/sounds/futur.mp3");
-    
-    // Debug ChatGPT : Démarrage à 0 pour éviter le crash si longueur incorrecte
     sciFiAudio.currentTime = 0; 
-    
-    // Vol maximum pour être certain que le problème ne vienne pas d'un gain trop faible
-    sciFiAudio.volume = 0.5; 
-    
+    sciFiAudio.volume = 0.5; // Ajusté à 50% comme convenu !
     globalAudioRef.current = sciFiAudio;
 
-    // Logs de surveillance dans la console (F12)
-    sciFiAudio.onloadeddata = () => {
-      console.log("✅ Fichier audio chargé avec succès depuis /public/sounds/futur.mp3");
-    };
-
-    sciFiAudio.onerror = (e) => {
-      console.error("❌ Erreur critique de chargement audio : Le fichier n'existe pas ou le chemin est incorrect.", e);
-    };
+    sciFiAudio.onloadeddata = () => console.log("✅ Fichier audio chargé.");
+    sciFiAudio.onerror = (e) => console.error("❌ Erreur chargement audio.", e);
 
     sciFiAudio.play()
       .then(() => console.log("🎉 Audio en cours de lecture !"))
-      .catch(o => console.error("⚠️ Lecture bloquée par le navigateur :", o));
+      .catch(o => console.error("⚠️ Lecture bloquée :", o));
   };
 
   return (
@@ -302,7 +298,7 @@ export default function WelcomePage() {
         style={{backgroundImage:"linear-gradient(rgba(6,182,212,1) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,1) 1px, transparent 1px)", backgroundSize:"60px 60px"}}/>
 
       {/* LANG DROPDOWN COIN DROIT */}
-      <div ref={langRef} className="absolute top-5 right-5 z-50" data-stop="">
+      <div ref={langRef} className="absolute top-5 right-5 z-50">
         <button onClick={e => { e.stopPropagation(); setShowLang(v=>!v); }}
           className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 hover:border-cyan-500/50 rounded-xl px-3 py-2 text-xs font-mono font-bold text-zinc-300 transition-all">
           <span>{fr ? "🇫🇷 FR" : "🇬🇧 EN"}</span>
@@ -369,15 +365,15 @@ export default function WelcomePage() {
 
           {/* BLOC GAUCHE — PANNEAU INTERACTIF D'ECHO */}
           {echoStep === "lang_select" && (
-            <div className="bg-white/[0.04] backdrop-blur-xl border-2 border-cyan-500/40 rounded-2xl p-8 flex flex-col justify-center items-center min-h-[380px] -mt-8 lg:-ml-6 shadow-[0_0_30px_rgba(6,182,212,0.15)] gap-6" data-stop="">
+            <div className="bg-white/[0.04] backdrop-blur-xl border-2 border-cyan-500/40 rounded-2xl p-8 flex flex-col justify-center items-center min-h-[380px] -mt-8 lg:-ml-6 shadow-[0_0_30px_rgba(6,182,212,0.15)] gap-6">
               <h3 className="text-white font-mono text-xs uppercase tracking-widest font-bold text-center">
                 Select System Language / Choisir la langue
               </h3>
               <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
-                <button onClick={() => initSequence("fr")} className="flex-1 py-3.5 rounded-xl border-2 border-cyan-400 bg-cyan-500/10 text-white font-mono text-sm font-bold tracking-wider hover:bg-cyan-500/30 transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                <button onClick={(e) => { e.stopPropagation(); initSequence("fr"); }} className="flex-1 py-3.5 rounded-xl border-2 border-cyan-400 bg-cyan-500/10 text-white font-mono text-sm font-bold tracking-wider hover:bg-cyan-500/30 transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
                   🇫🇷 Français
                 </button>
-                <button onClick={() => initSequence("en")} className="flex-1 py-3.5 rounded-xl border-2 border-cyan-400 bg-cyan-500/10 text-white font-mono text-sm font-bold tracking-wider hover:bg-cyan-500/30 transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                <button onClick={(e) => { e.stopPropagation(); initSequence("en"); }} className="flex-1 py-3.5 rounded-xl border-2 border-cyan-400 bg-cyan-500/10 text-white font-mono text-sm font-bold tracking-wider hover:bg-cyan-500/30 transition-all shadow-[0_0_15px_rgba(6,182,212,0.2)]">
                   🇬🇧 English
                 </button>
               </div>
@@ -385,7 +381,7 @@ export default function WelcomePage() {
           )}
 
           {echoStep !== "lang_select" && echoStep !== "closed" && (
-            <div className="bg-white/[0.06] backdrop-blur-xl border-2 border-cyan-400/50 rounded-2xl p-6 relative flex flex-col justify-between min-h-[380px] -mt-8 lg:-ml-6 shadow-[0_0_35px_rgba(6,182,212,0.2)]" data-stop="">
+            <div className="bg-white/[0.06] backdrop-blur-xl border-2 border-cyan-400/50 rounded-2xl p-6 relative flex flex-col justify-between min-h-[380px] -mt-8 lg:-ml-6 shadow-[0_0_35px_rgba(6,182,212,0.2)]">
               <button onClick={(e) => { e.stopPropagation(); setEchoStep("closed"); }}
                 className="absolute top-4 right-5 text-zinc-400 hover:text-cyan-300 font-mono text-xl font-bold transition-colors p-1 z-30">
                 ✕
@@ -446,7 +442,7 @@ export default function WelcomePage() {
             </p>
 
             <div className="flex flex-col gap-3">
-              <button data-stop="" onClick={e => { e.stopPropagation(); handleGoogleConnectNormal(); }}
+              <button onClick={e => { e.stopPropagation(); handleGoogleConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-sm rounded-xl transition-all shadow-md">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -457,7 +453,7 @@ export default function WelcomePage() {
                 <span className="flex-1 text-center">{fr ? "Continuer avec Google" : "Continue with Google"}</span>
               </button>
 
-              <button data-stop="" onClick={e => { e.stopPropagation(); handleMicrosoftConnectNormal(); }}
+              <button onClick={e => { e.stopPropagation(); handleMicrosoftConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl transition-all border border-zinc-700">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 23 23" fill="none">
                   <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
@@ -475,11 +471,11 @@ export default function WelcomePage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <button data-stop="" onClick={e => { e.stopPropagation(); setShowSignInModal(true); }}
+                <button onClick={e => { e.stopPropagation(); setShowSignInModal(true); }}
                   className="h-12 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm rounded-xl transition-all shadow-md">
                   {fr ? "Se connecter" : "Sign in"}
                 </button>
-                <button data-stop="" onClick={e => { e.stopPropagation(); setShowSignUpModal(true); }}
+                <button onClick={e => { e.stopPropagation(); setShowSignUpModal(true); }}
                   className="h-12 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-sm rounded-xl transition-all border border-zinc-700">
                   {fr ? "Créer un compte" : "Create account"}
                 </button>
@@ -487,7 +483,7 @@ export default function WelcomePage() {
             </div>
 
             <div className="mt-1">
-              <button data-stop="" onClick={e => { e.stopPropagation(); window.location.href="/"; }}
+              <button onClick={e => { e.stopPropagation(); window.location.href="/"; }}
                 className="w-full h-11 flex items-center justify-center gap-2 bg-transparent border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 font-semibold text-sm rounded-xl transition-all">
                 <span>🏠</span>
                 <span>{fr ? "Accéder à l'accueil sans compte" : "Access home without account"}</span>
@@ -508,7 +504,7 @@ export default function WelcomePage() {
       {/* MODAL SUPABASE SIGN IN */}
       {showSignInModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" data-stop="">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
             <form onSubmit={handleEmailSignIn} className="space-y-6">
               <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
                 <div>
@@ -537,7 +533,7 @@ export default function WelcomePage() {
       {/* MODAL SUPABASE SIGN UP */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" data-stop="">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
             <form onSubmit={handleEmailSignUp} className="space-y-6">
               <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
                 <div>

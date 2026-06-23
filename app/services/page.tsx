@@ -34,82 +34,82 @@ const localT = {
     },
     plans: {
       connected_free: {
-        title: "Connected Free",
-        sub: "FOREVER FREE",
+        title: "Accès libre",
+        sub: "GRATUIT À VIE",
         f1: "✅ AI Standard Model",
-        f2: "✅ WebSearch Integration",
-        f3: "✅ Write A Book",
-        f4: "✅ Calendar",
-        f5: "✅ Vitality",
-        f6: "✅ Behavioral Prompts Limited",
-        f7: "❌ History page",
-        ai1: "✅ Calendar Echo AI Limited",
-        ai2: "✅ Vitality Echo AI Limited",
+        f2: "✅ Intégration Recherche Web",
+        f3: "✅ Écrire un Livre",
+        f4: "✅ Calendrier",
+        f5: "✅ Vitalité",
+        f6: "✅ Invites Comportementales Limitées",
+        f7: "❌ Page Historique",
+        ai1: "✅ Calendrier Echo AI Limité",
+        ai2: "✅ Vitalité Echo AI Limité",
       },
       basic: {
-        title: "Basic",
-        sub: "PER MONTH",
-        f1: "✅ AI Advanced Model",
-        f2: "✅ WebSearch Integration",
-        f3: "✅ Write A Book",
-        f4: "✅ Calendar",
-        f5: "✅ Vitality",
-        f6: "✅ Behavioral Prompts x4",
-        f7: "❌ History page",
-        f8: "✅ Email Support",
-        ai1: "✅ Calendar Echo AI x4",
-        ai2: "✅ Vitality Echo AI x4",
+        title: "Avantage",
+        sub: "PAR MOIS",
+        f1: "✅ AI Enhanced Models",
+        f2: "✅ Intégration Recherche Web",
+        f3: "✅ Écrire un Livre",
+        f4: "✅ Calendrier",
+        f5: "✅ Vitalité",
+        f6: "✅ Invites Comportementales x4",
+        f7: "❌ Page Historique",
+        f8: "✅ Support par Courriel",
+        ai1: "✅ Calendrier Echo AI x4",
+        ai2: "✅ Vitalité Echo AI x4",
       },
       premium: {
         title: "Premium",
-        sub: "PER MONTH",
-        badge: "⭐ MOST POPULAR",
+        sub: "PAR MOIS",
+        badge: "⭐ LE PLUS POPULAIRE",
         f1: "✅ AI Advanced Model",
-        f2: "✅ WebSearch Integration",
-        f3: "✅ Write A Book",
-        f4: "✅ Calendar",
-        f4_1: "✅ Vitality",
-        f5: "✅ History page limited",
-        f6: "✅ Email Support",
-        f7: "✅ Image Analysis",
-        f8: "✅ Behavioral Prompts x10",
-        ai1: "✅ Calendar Echo AI x10",
-        ai2: "✅ Vitality Echo AI x10",
+        f2: "✅ Intégration Recherche Web",
+        f3: "✅ Écrire un Livre",
+        f4: "✅ Calendrier",
+        f4_1: "✅ Vitalité",
+        f5: "✅ Page Historique Limitée",
+        f6: "✅ Support par Courriel",
+        f7: "✅ Analyse d'Image",
+        f8: "✅ Invites Comportementales x10",
+        ai1: "✅ Calendrier Echo AI x10",
+        ai2: "✅ Vitalité Echo AI x10",
       },
       ultra: {
         title: "Ultra",
-        sub: "PER MONTH",
-        power: "Power Users",
-        f1: "✅ AI Expert Model",
-        f2: "✅ WebSearch Integration",
-        f3: "✅ Write A Book",
-        f4: "✅ Calendar",
-        f5: "✅ Vitality",
-        f6: "✅ History page unlimited",
-        f7: "✅ Priority Processing",
-        f8: "✅ Email Support",
-        f9: "✅ Image Analysis",
-        f10: "✅ Behavioral Prompts x30",
-        ai1: "✅ Calendar Echo AI x30",
-        ai2: "✅ Vitality Echo AI x30",
+        sub: "PAR MOIS",
+        power: "Utilisateurs Avancés",
+        f1: "✅ AI Pro Models",
+        f2: "✅ Intégration Recherche Web",
+        f3: "✅ Écrire un Livre",
+        f4: "✅ Calendrier",
+        f5: "✅ Vitalité",
+        f6: "✅ Page Historique Illimitée",
+        f7: "✅ Traitement Prioritaire",
+        f8: "✅ Support par Courriel",
+        f9: "✅ Analyse d'Image",
+        f10: "✅ Invites Comportementales x30",
+        ai1: "✅ Calendrier Echo AI x30",
+        ai2: "✅ Vitalité Echo AI x30",
       },
       founder: {
-        title: "Founder",
-        sub: "PER MONTH",
-        power: "Support Echo Development",
-        f1: "✅ AI Expert Model unlimited",
-        f2: "✅ WebSearch Integration",
-        f3: "✅ Write A Book",
-        f4: "✅ Calendar",
-        f5: "✅ Vitality",
-        f6: "✅ History page unlimited",
-        f7: "✅ Priority Processing",
-        f8: "✅ Email Support",
-        f9: "✅ Image Analysis",
-        f10: "✅ Advanced Capabilities",
-        f11: "✅ Unlimited Behavioral Prompts",
-        ai1: "✅ Calendar Echo AI unlimited",
-        ai2: "✅ Vitality Echo AI unlimited",
+        title: "Fondateur",
+        sub: "PAR MOIS",
+        power: "Soutenir le Développement d'Echo",
+        f1: "✅ AI Expert Model illimité",
+        f2: "✅ Intégration Recherche Web",
+        f3: "✅ Écrire un Livre",
+        f4: "✅ Calendrier",
+        f5: "✅ Vitalité",
+        f6: "✅ Page Historique Illimitée",
+        f7: "✅ Traitement Prioritaire",
+        f8: "✅ Support par Courriel",
+        f9: "✅ Analyse d'Image",
+        f10: "✅ Capacités Avancées",
+        f11: "✅ Invites Comportementales Illimitées",
+        ai1: "✅ Calendrier Echo AI Illimité",
+        ai2: "✅ Vitalité Echo AI Illimité",
       }
     }
   },
@@ -141,7 +141,7 @@ const localT = {
     },
     plans: {
       connected_free: {
-        title: "Connected Free",
+        title: "Accès libre",
         sub: "FOREVER FREE",
         f1: "✅ AI Standard Model",
         f2: "✅ WebSearch Integration",
@@ -154,9 +154,9 @@ const localT = {
         ai2: "✅ Vitality Echo AI Limited",
       },
       basic: {
-        title: "Basic",
+        title: "Advantage",
         sub: "PER MONTH",
-        f1: "✅ AI Advanced Model",
+        f1: "✅ AI Enhanced Models",
         f2: "✅ WebSearch Integration",
         f3: "✅ Write A Book",
         f4: "✅ Calendar",
@@ -187,7 +187,7 @@ const localT = {
         title: "Ultra",
         sub: "PER MONTH",
         power: "Power Users",
-        f1: "✅ AI Expert Model",
+        f1: "✅ AI Pro Models",
         f2: "✅ WebSearch Integration",
         f3: "✅ Write A Book",
         f4: "✅ Calendar",
@@ -240,6 +240,7 @@ export default function ServicesPage() {
 
   const [showTreasureModal, setShowTreasureModal] = useState(false);
   const [isLoadingTreasure, setIsLoadingTreasure] = useState(false);
+  const [showLoginRequiredModal, setShowLoginRequiredModal] = useState(false);
 
   const activeT = lang === "fr" ? localT.fr : localT.en;
 
@@ -279,7 +280,7 @@ export default function ServicesPage() {
 
   const handleUpgradeWithStripe = async (planName: "basic" | "premium" | "ultra" | "founder" | "treasure") => {
     if (!user) {
-      alert(lang === "fr" ? "Veuillez vous connecter avant de mettre à niveau votre plan." : "Please log in before upgrading your plan.");
+      setShowLoginRequiredModal(true);
       return;
     }
     if (planName !== "treasure" && TIER_RANK[planName] <= TIER_RANK[userTier]) {
@@ -401,7 +402,7 @@ export default function ServicesPage() {
             </div>
           </div>
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
-            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier}</span>
+            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{userTier === "connected_free" ? "Accès libre" : userTier}</span>
           </div>
         </aside>
 
@@ -662,6 +663,35 @@ export default function ServicesPage() {
 
         </section>
       </div>
+
+      {/* ── 🔐 POP-UP CONNEXION REQUISE (CONVIVIAL) ── */}
+      {showLoginRequiredModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10000] p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowLoginRequiredModal(false)}>
+          <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center relative shadow-2xl space-y-4 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <img src="/Echo.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
+            <p className="text-zinc-900 dark:text-zinc-100 font-sans text-sm font-semibold leading-relaxed">
+              {lang === "fr"
+                ? "Connecte-toi d'abord, je te garde la surprise au chaud ! 😉"
+                : "Log in first, I'll keep the surprise warm for you! 😉"}
+            </p>
+            <div className="flex flex-col gap-2">
+              <Link
+                href="/account"
+                onClick={() => setShowLoginRequiredModal(false)}
+                className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md text-center"
+              >
+                {lang === "fr" ? "Se connecter" : "Log in"}
+              </Link>
+              <button
+                onClick={() => setShowLoginRequiredModal(false)}
+                className="w-full py-1.5 text-zinc-500 font-mono text-[11px] hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+              >
+                {lang === "fr" ? "Plus tard" : "Later"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* POP-UP EASTER EGG (TRÉSOR) */}
       {showTreasureModal && (
