@@ -184,7 +184,29 @@ export default function Home() {
 let finalMessages = raws;
 
 if (raws.length > 600) {
-  console.log("[MEMORY] Trigger");
+  try {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+    const res = await fetch(`${API_URL}/memory-summary`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        summary: memorySummary,
+        messages: raws.slice(0, 500)
+      })
+    });
+
+    const data = await res.json();
+
+    finalSummary = data.summary || memorySummary;
+    finalMessages = raws.slice(-100);
+
+    setMemorySummary(finalSummary);
+
+    console.log("[MEMORY] Résumé mis à jour");
+  } catch (e) {
+    console.error("[MEMORY]", e);
+  }
 }
     if (convId) {
       await supabase.from("echo_conversations")
