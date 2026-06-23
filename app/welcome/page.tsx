@@ -241,8 +241,8 @@ export default function WelcomePage() {
   };
 
   const handlePageClick = (e: React.MouseEvent) => {
-    if (echoStep !== "closed") return; 
-    const tag = (e.target as HTMLElement).closest("button,a,input,select,textarea,[data-stop]");
+    if (echoStep !== "closed") return; // Le panneau interactif bloque tout clic vers /account tant qu'il est ouvert
+    const tag = (e.target as HTMLElement).closest("[data-stop]");
     if (!tag) router.push("/account");
   };
 
@@ -359,7 +359,7 @@ export default function WelcomePage() {
                 ✕
               </button>
 
-              {/* Bébé Echo Flottant Unique - Reste stable 5s de plus avant de descendre */}
+              {/* Bébé Echo Flottant Unique */}
               <div className={`absolute top-4 right-14 ${echoStep === "typing" ? "animate-echo-slide-out" : "opacity-0"}`}>
                 <img src="/Echo.png" alt="Echo Icon" className="w-14 h-14 rounded-full border border-cyan-500/30 object-contain shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
               </div>
@@ -407,14 +407,15 @@ export default function WelcomePage() {
             </div>
           )}
 
-          {/* BLOC DROIT — FORMULAIRE DE CONNEXION */}
-          <div className="bg-zinc-950/90 border border-cyan-500/25 rounded-2xl p-6 backdrop-blur-sm shadow-[0_0_40px_rgba(6,182,212,0.06)] flex flex-col gap-4" data-stop="">
+          {/* BLOC DROIT — FORMULAIRE DE CONNEXION (Sans data-stop global pour garder le fond cliquable) */}
+          <div className="bg-zinc-950/90 border border-cyan-500/25 rounded-2xl p-6 backdrop-blur-sm shadow-[0_0_40px_rgba(6,182,212,0.06)] flex flex-col gap-4">
             <p className="text-center text-white font-bold text-lg">
               {fr ? "Connectez-vous pour commencer" : "Sign in to get started"}
             </p>
 
             <div className="flex flex-col gap-3">
-              <button onClick={e => { e.stopPropagation(); handleGoogleConnectNormal(); }}
+              {/* BOUTON 1: GOOGLE */}
+              <button data-stop="" onClick={e => { e.stopPropagation(); handleGoogleConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-white hover:bg-zinc-100 text-zinc-900 font-bold text-sm rounded-xl transition-all shadow-md">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -425,7 +426,8 @@ export default function WelcomePage() {
                 <span className="flex-1 text-center">{fr ? "Continuer avec Google" : "Continue with Google"}</span>
               </button>
 
-              <button onClick={e => { e.stopPropagation(); handleMicrosoftConnectNormal(); }}
+              {/* BOUTON 2: MICROSOFT */}
+              <button data-stop="" onClick={e => { e.stopPropagation(); handleMicrosoftConnectNormal(); }}
                 className="w-full h-13 flex items-center gap-3 px-4 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-sm rounded-xl transition-all border border-zinc-700">
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 23 23" fill="none">
                   <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
@@ -443,11 +445,13 @@ export default function WelcomePage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <button onClick={e => { e.stopPropagation(); setShowSignInModal(true); }}
+                {/* BOUTON 3: SIGN IN */}
+                <button data-stop="" onClick={e => { e.stopPropagation(); setShowSignInModal(true); }}
                   className="h-12 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm rounded-xl transition-all shadow-md">
                   {fr ? "Se connecter" : "Sign in"}
                 </button>
-                <button onClick={e => { e.stopPropagation(); setShowSignUpModal(true); }}
+                {/* BOUTON 4: CREATE COMPTE */}
+                <button data-stop="" onClick={e => { e.stopPropagation(); setShowSignUpModal(true); }}
                   className="h-12 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-sm rounded-xl transition-all border border-zinc-700">
                   {fr ? "Créer un compte" : "Create account"}
                 </button>
@@ -455,7 +459,7 @@ export default function WelcomePage() {
             </div>
 
             <div className="mt-1">
-              <button onClick={e => { e.stopPropagation(); window.location.href="/"; }}
+              <button data-stop="" onClick={e => { e.stopPropagation(); window.location.href="/"; }}
                 className="w-full h-11 flex items-center justify-center gap-2 bg-transparent border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 font-semibold text-sm rounded-xl transition-all">
                 <span>🏠</span>
                 <span>{fr ? "Accéder à l'accueil sans compte" : "Access home without account"}</span>
@@ -475,8 +479,8 @@ export default function WelcomePage() {
 
       {/* MODAL SUPABASE SIGN IN */}
       {showSignInModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" data-stop="">
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" data-stop="">
             <form onSubmit={handleEmailSignIn} className="space-y-6">
               <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
                 <div>
@@ -504,8 +508,8 @@ export default function WelcomePage() {
 
       {/* MODAL SUPABASE SIGN UP */}
       {showSignUpModal && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200" data-stop="">
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 max-w-xl w-full shadow-2xl animate-in zoom-in-95 duration-200" data-stop="">
             <form onSubmit={handleEmailSignUp} className="space-y-6">
               <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
                 <div>
@@ -544,7 +548,6 @@ export default function WelcomePage() {
             opacity: 0.9;
             transform: scale(1) translate(0, 0);
           }
-          /* Phase d'attente prolongée (+5 secondes d'immobilité relative) */
           60% {
             opacity: 0.9;
             transform: scale(1) translate(0, 0);
@@ -560,7 +563,7 @@ export default function WelcomePage() {
         }
 
         .animate-echo-slide-out {
-          animation: echoSlideOut 16s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+          animation: echoSlideOut 13s cubic-bezier(0.25, 1, 0.5, 1) forwards;
         }
       `}</style>
     </main>
