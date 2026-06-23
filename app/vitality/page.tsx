@@ -602,7 +602,7 @@ export default function VitalityPage() {
                 <div className="h-full flex flex-col items-center justify-center gap-3 p-6">
                   {!tutorialStep && (
                     <div className={`w-12 h-12 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full flex items-center justify-center shadow-inner ${echoState==="idle"?"echo-idle":echoState==="thinking"?"echo-thinking":"echo-speaking"}`}>
-                      <img src="/echo.png" alt="Echo" className="w-full h-full object-cover rounded-full" />
+                      <img src="/echo1.png" alt="Echo" className="w-full h-full object-cover rounded-full" />
                     </div>
                   )}
                   <p className="text-zinc-400 dark:text-zinc-600 text-xs italic text-center">
@@ -620,7 +620,7 @@ export default function VitalityPage() {
                     if (isEcho) return (
                       <div key={idx} className="flex flex-col gap-3 animate-in fade-in duration-300">
                         <div className="flex items-center gap-2">
-                          <img src="/echo.png" alt="Echo"
+                          <img src="/echo1.png" alt="Echo"
                             className={`w-10 h-10 rounded-full object-contain shrink-0 border border-zinc-200 dark:border-zinc-800 ${isLastE?echoState==="thinking"?"echo-thinking":echoState==="speaking"?"echo-speaking":"echo-idle":"echo-idle"}`} />
                           <span className="text-zinc-500 dark:text-zinc-400 text-[11px] font-mono uppercase tracking-widest font-bold">Echo</span>
                         </div>

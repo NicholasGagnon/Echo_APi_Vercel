@@ -335,7 +335,7 @@ export default function WelcomePage() {
               style={{background:"conic-gradient(from 180deg, transparent 55%, rgba(16,185,129,0.25) 80%, #10b981 100%)", animation:"spinRadar 5s linear infinite reverse"}}/>
             <div className="absolute inset-3 rounded-full bg-black/85 border border-cyan-500/20"/>
             <div className={`relative z-10 w-32 h-32 rounded-full overflow-hidden border-2 border-cyan-500/70 shadow-[0_0_40px_rgba(6,182,212,0.6)] ${echoClass}`}>
-              <img src="/echo.png" alt="Echo" className="w-full h-full object-cover"/>
+              <img src="/echo1.png" alt="Echo" className="w-full h-full object-cover"/>
             </div>
             {[0,1,2,3,4,5].map(i => (
               <div key={i} className="absolute w-2 h-2 rounded-full bg-cyan-400"
@@ -389,7 +389,7 @@ export default function WelcomePage() {
 
               {/* Bébé Echo Flottant Unique */}
               <div className={`absolute top-4 right-14 ${echoStep === "typing" ? "animate-echo-slide-out" : "opacity-0"}`}>
-                <img src="/echo.png" alt="Echo Icon" className="w-14 h-14 rounded-full border border-cyan-500/30 object-contain shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
+                <img src="/echo1.png" alt="Echo Icon" className="w-14 h-14 rounded-full border border-cyan-500/30 object-contain shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
               </div>
 
               {/* Terminal de points millimétré */}

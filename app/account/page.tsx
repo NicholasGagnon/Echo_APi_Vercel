@@ -977,7 +977,7 @@ export default function AccountPage() {
       {showLoginRequiredModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10000] p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowLoginRequiredModal(false)}>
           <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center relative shadow-2xl space-y-4 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <img src="/echo.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
+            <img src="/echo1.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
             <p className="text-zinc-900 dark:text-zinc-100 font-sans text-sm font-semibold leading-relaxed">
               {lang === "fr"
                 ? "Connecte-toi d'abord, je te garde la surprise au chaud ! 😉"
@@ -1006,7 +1006,7 @@ export default function AccountPage() {
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[10000] p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-red-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center relative shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
             <div className="absolute top-4 right-4">
-              <img src="/echo.png" alt="Echo" className="w-8 h-8 rounded-lg object-contain" />
+              <img src="/echo1.png" alt="Echo" className="w-8 h-8 rounded-lg object-contain" />
             </div>
             <div className="pt-4 text-red-600 dark:text-red-400 font-mono text-sm sm:text-base font-bold leading-relaxed">
               {lang === "fr"

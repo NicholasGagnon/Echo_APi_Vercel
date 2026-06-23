@@ -498,7 +498,7 @@ export default function ChatPage() {
             {/* Echo avatar */}
             <div className="flex flex-col items-center gap-3 mb-5">
               <div className="w-16 h-16 rounded-full border-2 border-cyan-400/60 overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.3)]">
-                <img src="/echo.png" alt="Echo" className="w-full h-full object-cover" />
+                <img src="/echo1.png" alt="Echo" className="w-full h-full object-cover" />
               </div>
               <div className="text-center">
                 <p className="text-cyan-500 font-mono text-[10px] uppercase tracking-widest font-bold mb-1">Echo</p>
@@ -546,7 +546,7 @@ export default function ChatPage() {
           </div>
           <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
             <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
-              <img src="/echo.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
+              <img src="/echo1.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
             </div>
             <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
               {lang === "fr"
@@ -684,7 +684,7 @@ export default function ChatPage() {
                 <div className="h-full flex flex-col items-center justify-center gap-4">
                   {!tutorialStep && (
                     <div className="w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-900 rounded-full shadow-md overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center echo-idle">
-                      <img src="/echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
+                      <img src="/echo1.png" alt="Echo Avatar" className="w-full h-full object-cover" />
                     </div>
                   )}
                   <p className="text-zinc-400 dark:text-zinc-700 text-sm italic">
@@ -703,7 +703,7 @@ export default function ChatPage() {
                     <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 max-w-3xl">
                       <div className="flex items-center gap-4">
                         <div className={`w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-sm overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center ${isLastEcho ? echoState==="thinking"?"echo-thinking":echoState==="speaking"?"echo-speaking":"echo-idle":"echo-idle"}`}>
-                          <img src="/echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
+                          <img src="/echo1.png" alt="Echo Avatar" className="w-full h-full object-cover" />
                         </div>
                         <div className="flex flex-col">
                           <span className="text-zinc-500 dark:text-zinc-300 text-sm font-mono uppercase tracking-widest font-bold">Echo</span>

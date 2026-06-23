@@ -342,7 +342,7 @@ export default function HorizonWebPage() {
           {echoState === "thinking" && (
             <div className="h-64 flex flex-col items-center justify-center gap-4 font-mono">
               <img
-                src="/echo.png"
+                src="/echo1.png"
                 alt="Echo Thinking"
                 className="w-20 h-20 object-contain echo-thinking"
               />
@@ -373,7 +373,7 @@ export default function HorizonWebPage() {
                     <EchoSvgMascot className="w-8 h-8" />
                   ) : (
                     <img
-                      src="/echo.png"
+                      src="/echo1.png"
                       alt="Echo"
                       className="w-8 h-8 object-contain echo-speaking"
                       onError={() => setIsAvatarBroken(true)}
@@ -426,7 +426,7 @@ export default function HorizonWebPage() {
                 <EchoSvgMascot className="w-24 h-24 mb-6" />
               ) : (
                 <img
-                  src="/echo.png"
+                  src="/echo1.png"
                   alt="Echo Idle"
                   className="w-24 h-24 object-contain echo-idle mb-6 select-none"
                   onError={() => setIsAvatarBroken(true)}

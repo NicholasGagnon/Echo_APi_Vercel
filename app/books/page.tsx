@@ -633,7 +633,7 @@ export default function BooksPage() {
           </div>
           <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
             <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
-              <img src="/echo.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
+              <img src="/echo1.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
             </div>
             <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
               {fr
@@ -1021,7 +1021,7 @@ export default function BooksPage() {
             {echoMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-3 pb-4">
                 <div className="w-16 h-16 rounded-full overflow-hidden border border-zinc-700 shadow-lg echo-idle">
-                  <img src="/echo.png" alt="Echo" className="w-full h-full object-cover"/>
+                  <img src="/echo1.png" alt="Echo" className="w-full h-full object-cover"/>
                 </div>
                 <div className="text-[13px] text-zinc-500 text-center leading-relaxed px-2 whitespace-pre-line">{T.echoPlaceholder}</div>
               </div>

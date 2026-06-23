@@ -657,7 +657,7 @@ if (raws.length > 10) {
                   </div>
                   <div className="grid grid-cols-[72px_1fr] sm:grid-cols-[96px_1fr] gap-4 sm:gap-5 mb-5 items-start">
                     <div className="relative w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 bg-zinc-900 dark:bg-zinc-100 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner overflow-hidden isolate">
-                      <img src="/echo.png" alt="Echo Avatar" className="block w-full h-full object-cover" />
+                      <img src="/echo1.png" alt="Echo Avatar" className="block w-full h-full object-cover" />
                     </div>
                     <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line min-w-0">
                       {lang === "fr" ? (
@@ -718,7 +718,7 @@ if (raws.length > 10) {
                 <div className="relative w-24 h-24 flex items-center justify-center">
                   <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spinDash 4s linear infinite"}}/>
                   <div className="absolute inset-1.5 rounded-full bg-black/80"/>
-                  <img src="/echo.png" alt="Echo" className="relative z-10 w-20 h-20 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
+                  <img src="/echo1.png" alt="Echo" className="relative z-10 w-20 h-20 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
                   <button
                     type="button"
                     onClick={() => setShowTreasureModal(true)}
@@ -825,7 +825,7 @@ if (raws.length > 10) {
                           {/* Anneau glow */}
                           <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spin 4s linear infinite"}}/>
                           <div className="absolute inset-1.5 rounded-full bg-black/80"/>
-                          <img src="/echo.png" alt="Echo Core" className="relative z-10 w-24 h-24 xl:w-28 xl:h-28 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
+                          <img src="/echo1.png" alt="Echo Core" className="relative z-10 w-24 h-24 xl:w-28 xl:h-28 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
                         </div>
                         <span className="text-zinc-500 dark:text-zinc-600 text-[9px] block mt-2 tracking-widest uppercase font-mono">{echoState}</span>
                         <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
@@ -890,7 +890,7 @@ if (raws.length > 10) {
                     if (isEcho) return (
                       <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 min-w-0">
                         <div className="flex items-center gap-4">
-                          <img src="/echo.png" alt="Echo"
+                          <img src="/echo1.png" alt="Echo"
                             className={`w-14 h-14 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-800 shadow-md ${isLastEcho ? echoState==="thinking"?"echo-thinking":echoState==="speaking"?"echo-speaking":"echo-idle":"echo-idle"}`} />
                           <div className="flex flex-col">
                             <span className="text-zinc-500 dark:text-zinc-400 text-xs font-mono uppercase tracking-widest font-bold">Echo</span>
@@ -1102,7 +1102,7 @@ if (raws.length > 10) {
       {showLoginRequiredModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10000] p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowLoginRequiredModal(false)}>
           <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center relative shadow-2xl space-y-4 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <img src="/echo.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
+            <img src="/echo1.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
             <p className="text-zinc-900 dark:text-zinc-100 font-sans text-sm font-semibold leading-relaxed">
               {lang === "fr"
                 ? "Connecte-toi d'abord, je te garde la surprise au chaud ! 😉"
