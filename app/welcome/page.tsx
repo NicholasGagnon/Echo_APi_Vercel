@@ -359,7 +359,7 @@ export default function WelcomePage() {
                 ✕
               </button>
 
-              {/* Bébé Echo Flottant Unique - Animation de descente vers la droite vers les boutons de connexion */}
+              {/* Bébé Echo Flottant Unique - Reste stable 5s de plus avant de descendre */}
               <div className={`absolute top-4 right-14 ${echoStep === "typing" ? "animate-echo-slide-out" : "opacity-0"}`}>
                 <img src="/Echo.png" alt="Echo Icon" className="w-14 h-14 rounded-full border border-cyan-500/30 object-contain shadow-[0_0_15px_rgba(6,182,212,0.4)]" />
               </div>
@@ -540,11 +540,16 @@ export default function WelcomePage() {
             opacity: 0;
             transform: scale(0.7) translate(0, 0);
           }
-          15% {
+          10% {
             opacity: 0.9;
             transform: scale(1) translate(0, 0);
           }
-          75% {
+          /* Phase d'attente prolongée (+5 secondes d'immobilité relative) */
+          60% {
+            opacity: 0.9;
+            transform: scale(1) translate(0, 0);
+          }
+          88% {
             opacity: 0.8;
             transform: scale(1) translate(40px, 80px);
           }
@@ -555,7 +560,7 @@ export default function WelcomePage() {
         }
 
         .animate-echo-slide-out {
-          animation: echoSlideOut 5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+          animation: echoSlideOut 10s cubic-bezier(0.25, 1, 0.5, 1) forwards;
         }
       `}</style>
     </main>

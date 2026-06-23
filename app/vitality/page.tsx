@@ -403,9 +403,9 @@ export default function VitalityPage() {
           </div>
           <div className="text-xs text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4 space-y-2">
             {lang==="fr" ? (
-              <p>Hey! 👋 Je suis aussi la pour garder le controle sur ton budget. Definis ton objectif financier en haut, puis parle-moi dans le chat — je m'occupe du reste. ✨</p>
+              <p>Hey! 👋 Je suis aussi la pour garder le controle sur ton budget. Definis ton objectif financier en haut, puis parle-moi dans le chat — je m'occupe du reste. ✨✨✨✨✨✨</p>
             ) : (
-              <p>Hey! 👋 I am here to help you stay on track with finances. Set your goal above, then just tell me what you spent — I will handle the rest. ✨</p>
+              <p>Hey! 👋 I am here to help you stay on track with finances. Set your goal above, then just tell me what you spent — I will handle the rest. ✨✨✨✨✨</p>
             )}
           </div>
           <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800 dark:border-zinc-200">
@@ -425,9 +425,9 @@ export default function VitalityPage() {
           </div>
           <div className="text-xs text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4">
             {lang==="fr" ? (
-              <p>Salut! 😋 Chaque repas devient une donnee utile. Parle-moi de ce que tu manges et je calcule tout automatiquement.</p>
+              <p>Salut! 😋 Chaque repas devient une donnee utile. Parle-moi de ce que tu manges et je calcule tout automatiquement. ✨✨✨✨✨✨✨</p>
             ) : (
-              <p>Hi! 😋 Every meal is useful data. Tell me what you ate and I will calculate everything automatically.</p>
+              <p>Hi! 😋 Every meal is useful data. Tell me what you ate and I will calculate everything automatically. ✨✨✨✨✨✨✨</p>
             )}
           </div>
           <button onClick={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">

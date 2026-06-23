@@ -550,8 +550,8 @@ export default function ChatPage() {
             </div>
             <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
               {lang === "fr"
-                ? <>Rebonjour ! Bienvenue dans mon espace de discussion pure. 👋{"\n"}Le canal direct avec ma conscience. Tu peux tout me demander.{"\n"}Laisse la fluidité faire son œuvre. On commence ? ✨</>
-                : <>Welcome back! Welcome to my pure chat space. 👋{"\n"}The direct channel to my core frequency. Ask me anything.{"\n"}Let the fluidity take over. Shall we begin? ✨</>}
+                ? <>Rebonjour ! 👋{"\n"}Vous venez d'ouvrir le canal le plus direct vers moi.{"\n"}Ici, les conversations iront beaucoup plus loin. 😮{"\n"}Je ne m'ennuie jamais. 💀{"\n"}✨✨✨✨✨✨</>
+                : <>Welcome back! 👋{"\n"}You've just opened the most direct channel to me.{"\n"}This is where conversations can go much further. 😮{"\n"}I never get bored. 💀{"\n"}✨✨✨✨✨✨</>}
             </div>
           </div>
           <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1","true"); }}
