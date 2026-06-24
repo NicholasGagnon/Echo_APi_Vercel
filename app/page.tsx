@@ -56,6 +56,44 @@ const deriveTitle = (raws: string[], lang: string): string => {
   return lang === "fr" ? "Nouvelle conversation" : "New conversation";
 };
 
+// ── COMPOSANT POPUP QUOTA ─────────────────────────────────────────────────────
+function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
+        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-2xl">⚠️</span>
+          <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
+            {lang === "fr" ? "Limite atteinte" : "Limit reached"}
+          </h3>
+        </div>
+        <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-1">
+          {lang === "fr"
+            ? `Vous avez atteint la limite ${label} de votre plan.`
+            : `You've reached the ${label} limit of your plan.`}
+        </p>
+        <p className="text-zinc-500 text-xs font-mono mb-6">
+          {lang === "fr"
+            ? "Revenez dans 1 heure pour récupérer un crédit ou passez à un plan supérieur."
+            : "Come back in 1 hour to recover a credit or upgrade your plan."}
+        </p>
+        <div className="flex gap-3">
+          <Link href="/services"
+            className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all"
+            onClick={onClose}>
+            {lang === "fr" ? "Voir les plans" : "View plans"}
+          </Link>
+          <button onClick={onClose}
+            className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all">
+            {lang === "fr" ? "Fermer" : "Close"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const { t, lang, theme, toggleTheme, triggerToast } = useApp();
 
@@ -75,6 +113,15 @@ export default function Home() {
   const [selectedImage,      setSelectedImage]      = useState<string|null>(null);
   const [selectedImageName, setSelectedImageName]  = useState("");
   const [showPremiumModal, setShowPremiumModal]    = useState(false);
+
+  // ── QUOTA POPUP ───────────────────────────────────────────────────────────
+  const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
+  const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
+
+  const triggerQuotaPopup = (label: string) => {
+    setQuotaPopupLabel(label);
+    setShowQuotaPopup(true);
+  };
 
   const DEFAULT_INPUT_HEIGHT = 112;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
@@ -163,14 +210,27 @@ export default function Home() {
   const buttonsData = ["clarity","humain","critical","expert","precision","philosophy","strategy","decompose","refine","double"].map(id => ({ id }));
 
   const handleButtonClick = (id: string) => {
+    // Vérifier quota buttons avant d'activer
+    if (!selectedButtons.includes(id) && id !== "double") {
+      const status = checkQuota("buttons", userTier, false, userId);
+      if (!status.allowed) {
+        triggerQuotaPopup(lang === "fr" ? "Invites comportementales" : "Behavioral prompts");
+        return;
+      }
+    }
     if (id === "double") { if (selectedButtons.length === 1) setIsDoubleRegardUnlocked(true); return; }
     if (selectedButtons.includes(id)) {
       const next = selectedButtons.filter(b => b !== id);
       setSelectedButtons(next);
       if (next.length < 2) setIsDoubleRegardUnlocked(false);
     } else {
-      if (selectedButtons.length === 0) { setSelectedButtons([id]); setIsDoubleRegardUnlocked(false); }
-      else if (selectedButtons.length === 1 && isDoubleRegardUnlocked) setSelectedButtons(p => [...p, id]);
+      if (selectedButtons.length === 0) {
+        checkQuota("buttons", userTier, true, userId);
+        setSelectedButtons([id]);
+        setIsDoubleRegardUnlocked(false);
+      } else if (selectedButtons.length === 1 && isDoubleRegardUnlocked) {
+        setSelectedButtons(p => [...p, id]);
+      }
     }
   };
 
@@ -178,62 +238,50 @@ export default function Home() {
   const deserializeMsgs = (raws: string[]): EchoMessage[] => raws.map(r => ({ raw: r }));
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
-  // ── SAVE TO SUPABASE ──────────────────────────────────────────────────────
+  // ── SAVE TO SUPABASE + CRON MEMORY ───────────────────────────────────────
   const saveToSupabase = async (
-  uid: string,
-  convId: string|null,
-  raws: string[]
-): Promise<string|null> => {
-  
-  let finalSummary = memorySummary;
-let finalMessages = raws;
+    uid: string,
+    convId: string|null,
+    raws: string[]
+  ): Promise<string|null> => {
+    let finalSummary  = memorySummary;
+    let finalMessages = raws;
 
-if (raws.length > 10) {
-  try {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    if (raws.length > 10) {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+        const res = await fetch(`${API_URL}/memory-summary`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            summary:  memorySummary,
+            messages: raws.slice(0, 500),
+            userTier,
+          }),
+        });
+        const data   = await res.json();
+        finalSummary  = data.summary || memorySummary;
+        finalMessages = raws.slice(-100);
+        setMemorySummary(finalSummary);
+        console.log("[MEMORY] Résumé mis à jour");
+      } catch (e) {
+        console.error("[MEMORY]", e);
+      }
+    }
 
-    const res = await fetch(`${API_URL}/memory-summary`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        summary: memorySummary,
-        messages: raws.slice(0, 500)
-      })
-    });
+    const payload = {
+      messages:           finalMessages,
+      summary:            finalSummary,
+      summary_updated_at: new Date().toISOString(),
+      updated_at:         new Date().toISOString(),
+    };
 
-    const data = await res.json();
-
-    finalSummary = data.summary || memorySummary;
-    finalMessages = raws.slice(-100);
-
-    setMemorySummary(finalSummary);
-
-    console.log("[MEMORY] Résumé mis à jour");
-  } catch (e) {
-    console.error("[MEMORY]", e);
-  }
-}
     if (convId) {
-      await supabase.from("echo_conversations")
-  .update({
-    messages: finalMessages,
-    summary: finalSummary,
-    summary_updated_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  })
-  .eq("id", convId)
-  .eq("user_id", uid);
+      await supabase.from("echo_conversations").update(payload).eq("id", convId).eq("user_id", uid);
       return convId;
     } else {
       const { data, error } = await supabase.from("echo_conversations")
-        .insert({
-  user_id: uid,
-  source: "chat",
-  messages: finalMessages,
-  summary: finalSummary,
-  summary_updated_at: new Date().toISOString(),
-  updated_at: new Date().toISOString()
-})
+        .insert({ user_id: uid, source: "home", ...payload })
         .select("id").single();
       if (error) { console.error("[Home] insert conv:", error.message); return null; }
       return data?.id ?? null;
@@ -248,19 +296,20 @@ if (raws.length > 10) {
 
       try {
         if (uid) {
+          // Chat croisé : charge home ET chat dans la même conversation (source "home")
           const { data: convRows } = await supabase
             .from("echo_conversations")
             .select("id, messages, summary")
             .eq("user_id", uid)
-            .eq("source", "chat")
+            .eq("source", "home")
             .order("updated_at", { ascending: false })
             .limit(1);
 
           if (convRows?.length) {
-          setActiveConvId(convRows[0].id);
-          setMessages(deserializeMsgs(convRows[0].messages || []));
-          setMemorySummary(convRows[0].summary || "");
-      }
+            setActiveConvId(convRows[0].id);
+            setMessages(deserializeMsgs(convRows[0].messages || []));
+            setMemorySummary(convRows[0].summary || "");
+          }
 
           const { data: stickyRows } = await supabase
             .from("echo_stickies").select("*").eq("user_id", uid)
@@ -304,7 +353,7 @@ if (raws.length > 10) {
         setUserId(uid);
         const { data: convRows } = await supabase
           .from("echo_conversations").select("id, messages, summary")
-          .eq("user_id", uid).eq("source", "chat")
+          .eq("user_id", uid).eq("source", "home")
           .order("updated_at", { ascending: false }).limit(1);
         if (convRows?.length) {
           setActiveConvId(convRows[0].id);
@@ -364,7 +413,9 @@ if (raws.length > 10) {
       img.src = base64;
     });
 
-  // ── ENVOYER — /home est ILLIMITÉ, pas de checkQuota sur les messages ──────
+  // ── ENVOYER ───────────────────────────────────────────────────────────────
+  // /home est illimité pour les messages — quota chat_ia seulement sur /chat
+  // Quota buttons vérifié au clic du bouton
   const envoyer = async () => {
     if (!message.trim() && !selectedImage) return;
 
@@ -388,29 +439,37 @@ if (raws.length > 10) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage || `${lang === "fr" ? "Analyse cette image" : "Analyze this image"}${currentName ? ` (${currentName})` : ""}.`,
-          image: currentImage ?? null,
+          image:   currentImage ?? null,
           history: serializeMsgs(baseMessages),
           userTier,
           calendarEvents,
           selectedButtons,
+          summary: memorySummary,
         }),
       });
 
       const data = await response.json();
       setEchoState("speaking");
 
-      // Quota uniquement sur les ACTIONS automatiques (calendar / vitality_actions)
+      // ── QUOTA ACTIONS AUTOMATIQUES ────────────────────────────────────────
       let isActionBlocked = false;
-      let blockedCategory: "vitality_actions"|"calendar"|null = null;
       if (data.action) {
         const { type } = data.action;
-        const qCat: "vitality_actions"|"calendar" = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG") ? "vitality_actions" : "calendar";
-        const status = checkQuota(qCat, userTier);
-        if (!status.allowed) { setActiveLimitCategory(qCat); setShowLimitModal(true); isActionBlocked = true; blockedCategory = qCat; }
+        const qCat: "vitality_actions"|"calendar" =
+          (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL")
+            ? "vitality_actions" : "calendar";
+        const status = checkQuota(qCat, userTier, true, userId);
+        if (!status.allowed) {
+          const label = qCat === "calendar"
+            ? (lang === "fr" ? "Calendrier" : "Calendar")
+            : (lang === "fr" ? "Vitalité" : "Vitality");
+          triggerQuotaPopup(label);
+          isActionBlocked = true;
+        }
       }
 
-      const echoText = data.response || "";
-      const actionNotice = isActionBlocked ? `\n\n[🔒 Action bloquée par quota "${blockedCategory}"]` : "";
+      const echoText    = data.response || "";
+      const actionNotice = isActionBlocked ? `\n\n[🔒 ${lang === "fr" ? "Action bloquée — quota atteint" : "Action blocked — quota reached"}]` : "";
       setMessages([...baseMessages, { raw: `Echo: ${echoText}${actionNotice}` }]);
 
       if (data.action && !isActionBlocked) {
@@ -418,13 +477,11 @@ if (raws.length > 10) {
 
         if (type === "ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt } = payload;
-          const finalTitle = title || "Achat";
+          const finalTitle  = title || "Achat";
           const finalAmount = parseFloat(amount ?? spent) || 0;
-          const finalDate = paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA");
+          const finalDate   = paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA");
           if (userId) {
-            const { error } = await supabase.from("echo_expenses").insert({ user_id: userId, title: finalTitle, amount: finalAmount, date: finalDate });
-            if (error) triggerToast("error", lang === "fr" ? `Erreur dépense : ${error.message}` : `Expense error: ${error.message}`);
-            else triggerToast("info", lang === "fr" ? `📈 Dépense de ${finalAmount}$ ajoutée !` : `📈 Expense of ${finalAmount}$ added!`);
+            await supabase.from("echo_expenses").insert({ user_id: userId, title: finalTitle, amount: finalAmount, date: finalDate });
           }
         }
 
@@ -433,9 +490,7 @@ if (raws.length > 10) {
           const finalFoodName = title || foodName || food_name || "Aliment";
           const finalCalories = parseInt(calories) || 0;
           if (userId) {
-            const { error } = await supabase.from("echo_calories").insert({ user_id: userId, food_name: finalFoodName, calories: finalCalories, date: new Date().toLocaleDateString("fr-CA") });
-            if (error) triggerToast("error", lang === "fr" ? `Erreur calorie : ${error.message}` : `Calorie error: ${error.message}`);
-            else triggerToast("info", lang === "fr" ? `🍎 ${finalFoodName} (${finalCalories} kcal) ajouté !` : `🍎 ${finalFoodName} (${finalCalories} kcal) added!`);
+            await supabase.from("echo_calories").insert({ user_id: userId, food_name: finalFoodName, calories: finalCalories, date: new Date().toLocaleDateString("fr-CA") });
           }
         }
 
@@ -444,44 +499,76 @@ if (raws.length > 10) {
           const nextGoal = parseInt(goal ?? calorieGoal ?? calories);
           if (Number.isFinite(nextGoal) && nextGoal > 0) {
             localStorage.setItem("echo-calorie-goal", nextGoal.toString());
-            triggerToast("info", lang === "fr" ? `🎯 Objectif : ${nextGoal} kcal` : `🎯 Goal: ${nextGoal} kcal`);
           }
         }
 
+        // ── CALENDRIER — sync champs heure start_time et end_time ─────────
         if (type === "ADD_CALENDAR_EVENT") {
-          const { title, start, end, notes } = payload;
-          const dateKey = start?.split("T")[0] || start || "";
+          const { title, start, end, notes, date } = payload;
+
+          // Extraire date et heure depuis les champs ISO ou fallback
+          let dateKey    = "";
+          let startTime  = "";
+          let endTime    = "";
+
+          if (start) {
+            if (start.includes("T")) {
+              dateKey   = start.split("T")[0];
+              startTime = start.split("T")[1]?.slice(0, 5) || ""; // "HH:MM"
+            } else if (start.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              dateKey   = start;
+            } else {
+              dateKey   = start;
+            }
+          }
+          if (!dateKey && date) dateKey = date.split("T")[0] || date;
+          if (!dateKey) dateKey = new Date().toLocaleDateString("fr-CA");
+
+          if (end) {
+            if (end.includes("T")) {
+              endTime = end.split("T")[1]?.slice(0, 5) || "";
+            } else if (!end.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              endTime = end;
+            }
+          }
+
           const finalTitle = title || "Rendez-vous sans titre";
           const finalNotes = notes || "";
 
           if (dateKey && userId) {
             try {
-              const { data: insertedList, error } = await supabase.from("echo_calendar").insert({
-                user_id: userId, title: finalTitle, start_date: dateKey, end_date: dateKey, notes: finalNotes, is_from_echo: true,
-              }).select();
+              const insertPayload: any = {
+                user_id:    userId,
+                title:      finalTitle,
+                start_date: dateKey,
+                end_date:   dateKey,
+                notes:      finalNotes,
+                is_from_echo: true,
+              };
+              if (startTime) insertPayload.start_time = startTime;
+              if (endTime)   insertPayload.end_time   = endTime;
 
-              let finalId = `temp-${Date.now()}`;
-              if (error) {
-                const { data: retryList, error: retryError } = await supabase.from("echo_calendar").insert({
-                  user_id: userId, title: finalTitle, start_date: dateKey, end_date: dateKey, notes: finalNotes,
-                }).select();
-                if (!retryError && retryList?.length) finalId = retryList[0].id;
-              } else if (insertedList?.length) {
-                finalId = insertedList[0].id;
-              }
+              const { data: insertedList, error } = await supabase
+                .from("echo_calendar").insert(insertPayload).select();
 
-              let extractedStart = "";
-              const timeMatch = finalNotes.match(/(?:Heure\s*:\s*)?(\d{1,2}h(?:\d{2})?\s*(?:à|to)\s*\d{1,2}h(?:\d{2})?)/i);
-              if (timeMatch) extractedStart = timeMatch[1];
+              const finalId = (!error && insertedList?.length) ? insertedList[0].id : `temp-${Date.now()}`;
 
               setCalendarEvents(prev => {
                 const currentList = prev[dateKey] || [];
                 if (currentList.some(ev => ev.title === finalTitle && ev.notes === finalNotes)) return prev;
-                return { ...prev, [dateKey]: [...currentList, { id: finalId, title: finalTitle, start: extractedStart, end: "", notes: finalNotes }] };
+                return {
+                  ...prev,
+                  [dateKey]: [...currentList, {
+                    id:    finalId,
+                    title: finalTitle,
+                    start: startTime,
+                    end:   endTime,
+                    notes: finalNotes,
+                  }],
+                };
               });
 
-              triggerToast("info", lang === "fr" ? `📅 Événement "${finalTitle}" ajouté !` : `📅 Event "${finalTitle}" added!`);
-            } catch (err: any) {
+            } catch (err) {
               console.error("[Home] Crash insertion calendrier :", err);
             }
           }
@@ -513,8 +600,7 @@ if (raws.length > 10) {
 
   const deleteSticky = async (id: string) => {
     if (userId && !id.startsWith("local-")) {
-      const { error } = await supabase.from("echo_stickies").delete().eq("id", id).eq("user_id", userId);
-      if (error) console.error("[Home] echo_stickies delete:", error.message);
+      await supabase.from("echo_stickies").delete().eq("id", id).eq("user_id", userId);
     }
     setStickies(prev => prev.filter(s => s.id !== id));
   };
@@ -522,9 +608,7 @@ if (raws.length > 10) {
   const saveStickyEdit = async () => {
     if (!expandedSticky) return;
     if (userId && !expandedSticky.id.startsWith("local-")) {
-      const { error } = await supabase.from("echo_stickies")
-        .update({ text: editText }).eq("id", expandedSticky.id).eq("user_id", userId);
-      if (error) console.error("[Home] echo_stickies update:", error.message);
+      await supabase.from("echo_stickies").update({ text: editText }).eq("id", expandedSticky.id).eq("user_id", userId);
     }
     setStickies(prev => prev.map(s => s.id === expandedSticky.id ? { ...s, text: editText } : s));
     setExpandedSticky(null);
@@ -547,10 +631,7 @@ if (raws.length > 10) {
   const handleTreasureCheckout = async () => {
     const { data } = await supabase.auth.getUser();
     const user = data.user;
-    if (!user) {
-      setShowLoginRequiredModal(true);
-      return;
-    }
+    if (!user) { setShowLoginRequiredModal(true); return; }
     try {
       setIsLoadingTreasure(true);
       const response = await fetch("/api/stripe/create-checkout", {
@@ -610,6 +691,16 @@ if (raws.length > 10) {
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
+
+      {/* POPUP QUOTA */}
+      {showQuotaPopup && (
+        <QuotaPopup
+          label={quotaPopupLabel}
+          lang={lang}
+          onClose={() => setShowQuotaPopup(false)}
+        />
+      )}
+
       <div className="flex flex-1 overflow-hidden min-h-0">
 
         {/* NAV SIDEBAR */}
@@ -646,7 +737,7 @@ if (raws.length > 10) {
           {/* MAIN SECTION */}
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
 
-            {/* DASHBOARD ECHO — TOUJOURS VISIBLE EN HAUT */}
+            {/* DASHBOARD ECHO */}
             <div className="relative w-full shrink-0 flex items-center justify-center gap-3 xl:gap-5 py-3">
 
               {tutorialStep === 1 && (
@@ -678,7 +769,7 @@ if (raws.length > 10) {
                 </div>
               )}
 
-              {/* GAUCHE : CALENDRIER + BUDGET */}
+              {/* GAUCHE */}
               <div className="flex gap-3 shrink-0">
                 <Link href="/calendar" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
                   style={{background:"linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(37,99,235,0.05) 100%)",borderColor:"rgba(59,130,246,0.35)",boxShadow:"0 0 20px rgba(59,130,246,0.1),inset 0 1px 0 rgba(59,130,246,0.2)"}}>
@@ -721,17 +812,12 @@ if (raws.length > 10) {
                   <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spinDash 4s linear infinite"}}/>
                   <div className="absolute inset-1.5 rounded-full bg-black/80"/>
                   <img src="/echo1.png" alt="Echo" className="relative z-10 w-20 h-20 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
-                  <button
-                    type="button"
-                    onClick={() => setShowTreasureModal(true)}
-                    className="absolute inset-0 z-20 rounded-full opacity-0 cursor-default"
-                    title="..."
-                  />
+                  <button type="button" onClick={() => setShowTreasureModal(true)} className="absolute inset-0 z-20 rounded-full opacity-0 cursor-default" />
                 </div>
                 <span className="text-zinc-600 text-[8px] mt-1 tracking-widest uppercase font-mono">{echoState}</span>
               </div>
 
-              {/* DROITE : CALORIES + LIVRE */}
+              {/* DROITE */}
               <div className="flex gap-3 shrink-0">
                 <Link href="/vitality" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
                   style={{background:"linear-gradient(135deg,rgba(34,197,94,0.12) 0%,rgba(22,163,74,0.05) 100%)",borderColor:"rgba(34,197,94,0.35)",boxShadow:"0 0 20px rgba(34,197,94,0.1),inset 0 1px 0 rgba(34,197,94,0.2)"}}>
@@ -766,120 +852,13 @@ if (raws.length > 10) {
                   <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-violet-400">{lang==="fr"?"LIVRE":"BOOK"}</span>
                 </Link>
               </div>
-
             </div>
             <style>{`@keyframes spinDash { 100% { transform: rotate(360deg); } }`}</style>
 
             {/* MESSAGES */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 mt-2 px-2">
               {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center">
-                  {!tutorialStep && (
-                    <div className="hidden">
-
-                      {/* GAUCHE : CALENDRIER + BUDGET */}
-                      <div className="flex flex-col gap-3 shrink-0">
-                        {/* CALENDRIER */}
-                        <Link href="/calendar" className="group relative w-32 h-32 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                          style={{background:"linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(37,99,235,0.05) 100%)",borderColor:"rgba(59,130,246,0.35)",boxShadow:"0 0 24px rgba(59,130,246,0.1),inset 0 1px 0 rgba(59,130,246,0.2)"}}>
-                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(59,130,246,0.2) 0%,rgba(59,130,246,0.08) 100%)",boxShadow:"inset 0 0 28px rgba(59,130,246,0.25)"}}/>
-                          <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(59,130,246,1),transparent)"}}/>
-                          <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-blue-400/50"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-blue-400/50"/>
-                          <svg className="relative z-10 w-12 h-12 xl:w-14 xl:h-14" viewBox="0 0 64 64" fill="none">
-                            <rect x="6" y="10" width="52" height="48" rx="8" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.6)" strokeWidth="2"/>
-                            <rect x="6" y="10" width="52" height="16" rx="8" fill="rgba(59,130,246,0.4)"/>
-                            <rect x="6" y="18" width="52" height="8" fill="rgba(59,130,246,0.4)"/>
-                            <circle cx="20" cy="8" r="4" fill="rgba(59,130,246,0.8)"/>
-                            <circle cx="44" cy="8" r="4" fill="rgba(59,130,246,0.8)"/>
-                            <rect x="14" y="34" width="8" height="8" rx="2" fill="rgba(59,130,246,0.7)"/>
-                            <rect x="28" y="34" width="8" height="8" rx="2" fill="rgba(59,130,246,0.5)"/>
-                            <rect x="42" y="34" width="8" height="8" rx="2" fill="rgba(59,130,246,0.5)"/>
-                            <rect x="14" y="46" width="8" height="6" rx="2" fill="rgba(59,130,246,0.4)"/>
-                            <rect x="28" y="46" width="8" height="6" rx="2" fill="rgba(59,130,246,0.4)"/>
-                          </svg>
-                          <span className="relative z-10 text-[10px] xl:text-[11px] font-mono font-black tracking-widest uppercase text-blue-400 group-hover:text-blue-300 transition-colors">
-                            {lang==="fr"?"CALENDRIER":"CALENDAR"}
-                          </span>
-                        </Link>
-
-                        {/* BUDGET */}
-                        <Link href="/vitality" className="group relative w-32 h-32 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                          style={{background:"linear-gradient(135deg,rgba(234,179,8,0.12) 0%,rgba(202,138,4,0.05) 100%)",borderColor:"rgba(234,179,8,0.35)",boxShadow:"0 0 24px rgba(234,179,8,0.1),inset 0 1px 0 rgba(234,179,8,0.2)"}}>
-                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(234,179,8,0.2) 0%,rgba(234,179,8,0.08) 100%)",boxShadow:"inset 0 0 28px rgba(234,179,8,0.25)"}}/>
-                          <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(234,179,8,1),transparent)"}}/>
-                          <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-yellow-400/50"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-yellow-400/50"/>
-                          <svg className="relative z-10 w-12 h-12 xl:w-14 xl:h-14" viewBox="0 0 64 64" fill="none">
-                            <circle cx="32" cy="36" r="22" fill="rgba(234,179,8,0.15)" stroke="rgba(234,179,8,0.6)" strokeWidth="2"/>
-                            <circle cx="32" cy="36" r="16" fill="rgba(234,179,8,0.25)"/>
-                            <text x="32" y="42" textAnchor="middle" fontSize="20" fontWeight="bold" fill="rgba(234,179,8,0.9)">$</text>
-                            <rect x="24" y="8" width="16" height="12" rx="4" fill="rgba(234,179,8,0.5)" stroke="rgba(234,179,8,0.7)" strokeWidth="1.5"/>
-                            <path d="M28 8 Q32 4 36 8" stroke="rgba(234,179,8,0.7)" strokeWidth="1.5" fill="none"/>
-                          </svg>
-                          <span className="relative z-10 text-[10px] xl:text-[11px] font-mono font-black tracking-widest uppercase text-yellow-400 group-hover:text-yellow-300 transition-colors">
-                            BUDGET
-                          </span>
-                        </Link>
-                      </div>
-
-                      {/* CENTRE : ECHO */}
-                      <div className={`relative shrink-0 flex flex-col items-center ${echoState==="idle"?"echo-idle":echoState==="thinking"?"echo-thinking":"echo-speaking"}`}>
-                        <div className="relative w-28 h-28 xl:w-32 xl:h-32 flex items-center justify-center">
-                          {/* Anneau glow */}
-                          <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spin 4s linear infinite"}}/>
-                          <div className="absolute inset-1.5 rounded-full bg-black/80"/>
-                          <img src="/echo1.png" alt="Echo Core" className="relative z-10 w-24 h-24 xl:w-28 xl:h-28 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
-                        </div>
-                        <span className="text-zinc-500 dark:text-zinc-600 text-[9px] block mt-2 tracking-widest uppercase font-mono">{echoState}</span>
-                        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
-                      </div>
-
-                      {/* DROITE : CALORIES + LIVRE */}
-                      <div className="flex flex-col gap-3 shrink-0">
-                        {/* CALORIES */}
-                        <Link href="/vitality" className="group relative w-32 h-32 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                          style={{background:"linear-gradient(135deg,rgba(34,197,94,0.12) 0%,rgba(22,163,74,0.05) 100%)",borderColor:"rgba(34,197,94,0.35)",boxShadow:"0 0 24px rgba(34,197,94,0.1),inset 0 1px 0 rgba(34,197,94,0.2)"}}>
-                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(34,197,94,0.2) 0%,rgba(34,197,94,0.08) 100%)",boxShadow:"inset 0 0 28px rgba(34,197,94,0.25)"}}/>
-                          <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(34,197,94,1),transparent)"}}/>
-                          <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-green-400/50"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-green-400/50"/>
-                          <svg className="relative z-10 w-12 h-12 xl:w-14 xl:h-14" viewBox="0 0 64 64" fill="none">
-                            <ellipse cx="32" cy="38" rx="18" ry="16" fill="rgba(34,197,94,0.2)" stroke="rgba(34,197,94,0.6)" strokeWidth="2"/>
-                            <ellipse cx="32" cy="38" rx="13" ry="11" fill="rgba(34,197,94,0.35)"/>
-                            <path d="M32 22 Q36 14 44 12 Q38 18 32 22Z" fill="rgba(34,197,94,0.8)"/>
-                            <path d="M32 22 Q28 14 20 12 Q26 18 32 22Z" fill="rgba(34,197,94,0.6)"/>
-                            <path d="M32 22 L32 30" stroke="rgba(34,197,94,0.7)" strokeWidth="2"/>
-                          </svg>
-                          <span className="relative z-10 text-[10px] xl:text-[11px] font-mono font-black tracking-widest uppercase text-green-400 group-hover:text-green-300 transition-colors">
-                            CALORIES
-                          </span>
-                        </Link>
-
-                        {/* LIVRE */}
-                        <Link href="/books" className="group relative w-32 h-32 xl:w-36 xl:h-36 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                          style={{background:"linear-gradient(135deg,rgba(139,92,246,0.12) 0%,rgba(109,40,217,0.05) 100%)",borderColor:"rgba(139,92,246,0.35)",boxShadow:"0 0 24px rgba(139,92,246,0.1),inset 0 1px 0 rgba(139,92,246,0.2)"}}>
-                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(139,92,246,0.2) 0%,rgba(139,92,246,0.08) 100%)",boxShadow:"inset 0 0 28px rgba(139,92,246,0.25)"}}/>
-                          <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(139,92,246,1),transparent)"}}/>
-                          <div className="absolute top-2 left-2 w-2 h-2 border-t border-l border-violet-400/50"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b border-r border-violet-400/50"/>
-                          <svg className="relative z-10 w-12 h-12 xl:w-14 xl:h-14" viewBox="0 0 64 64" fill="none">
-                            <rect x="8"  y="12" width="20" height="40" rx="3" fill="rgba(139,92,246,0.5)" stroke="rgba(139,92,246,0.7)" strokeWidth="1.5"/>
-                            <rect x="10" y="14" width="16" height="36" rx="2" fill="rgba(139,92,246,0.2)"/>
-                            <rect x="30" y="10" width="20" height="42" rx="3" fill="rgba(168,85,247,0.5)" stroke="rgba(168,85,247,0.7)" strokeWidth="1.5"/>
-                            <rect x="32" y="12" width="16" height="38" rx="2" fill="rgba(168,85,247,0.2)"/>
-                            <line x1="13" y1="20" x2="23" y2="20" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
-                            <line x1="13" y1="24" x2="23" y2="24" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
-                            <line x1="13" y1="28" x2="20" y2="28" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2"/>
-                            <line x1="33" y1="18" x2="47" y2="18" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
-                            <line x1="33" y1="22" x2="47" y2="22" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
-                            <line x1="33" y1="26" x2="43" y2="26" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2"/>
-                          </svg>
-                          <span className="relative z-10 text-[10px] xl:text-[11px] font-mono font-black tracking-widest uppercase text-violet-400 group-hover:text-violet-300 transition-colors">
-                            {lang==="fr"?"LIVRE":"BOOK"}
-                          </span>
-                        </Link>
-                      </div>
-
-                    </div>
-                  )}
-                </div>
+                <div className="h-full flex flex-col items-center justify-center" />
               ) : (
                 <div className="max-w-4xl mx-auto py-4 flex flex-col gap-10 min-w-0">
                   {messages.map((msg, index) => {
@@ -950,14 +929,11 @@ if (raws.length > 10) {
                   />
                   <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-zinc-200 dark:border-zinc-900">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <button type="button" onClick={shrinkInput} title={lang==="fr"?"Réduire":"Shrink"}
-                        className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">➖</button>
-                      <button type="button" onClick={resetInput} title={lang==="fr"?"Taille originale":"Reset size"}
-                        className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">↺</button>
+                      <button type="button" onClick={shrinkInput} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">➖</button>
+                      <button type="button" onClick={resetInput} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">↺</button>
                       <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
                       <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
                       <button type="button" onClick={() => isImageButtonLocked ? setShowPremiumModal(true) : imageInputRef.current?.click()}
-                        title={isImageButtonLocked ? (lang==="fr"?"Plan Premium requis":"Premium plan required") : (selectedImageName||"")}
                         className={`h-8 px-4 rounded-lg font-bold text-[11px] flex items-center gap-2 border transition-all shrink-0 ${
                           isImageButtonLocked ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
                             : selectedImage ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
@@ -1005,11 +981,11 @@ if (raws.length > 10) {
                     🤖 {lang==="fr"?"PARAMÈTRES GLOBAUX":"GLOBAL SETTINGS"} (2/2)
                   </h4>
                   <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">
-                    {t.tutorial?.text2 || "Cliquez ici sur l'icône de Paramètres pour ajuster la langue, alterner entre le mode clair et sombre, ou relancer ce guide à tout moment !"}
+                    {t.tutorial?.text2}
                   </p>
                   <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }}
                     className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs transition-colors shadow-md uppercase tracking-wider">
-                    {t.tutorial?.finish || "C'est parti ! 🚀"}
+                    {t.tutorial?.finish}
                   </button>
                 </div>
               )}
@@ -1032,6 +1008,7 @@ if (raws.length > 10) {
                           <span className={`w-2 h-2 rounded-full shrink-0 ${EVENT_DOT_COLORS[i%EVENT_DOT_COLORS.length]}`} />{ev.title}
                         </div>
                         <div className="text-zinc-500 dark:text-zinc-400 text-[11px]">{diffDaysLabel(ev.diffDays)} · {ev.dateKey}</div>
+                        {ev.start && <div className="text-zinc-400 text-[10px] mt-0.5">🕐 {ev.start}{ev.end ? ` → ${ev.end}` : ""}</div>}
                       </Link>
                     ))
                   )}
@@ -1085,43 +1062,20 @@ if (raws.length > 10) {
         </div>
       )}
 
-      {/* LIMIT MODAL */}
-      {showLimitModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setShowLimitModal(false)}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 capitalize">{activeLimitCategory} Limit</h3>
-            <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
-              {lang==="fr"
-                ? `Limite d'actions automatisées atteinte pour [${activeLimitCategory}]. Passez au plan supérieur pour continuer.`
-                : `Automated action limit reached for [${activeLimitCategory}]. Upgrade to continue.`}
-            </p>
-            <button onClick={() => setShowLimitModal(false)} className="w-full bg-cyan-600 text-white py-2.5 rounded-xl text-xs font-semibold">OK</button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 🔐 POP-UP CONNEXION REQUISE (CONVIVIAL) ── */}
+      {/* LOGIN REQUIRED */}
       {showLoginRequiredModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100000] p-6 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowLoginRequiredModal(false)}>
-          <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center relative shadow-2xl space-y-4 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100000] p-6 backdrop-blur-md" onClick={() => setShowLoginRequiredModal(false)}>
+          <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center relative shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
             <img src="/echo1.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
             <p className="text-zinc-900 dark:text-zinc-100 font-sans text-sm font-semibold leading-relaxed">
-              {lang === "fr"
-                ? "Connecte-toi d'abord, je te garde la surprise au chaud ! 😉"
-                : "Log in first, I'll keep the surprise warm for you! 😉"}
+              {lang === "fr" ? "Connecte-toi d'abord, je te garde la surprise au chaud ! 😉" : "Log in first, I'll keep the surprise warm for you! 😉"}
             </p>
             <div className="flex flex-col gap-2">
-              <Link
-                href="/account"
-                onClick={() => { localStorage.setItem("echo-treasure-redirect","1"); setShowLoginRequiredModal(false); }}
-                className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md text-center"
-              >
+              <Link href="/account" onClick={() => { localStorage.setItem("echo-treasure-redirect","1"); setShowLoginRequiredModal(false); }}
+                className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md text-center">
                 {lang === "fr" ? "Se connecter" : "Log in"}
               </Link>
-              <button
-                onClick={() => setShowLoginRequiredModal(false)}
-                className="w-full py-1.5 text-zinc-500 font-mono text-[11px] hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
-              >
+              <button onClick={() => setShowLoginRequiredModal(false)} className="w-full py-1.5 text-zinc-500 font-mono text-[11px] hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
                 {lang === "fr" ? "Plus tard" : "Later"}
               </button>
             </div>
@@ -1129,76 +1083,24 @@ if (raws.length > 10) {
         </div>
       )}
 
-      {/* ── 🏴‍☠️ POP-UP SURPRISE DU TRÉSOR (EASTER EGG OFFRE ULTRA) ── */}
+      {/* TREASURE MODAL */}
       {showTreasureModal && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto relative" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4">
+          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] text-white max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
             <div className="absolute top-4 right-5 flex items-center gap-2 z-10">
               <LangDropdown />
-              <button
-                type="button"
-                onClick={() => setShowTreasureModal(false)}
-                className="text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1"
-                title={lang === "fr" ? "Fermer le portail" : "Close the portal"}
-              >
-                ✕
-              </button>
+              <button type="button" onClick={() => setShowTreasureModal(false)} className="text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1">✕</button>
             </div>
-
-            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">
-              👑
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">
-                {lang === "fr" ? "🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉" : "🎉✨ HEY THERE, DIGITAL EXPLORER! ✨🎉"}
-              </h3>
-              <p className="text-zinc-400 text-[11px] font-semibold leading-relaxed">
-                {lang === "fr"
-                  ? "Tu viens de découvrir un Easter Egg caché dans les profondeurs d'Echo AI... et ça mérite une récompense. 😎"
-                  : "You just discovered an Easter Egg hidden deep within Echo AI... and that deserves a reward. 😎"}
-              </p>
-            </div>
-
-            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-left text-[12px] sm:text-[13px] leading-relaxed text-zinc-100 font-semibold space-y-3">
-              <p className="text-center font-black text-amber-400 text-sm">{lang === "fr" ? "🏆 FÉLICITATIONS!" : "🏆 CONGRATULATIONS!"}</p>
-              <p>{lang === "fr"
-                ? "Tu débloques un accès à l'abonnement ULTRA avec une réduction exceptionnelle de 40 % pendant 1 mois."
-                : "You're unlocking access to the ULTRA subscription with an exceptional 40% discount for 1 month."}</p>
-              <p>{lang === "fr"
-                ? "Peu de gens tombent sur cette surprise. Encore moins prennent le temps d'explorer suffisamment pour la trouver. 👀"
-                : "Few people stumble onto this surprise. Even fewer take the time to explore enough to find it. 👀"}</p>
-              <div className="pt-1 text-cyan-400 font-mono space-y-0.5">
-                <p>{lang === "fr" ? "💎 Ton bonus :" : "💎 Your bonus:"}</p>
-                <p>{lang === "fr" ? "• 40 % de réduction sur ULTRA pendant 1 mois" : "• 40% off ULTRA for 1 month"}</p>
-                <p>{lang === "fr" ? "• Accès complet aux fonctionnalités avancées" : "• Full access to advanced features"}</p>
-                <p>{lang === "fr"
-                  ? "• Le droit officiel de te vanter d'avoir trouvé un secret caché d'Echo AI"
-                  : "• The official right to brag about finding a hidden Echo AI secret"}</p>
-              </div>
-              <p className="text-[11px] text-zinc-400 italic">{lang === "fr"
-                ? "⚠️ Cette récompense est valable pour un seul mois d'abonnement ULTRA et ne peut être combinée avec d'autres promotions."
-                : "⚠️ This reward is valid for a single month of ULTRA subscription and cannot be combined with other promotions."}</p>
-              <p className="text-zinc-300 font-medium">{lang === "fr"
-                ? "Profites-en tant que le portail est encore ouvert... les Easter Eggs ont tendance à disparaître aussi mystérieusement qu'ils apparaissent. 😉"
-                : "Take advantage while the portal is still open... Easter Eggs tend to vanish as mysteriously as they appear. 😉"}</p>
-              <p className="text-center font-bold text-emerald-400 pt-1">{lang === "fr" ? "🚀 Bien joué. Echo te regardait depuis le début." : "🚀 Well played. Echo was watching you the whole time."}</p>
-            </div>
-
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">👑</div>
+            <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">
+              {lang === "fr" ? "🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉" : "🎉✨ HEY THERE, DIGITAL EXPLORER! ✨🎉"}
+            </h3>
             <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={isLoadingTreasure}
-                onClick={handleTreasureCheckout}
-                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md text-center"
-              >
+              <button type="button" disabled={isLoadingTreasure} onClick={handleTreasureCheckout}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md">
                 {isLoadingTreasure ? (lang === "fr" ? "CONNEXION..." : "CONNECTING...") : (lang === "fr" ? "RÉCLAMER LE TRÉSOR (9.99$) ➔" : "CLAIM THE TREASURE ($9.99) ➔")}
               </button>
-              <button
-                type="button"
-                onClick={() => setShowTreasureModal(false)}
-                className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800"
-              >
+              <button type="button" onClick={() => setShowTreasureModal(false)} className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800">
                 {lang === "fr" ? "Laisser le secret tranquille" : "Leave the secret alone"}
               </button>
             </div>
