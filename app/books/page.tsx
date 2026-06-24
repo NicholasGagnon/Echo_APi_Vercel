@@ -7,6 +7,7 @@ import { useApp } from "../../context/AppContext";
 import { checkQuota, UserTier } from "../../utils/quota";
 import LangDropdown from "../components/LangDropdown";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
+import PremiumRequiredModal from "../components/PremiumRequiredModal";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -15,7 +16,7 @@ import { TextAlign } from "@tiptap/extension-text-align";
 
 type EchoMode    = "creative" | "ideas" | "critical";
 type BookView    = "edit" | "present";
-type BookMessage = { role: "user" | "echo"; text: string };
+type BookMessage = { role: "user" | "echo"; text: string; imageB64?: string };
 type Chapter     = { id: string; title: string; content: string };
 
 const I: Record<"fr"|"en", Record<string,string>> = {
@@ -264,6 +265,7 @@ export default function BooksPage() {
   const fr = lang === "fr";
   const T  = I[lang as "fr"|"en"] ?? I.fr;
   const safeTier = (userTier || "connected_free") as UserTier;
+  const isImageButtonLocked = safeTier === "connected_free" || safeTier === "basic";
 
   const [userId,   setUserId]   = useState<string|null>(null);
   const [bookDbId, setBookDbId] = useState<string|null>(null);
@@ -537,19 +539,26 @@ export default function BooksPage() {
   const [echoMessages, setEchoMessages] = useState<BookMessage[]>([]);
   const [echoInput, setEchoInput]       = useState("");
   const [echoThinking, setEchoThinking] = useState(false);
+  const [isListening, setIsListening]   = useState(false);
+  const [imageBase64, setImageBase64]   = useState<string|null>(null);
+  const [imageName, setImageName]       = useState<string|null>(null);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
   const echoBottomRef = useRef<HTMLDivElement>(null);
 
   const sendEcho = async () => {
-    if (!echoInput.trim() || echoThinking) return;
+    if ((!echoInput.trim() && !imageBase64) || echoThinking) return;
     const quotaStatus = checkQuota("vitality_actions", safeTier);
     if (!quotaStatus.allowed) { setShowLimitModal(true); return; }
-    const msg = echoInput.trim(); setEchoInput("");
-    setEchoMessages(prev => [...prev, {role:"user", text:msg}]); setEchoThinking(true);
+    const msg = echoInput.trim() || (fr ? "Analyse cette image." : "Analyze this image.");
+    const currentImage = imageBase64;
+    setEchoInput(""); setImageBase64(null); setImageName(null);
+    setEchoMessages(prev => [...prev, {role:"user", text:msg, imageB64: currentImage ?? undefined}]); setEchoThinking(true);
     const history = echoMessages.map(m => m.role==="user" ? `You: ${m.text}` : `Echo: ${m.text}`);
     const excerpt = editor?.getText()?.slice(0, 300) || "";
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const res = await fetch(`${API_URL}/books`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ message:`[Livre: "${bookTitle}" | Extrait: "${excerpt}"]\n\n${msg}`, history, selectedButtons:echoMode?[echoMode]:[], userTier:safeTier, bookTitle }) });
+      const res = await fetch(`${API_URL}/books`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ message:`[Livre: "${bookTitle}" | Extrait: "${excerpt}"]\n\n${msg}`, image: currentImage ?? null, history, selectedButtons:echoMode?[echoMode]:[], userTier:safeTier, bookTitle }) });
       if (!res.ok) throw new Error("Server error");
       const data = await res.json();
       const reply = data.response || "...";
@@ -574,6 +583,38 @@ export default function BooksPage() {
   };
 
   useEffect(() => { echoBottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [echoMessages, echoThinking]);
+
+  const lancerDictation = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { alert("Speech recognition is not supported."); return; }
+    const r = new SR();
+    r.lang = fr ? "fr-FR" : "en-US";
+    r.onstart = () => setIsListening(true); r.onend = () => setIsListening(false); r.onerror = () => setIsListening(false);
+    r.onresult = (e: any) => setEchoInput(p => p + (p ? " " : "") + e.results[0][0].transcript);
+    r.start();
+  };
+
+  const compressEchoImage = (base64: string): Promise<string> =>
+    new Promise(resolve => {
+      const img = document.createElement("img");
+      img.onload = () => {
+        const MAX = 1200; let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h*MAX/w); w = MAX; } else { w = Math.round(w*MAX/h); h = MAX; } }
+        const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.75));
+      };
+      img.src = base64;
+    });
+
+  const handleEchoImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setImageName(file.name);
+    const reader = new FileReader();
+    reader.onloadend = async () => { const c = await compressEchoImage(reader.result as string); setImageBase64(c); };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
 
   const triggerPreset = (p: "print"|"kindle") => {
     applyPreset(p, {setMirrorMargins, setShowPageNumbers, setShowHeader, setLineHeight, setFontSize, setIsJustified});
@@ -672,6 +713,8 @@ export default function BooksPage() {
           </div>
         </div>
       )}
+
+      <PremiumRequiredModal open={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
 
       {/* NAV SIDEBAR */}
       <aside className="w-44 shrink-0 border-r border-zinc-200 dark:border-zinc-800 px-5 py-6 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
@@ -1039,12 +1082,44 @@ export default function BooksPage() {
                     msg.role==="user"
                       ?"self-end bg-cyan-500/10 border border-cyan-500/20 text-zinc-200 rounded-br-sm max-w-[90%]"
                       :"self-start bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-bl-sm max-w-[95%]"
-                  }`}>{msg.text}</div>
+                  }`}>
+                    {msg.imageB64 && <img src={msg.imageB64} alt="upload" className="max-w-[140px] max-h-[110px] rounded-lg border border-zinc-700 object-cover shadow-md mb-1.5" />}
+                    {msg.text}
+                  </div>
                 ))}
                 {echoThinking && <div className="self-start text-[13px] text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-xl rounded-bl-sm px-3 py-2">...</div>}
               </>
             )}
             <div ref={echoBottomRef}/>
+          </div>
+
+          <input ref={imageFileInputRef} type="file" accept="image/*" onChange={handleEchoImageChange} className="hidden" />
+
+          {imageBase64 && (
+            <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 mx-2 mb-1.5 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-400 shrink-0">
+              <div className="flex items-center gap-2 truncate min-w-0">
+                <img src={imageBase64} alt="preview" className="w-8 h-8 rounded object-cover border border-emerald-500/30 shrink-0" />
+                <span className="truncate font-medium">{imageName || (fr?"Image prête":"Image ready")}</span>
+              </div>
+              <button onClick={() => { setImageBase64(null); setImageName(null); }} className="text-zinc-500 hover:text-red-400 font-bold ml-2 shrink-0">✕</button>
+            </div>
+          )}
+
+          <div className="flex gap-1.5 px-2 pt-2 shrink-0">
+            <button type="button" onClick={() => isImageButtonLocked ? setShowPremiumModal(true) : imageFileInputRef.current?.click()}
+              title={isImageButtonLocked ? (fr?"Plan Premium requis":"Premium plan required") : ""}
+              className={`flex-1 h-7 rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 border transition-all ${
+                isImageButtonLocked ? "cursor-not-allowed bg-zinc-900 border-zinc-800 text-zinc-500"
+                  : imageBase64 ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-400"
+                  : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-400"}`}>
+              <span>{isImageButtonLocked?"🔒":imageBase64?"✓":"🖼️"}</span>
+              <span>{isImageButtonLocked?(fr?"Image":"Image"):imageBase64?(fr?"Prête":"Ready"):(fr?"Image":"Image")}</span>
+            </button>
+            <button type="button" onClick={lancerDictation}
+              className={`flex-1 h-7 rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 border transition-all ${isListening?"bg-red-600 border-red-500 text-white animate-pulse":"bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/20 text-cyan-400"}`}>
+              <span>{isListening?"🔴":"🎤"}</span>
+              <span>{isListening?"Stop":(fr?"Parler":"Speak")}</span>
+            </button>
           </div>
 
           <div className="p-2 border-t border-zinc-200 dark:border-zinc-800 flex gap-1.5 shrink-0">

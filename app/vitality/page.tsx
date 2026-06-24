@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
+import PremiumRequiredModal from "../components/PremiumRequiredModal";
 import { useApp } from "../../context/AppContext";
 
 type BudgetExpense = { id: string; title: string; amount: number; currency: "$"|"€"; date: string };
@@ -25,6 +26,7 @@ export default function VitalityPage() {
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageName,   setImageName]   = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
 
   const [expenses,     setExpenses]     = useState<BudgetExpense[]>([]);
@@ -56,6 +58,7 @@ export default function VitalityPage() {
   const [modalGender, setModalGender] = useState("homme");
 
   const safeTier = (userTier || "connected_free") as UserTier;
+  const isImageButtonLocked = safeTier === "connected_free" || safeTier === "basic";
 
   const dict = {
     fr: {
@@ -662,9 +665,10 @@ export default function VitalityPage() {
                   rows={3} placeholder={dict.placeholder}
                   className="flex-1 bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-xs resize-none focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 transition-colors leading-relaxed shadow-inner placeholder-zinc-400" />
                 <div className="flex flex-col gap-2 w-12 shrink-0 self-end">
-                  <button type="button" onClick={()=>fileInputRef.current?.click()}
-                    className={`h-9 w-full rounded-xl flex items-center justify-center border text-sm transition-all ${imageBase64?"border-emerald-500/40 text-emerald-400 bg-emerald-500/10":"border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 bg-white dark:bg-zinc-900"}`}>
-                    {imageBase64?"V":"IMG"}
+                  <button type="button" onClick={()=>isImageButtonLocked?setShowPremiumModal(true):fileInputRef.current?.click()}
+                    title={isImageButtonLocked ? (lang==="fr"?"Plan Premium requis":"Premium plan required") : ""}
+                    className={`h-9 w-full rounded-xl flex items-center justify-center border text-sm transition-all ${isImageButtonLocked?"cursor-not-allowed border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-100 dark:bg-zinc-900":imageBase64?"border-emerald-500/40 text-emerald-400 bg-emerald-500/10":"border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 bg-white dark:bg-zinc-900"}`}>
+                    {isImageButtonLocked?"🔒":imageBase64?"V":"IMG"}
                   </button>
                   <button type="button" onClick={lancerDictation}
                     className={`h-9 w-full rounded-xl flex items-center justify-center border text-sm transition-all ${isListening?"bg-red-600 border-red-500 text-white animate-pulse":"border-cyan-500/30 text-cyan-500 bg-cyan-500/10 hover:border-cyan-400"}`}>
@@ -784,6 +788,8 @@ export default function VitalityPage() {
           </div>
         </div>
       )}
+
+      <PremiumRequiredModal open={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
     </main>
   );
 }

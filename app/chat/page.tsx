@@ -850,6 +850,8 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      <PremiumRequiredModal open={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
     </main>
   );
 }
