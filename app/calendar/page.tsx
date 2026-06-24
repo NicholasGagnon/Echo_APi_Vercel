@@ -680,7 +680,7 @@ export default function CalendarPage() {
                   isSyncing
                     ? "bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed animate-pulse"
                     : "bg-cyan-600 text-white border-transparent hover:bg-cyan-500 shadow-sm"}`}>
-                {isSyncing ? "..." : "Sync Google & Supabase"}
+                {isSyncing ? "..." : "Google Sync"}
               </button>
               <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1 shrink-0"/>
               <button onClick={() => icsInputRef.current?.click()}

@@ -6,18 +6,6 @@ import { supabase } from "../lib/supabase";
 import { checkQuota, UserTier } from "../../utils/quota";
 import { useApp } from "../../context/AppContext";
 
-type HorizonMatrix = {
-  c_est_quoi: string;
-  est_ce_bon: string;
-  combien_ca_coute: string;
-  est_ce_disponible: string;
-  qu_en_pensent_les_gens: string;
-  quelles_sont_les_alternatives: string;
-  quels_sont_les_risques: string;
-  quelle_option_est_recommandee: string;
-};
-
-// Hologramme SVG fallback
 const EchoSvgMascot = ({ className = "w-20 h-20" }: { className?: string }) => (
   <svg className={`${className} animate-pulse drop-shadow-[0_0_15px_rgba(6,182,212,0.5)]`} viewBox="0 0 100 100" fill="none">
     <circle cx="50" cy="50" r="45" fill="url(#cyanGlow)" opacity="0.1" />
@@ -42,10 +30,7 @@ const EchoSvgMascot = ({ className = "w-20 h-20" }: { className?: string }) => (
   </svg>
 );
 
-// ── FORMATEUR DE RÉPONSE RESPIRANTE ─────────────────────────────────────────
-// Transforme le texte brut en blocs visuellement aérés
 function BreathingResponse({ text, lang }: { text: string; lang: string }) {
-  // Nettoyer les \n littéraux et normaliser
   const cleaned = text
     .replace(/\\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -58,7 +43,6 @@ function BreathingResponse({ text, lang }: { text: string; lang: string }) {
       {lines.map((line, i) => {
         const trimmed = line.trim();
 
-        // Ligne numérotée (1. 2. etc ou 1- 2-)
         const numberedMatch = trimmed.match(/^(\d+)[.\-\)]\s+(.+)/);
         if (numberedMatch) {
           return (
@@ -73,7 +57,6 @@ function BreathingResponse({ text, lang }: { text: string; lang: string }) {
           );
         }
 
-        // Ligne "Analyse :" ou "Recommandation :" → titre de section
         const sectionMatch = trimmed.match(/^(Analyse|Recommandation|Analysis|Recommendation|Note|Conclusion)\s*[:–-]/i);
         if (sectionMatch) {
           const rest = trimmed.replace(/^[^:–-]+[:–-]\s*/, "");
@@ -87,7 +70,6 @@ function BreathingResponse({ text, lang }: { text: string; lang: string }) {
           );
         }
 
-        // Ligne avec ** gras **
         if (trimmed.includes("**")) {
           const parts = trimmed.split(/\*\*(.+?)\*\*/g);
           return (
@@ -97,7 +79,6 @@ function BreathingResponse({ text, lang }: { text: string; lang: string }) {
           );
         }
 
-        // Ligne courte seule (titre implicite)
         if (trimmed.length < 60 && !trimmed.endsWith(".") && !trimmed.endsWith(",")) {
           return (
             <p key={i} className="text-[13px] font-mono uppercase tracking-widest text-zinc-400 dark:text-zinc-500 pt-2">
@@ -106,7 +87,6 @@ function BreathingResponse({ text, lang }: { text: string; lang: string }) {
           );
         }
 
-        // Paragraphe normal
         return (
           <p key={i} className="text-[15px] text-zinc-700 dark:text-zinc-200 leading-relaxed">
             {trimmed}
@@ -120,20 +100,17 @@ function BreathingResponse({ text, lang }: { text: string; lang: string }) {
 export default function HorizonWebPage() {
   const { t, lang, setLang } = useApp();
 
-  const [query, setQuery] = useState("");
+  const [query, setQuery]               = useState("");
   const [echoResponse, setEchoResponse] = useState("");
-  const [matrix, setMatrix] = useState<HorizonMatrix | null>(null);
-  const [attributes, setAttributes] = useState<string[]>([]);
-  const [echoState, setEchoState] = useState<"idle" | "thinking" | "speaking">("idle");
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userTier, setUserTier] = useState<UserTier>("connected_free");
-
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const [isMatrixExpanded, setIsMatrixExpanded] = useState(false);
+  const [attributes, setAttributes]     = useState<string[]>([]);
+  const [echoState, setEchoState]       = useState<"idle" | "thinking" | "speaking">("idle");
+  const [userId, setUserId]             = useState<string | null>(null);
+  const [userTier, setUserTier]         = useState<UserTier>("connected_free");
+  const [isPopupOpen, setIsPopupOpen]   = useState(false);
   const [isIntroLangOpen, setIsIntroLangOpen] = useState(false);
+  const [isAvatarBroken, setIsAvatarBroken]   = useState(false);
+  const [activeLens, setActiveLens]     = useState<"critical" | "expert" | "strategy" | null>(null);
   const introLangRef = useRef<HTMLDivElement>(null);
-  const [isAvatarBroken, setIsAvatarBroken] = useState(false);
-  const [activeLens, setActiveLens] = useState<"critical" | "expert" | "strategy" | null>(null);
 
   useEffect(() => {
     const closeOnOutside = (e: MouseEvent) => {
@@ -150,12 +127,10 @@ export default function HorizonWebPage() {
     const cachedQuery      = localStorage.getItem("horizon_last_query");
     const cachedResponse   = localStorage.getItem("horizon_last_response");
     const cachedAttributes = localStorage.getItem("horizon_last_attributes");
-    const cachedMatrix     = localStorage.getItem("horizon_last_matrix");
 
     if (cachedQuery)      setQuery(cachedQuery);
     if (cachedResponse)   { setEchoResponse(cachedResponse); setEchoState("speaking"); }
     if (cachedAttributes) { try { setAttributes(JSON.parse(cachedAttributes)); } catch {} }
-    if (cachedMatrix)     { try { setMatrix(JSON.parse(cachedMatrix)); } catch {} }
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
@@ -175,7 +150,6 @@ export default function HorizonWebPage() {
     setQuery(targetQuery);
     setEchoState("thinking");
     setEchoResponse("");
-    setMatrix(null);
     setAttributes([]);
 
     const lensToSend = overrideLens !== undefined ? overrideLens : activeLens;
@@ -199,14 +173,12 @@ export default function HorizonWebPage() {
 
       if (data.response) {
         setEchoResponse(data.response);
-        setMatrix(data.matrix || null);
         setAttributes(data.attributes || []);
         setEchoState("speaking");
 
         localStorage.setItem("horizon_last_query",      targetQuery);
         localStorage.setItem("horizon_last_response",   data.response);
         localStorage.setItem("horizon_last_attributes", JSON.stringify(data.attributes || []));
-        localStorage.setItem("horizon_last_matrix",     JSON.stringify(data.matrix || null));
       } else {
         setAttributes(["erreur_coherence"]);
         setEchoState("idle");
@@ -232,11 +204,9 @@ export default function HorizonWebPage() {
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
 
-      {/* NEON GLOBAL — ligne traversante en haut */}
       <div className="pointer-events-none fixed top-0 left-0 right-0 h-[2px] z-40"
         style={{background:"linear-gradient(90deg, transparent 0%, #06b6d4 30%, #22d3ee 50%, #06b6d4 70%, transparent 100%)", boxShadow:"0 0 12px 2px rgba(6,182,212,0.6), 0 0 30px 6px rgba(6,182,212,0.2)", animation:"neonSlide 4s ease-in-out infinite alternate"}}/>
 
-      {/* POPUP INTRO */}
       {isPopupOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-950 border-2 border-cyan-500/40 p-6 rounded-2xl max-w-lg w-full relative shadow-[0_0_50px_rgba(6,182,212,0.25)]">
@@ -281,7 +251,6 @@ export default function HorizonWebPage() {
         </div>
       )}
 
-      {/* SIDEBAR */}
       <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex-col justify-between hidden md:flex">
         <div className="space-y-20">
           <h2 className="font-bold text-lg">
@@ -304,26 +273,19 @@ export default function HorizonWebPage() {
         </div>
       </aside>
 
-      {/* MAIN */}
       <section className="flex-1 flex flex-col min-w-0 bg-white dark:bg-black transition-colors duration-200 relative overflow-hidden">
 
-        {/* HEADER + SEARCH */}
         <div className="p-8 pb-6 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center text-center shrink-0 pt-14 relative">
-
-          {/* TITRE avec néon autour */}
           <div className="relative mb-7">
             <h1 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase font-mono select-none text-cyan-500 dark:text-cyan-400"
               style={{textShadow:"0 0 20px rgba(6,182,212,0.5), 0 0 60px rgba(6,182,212,0.2)"}}>
               HORIZON WEB SEARCH
             </h1>
-            {/* Ligne néon sous le titre */}
             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3/4 h-[1px]"
               style={{background:"linear-gradient(90deg, transparent, #06b6d4, #22d3ee, #06b6d4, transparent)", boxShadow:"0 0 8px 2px rgba(6,182,212,0.4)"}}/>
           </div>
 
-          {/* SEARCH BOX avec néon autour */}
           <div className="w-full max-w-3xl relative group">
-            {/* Néon border animé */}
             <div className="absolute -inset-[1px] rounded-2xl pointer-events-none z-0"
               style={{background:"linear-gradient(135deg, rgba(6,182,212,0.4), rgba(34,211,238,0.1), rgba(6,182,212,0.4))", boxShadow:"0 0 15px rgba(6,182,212,0.2)", borderRadius:"1rem"}}/>
             <input
@@ -341,7 +303,6 @@ export default function HorizonWebPage() {
             </button>
           </div>
 
-          {/* LENS BUTTONS */}
           <div className="flex flex-col sm:flex-row gap-2 mt-4 w-full max-w-3xl justify-center font-mono">
             {([
               { id:"critical" as const, label:lang==="fr"?"REGARD CRITIQUE":"CRITICAL VIEW", prefix:"3⚔️", color:"red"   },
@@ -364,11 +325,9 @@ export default function HorizonWebPage() {
           </div>
         </div>
 
-        {/* ZONE RÉSULTATS */}
         <div className="flex-1 overflow-y-auto p-6 md:p-10 min-h-0 bg-white dark:bg-black flex flex-col items-center"
           style={{scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent"}}>
 
-          {/* THINKING */}
           {echoState === "thinking" && (
             <div className="h-64 flex flex-col items-center justify-center gap-4 font-mono">
               {isAvatarBroken ? <EchoSvgMascot className="w-20 h-20"/> : (
@@ -380,11 +339,9 @@ export default function HorizonWebPage() {
             </div>
           )}
 
-          {/* RÉSULTATS */}
           {echoState !== "thinking" && echoResponse && (
             <div className="w-full max-w-3xl space-y-6 animate-in fade-in duration-300 pb-16">
 
-              {/* CHIPS */}
               {attributes.length > 0 && (
                 <div className="flex gap-2 items-center flex-wrap font-mono text-[10px]">
                   <span className="text-zinc-400 uppercase font-bold">{lang === "fr" ? "Critères :" : "Criteria :"}</span>
@@ -394,9 +351,7 @@ export default function HorizonWebPage() {
                 </div>
               )}
 
-              {/* RÉPONSE RESPIRANTE — sans boîte compartiment */}
               <div className="space-y-1">
-                {/* En-tête Echo minimal */}
                 <div className="flex items-center gap-2 mb-5">
                   {isAvatarBroken ? <EchoSvgMascot className="w-7 h-7"/> : (
                     <img src="/echo1.png" alt="Echo" className="w-7 h-7 object-contain echo-speaking rounded-full border border-cyan-500/30" onError={() => setIsAvatarBroken(true)}/>
@@ -404,52 +359,13 @@ export default function HorizonWebPage() {
                   <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-500/70 font-bold">
                     {lang === "fr" ? "Analyse Echo" : "Echo's Analysis"}
                   </span>
-                  {/* Ligne décorative */}
                   <div className="flex-1 h-[1px]" style={{background:"linear-gradient(90deg, rgba(6,182,212,0.3), transparent)"}}/>
                 </div>
-
-                {/* Texte respirant */}
                 <BreathingResponse text={echoResponse} lang={lang} />
               </div>
-
-              {/* MATRICE 8 PILIERS — accordéon discret */}
-              {matrix && (
-                <div className="mt-8 border border-zinc-100 dark:border-zinc-900 rounded-2xl overflow-hidden">
-                  <button
-                    onClick={() => setIsMatrixExpanded(!isMatrixExpanded)}
-                    className="w-full py-3.5 px-5 bg-zinc-50 dark:bg-zinc-950 flex justify-between items-center hover:bg-zinc-100 dark:hover:bg-zinc-900/80 transition-all font-mono text-[10px] uppercase tracking-wider text-zinc-400 font-black outline-none">
-                    <span className="flex items-center gap-2">
-                      <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><circle cx="8" cy="11" r=".6" fill="currentColor" stroke="none"/></svg>
-                      {lang === "fr" ? "Matrice Horizon — 8 Piliers" : "Horizon Matrix — 8 Pillars"}
-                    </span>
-                    <span>{isMatrixExpanded ? "▲" : "▼"}</span>
-                  </button>
-
-                  {isMatrixExpanded && (
-                    <div className="p-5 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900 grid grid-cols-1 md:grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-200">
-                      {[
-                        { k: lang==="fr"?"1. C'est Quoi ?":"1. What is it?",                      v: matrix.c_est_quoi                   },
-                        { k: lang==="fr"?"2. Est-ce Bon ?":"2. Is it good?",                       v: matrix.est_ce_bon                   },
-                        { k: lang==="fr"?"3. Combien ça coûte ?":"3. Cost breakdown",               v: matrix.combien_ca_coute             },
-                        { k: lang==="fr"?"4. Disponibilité / Horaires":"4. Hours & Availability",  v: matrix.est_ce_disponible            },
-                        { k: lang==="fr"?"5. Retour Terrain":"5. Field feedback",                  v: matrix.qu_en_pensent_les_gens       },
-                        { k: lang==="fr"?"6. Alternatives":"6. Alternatives",                       v: matrix.quelles_sont_les_alternatives},
-                        { k: lang==="fr"?"7. Risques":"7. Risks",                                   v: matrix.quels_sont_les_risques       },
-                        { k: lang==="fr"?"8. Recommandation finale":"8. Final recommendation",      v: matrix.quelle_option_est_recommandee},
-                      ].map((item, i) => (
-                        <div key={i} className={`p-4 rounded-xl border ${i===7?"md:col-span-2 border-cyan-500/20 bg-cyan-500/[0.03]":"border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-950"}`}>
-                          <h5 className="text-[9px] font-mono font-bold text-cyan-500/70 uppercase mb-1.5 tracking-widest">{item.k}</h5>
-                          <p className="text-[13px] text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">{item.v}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
 
-          {/* IDLE */}
           {echoState === "idle" && !echoResponse && (
             <div className="h-full flex flex-col items-center justify-center text-center py-16">
               {isAvatarBroken ? <EchoSvgMascot className="w-24 h-24 mb-6"/> : (
@@ -469,10 +385,6 @@ export default function HorizonWebPage() {
           0%   { opacity: 0.4; transform: scaleX(0.7); }
           50%  { opacity: 1;   transform: scaleX(1); }
           100% { opacity: 0.4; transform: scaleX(0.7); }
-        }
-        @keyframes neonPulse {
-          0%, 100% { box-shadow: 0 0 8px 1px rgba(6,182,212,0.3); }
-          50%       { box-shadow: 0 0 20px 4px rgba(6,182,212,0.6); }
         }
       `}</style>
     </main>
