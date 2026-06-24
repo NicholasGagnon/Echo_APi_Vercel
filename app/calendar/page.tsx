@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
 import { UserTier } from "../../utils/quota";
+import LangDropdown from "../components/LangDropdown";
 
 type EventData = {
   id: string;
@@ -20,7 +21,7 @@ type CalendarEvents = Record<string, EventData[]>;
 
 const DAYS_LABELS_FR = ["D","L","M","M","J","V","S"];
 const DAYS_LABELS_EN = ["S","M","T","W","T","F","S"];
-const MONTHS_FR = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
+const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const GOOGLE_CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly";
 
@@ -38,9 +39,124 @@ const clearHash = () => {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
 };
 
+// ── TUTORIAL POPUP ────────────────────────────────────────────────────────────
+function CalendarTutorialPopup({ lang, onClose, onConnect }: {
+  lang: string;
+  onClose: () => void;
+  onConnect: () => void;
+}) {
+  const fr = lang === "fr";
+  return (
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200">
+      <div
+        className="bg-zinc-950 border-2 border-cyan-500/40 rounded-3xl w-full max-w-2xl shadow-[0_0_60px_rgba(6,182,212,0.2)] animate-in zoom-in-95 duration-200 overflow-hidden max-h-[92vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* HEADER */}
+        <div className="flex items-start gap-4 px-7 pt-7 pb-5 border-b border-zinc-800 shrink-0">
+          <div className="w-14 h-14 rounded-2xl overflow-hidden border border-cyan-500/30 shadow-[0_0_16px_rgba(6,182,212,0.3)] shrink-0">
+            <img src="/echo1.png" alt="Echo" className="w-full h-full object-cover" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-500/70 mb-1">Echo AI — Calendrier</p>
+            <h2 className="text-lg font-black text-zinc-100 leading-tight">
+              {fr ? "👑 Hola Roi du Calendrier !" : "👑 Hola, Calendar King!"}
+            </h2>
+            <p className="text-zinc-400 text-[12px] mt-1 leading-relaxed">
+              {fr
+                ? "C'est ici que tu peux synchroniser tes rendez-vous et activer ton calendrier connecté."
+                : "This is where you can sync your appointments and activate your connected calendar."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <LangDropdown />
+            <button
+              onClick={onClose}
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all text-sm font-mono"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* BODY */}
+        <div className="px-7 py-6 overflow-y-auto flex-1 space-y-5">
+
+          {/* Intro */}
+          <p className="text-zinc-300 text-[13px] leading-relaxed">
+            {fr
+              ? "Pour commencer, clique sur \"Se connecter\" en bas et connecte ton compte Google. Google va t'envoyer des avertissements, c'est normal."
+              : "To get started, click \"Connect\" below and link your Google account. Google will show warnings — that's expected."}
+          </p>
+
+          {/* Steps */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+            <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-black">
+              {fr ? "📋 Guide d'autorisation pas à pas" : "📋 Step-by-step authorization guide"}
+            </p>
+
+            {[
+              fr
+                ? "Sélectionnez l'adresse du compte Google cible que vous désirez lier à vos matrices Echo."
+                : "Select the Google account you want to link to your Echo ecosystem.",
+              fr
+                ? 'Dès l\'apparition de l\'écran d\'avertissement de sécurité de Google, repérez et cliquez sur le petit lien textuel "Paramètres avancés" (Advanced) situé dans le coin inférieur gauche.'
+                : 'When the Google security warning screen appears, find and click the small link "Advanced settings" in the lower left corner.',
+              fr
+                ? 'Une section masquée va s\'étendre : cliquez fermement sur le lien de contournement "Accéder à echosai.ca (non sécurisé)" pour lier l\'agent.'
+                : 'A hidden section will expand: click the bypass link "Go to echosai.ca (unsafe)" to bind the agent.',
+              fr
+                ? "Sur l'écran final de consentement, cochez impérativement toutes les cases d'autorisations requises pour la lecture, la création et la modification de vos événements d'agenda, puis confirmez la validation."
+                : "On the final consent screen, you must check all permission boxes for reading, creating, and modifying your calendar events, then confirm.",
+            ].map((step, i) => (
+              <div key={i} className="flex gap-3 items-start">
+                <div className="w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-[10px] font-black font-mono flex items-center justify-center shrink-0 mt-0.5">
+                  {i + 1}
+                </div>
+                <p className="text-zinc-300 text-[13px] leading-relaxed flex-1">{step}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Outro */}
+          <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl px-4 py-3">
+            <p className="text-zinc-300 text-[13px] leading-relaxed">
+              {fr
+                ? "Une fois connecté, Echo pourra gérer et synchroniser tes événements automatiquement."
+                : "Once connected, Echo will be able to manage and sync your events automatically."}
+            </p>
+            <p className="text-cyan-400 font-bold text-sm mt-1">Adiooo 😎</p>
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="px-7 py-5 border-t border-zinc-800 flex items-center justify-between gap-3 shrink-0">
+          <button
+            onClick={onConnect}
+            className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs px-6 py-3 rounded-xl uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] font-mono"
+          >
+            <svg viewBox="0 0 18 18" width="14" height="14" fill="none">
+              <circle cx="9" cy="9" r="8" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M9 5v4l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            {fr ? "Se connecter à Google Calendar" : "Connect to Google Calendar"}
+          </button>
+          <button
+            onClick={onClose}
+            className="text-zinc-500 hover:text-zinc-300 text-[11px] font-mono transition-colors"
+          >
+            {fr ? "Plus tard" : "Later"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
 export default function CalendarPage() {
   const { t, lang, userTier, triggerToast } = useApp();
-  const today = new Date();
+  const today   = new Date();
   const safeTier = (userTier || "connected_free") as UserTier;
 
   const [currentYear,  setCurrentYear]  = useState(today.getFullYear());
@@ -49,6 +165,7 @@ export default function CalendarPage() {
   const [isLoaded,     setIsLoaded]     = useState(false);
   const [userId,       setUserId]       = useState<string|null>(null);
   const [selectedDateKey, setSelectedDateKey] = useState<string|null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [title,       setTitle]       = useState("");
@@ -62,11 +179,11 @@ export default function CalendarPage() {
   const [showLimitModal,       setShowLimitModal]       = useState(false);
   const icsInputRef   = useRef<HTMLInputElement>(null);
   const isFetchingRef = useRef(false);
-  // Ref pour avoir le token courant sans dépendance de closure
   const googleTokenRef = useRef<string|null>(null);
 
   const getStorageKey     = (uid: string) => `echo-calendar-v2-${uid}`;
   const getGoogleTokenKey = (uid: string) => `echo-google-token-${uid}`;
+  const TUTO_KEY = "echo-calendar-tuto-seen-v1";
 
   // ── CHARGER EVENTS SUPABASE ────────────────────────────────────────────────
   const fetchSupabaseEvents = useCallback(async (uid: string) => {
@@ -75,21 +192,15 @@ export default function CalendarPage() {
         .from("echo_calendar").select("*").eq("user_id", uid);
       if (error) throw error;
       if (!calRows) return;
-
       const rebuilt: CalendarEvents = {};
       calRows.forEach(r => {
         const key = r.start_date;
         if (!rebuilt[key]) rebuilt[key] = [];
         rebuilt[key].push({
-          id:        r.id,
-          title:     r.title,
-          start:     r.start_time || "",
-          end:       r.end_time || "",
-          notes:     r.notes || "",
-          isFromEcho: r.is_from_echo ?? false,
+          id: r.id, title: r.title, start: r.start_time || "",
+          end: r.end_time || "", notes: r.notes || "", isFromEcho: r.is_from_echo ?? false,
         });
       });
-
       setEvents(prev => {
         const updated = { ...prev };
         const allKeys = new Set([...Object.keys(updated), ...Object.keys(rebuilt)]);
@@ -107,18 +218,10 @@ export default function CalendarPage() {
   }, []);
 
   // ── TOKEN HELPERS ──────────────────────────────────────────────────────────
-  // Résolution du token : localStorage → ref → Supabase DB
   const resolveToken = useCallback(async (uid: string): Promise<string|null> => {
-    // 1. localStorage en premier (le plus fiable)
     const ls = localStorage.getItem(getGoogleTokenKey(uid));
-    if (ls) {
-      googleTokenRef.current = ls;
-      setGoogleToken(ls);
-      return ls;
-    }
-    // 2. ref (évite le stale closure)
+    if (ls) { googleTokenRef.current = ls; setGoogleToken(ls); return ls; }
     if (googleTokenRef.current) return googleTokenRef.current;
-    // 3. Supabase DB
     try {
       const { data: row } = await supabase
         .from("user_tokens").select("google_access_token").eq("id", uid).maybeSingle();
@@ -136,11 +239,9 @@ export default function CalendarPage() {
     googleTokenRef.current = token;
     setGoogleToken(token);
     localStorage.setItem(getGoogleTokenKey(uid), token);
-    // Sauvegarder en DB sans bloquer
     supabase.auth.getSession().then(({ data: { session } }) => {
       supabase.from("user_tokens").upsert({
-        id: uid,
-        google_access_token: token,
+        id: uid, google_access_token: token,
         google_refresh_token: session?.refresh_token || null,
         user_tier: safeTier,
         last_request_date: new Date().toISOString().split("T")[0],
@@ -155,9 +256,7 @@ export default function CalendarPage() {
     googleTokenRef.current = null;
     setGoogleToken(null);
     localStorage.removeItem(getGoogleTokenKey(uid));
-    try {
-      await supabase.from("user_tokens").update({ google_access_token: null }).eq("id", uid);
-    } catch {}
+    try { await supabase.from("user_tokens").update({ google_access_token: null }).eq("id", uid); } catch {}
     setNeedsGoogleReconnect(true);
   }, []);
 
@@ -177,30 +276,20 @@ export default function CalendarPage() {
     if (!token || !uid || isFetchingRef.current) return;
     isFetchingRef.current = true;
     setIsSyncing(true);
-
-    const y = year  ?? currentYear;
+    const y = year ?? currentYear;
     const m = month ?? currentMonth;
-
     try {
       const timeMin = new Date(y, m, 1).toISOString();
       const timeMax = new Date(y, m+1, 0, 23, 59, 59).toISOString();
-
       const res = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      if (res.status === 401 || res.status === 403) {
-        console.warn("[Calendar] Token invalide →", res.status);
-        await clearToken(uid);
-        return;
-      }
+      if (res.status === 401 || res.status === 403) { await clearToken(uid); return; }
       if (!res.ok) { console.error("[Calendar] Google sync failed:", res.status); return; }
-
       setNeedsGoogleReconnect(false);
       const data = await res.json();
       if (!data.items?.length) return;
-
       const incoming: CalendarEvents = {};
       data.items.forEach((item: any) => {
         const rawStart = item.start?.dateTime || item.start?.date;
@@ -215,7 +304,6 @@ export default function CalendarPage() {
           googleEventId: item.id,
         });
       });
-
       setEvents(prev => {
         const updated = { ...prev };
         const prefix  = `${y}-${String(m+1).padStart(2,"0")}`;
@@ -240,7 +328,7 @@ export default function CalendarPage() {
   const pushEventToGoogle = useCallback(async (uid: string, dateKey: string, ev: EventData): Promise<string|null> => {
     const token = await resolveToken(uid);
     if (!token) {
-      console.log("[Calendar] pushEventToGoogle: aucun token disponible");
+      console.warn("[Calendar] pushEventToGoogle: aucun token — reconnexion nécessaire");
       setNeedsGoogleReconnect(true);
       return null;
     }
@@ -254,20 +342,31 @@ export default function CalendarPage() {
         ? { dateTime: new Date(`${dateKey}T${ev.end||"23:59"}:00`).toISOString() }
         : { date: dateKey };
 
+      console.log("[Calendar] Pushing to Google:", { summary: ev.title, start: startObj, end: endObj });
+
       const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ summary: ev.title, description: ev.notes, start: startObj, end: endObj }),
       });
 
-      if (res.status === 401 || res.status === 403) { await clearToken(uid); return null; }
-      if (!res.ok) { console.error("[Calendar] pushEventToGoogle failed:", res.status); return null; }
+      // ── LOG DÉTAILLÉ pour diagnostiquer le problème de sync ──
+      if (!res.ok) {
+        const errBody = await res.text();
+        console.error(`[Calendar] pushEventToGoogle FAILED — status ${res.status}:`, errBody);
+        // Si 401/403 = token invalide ou scope insuffisant
+        if (res.status === 401 || res.status === 403) {
+          console.warn("[Calendar] Token expiré ou scope insuffisant (besoin de calendar.events write)");
+          await clearToken(uid);
+        }
+        return null;
+      }
 
       const d = await res.json();
-      console.log("[Calendar] Push Google OK:", d.id);
+      console.log("[Calendar] Push Google OK — Google Event ID:", d.id);
       return d.id ?? null;
     } catch (err) {
-      console.error("[Calendar] pushEventToGoogle error:", err);
+      console.error("[Calendar] pushEventToGoogle crash:", err);
       return null;
     }
   }, [resolveToken, clearToken]);
@@ -288,45 +387,38 @@ export default function CalendarPage() {
   useEffect(() => {
     let cancelled = false;
 
+    // Afficher le tutorial si pas encore vu
+    if (!localStorage.getItem(TUTO_KEY)) {
+      setShowTutorial(true);
+    }
+
     const bootstrap = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { if (!cancelled) setIsLoaded(true); return; }
-
       const uid = session.user.id;
       if (!cancelled) setUserId(uid);
 
-      // Charger localStorage
       const savedEvents = localStorage.getItem(getStorageKey(uid));
       if (savedEvents && !cancelled) {
         try { setEvents(JSON.parse(savedEvents)); } catch {}
       }
-
-      // Charger Supabase
       if (!cancelled) await fetchSupabaseEvents(uid);
 
-      // Résoudre le token Google
       let activeToken: string|null = null;
       const hashToken = extractProviderTokenFromHash();
       if (hashToken) {
-        clearHash();
-        activeToken = hashToken;
+        clearHash(); activeToken = hashToken;
         await storeToken(uid, hashToken);
-        console.log("[Calendar] Token depuis hash URL");
       } else if (session.provider_token) {
         activeToken = session.provider_token;
         await storeToken(uid, session.provider_token);
-        console.log("[Calendar] Token depuis session.provider_token");
       } else {
         activeToken = await resolveToken(uid);
-        if (activeToken) console.log("[Calendar] Token resolu depuis DB/localStorage");
       }
 
       if (activeToken && !cancelled) {
         await fetchGoogleEvents(activeToken, uid, today.getFullYear(), today.getMonth());
-      } else {
-        console.log("[Calendar] Aucun token Google disponible");
       }
-
       if (!cancelled) setIsLoaded(true);
     };
 
@@ -344,7 +436,6 @@ export default function CalendarPage() {
         const savedEvents = localStorage.getItem(getStorageKey(uid));
         setEvents(savedEvents ? JSON.parse(savedEvents) : {});
         await fetchSupabaseEvents(uid);
-
         const hashToken     = extractProviderTokenFromHash();
         const providerToken = hashToken || session.provider_token;
         if (providerToken) {
@@ -381,7 +472,7 @@ export default function CalendarPage() {
     const token = await resolveToken(userId);
     if (!token) { setNeedsGoogleReconnect(true); return; }
     await fetchGoogleEvents(token, userId, currentYear, currentMonth);
-    triggerToast("info", lang==="fr"?"Donnees synchronisees !":"Data synchronized!");
+    triggerToast("info", lang==="fr"?"Données synchronisées !":"Data synchronized!");
   };
 
   // ── ICS ───────────────────────────────────────────────────────────────────
@@ -459,14 +550,9 @@ export default function CalendarPage() {
     setShowAddForm(false); resetForm();
 
     try {
-      // Push Google d'abord
-      console.log("[Calendar] Push vers Google...");
       const cloudId = await pushEventToGoogle(userId, selectedDateKey, ev);
-      console.log("[Calendar] Google ID:", cloudId || "null (token absent ou push echoue)");
-
       const finalId = cloudId || tempId;
 
-      // Supabase
       const { data, error: supaErr } = await supabase.from("echo_calendar").insert({
         id:           finalId,
         user_id:      userId,
@@ -483,11 +569,9 @@ export default function CalendarPage() {
         console.error("[Calendar] Supabase insert:", supaErr.message);
         triggerToast("error", `Erreur: ${supaErr.message}`);
       } else {
-        console.log("[Calendar] Supabase OK:", data);
-        triggerToast("info", lang==="fr"?"Evenement sauvegarde !":"Event saved!");
+        triggerToast("info", lang==="fr"?"Événement sauvegardé !":"Event saved!");
       }
 
-      // Mettre a jour l'ID local si Google a repondu
       if (cloudId) {
         setEvents(prev => ({
           ...prev,
@@ -507,16 +591,36 @@ export default function CalendarPage() {
     const { error } = await supabase.from("echo_calendar").delete().eq("id",id).eq("user_id",userId);
     if (error) console.error("[Calendar] delete:", error.message);
     setEvents(prev => ({ ...prev, [dateKey]: (prev[dateKey]||[]).filter(e => e.id!==id) }));
-    triggerToast("info", lang==="fr"?"Evenement supprime.":"Event deleted.");
+    triggerToast("info", lang==="fr"?"Événement supprimé.":"Event deleted.");
   };
 
   const selectedEvents   = selectedDateKey ? events[selectedDateKey]||[] : [];
   const activeMonthLabel = lang==="fr" ? MONTHS_FR[currentMonth] : MONTHS_EN[currentMonth];
   const activeDaysLabels = lang==="fr" ? DAYS_LABELS_FR : DAYS_LABELS_EN;
 
+  const handleTutorialConnect = () => {
+    setShowTutorial(false);
+    localStorage.setItem(TUTO_KEY, "true");
+    reconnectGoogle();
+  };
+
+  const handleTutorialClose = () => {
+    setShowTutorial(false);
+    localStorage.setItem(TUTO_KEY, "true");
+  };
+
   return (
     <main className="h-[100dvh] bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
       <input type="file" ref={icsInputRef} accept=".ics" onChange={handleICSRawImport} className="hidden"/>
+
+      {/* TUTORIAL POPUP */}
+      {showTutorial && (
+        <CalendarTutorialPopup
+          lang={lang}
+          onClose={handleTutorialClose}
+          onConnect={handleTutorialConnect}
+        />
+      )}
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
@@ -530,7 +634,7 @@ export default function CalendarPage() {
               <Link href="/chat"       className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
               <Link href="/books"      className="block hover:text-cyan-500">{t.sidebar.books}</Link>
               <Link href="/calendar"   className="block text-cyan-600 dark:text-cyan-400 font-bold">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
-              <Link href="/vitality"   className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalite":"Vitality"}</Link>
+              <Link href="/vitality"   className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
               <Link href="/services"   className="block hover:text-cyan-500">💎 Services</Link>
               <Link href="/account"    className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
               <Link href="/horizonweb" className="block hover:text-cyan-500">📡 HorizonWeb</Link>
@@ -550,7 +654,7 @@ export default function CalendarPage() {
             <div className="w-full max-w-7xl mx-auto mb-6 flex items-center justify-between gap-3 flex-wrap bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-2xl px-4 py-3 text-xs">
               <span className="text-amber-700 dark:text-amber-300 font-medium">
                 {lang==="fr"
-                  ? "Connexion Google Calendar expiree. Reconnecte ton compte pour reactiver la synchronisation."
+                  ? "Connexion Google Calendar expirée. Reconnecte ton compte pour réactiver la synchronisation."
                   : "Google Calendar connection expired. Reconnect your account to resume syncing."}
               </span>
               <button onClick={reconnectGoogle}
@@ -564,7 +668,7 @@ export default function CalendarPage() {
           <div className="flex flex-col lg:flex-row lg:items-center justify-start gap-4 mb-8 shrink-0 w-full max-w-7xl mx-auto border-b border-zinc-100 dark:border-zinc-900 pb-5">
             <div className="flex items-center gap-3">
               <button onClick={prevMonth} className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 hover:text-cyan-500 transition-colors text-xs">◀</button>
-              <button onClick={goToday}   className="text-xl sm:text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-100 hover:text-cyan-500 transition-colors">
+              <button onClick={goToday} className="text-xl sm:text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-100 hover:text-cyan-500 transition-colors">
                 📅 {activeMonthLabel} {currentYear}
               </button>
               <button onClick={nextMonth} className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 hover:text-cyan-500 transition-colors text-xs">▶</button>
@@ -586,6 +690,13 @@ export default function CalendarPage() {
               <button onClick={exportICS}
                 className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
                 {lang==="fr"?"Exporter":"Export"}
+              </button>
+              {/* Bouton ré-ouvrir le tutorial */}
+              <button
+                onClick={() => setShowTutorial(true)}
+                title={lang==="fr"?"Guide de connexion Google":"Google connection guide"}
+                className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
+                ?
               </button>
               {googleTokenRef.current && !needsGoogleReconnect && (
                 <div className="text-[10px] text-emerald-500 font-mono font-bold shrink-0 flex items-center gap-1">
@@ -646,15 +757,14 @@ export default function CalendarPage() {
       {selectedDateKey && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setSelectedDateKey(null)}>
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl space-y-6 max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-
             <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
               <div>
                 <h2 className="text-base font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">📅 {selectedDateKey}</h2>
                 <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">
-                  {lang==="fr"?"Gestion des evenements de cette journee.":"Event manager for this day."}
+                  {lang==="fr"?"Gestion des événements de cette journée.":"Event manager for this day."}
                 </p>
               </div>
-              <button onClick={() => setSelectedDateKey(null)} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">X</button>
+              <button onClick={() => setSelectedDateKey(null)} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
             </div>
 
             {selectedEvents.length > 0 && (
@@ -668,7 +778,7 @@ export default function CalendarPage() {
                         {ev.googleEventId && <span className="text-[9px] bg-blue-100 dark:bg-blue-950/50 px-2 py-0.5 rounded-md border border-blue-300 dark:border-blue-800 uppercase font-mono font-bold text-blue-600 dark:text-blue-400">Google</span>}
                       </div>
                       <div className="text-zinc-400 dark:text-zinc-500 text-xs font-mono">
-                        {ev.start?`${ev.start}${ev.end?` -> ${ev.end}`:""}`:lang==="fr"?"Journee complete":"All Day"}
+                        {ev.start?`${ev.start}${ev.end?` → ${ev.end}`:""}`:lang==="fr"?"Journée complète":"All Day"}
                       </div>
                       {ev.notes && (
                         <p className="text-zinc-600 dark:text-zinc-400 text-xs bg-white dark:bg-black/40 border border-zinc-200 dark:border-zinc-900 rounded-xl p-2.5 mt-2 whitespace-pre-wrap leading-relaxed shadow-inner">
@@ -677,7 +787,7 @@ export default function CalendarPage() {
                       )}
                     </div>
                     <button onClick={() => deleteEvent(selectedDateKey, ev.id, ev.googleEventId)}
-                      className="text-zinc-400 hover:text-red-500 font-mono text-sm ml-4 p-1 transition-colors">X</button>
+                      className="text-zinc-400 hover:text-red-500 font-mono text-sm ml-4 p-1 transition-colors">✕</button>
                   </div>
                 ))}
               </div>
@@ -685,29 +795,29 @@ export default function CalendarPage() {
 
             {selectedEvents.length===0 && !showAddForm && (
               <div className="text-center py-6 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-400 dark:text-zinc-600 text-xs">
-                {lang==="fr"?"Aucun evenement sur cette journee.":"No events on this day."}
+                {lang==="fr"?"Aucun événement sur cette journée.":"No events on this day."}
               </div>
             )}
 
             {!showAddForm && (
               <button onClick={() => setShowAddForm(true)}
                 className="w-full bg-zinc-100 dark:bg-zinc-900 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-600 border border-transparent font-bold py-3 rounded-xl text-xs transition-colors">
-                + {lang==="fr"?"Ajouter un evenement":"Add event"}
+                + {lang==="fr"?"Ajouter un événement":"Add event"}
               </button>
             )}
 
             {showAddForm && (
               <div className="space-y-4 border-t border-zinc-200 dark:border-zinc-900 pt-4 animate-in fade-in duration-200">
                 <h3 className="font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400 font-bold">
-                  + {lang==="fr"?"Nouvel evenement":"New event"}
+                  + {lang==="fr"?"Nouvel événement":"New event"}
                 </h3>
                 <input type="text"
-                  placeholder={lang==="fr"?"Titre de l'evenement":"Event title"}
+                  placeholder={lang==="fr"?"Titre de l'événement":"Event title"}
                   value={title} onChange={e => setTitle(e.target.value)}
                   className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner"/>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang==="fr"?"Debut":"Start"}</label>
+                    <label className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang==="fr"?"Début":"Start"}</label>
                     <input type="time" value={start} onChange={e => setStart(e.target.value)}
                       className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner"/>
                   </div>
@@ -742,7 +852,7 @@ export default function CalendarPage() {
             <h3 className="text-lg font-bold">{lang==="fr"?"Upgrade requis":"Upgrade Required"}</h3>
             <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed">
               {lang==="fr"
-                ? "La synchronisation Google Calendar necessite un compte Premium ou superieur."
+                ? "La synchronisation Google Calendar nécessite un compte Premium ou supérieur."
                 : "Google Calendar syncing requires a Premium account or higher."}
             </p>
             <div className="flex flex-col gap-2 pt-2">

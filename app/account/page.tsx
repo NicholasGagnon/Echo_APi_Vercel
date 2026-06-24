@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
 import LangDropdown from "../components/LangDropdown";
+import ContactModal from "../components/ContactModal";
 
 // --- LOGOS & ICONS ---
 const MicrosoftLogo = () => (
@@ -60,6 +61,7 @@ export default function AccountPage() {
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [showGoogleSyncPopup, setShowGoogleSyncPopup] = useState(false);
+  const [activeContactModal, setActiveContactModal] = useState<"support" | "contact" | null>(null);
   const [showTreasureModal, setShowTreasureModal] = useState(false);
   const [isLoadingTreasure, setIsLoadingTreasure] = useState(false);
   const [showLoginRequiredModal, setShowLoginRequiredModal] = useState(false);
@@ -386,6 +388,19 @@ export default function AccountPage() {
     setSignUpSuccess(null);
   };
 
+  const handleSupportClick = () => {
+    if (!userTier || userTier === "connected_free") {
+      showToast(
+        lang === "fr"
+          ? "🔒 Le support est réservé aux plans Basic, Premium, Ultra et Fondateur."
+          : "🔒 Support is reserved for Basic, Premium, Ultra, and Founder plans.",
+        "info"
+      );
+      return;
+    }
+    setActiveContactModal("support");
+  };
+
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
 
@@ -693,12 +708,16 @@ export default function AccountPage() {
                 </h5>
                 <ul className="space-y-2 text-xs font-mono text-zinc-600 dark:text-zinc-400">
                   <li>
-                    <span className="font-sans font-semibold text-zinc-700 dark:text-zinc-300">Support: </span>
-                    <a href="mailto:support@echosai.ca" className="text-cyan-600 dark:text-cyan-400 hover:underline">support@echosai.ca</a>
+                    <button type="button" onClick={handleSupportClick} className="text-left">
+                      <span className="font-sans font-semibold text-zinc-700 dark:text-zinc-300">Support: </span>
+                      <span className="text-cyan-600 dark:text-cyan-400 hover:underline">support@echosai.ca</span>
+                    </button>
                   </li>
                   <li>
-                    <span className="font-sans font-semibold text-zinc-700 dark:text-zinc-300">General: </span>
-                    <a href="mailto:contact@echosai.ca" className="text-cyan-600 dark:text-cyan-400 hover:underline">contact@echosai.ca</a>
+                    <button type="button" onClick={() => setActiveContactModal("contact")} className="text-left">
+                      <span className="font-sans font-semibold text-zinc-700 dark:text-zinc-300">General: </span>
+                      <span className="text-cyan-600 dark:text-cyan-400 hover:underline">contact@echosai.ca</span>
+                    </button>
                   </li>
                 </ul>
               </div>
@@ -742,6 +761,15 @@ export default function AccountPage() {
 
         </section>
       </div>
+
+      {/* ── MODALS CONTACT / SUPPORT ── */}
+      {activeContactModal && (
+        <ContactModal
+          type={activeContactModal}
+          lang={lang}
+          onClose={() => setActiveContactModal(null)}
+        />
+      )}
 
       {/* RECOVERY MODAL */}
       {isRecoveringPassword && (

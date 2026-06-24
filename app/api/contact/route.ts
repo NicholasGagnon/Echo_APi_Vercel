@@ -11,9 +11,9 @@ const DESTINATIONS: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { type, email, subject, message } = await req.json();
+    const { type, email, category, subject, message } = await req.json();
 
-    if (!type || !email || !subject || !message) {
+    if (!type || !email || !category || !subject || !message) {
       return NextResponse.json({ error: "Champs manquants." }, { status: 400 });
     }
 
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       from: "Echo AI <noreply@echosai.ca>",
       to,
       replyTo: email,
-      subject: `[Echo ${type === "support" ? "Support" : "Contact"}] ${subject}`,
+      subject: `[Echo ${type === "support" ? "Support" : "Contact"} — ${category}] ${subject}`,
       html: `
         <div style="font-family: monospace; background: #09090b; color: #e4e4e7; padding: 32px; border-radius: 12px; max-width: 600px;">
           <div style="border-bottom: 1px solid #27272a; padding-bottom: 16px; margin-bottom: 24px;">
@@ -34,6 +34,10 @@ export async function POST(req: NextRequest) {
               Echo AI — ${type === "support" ? "Demande de support" : "Message de contact"}
             </p>
             <h2 style="color: #f4f4f5; font-size: 18px; margin: 0;">${subject}</h2>
+          </div>
+          <div style="margin-bottom: 24px;">
+            <p style="color: #71717a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 8px;">Catégorie</p>
+            <p style="color: #f4f4f5; margin: 0;">${category}</p>
           </div>
           <div style="margin-bottom: 24px;">
             <p style="color: #71717a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 8px;">De</p>

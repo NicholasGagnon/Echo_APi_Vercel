@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
 import LangDropdown from "../components/LangDropdown";
+import ContactModal from "../components/ContactModal";
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 type ModalType = "support" | "contact" | null;
@@ -18,22 +19,6 @@ const localT = {
     connecting: "Connexion...",
     upgrade: "🚀 AMÉLIORER",
     joinFounder: "👑 REJOINDRE",
-    // Modals contact
-    supportTitle: "Support Technique",
-    contactTitle: "Nous Contacter",
-    supportDesc: "Une question sur ton abonnement ou un problème technique ? L'équipe Echo est là.",
-    contactDesc: "Une idée, une suggestion, un partenariat ? On veut t'entendre.",
-    yourEmail: "Ton adresse courriel",
-    subject: "Sujet",
-    subjectPlaceholder: "Résumé de ta demande",
-    message: "Message",
-    messagePlaceholder: "Décris ta demande en détail...",
-    send: "Envoyer",
-    sending: "Envoi en cours...",
-    sent: "✓ Message envoyé !",
-    sentDesc: "On reviendra vers toi dans les plus brefs délais.",
-    errorSend: "Échec de l'envoi. Réessaie dans un moment.",
-    close: "Fermer",
     supportLocked: "🔒 Le support est réservé aux plans Basic, Premium, Ultra et Fondateur.",
     // Easter egg
     treasureEgg: {
@@ -70,21 +55,6 @@ const localT = {
     connecting: "Connecting...",
     upgrade: "🚀 UPGRADE",
     joinFounder: "👑 BECOME A FOUNDER",
-    supportTitle: "Technical Support",
-    contactTitle: "Contact Us",
-    supportDesc: "Got a question about your subscription or a technical issue? The Echo team is here.",
-    contactDesc: "An idea, a suggestion, a partnership? We want to hear from you.",
-    yourEmail: "Your email address",
-    subject: "Subject",
-    subjectPlaceholder: "Summary of your request",
-    message: "Message",
-    messagePlaceholder: "Describe your request in detail...",
-    send: "Send",
-    sending: "Sending...",
-    sent: "✓ Message sent!",
-    sentDesc: "We'll get back to you as soon as possible.",
-    errorSend: "Failed to send. Please try again in a moment.",
-    close: "Close",
     supportLocked: "🔒 Support is reserved for Basic, Premium, Ultra, and Founder plans.",
     treasureEgg: {
       closePortal: "Close the portal",
@@ -117,165 +87,6 @@ const localT = {
 const TIER_RANK: Record<string, number> = {
   connected_free: 0, basic: 1, premium: 2, treasure: 2.5, ultra: 3, founder: 4,
 };
-
-// ── MODAL CONTACT/SUPPORT ─────────────────────────────────────────────────────
-function ContactModal({ type, lang, T, onClose }: {
-  type: "support" | "contact";
-  lang: string;
-  T: typeof localT["fr"];
-  onClose: () => void;
-}) {
-  const [email,   setEmail]   = useState("");
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [status,  setStatus]  = useState<"idle" | "sending" | "sent" | "error">("idle");
-
-  const isSupport = type === "support";
-
-  const handleSend = async () => {
-    if (!email.trim() || !subject.trim() || !message.trim()) return;
-    setStatus("sending");
-    try {
-      const res = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, email: email.trim(), subject: subject.trim(), message: message.trim() }),
-      });
-      if (!res.ok) throw new Error();
-      setStatus("sent");
-    } catch {
-      setStatus("error");
-    }
-  };
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200"
-      onClick={onClose}
-    >
-      <div
-        className="bg-zinc-950 border-2 border-cyan-500/40 rounded-3xl w-full max-w-lg shadow-[0_0_60px_rgba(6,182,212,0.2)] animate-in zoom-in-95 duration-200 overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* HEADER */}
-        <div className="relative flex items-center gap-4 px-7 pt-7 pb-5 border-b border-zinc-800">
-          <div className="w-12 h-12 rounded-2xl overflow-hidden border border-cyan-500/30 shadow-[0_0_12px_rgba(6,182,212,0.3)] shrink-0">
-            <img src="/echo1.png" alt="Echo" className="w-full h-full object-cover" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-500/70 mb-0.5">Echo AI</p>
-            <h2 className="text-base font-black text-zinc-100 tracking-tight">
-              {isSupport ? T.supportTitle : T.contactTitle}
-            </h2>
-            <p className="text-zinc-500 text-[11px] mt-0.5 leading-relaxed">
-              {isSupport ? T.supportDesc : T.contactDesc}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="absolute top-5 right-5 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all text-sm font-mono"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* BODY */}
-        <div className="px-7 py-6">
-          {status === "sent" ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
-              <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-2xl">
-                ✓
-              </div>
-              <div>
-                <p className="text-emerald-400 font-black text-base font-mono">{T.sent}</p>
-                <p className="text-zinc-500 text-xs mt-1">{T.sentDesc}</p>
-              </div>
-              <button
-                onClick={onClose}
-                className="mt-2 px-6 py-2 bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs rounded-xl hover:text-zinc-200 transition-all font-mono"
-              >
-                {T.close}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* EMAIL */}
-              <div>
-                <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 block mb-1.5 font-bold">
-                  {T.yourEmail}
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="nom@domaine.com"
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-cyan-500/60 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors"
-                />
-              </div>
-
-              {/* SUBJECT */}
-              <div>
-                <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 block mb-1.5 font-bold">
-                  {T.subject}
-                </label>
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={e => setSubject(e.target.value)}
-                  placeholder={T.subjectPlaceholder}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-cyan-500/60 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors"
-                />
-              </div>
-
-              {/* MESSAGE */}
-              <div>
-                <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 block mb-1.5 font-bold">
-                  {T.message}
-                </label>
-                <textarea
-                  value={message}
-                  onChange={e => setMessage(e.target.value)}
-                  placeholder={T.messagePlaceholder}
-                  rows={5}
-                  className="w-full bg-zinc-900 border border-zinc-800 focus:border-cyan-500/60 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors resize-none leading-relaxed"
-                />
-              </div>
-
-              {/* ERROR */}
-              {status === "error" && (
-                <p className="text-red-400 text-[11px] font-mono bg-red-950/30 border border-red-500/20 rounded-lg px-3 py-2">
-                  ⚠️ {T.errorSend}
-                </p>
-              )}
-
-              {/* FOOTER */}
-              <div className="flex gap-3 pt-1">
-                <button
-                  onClick={handleSend}
-                  disabled={status === "sending" || !email || !subject || !message}
-                  className="flex-1 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] font-mono"
-                >
-                  {status === "sending" ? T.sending : T.send}
-                </button>
-                <button
-                  onClick={onClose}
-                  className="px-5 py-3 bg-zinc-900 border border-zinc-800 text-zinc-400 text-xs rounded-xl hover:text-zinc-200 hover:border-zinc-700 transition-all font-mono"
-                >
-                  {T.close}
-                </button>
-              </div>
-
-              {/* Destination info */}
-              <p className="text-zinc-600 text-[10px] font-mono text-center">
-                → {isSupport ? "support@echosai.ca" : "contact@echosai.ca"}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
 export default function ServicesPage() {
@@ -580,7 +391,6 @@ export default function ServicesPage() {
         <ContactModal
           type={activeModal}
           lang={lang}
-          T={activeT}
           onClose={() => setActiveModal(null)}
         />
       )}
