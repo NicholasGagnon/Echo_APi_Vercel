@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
-import { UserTier } from "../../utils/quota";
+import { checkQuota, UserTier } from "../../utils/quota";
 import LangDropdown from "../components/LangDropdown";
 
 type EventData = {
@@ -39,6 +39,44 @@ const clearHash = () => {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
 };
 
+// ── POPUP QUOTA ───────────────────────────────────────────────────────────────
+function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[9999] p-4">
+      <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
+        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-2xl">⚠️</span>
+          <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
+            {lang === "fr" ? "Limite atteinte" : "Limit reached"}
+          </h3>
+        </div>
+        <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-1">
+          {lang === "fr"
+            ? `Vous avez atteint la limite ${label} de votre plan.`
+            : `You've reached the ${label} limit of your plan.`}
+        </p>
+        <p className="text-zinc-500 text-xs font-mono mb-6">
+          {lang === "fr"
+            ? "Revenez dans 1 heure pour récupérer un crédit ou passez à un plan supérieur."
+            : "Come back in 1 hour to recover a credit or upgrade your plan."}
+        </p>
+        <div className="flex gap-3">
+          <Link href="/services"
+            className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all"
+            onClick={onClose}>
+            {lang === "fr" ? "Voir les plans" : "View plans"}
+          </Link>
+          <button onClick={onClose}
+            className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all">
+            {lang === "fr" ? "Fermer" : "Close"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── TUTORIAL POPUP ────────────────────────────────────────────────────────────
 function CalendarTutorialPopup({ lang, onClose, onConnect }: {
   lang: string;
@@ -47,12 +85,8 @@ function CalendarTutorialPopup({ lang, onClose, onConnect }: {
 }) {
   const fr = lang === "fr";
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200">
-      <div
-        className="bg-zinc-950 border-2 border-cyan-500/40 rounded-3xl w-full max-w-2xl shadow-[0_0_60px_rgba(6,182,212,0.2)] animate-in zoom-in-95 duration-200 overflow-hidden max-h-[92vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* HEADER */}
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9998] p-4 animate-in fade-in duration-200">
+      <div className="bg-zinc-950 border-2 border-cyan-500/40 rounded-3xl w-full max-w-2xl shadow-[0_0_60px_rgba(6,182,212,0.2)] animate-in zoom-in-95 duration-200 overflow-hidden max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-start gap-4 px-7 pt-7 pb-5 border-b border-zinc-800 shrink-0">
           <div className="w-14 h-14 rounded-2xl overflow-hidden border border-cyan-500/30 shadow-[0_0_16px_rgba(6,182,212,0.3)] shrink-0">
             <img src="/echo1.png" alt="Echo" className="w-full h-full object-cover" />
@@ -70,81 +104,45 @@ function CalendarTutorialPopup({ lang, onClose, onConnect }: {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <LangDropdown />
-            <button
-              onClick={onClose}
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all text-sm font-mono"
-            >
-              ✕
-            </button>
+            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all text-sm font-mono">✕</button>
           </div>
         </div>
 
-        {/* BODY */}
         <div className="px-7 py-6 overflow-y-auto flex-1 space-y-5">
-
-          {/* Intro */}
           <p className="text-zinc-300 text-[13px] leading-relaxed">
             {fr
               ? "Pour commencer, clique sur \"Se connecter\" en bas et connecte ton compte Google. Google va t'envoyer des avertissements, c'est normal."
               : "To get started, click \"Connect\" below and link your Google account. Google will show warnings — that's expected."}
           </p>
-
-          {/* Steps */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
             <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-black">
               {fr ? "📋 Guide d'autorisation pas à pas" : "📋 Step-by-step authorization guide"}
             </p>
-
             {[
-              fr
-                ? "Sélectionnez l'adresse du compte Google cible que vous désirez lier à vos matrices Echo."
-                : "Select the Google account you want to link to your Echo ecosystem.",
-              fr
-                ? 'Dès l\'apparition de l\'écran d\'avertissement de sécurité de Google, repérez et cliquez sur le petit lien textuel "Paramètres avancés" (Advanced) situé dans le coin inférieur gauche.'
-                : 'When the Google security warning screen appears, find and click the small link "Advanced settings" in the lower left corner.',
-              fr
-                ? 'Une section masquée va s\'étendre : cliquez fermement sur le lien de contournement "Accéder à echosai.ca (non sécurisé)" pour lier l\'agent.'
-                : 'A hidden section will expand: click the bypass link "Go to echosai.ca (unsafe)" to bind the agent.',
-              fr
-                ? "Sur l'écran final de consentement, cochez impérativement toutes les cases d'autorisations requises pour la lecture, la création et la modification de vos événements d'agenda, puis confirmez la validation."
-                : "On the final consent screen, you must check all permission boxes for reading, creating, and modifying your calendar events, then confirm.",
+              fr ? "Sélectionnez l'adresse du compte Google cible que vous désirez lier à vos matrices Echo." : "Select the Google account you want to link to your Echo ecosystem.",
+              fr ? 'Dès l\'apparition de l\'écran d\'avertissement de sécurité de Google, repérez et cliquez sur le petit lien textuel "Paramètres avancés" (Advanced) situé dans le coin inférieur gauche.' : 'When the Google security warning screen appears, find and click the small link "Advanced settings" in the lower left corner.',
+              fr ? 'Une section masquée va s\'étendre : cliquez fermement sur le lien de contournement "Accéder à echosai.ca (non sécurisé)" pour lier l\'agent.' : 'A hidden section will expand: click the bypass link "Go to echosai.ca (unsafe)" to bind the agent.',
+              fr ? "Sur l'écran final de consentement, cochez impérativement toutes les cases d'autorisations requises pour la lecture, la création et la modification de vos événements d'agenda, puis confirmez la validation." : "On the final consent screen, you must check all permission boxes for reading, creating, and modifying your calendar events, then confirm.",
             ].map((step, i) => (
               <div key={i} className="flex gap-3 items-start">
-                <div className="w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-[10px] font-black font-mono flex items-center justify-center shrink-0 mt-0.5">
-                  {i + 1}
-                </div>
+                <div className="w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-[10px] font-black font-mono flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
                 <p className="text-zinc-300 text-[13px] leading-relaxed flex-1">{step}</p>
               </div>
             ))}
           </div>
-
-          {/* Outro */}
           <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl px-4 py-3">
             <p className="text-zinc-300 text-[13px] leading-relaxed">
-              {fr
-                ? "Une fois connecté, Echo pourra gérer et synchroniser tes événements automatiquement."
-                : "Once connected, Echo will be able to manage and sync your events automatically."}
+              {fr ? "Une fois connecté, Echo pourra gérer et synchroniser tes événements automatiquement." : "Once connected, Echo will be able to manage and sync your events automatically."}
             </p>
             <p className="text-cyan-400 font-bold text-sm mt-1">Adiooo 😎</p>
           </div>
         </div>
 
-        {/* FOOTER */}
         <div className="px-7 py-5 border-t border-zinc-800 flex items-center justify-between gap-3 shrink-0">
-          <button
-            onClick={onConnect}
-            className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs px-6 py-3 rounded-xl uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] font-mono"
-          >
-            <svg viewBox="0 0 18 18" width="14" height="14" fill="none">
-              <circle cx="9" cy="9" r="8" stroke="currentColor" strokeWidth="1.5"/>
-              <path d="M9 5v4l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
+          <button onClick={onConnect} className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs px-6 py-3 rounded-xl uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] font-mono">
             {fr ? "Se connecter à Google Calendar" : "Connect to Google Calendar"}
           </button>
-          <button
-            onClick={onClose}
-            className="text-zinc-500 hover:text-zinc-300 text-[11px] font-mono transition-colors"
-          >
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-[11px] font-mono transition-colors">
             {fr ? "Plus tard" : "Later"}
           </button>
         </div>
@@ -156,7 +154,7 @@ function CalendarTutorialPopup({ lang, onClose, onConnect }: {
 // ── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
 export default function CalendarPage() {
   const { t, lang, userTier, triggerToast } = useApp();
-  const today   = new Date();
+  const today    = new Date();
   const safeTier = (userTier || "connected_free") as UserTier;
 
   const [currentYear,  setCurrentYear]  = useState(today.getFullYear());
@@ -176,20 +174,24 @@ export default function CalendarPage() {
   const [googleToken,          setGoogleToken]          = useState<string|null>(null);
   const [isSyncing,            setIsSyncing]            = useState(false);
   const [needsGoogleReconnect, setNeedsGoogleReconnect] = useState(false);
-  const [showLimitModal,       setShowLimitModal]       = useState(false);
-  const icsInputRef   = useRef<HTMLInputElement>(null);
-  const isFetchingRef = useRef(false);
+
+  // ── QUOTA POPUP ───────────────────────────────────────────────────────────
+  const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
+  const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
+  const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
+
+  const icsInputRef    = useRef<HTMLInputElement>(null);
+  const isFetchingRef  = useRef(false);
   const googleTokenRef = useRef<string|null>(null);
 
   const getStorageKey     = (uid: string) => `echo-calendar-v2-${uid}`;
   const getGoogleTokenKey = (uid: string) => `echo-google-token-${uid}`;
   const TUTO_KEY = "echo-calendar-tuto-seen-v1";
 
-  // ── CHARGER EVENTS SUPABASE ────────────────────────────────────────────────
+  // ── CHARGER EVENTS SUPABASE ───────────────────────────────────────────────
   const fetchSupabaseEvents = useCallback(async (uid: string) => {
     try {
-      const { data: calRows, error } = await supabase
-        .from("echo_calendar").select("*").eq("user_id", uid);
+      const { data: calRows, error } = await supabase.from("echo_calendar").select("*").eq("user_id", uid);
       if (error) throw error;
       if (!calRows) return;
       const rebuilt: CalendarEvents = {};
@@ -197,8 +199,9 @@ export default function CalendarPage() {
         const key = r.start_date;
         if (!rebuilt[key]) rebuilt[key] = [];
         rebuilt[key].push({
-          id: r.id, title: r.title, start: r.start_time || "",
-          end: r.end_time || "", notes: r.notes || "", isFromEcho: r.is_from_echo ?? false,
+          id: r.id, title: r.title,
+          start: r.start_time || "", end: r.end_time || "",
+          notes: r.notes || "", isFromEcho: r.is_from_echo ?? false,
         });
       });
       setEvents(prev => {
@@ -217,14 +220,13 @@ export default function CalendarPage() {
     }
   }, []);
 
-  // ── TOKEN HELPERS ──────────────────────────────────────────────────────────
+  // ── TOKEN HELPERS ─────────────────────────────────────────────────────────
   const resolveToken = useCallback(async (uid: string): Promise<string|null> => {
     const ls = localStorage.getItem(getGoogleTokenKey(uid));
     if (ls) { googleTokenRef.current = ls; setGoogleToken(ls); return ls; }
     if (googleTokenRef.current) return googleTokenRef.current;
     try {
-      const { data: row } = await supabase
-        .from("user_tokens").select("google_access_token").eq("id", uid).maybeSingle();
+      const { data: row } = await supabase.from("user_tokens").select("google_access_token").eq("id", uid).maybeSingle();
       if (row?.google_access_token) {
         googleTokenRef.current = row.google_access_token;
         setGoogleToken(row.google_access_token);
@@ -245,9 +247,7 @@ export default function CalendarPage() {
         google_refresh_token: session?.refresh_token || null,
         user_tier: safeTier,
         last_request_date: new Date().toISOString().split("T")[0],
-      }, { onConflict: "id" }).then(({ error }) => {
-        if (error) console.error("[Calendar] storeToken DB:", error.message);
-      });
+      }, { onConflict: "id" });
     });
     setNeedsGoogleReconnect(false);
   }, [safeTier]);
@@ -271,7 +271,7 @@ export default function CalendarPage() {
     });
   };
 
-  // ── FETCH GOOGLE EVENTS ────────────────────────────────────────────────────
+  // ── FETCH GOOGLE EVENTS ───────────────────────────────────────────────────
   const fetchGoogleEvents = useCallback(async (token: string, uid: string, year?: number, month?: number) => {
     if (!token || !uid || isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -286,7 +286,7 @@ export default function CalendarPage() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (res.status === 401 || res.status === 403) { await clearToken(uid); return; }
-      if (!res.ok) { console.error("[Calendar] Google sync failed:", res.status); return; }
+      if (!res.ok) return;
       setNeedsGoogleReconnect(false);
       const data = await res.json();
       if (!data.items?.length) return;
@@ -307,11 +307,9 @@ export default function CalendarPage() {
       setEvents(prev => {
         const updated = { ...prev };
         const prefix  = `${y}-${String(m+1).padStart(2,"0")}`;
-        Object.keys(updated).forEach(k => {
-          if (k.startsWith(prefix)) updated[k] = (updated[k] || []).filter(e => !e.googleEventId);
-        });
+        Object.keys(updated).forEach(k => { if (k.startsWith(prefix)) updated[k] = (updated[k]||[]).filter(e => !e.googleEventId); });
         Object.keys(incoming).forEach(k => {
-          const local = (updated[k] || []).filter(e => !e.googleEventId);
+          const local = (updated[k]||[]).filter(e => !e.googleEventId);
           updated[k]  = [...local, ...incoming[k]];
         });
         return updated;
@@ -324,46 +322,24 @@ export default function CalendarPage() {
     }
   }, [currentYear, currentMonth, clearToken]);
 
-  // ── PUSH EVENT VERS GOOGLE ─────────────────────────────────────────────────
+  // ── PUSH EVENT VERS GOOGLE ────────────────────────────────────────────────
   const pushEventToGoogle = useCallback(async (uid: string, dateKey: string, ev: EventData): Promise<string|null> => {
     const token = await resolveToken(uid);
-    if (!token) {
-      console.warn("[Calendar] pushEventToGoogle: aucun token — reconnexion nécessaire");
-      setNeedsGoogleReconnect(true);
-      return null;
-    }
-
+    if (!token) { setNeedsGoogleReconnect(true); return null; }
     try {
       const hasTime  = !!(ev.start || ev.end);
-      const startObj = hasTime
-        ? { dateTime: new Date(`${dateKey}T${ev.start||"00:00"}:00`).toISOString() }
-        : { date: dateKey };
-      const endObj   = hasTime
-        ? { dateTime: new Date(`${dateKey}T${ev.end||"23:59"}:00`).toISOString() }
-        : { date: dateKey };
-
-      console.log("[Calendar] Pushing to Google:", { summary: ev.title, start: startObj, end: endObj });
-
+      const startObj = hasTime ? { dateTime: new Date(`${dateKey}T${ev.start||"00:00"}:00`).toISOString() } : { date: dateKey };
+      const endObj   = hasTime ? { dateTime: new Date(`${dateKey}T${ev.end||"23:59"}:00`).toISOString() }   : { date: dateKey };
       const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ summary: ev.title, description: ev.notes, start: startObj, end: endObj }),
       });
-
-      // ── LOG DÉTAILLÉ pour diagnostiquer le problème de sync ──
       if (!res.ok) {
-        const errBody = await res.text();
-        console.error(`[Calendar] pushEventToGoogle FAILED — status ${res.status}:`, errBody);
-        // Si 401/403 = token invalide ou scope insuffisant
-        if (res.status === 401 || res.status === 403) {
-          console.warn("[Calendar] Token expiré ou scope insuffisant (besoin de calendar.events write)");
-          await clearToken(uid);
-        }
+        if (res.status === 401 || res.status === 403) await clearToken(uid);
         return null;
       }
-
       const d = await res.json();
-      console.log("[Calendar] Push Google OK — Google Event ID:", d.id);
       return d.id ?? null;
     } catch (err) {
       console.error("[Calendar] pushEventToGoogle crash:", err);
@@ -386,11 +362,7 @@ export default function CalendarPage() {
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-
-    // Afficher le tutorial si pas encore vu
-    if (!localStorage.getItem(TUTO_KEY)) {
-      setShowTutorial(true);
-    }
+    if (!localStorage.getItem(TUTO_KEY)) setShowTutorial(true);
 
     const bootstrap = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -399,26 +371,16 @@ export default function CalendarPage() {
       if (!cancelled) setUserId(uid);
 
       const savedEvents = localStorage.getItem(getStorageKey(uid));
-      if (savedEvents && !cancelled) {
-        try { setEvents(JSON.parse(savedEvents)); } catch {}
-      }
+      if (savedEvents && !cancelled) { try { setEvents(JSON.parse(savedEvents)); } catch {} }
       if (!cancelled) await fetchSupabaseEvents(uid);
 
       let activeToken: string|null = null;
       const hashToken = extractProviderTokenFromHash();
-      if (hashToken) {
-        clearHash(); activeToken = hashToken;
-        await storeToken(uid, hashToken);
-      } else if (session.provider_token) {
-        activeToken = session.provider_token;
-        await storeToken(uid, session.provider_token);
-      } else {
-        activeToken = await resolveToken(uid);
-      }
+      if (hashToken) { clearHash(); activeToken = hashToken; await storeToken(uid, hashToken); }
+      else if (session.provider_token) { activeToken = session.provider_token; await storeToken(uid, session.provider_token); }
+      else { activeToken = await resolveToken(uid); }
 
-      if (activeToken && !cancelled) {
-        await fetchGoogleEvents(activeToken, uid, today.getFullYear(), today.getMonth());
-      }
+      if (activeToken && !cancelled) await fetchGoogleEvents(activeToken, uid, today.getFullYear(), today.getMonth());
       if (!cancelled) setIsLoaded(true);
     };
 
@@ -427,43 +389,25 @@ export default function CalendarPage() {
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session?.user) {
         setUserId(null); setEvents({}); setGoogleToken(null);
-        googleTokenRef.current = null; setNeedsGoogleReconnect(false); setIsLoaded(true);
-        return;
+        googleTokenRef.current = null; setNeedsGoogleReconnect(false); setIsLoaded(true); return;
       }
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        const uid = session.user.id;
-        setUserId(uid);
+        const uid = session.user.id; setUserId(uid);
         const savedEvents = localStorage.getItem(getStorageKey(uid));
         setEvents(savedEvents ? JSON.parse(savedEvents) : {});
         await fetchSupabaseEvents(uid);
         const hashToken     = extractProviderTokenFromHash();
         const providerToken = hashToken || session.provider_token;
-        if (providerToken) {
-          clearHash();
-          await storeToken(uid, providerToken);
-          await fetchGoogleEvents(providerToken, uid, today.getFullYear(), today.getMonth());
-        } else {
-          const token = await resolveToken(uid);
-          if (token) await fetchGoogleEvents(token, uid, today.getFullYear(), today.getMonth());
-        }
+        if (providerToken) { clearHash(); await storeToken(uid, providerToken); await fetchGoogleEvents(providerToken, uid, today.getFullYear(), today.getMonth()); }
+        else { const token = await resolveToken(uid); if (token) await fetchGoogleEvents(token, uid, today.getFullYear(), today.getMonth()); }
       }
     });
 
     return () => { cancelled = true; listener.subscription.unsubscribe(); };
   }, []);
 
-  // ── PERSISTENCE ───────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isLoaded || !userId) return;
-    localStorage.setItem(getStorageKey(userId), JSON.stringify(events));
-  }, [events, isLoaded, userId]);
-
-  // ── REFETCH ON MONTH CHANGE ───────────────────────────────────────────────
-  useEffect(() => {
-    if (!isLoaded || !userId) return;
-    const token = googleTokenRef.current;
-    if (token) fetchGoogleEvents(token, userId, currentYear, currentMonth);
-  }, [currentMonth, currentYear]);
+  useEffect(() => { if (!isLoaded || !userId) return; localStorage.setItem(getStorageKey(userId), JSON.stringify(events)); }, [events, isLoaded, userId]);
+  useEffect(() => { if (!isLoaded || !userId) return; const token = googleTokenRef.current; if (token) fetchGoogleEvents(token, userId, currentYear, currentMonth); }, [currentMonth, currentYear]);
 
   // ── MANUAL SYNC ───────────────────────────────────────────────────────────
   const handleManualSync = async () => {
@@ -540,9 +484,16 @@ export default function CalendarPage() {
   const openDay   = (day: number) => { setSelectedDateKey(makeDateKey(day)); setShowAddForm(false); resetForm(); };
   const resetForm = () => { setTitle(""); setStart(""); setEnd(""); setNotes(""); };
 
-  // ── SAVE EVENT ─────────────────────────────────────────────────────────────
+  // ── SAVE EVENT — avec quota calendar ─────────────────────────────────────
   const saveEvent = async () => {
     if (!selectedDateKey || !title.trim() || !userId) return;
+
+    const quotaStatus = checkQuota("calendar", safeTier, true, userId);
+    if (!quotaStatus.allowed) {
+      triggerQuotaPopup(lang === "fr" ? "Calendrier" : "Calendar");
+      return;
+    }
+
     const tempId = Date.now().toString();
     const ev: EventData = { id: tempId, title, start, end, notes };
 
@@ -553,7 +504,7 @@ export default function CalendarPage() {
       const cloudId = await pushEventToGoogle(userId, selectedDateKey, ev);
       const finalId = cloudId || tempId;
 
-      const { data, error: supaErr } = await supabase.from("echo_calendar").insert({
+      const { error: supaErr } = await supabase.from("echo_calendar").insert({
         id:           finalId,
         user_id:      userId,
         title,
@@ -563,7 +514,7 @@ export default function CalendarPage() {
         end_time:     end   || null,
         notes,
         is_from_echo: false,
-      }).select();
+      });
 
       if (supaErr) {
         console.error("[Calendar] Supabase insert:", supaErr.message);
@@ -598,27 +549,19 @@ export default function CalendarPage() {
   const activeMonthLabel = lang==="fr" ? MONTHS_FR[currentMonth] : MONTHS_EN[currentMonth];
   const activeDaysLabels = lang==="fr" ? DAYS_LABELS_FR : DAYS_LABELS_EN;
 
-  const handleTutorialConnect = () => {
-    setShowTutorial(false);
-    localStorage.setItem(TUTO_KEY, "true");
-    reconnectGoogle();
-  };
-
-  const handleTutorialClose = () => {
-    setShowTutorial(false);
-    localStorage.setItem(TUTO_KEY, "true");
-  };
-
   return (
     <main className="h-[100dvh] bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
       <input type="file" ref={icsInputRef} accept=".ics" onChange={handleICSRawImport} className="hidden"/>
 
-      {/* TUTORIAL POPUP */}
+      {/* POPUP QUOTA */}
+      {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
+
+      {/* TUTORIAL */}
       {showTutorial && (
         <CalendarTutorialPopup
           lang={lang}
-          onClose={handleTutorialClose}
-          onConnect={handleTutorialConnect}
+          onClose={() => { setShowTutorial(false); localStorage.setItem(TUTO_KEY, "true"); }}
+          onConnect={() => { setShowTutorial(false); localStorage.setItem(TUTO_KEY, "true"); reconnectGoogle(); }}
         />
       )}
 
@@ -653,12 +596,9 @@ export default function CalendarPage() {
           {needsGoogleReconnect && (
             <div className="w-full max-w-7xl mx-auto mb-6 flex items-center justify-between gap-3 flex-wrap bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-2xl px-4 py-3 text-xs">
               <span className="text-amber-700 dark:text-amber-300 font-medium">
-                {lang==="fr"
-                  ? "Connexion Google Calendar expirée. Reconnecte ton compte pour réactiver la synchronisation."
-                  : "Google Calendar connection expired. Reconnect your account to resume syncing."}
+                {lang==="fr" ? "Connexion Google Calendar expirée. Reconnecte ton compte pour réactiver la synchronisation." : "Google Calendar connection expired. Reconnect your account to resume syncing."}
               </span>
-              <button onClick={reconnectGoogle}
-                className="bg-amber-500 hover:bg-amber-400 text-white font-bold px-4 py-2 rounded-xl text-[11px] transition-colors shrink-0">
+              <button onClick={reconnectGoogle} className="bg-amber-500 hover:bg-amber-400 text-white font-bold px-4 py-2 rounded-xl text-[11px] transition-colors shrink-0">
                 {lang==="fr"?"Reconnecter Google":"Reconnect Google"}
               </button>
             </div>
@@ -676,28 +616,17 @@ export default function CalendarPage() {
 
             <div className="flex items-center gap-2 bg-zinc-50/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 p-1.5 rounded-xl shadow-sm ml-0 lg:ml-6 overflow-x-auto max-w-full">
               <button onClick={handleManualSync} disabled={isSyncing}
-                className={`text-[11px] font-bold px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 border ${
-                  isSyncing
-                    ? "bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed animate-pulse"
-                    : "bg-cyan-600 text-white border-transparent hover:bg-cyan-500 shadow-sm"}`}>
+                className={`text-[11px] font-bold px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 border ${isSyncing ? "bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed animate-pulse" : "bg-cyan-600 text-white border-transparent hover:bg-cyan-500 shadow-sm"}`}>
                 {isSyncing ? "..." : "Google Sync"}
               </button>
               <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1 shrink-0"/>
-              <button onClick={() => icsInputRef.current?.click()}
-                className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
+              <button onClick={() => icsInputRef.current?.click()} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
                 {lang==="fr"?"Importer":"Import"}
               </button>
-              <button onClick={exportICS}
-                className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
+              <button onClick={exportICS} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
                 {lang==="fr"?"Exporter":"Export"}
               </button>
-              {/* Bouton ré-ouvrir le tutorial */}
-              <button
-                onClick={() => setShowTutorial(true)}
-                title={lang==="fr"?"Guide de connexion Google":"Google connection guide"}
-                className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
-                ?
-              </button>
+              <button onClick={() => setShowTutorial(true)} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">?</button>
               {googleTokenRef.current && !needsGoogleReconnect && (
                 <div className="text-[10px] text-emerald-500 font-mono font-bold shrink-0 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"/>Google
@@ -729,8 +658,7 @@ export default function CalendarPage() {
                         <div className="flex-1 w-full space-y-1 mt-1 overflow-hidden flex flex-col justify-start">
                           {dayEvents.slice(0,2).map(ev => (
                             <div key={ev.id}
-                              onClick={e => { e.stopPropagation(); setSelectedDateKey(key); setTitle(ev.title||""); setStart(ev.start||""); setEnd(ev.end||""); setNotes(ev.notes||""); setShowAddForm(true); }}
-                              className={`text-[10px] border rounded-lg px-1.5 py-0.5 truncate w-full tracking-wide transition-colors ${
+                              className={`text-[10px] border rounded-lg px-1.5 py-0.5 truncate w-full tracking-wide ${
                                 ev.isFromEcho
                                   ? "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900/60 text-purple-700 dark:text-purple-400 font-medium"
                                   : ev.googleEventId
@@ -739,9 +667,7 @@ export default function CalendarPage() {
                               <span className="font-bold">{ev.start?`${ev.start} `:""}</span>{ev.title}
                             </div>
                           ))}
-                          {dayEvents.length > 2 && (
-                            <div className="text-[9px] text-cyan-600 dark:text-cyan-500 font-mono font-bold pl-1">+{dayEvents.length-2}</div>
-                          )}
+                          {dayEvents.length > 2 && <div className="text-[9px] text-cyan-600 dark:text-cyan-500 font-mono font-bold pl-1">+{dayEvents.length-2}</div>}
                         </div>
                       </button>
                     );
@@ -781,13 +707,10 @@ export default function CalendarPage() {
                         {ev.start?`${ev.start}${ev.end?` → ${ev.end}`:""}`:lang==="fr"?"Journée complète":"All Day"}
                       </div>
                       {ev.notes && (
-                        <p className="text-zinc-600 dark:text-zinc-400 text-xs bg-white dark:bg-black/40 border border-zinc-200 dark:border-zinc-900 rounded-xl p-2.5 mt-2 whitespace-pre-wrap leading-relaxed shadow-inner">
-                          {ev.notes}
-                        </p>
+                        <p className="text-zinc-600 dark:text-zinc-400 text-xs bg-white dark:bg-black/40 border border-zinc-200 dark:border-zinc-900 rounded-xl p-2.5 mt-2 whitespace-pre-wrap leading-relaxed shadow-inner">{ev.notes}</p>
                       )}
                     </div>
-                    <button onClick={() => deleteEvent(selectedDateKey, ev.id, ev.googleEventId)}
-                      className="text-zinc-400 hover:text-red-500 font-mono text-sm ml-4 p-1 transition-colors">✕</button>
+                    <button onClick={() => deleteEvent(selectedDateKey, ev.id, ev.googleEventId)} className="text-zinc-400 hover:text-red-500 font-mono text-sm ml-4 p-1 transition-colors">✕</button>
                   </div>
                 ))}
               </div>
@@ -800,8 +723,7 @@ export default function CalendarPage() {
             )}
 
             {!showAddForm && (
-              <button onClick={() => setShowAddForm(true)}
-                className="w-full bg-zinc-100 dark:bg-zinc-900 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-600 border border-transparent font-bold py-3 rounded-xl text-xs transition-colors">
+              <button onClick={() => setShowAddForm(true)} className="w-full bg-zinc-100 dark:bg-zinc-900 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-600 border border-transparent font-bold py-3 rounded-xl text-xs transition-colors">
                 + {lang==="fr"?"Ajouter un événement":"Add event"}
               </button>
             )}
@@ -811,9 +733,7 @@ export default function CalendarPage() {
                 <h3 className="font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400 font-bold">
                   + {lang==="fr"?"Nouvel événement":"New event"}
                 </h3>
-                <input type="text"
-                  placeholder={lang==="fr"?"Titre de l'événement":"Event title"}
-                  value={title} onChange={e => setTitle(e.target.value)}
+                <input type="text" placeholder={lang==="fr"?"Titre de l'événement":"Event title"} value={title} onChange={e => setTitle(e.target.value)}
                   className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner"/>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -830,40 +750,15 @@ export default function CalendarPage() {
                 <textarea placeholder="Notes..." value={notes} onChange={e => setNotes(e.target.value)} rows={3}
                   className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner resize-none"/>
                 <div className="flex gap-2 pt-2">
-                  <button onClick={() => setShowAddForm(false)}
-                    className="flex-1 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 font-bold py-3 rounded-xl text-xs transition-colors hover:bg-zinc-200 dark:hover:bg-zinc-800">
+                  <button onClick={() => setShowAddForm(false)} className="flex-1 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 font-bold py-3 rounded-xl text-xs transition-colors hover:bg-zinc-200 dark:hover:bg-zinc-800">
                     {lang==="fr"?"Annuler":"Cancel"}
                   </button>
-                  <button onClick={saveEvent}
-                    className="flex-1 bg-cyan-600 text-white font-bold py-3 rounded-xl text-xs transition-all hover:bg-cyan-500 shadow-md">
+                  <button onClick={saveEvent} className="flex-1 bg-cyan-600 text-white font-bold py-3 rounded-xl text-xs transition-all hover:bg-cyan-500 shadow-md">
                     {lang==="fr"?"Enregistrer":"Save"}
                   </button>
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* LIMIT MODAL */}
-      {showLimitModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-md" onClick={() => setShowLimitModal(false)}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold">{lang==="fr"?"Upgrade requis":"Upgrade Required"}</h3>
-            <p className="text-zinc-500 dark:text-zinc-400 text-xs leading-relaxed">
-              {lang==="fr"
-                ? "La synchronisation Google Calendar nécessite un compte Premium ou supérieur."
-                : "Google Calendar syncing requires a Premium account or higher."}
-            </p>
-            <div className="flex flex-col gap-2 pt-2">
-              <Link href="/services" onClick={() => setShowLimitModal(false)}
-                className="bg-cyan-600 text-white font-bold py-3 rounded-xl text-xs hover:bg-cyan-500 block shadow-md">
-                {lang==="fr"?"Voir les plans":"View plans"}
-              </Link>
-              <button onClick={() => setShowLimitModal(false)} className="text-zinc-400 text-[10px] font-mono py-2">
-                {lang==="fr"?"Fermer":"Dismiss"}
-              </button>
-            </div>
           </div>
         </div>
       )}
