@@ -107,6 +107,7 @@ export default function HorizonWebPage() {
   const [userId, setUserId]             = useState<string | null>(null);
   const [userTier, setUserTier]         = useState<UserTier>("connected_free");
   const [isPopupOpen, setIsPopupOpen]   = useState(false);
+  const [showQuotaPopup, setShowQuotaPopup] = useState(false);
   const [isIntroLangOpen, setIsIntroLangOpen] = useState(false);
   const [isAvatarBroken, setIsAvatarBroken]   = useState(false);
   const [activeLens, setActiveLens]     = useState<"critical" | "expert" | "strategy" | null>(null);
@@ -154,11 +155,10 @@ export default function HorizonWebPage() {
 
     const lensToSend = overrideLens !== undefined ? overrideLens : activeLens;
 
-    const quotaStatus = checkQuota("horizon", userTier);
+    const quotaStatus = checkQuota("horizon", userTier, true, userId);
     if (!quotaStatus.allowed) {
-      setEchoResponse(lang === "fr" ? "Limite de recherches HorizonWeb atteinte pour ce cycle." : "HorizonWeb search limit reached for this cycle.");
-      setAttributes(["quota_atteint"]);
-      setEchoState("speaking");
+      setShowQuotaPopup(true);
+      setEchoState("idle");
       return;
     }
 
@@ -206,6 +206,42 @@ export default function HorizonWebPage() {
 
       <div className="pointer-events-none fixed top-0 left-0 right-0 h-[2px] z-40"
         style={{background:"linear-gradient(90deg, transparent 0%, #06b6d4 30%, #22d3ee 50%, #06b6d4 70%, transparent 100%)", boxShadow:"0 0 12px 2px rgba(6,182,212,0.6), 0 0 30px 6px rgba(6,182,212,0.2)", animation:"neonSlide 4s ease-in-out infinite alternate"}}/>
+
+      {/* POPUP QUOTA DÉPASSÉ */}
+      {showQuotaPopup && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
+            <button onClick={() => setShowQuotaPopup(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-2xl">📡</span>
+              <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
+                {lang === "fr" ? "Limite atteinte" : "Quota reached"}
+              </h3>
+            </div>
+            <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-2">
+              {lang === "fr"
+                ? "Tu as atteint la limite de recherches HorizonWeb pour ce cycle de 30 jours."
+                : "You've reached the HorizonWeb search limit for this 30-day cycle."}
+            </p>
+            <p className="text-zinc-500 text-xs font-mono mb-6">
+              {lang === "fr"
+                ? "Passe à un plan supérieur pour débloquer plus de recherches."
+                : "Upgrade your plan to unlock more searches."}
+            </p>
+            <div className="flex gap-3">
+              <Link href="/services"
+                className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                onClick={() => setShowQuotaPopup(false)}>
+                {lang === "fr" ? "Voir les plans" : "View plans"}
+              </Link>
+              <button onClick={() => setShowQuotaPopup(false)}
+                className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all">
+                {lang === "fr" ? "Fermer" : "Close"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isPopupOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
