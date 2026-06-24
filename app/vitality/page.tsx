@@ -8,9 +8,47 @@ import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import PremiumRequiredModal from "../components/PremiumRequiredModal";
 import { useApp } from "../../context/AppContext";
 
-type BudgetExpense = { id: string; title: string; amount: number; currency: "$"|"€"; date: string };
-type CalorieLog    = { id: string; foodName: string; calories: number; date: string };
+type BudgetExpense  = { id: string; title: string; amount: number; currency: "$"|"€"; date: string };
+type CalorieLog     = { id: string; foodName: string; calories: number; date: string };
 type VitalityMessage = { raw: string; imageB64?: string };
+
+// ── POPUP QUOTA ───────────────────────────────────────────────────────────────
+function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
+        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-2xl">⚠️</span>
+          <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
+            {lang === "fr" ? "Limite atteinte" : "Limit reached"}
+          </h3>
+        </div>
+        <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-1">
+          {lang === "fr"
+            ? `Vous avez atteint la limite ${label} de votre plan.`
+            : `You've reached the ${label} limit of your plan.`}
+        </p>
+        <p className="text-zinc-500 text-xs font-mono mb-6">
+          {lang === "fr"
+            ? "Revenez dans 1 heure pour récupérer un crédit ou passez à un plan supérieur."
+            : "Come back in 1 hour to recover a credit or upgrade your plan."}
+        </p>
+        <div className="flex gap-3">
+          <Link href="/services"
+            className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all"
+            onClick={onClose}>
+            {lang === "fr" ? "Voir les plans" : "View plans"}
+          </Link>
+          <button onClick={onClose}
+            className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all">
+            {lang === "fr" ? "Fermer" : "Close"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function VitalityPage() {
   const { t, lang, theme, userTier } = useApp();
@@ -18,10 +56,15 @@ export default function VitalityPage() {
   const [userId,   setUserId]   = useState<string | null>(null);
   const [inputEcho,    setInputEcho]    = useState("");
   const [echoMessages, setEchoMessages] = useState<VitalityMessage[]>([]);
+  const [memorySummary, setMemorySummary] = useState("");
   const bottomRef  = useRef<HTMLDivElement>(null);
   const [echoState, setEchoState] = useState("idle");
-  const [showLimitModal,      setShowLimitModal]      = useState(false);
-  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar">("vitality_actions");
+
+  // ── QUOTA POPUP ───────────────────────────────────────────────────────────
+  const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
+  const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
+  const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
+
   const [isListening, setIsListening] = useState(false);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageName,   setImageName]   = useState<string | null>(null);
@@ -85,6 +128,7 @@ export default function VitalityPage() {
   const getCalorieGoalKey     = (uid: string|null) => uid ? `echo-calorie-goal-${uid}`          : "echo-calorie-goal";
   const getVitalityProfileKey = (uid: string|null) => uid ? `echo-vitality-profile-${uid}`      : "echo-vitality-profile";
   const getVitalityConvoKey   = (uid: string|null) => uid ? `echo-vitality-conversation-${uid}` : "echo-vitality-conversation";
+  const getVitalitySummaryKey = (uid: string|null) => uid ? `echo-vitality-summary-${uid}`      : "echo-vitality-summary";
 
   const lastEchoIndex   = echoMessages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
   const serializeMsgs   = (msgs: VitalityMessage[]) => msgs.map(m => m.raw);
@@ -96,19 +140,16 @@ export default function VitalityPage() {
       setUserId(uid);
       try {
         if (uid) {
-          const { data: expRows, error: expErr } = await supabase
-            .from("echo_expenses").select("*").eq("user_id", uid).order("date", { ascending: false });
-          if (expErr) console.error("[Vitality] expenses:", expErr.message);
-          else setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"€", date: r.date })));
-
-          const { data: calRows, error: calErr } = await supabase
-            .from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
-          if (calErr) console.error("[Vitality] calories:", calErr.message);
-          else setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
+          const { data: expRows } = await supabase.from("echo_expenses").select("*").eq("user_id", uid).order("date", { ascending: false });
+          setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"€", date: r.date })));
+          const { data: calRows } = await supabase.from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
+          setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
         }
 
-        const savedConvo = localStorage.getItem(getVitalityConvoKey(uid));
-        if (savedConvo) setEchoMessages(deserializeMsgs(JSON.parse(savedConvo)));
+        const savedConvo    = localStorage.getItem(getVitalityConvoKey(uid));
+        const savedSummary  = localStorage.getItem(getVitalitySummaryKey(uid));
+        if (savedConvo)   setEchoMessages(deserializeMsgs(JSON.parse(savedConvo)));
+        if (savedSummary) setMemorySummary(savedSummary);
 
         if (!uid) {
           const guestExp = localStorage.getItem("echo-budget-expenses-guest");
@@ -136,17 +177,18 @@ export default function VitalityPage() {
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session?.user) {
-        setUserId(null); setExpenses([]); setCaloriesList([]); setEchoMessages([]); return;
+        setUserId(null); setExpenses([]); setCaloriesList([]); setEchoMessages([]); setMemorySummary(""); return;
       }
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        const uid = session.user.id;
-        setUserId(uid);
+        const uid = session.user.id; setUserId(uid);
         const { data: expRows } = await supabase.from("echo_expenses").select("*").eq("user_id", uid).order("date", { ascending: false });
         setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"€", date: r.date })));
         const { data: calRows } = await supabase.from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
         setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
-        const convo = localStorage.getItem(getVitalityConvoKey(uid));
+        const convo   = localStorage.getItem(getVitalityConvoKey(uid));
+        const summary = localStorage.getItem(getVitalitySummaryKey(uid));
         setEchoMessages(convo ? deserializeMsgs(JSON.parse(convo)) : []);
+        setMemorySummary(summary || "");
         const bGoal = localStorage.getItem(getBudgetGoalKey(uid));
         if (bGoal) { setBudgetGoal(Number(bGoal)); setInputBudgetGoal(bGoal); }
         const cGoal = localStorage.getItem(getCalorieGoalKey(uid));
@@ -215,7 +257,7 @@ export default function VitalityPage() {
   };
 
   const deleteExpense = async (id: string) => {
-    if (userId) { const { error } = await supabase.from("echo_expenses").delete().eq("id",id).eq("user_id",userId); if(error) console.error("[Vitality] delete expense:",error.message); }
+    if (userId) { await supabase.from("echo_expenses").delete().eq("id",id).eq("user_id",userId); }
     setExpenses(prev => { const n=prev.filter(i=>i.id!==id); if(!userId)persistLocalExpenses(n); return n; });
   };
 
@@ -226,8 +268,7 @@ export default function VitalityPage() {
       if (changes.amount   !== undefined) db.amount   = changes.amount;
       if (changes.currency !== undefined) db.currency = changes.currency;
       if (changes.date     !== undefined) db.date     = changes.date;
-      const { error } = await supabase.from("echo_expenses").update(db).eq("id",id).eq("user_id",userId);
-      if (error) console.error("[Vitality] update expense:",error.message);
+      await supabase.from("echo_expenses").update(db).eq("id",id).eq("user_id",userId);
     }
     setExpenses(prev => prev.map(e => e.id===id ? {...e,...changes} : e));
   };
@@ -240,25 +281,47 @@ export default function VitalityPage() {
     const { data, error } = await supabase.from("echo_calories").insert({
       user_id: userId, food_name: cal.foodName, calories: cal.calories, date: cal.date,
     }).select().single();
-    if (error) { console.error("[Vitality] add calorie:",error.message); return; }
+    if (error) { console.error("[Vitality] add calorie:", error.message); return; }
     setCaloriesList(prev => [{ id: data.id, foodName: data.food_name, calories: data.calories, date: data.date }, ...prev]);
   };
 
   const deleteCalorie = async (id: string) => {
-    if (userId) { const { error } = await supabase.from("echo_calories").delete().eq("id",id).eq("user_id",userId); if(error) console.error("[Vitality] delete calorie:",error.message); }
+    if (userId) { await supabase.from("echo_calories").delete().eq("id",id).eq("user_id",userId); }
     setCaloriesList(prev => { const n=prev.filter(i=>i.id!==id); if(!userId)persistLocalCalories(n); return n; });
   };
 
+  // ── CRON MEMORY ───────────────────────────────────────────────────────────
+  const runMemoryCron = async (raws: string[]): Promise<string> => {
+    if (raws.length <= 10) return memorySummary;
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const res = await fetch(`${API_URL}/memory-summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ summary: memorySummary, messages: raws.slice(0, 500), userTier: safeTier }),
+      });
+      const data        = await res.json();
+      const newSummary  = data.summary || memorySummary;
+      setMemorySummary(newSummary);
+      localStorage.setItem(getVitalitySummaryKey(userId), newSummary);
+      console.log("[MEMORY Vitality] Résumé mis à jour");
+      return newSummary;
+    } catch (e) {
+      console.error("[MEMORY Vitality]", e);
+      return memorySummary;
+    }
+  };
+
+  // ── SEND ECHO ─────────────────────────────────────────────────────────────
   const handleSendEcho = async (forcedText?: string) => {
     if (echoState==="thinking") return;
     const textToSubmit = forcedText ?? inputEcho.trim();
     if (!textToSubmit && !imageBase64) return;
 
-    const quotaStatus = checkQuota("vitality_actions", safeTier);
+    // ── Quota vitality_actions ────────────────────────────────────────────
+    const quotaStatus = checkQuota("vitality_actions", safeTier, true, userId);
     if (!quotaStatus.allowed) {
-      setEchoMessages(prev => [...prev, { raw: lang==="fr"?"Echo: Limite atteinte.":"Echo: Limit reached." }]);
-      setActiveLimitCategory("vitality_actions");
-      setShowLimitModal(true);
+      triggerQuotaPopup(lang === "fr" ? "Vitalité" : "Vitality");
       return;
     }
 
@@ -276,15 +339,19 @@ export default function VitalityPage() {
     if (!forcedText) setInputEcho("");
     setImageBase64(null); setImageName(null);
 
+    // Cron memory si besoin
+    const currentSummary = await runMemoryCron(serializeMsgs(baseMessages));
+
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const response = await fetch(`${API_URL}/home`, {
+      const response = await fetch(`${API_URL}/vitality`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: textToSubmit || `Analyse cette image${currentName ? ` (${currentName})` : ""}`,
           image: currentImage ?? null,
           history: serializeMsgs(baseMessages),
+          summary: currentSummary,
           userTier: safeTier,
           currentExpenses: expenses,
           currentCalories: caloriesList,
@@ -298,49 +365,61 @@ export default function VitalityPage() {
       const data = await response.json();
       setEchoState("speaking");
 
+      // ── Quota action automatique ──────────────────────────────────────
       let isActionBlocked = false;
       if (data.action) {
-        const actionQuota = checkQuota("vitality_actions", safeTier);
+        const actionQuota = checkQuota("vitality_actions", safeTier, true, userId);
         if (!actionQuota.allowed) {
-          setActiveLimitCategory("vitality_actions");
-          setShowLimitModal(true);
+          triggerQuotaPopup(lang === "fr" ? "Vitalité" : "Vitality");
           isActionBlocked = true;
         }
       }
 
-      const quotaNotice = isActionBlocked ? "\n\n[Action bloquee par quota Vitalite]" : "";
-      setEchoMessages([...baseMessages, { raw: `Echo: ${data.response||""}${quotaNotice}` }]);
+      const actionNotice = isActionBlocked
+        ? `\n\n[🔒 ${lang === "fr" ? "Action bloquée — quota Vitalité atteint" : "Action blocked — Vitality quota reached"}]`
+        : "";
+      setEchoMessages([...baseMessages, { raw: `Echo: ${data.response||""}${actionNotice}` }]);
 
       if (data.action && !isActionBlocked) {
         const { type, payload } = data.action;
 
         if (type==="ADD_BUDGET_EXPENSE") {
-          const { title, amount, spent, date, paymentDate, paidAt, currency } = payload;
-          const entryDate = paymentDate||paidAt||date||new Date().toLocaleDateString("fr-CA");
-          const detectedCurrency = currency||(textToSubmit?.toLowerCase().includes("euro")||textToSubmit?.includes("€")?"€":"$");
-          await addExpense({ title: title||"Purchase", amount: parseFloat(amount??spent)||0, currency: detectedCurrency, date: entryDate });
+          // Utilise le vrai nom du produit/service demandé
+          const rawTitle    = payload.title || payload.name || payload.item || textToSubmit || "Achat";
+          const finalTitle  = rawTitle.length > 60 ? rawTitle.slice(0, 60) : rawTitle;
+          const finalAmount = parseFloat(payload.amount ?? payload.spent ?? payload.price) || 0;
+          const finalDate   = payload.paymentDate || payload.paidAt || payload.date || new Date().toLocaleDateString("fr-CA");
+          const detectedCurrency: "$"|"€" = payload.currency || (textToSubmit?.toLowerCase().includes("euro") || textToSubmit?.includes("€") ? "€" : "$");
+          await addExpense({ title: finalTitle, amount: finalAmount, currency: detectedCurrency, date: finalDate });
         }
+
         if (type==="UPDATE_BUDGET_EXPENSE") {
           const { id, title, amount, currency, date } = payload;
-          await updateExpense(id, { title, amount: amount!==undefined?parseFloat(amount):undefined, currency, date });
+          await updateExpense(id, { title, amount: amount !== undefined ? parseFloat(amount) : undefined, currency, date });
         }
+
         if (type==="DELETE_BUDGET_EXPENSE" && payload.id) await deleteExpense(payload.id);
 
         if (type==="ADD_CALORIE_LOG") {
-          const { foodName, meal, title, calories } = payload;
-          await addCalorie({ foodName: foodName||meal||title||"Food Item", calories: parseInt(calories)||0, date: new Date().toLocaleDateString("fr-CA") });
+          // Utilise le vrai nom de l'aliment demandé
+          const rawFoodName  = payload.foodName || payload.food_name || payload.meal || payload.title || payload.name || textToSubmit || "Aliment";
+          const finalFood    = rawFoodName.length > 60 ? rawFoodName.slice(0, 60) : rawFoodName;
+          const finalCalories = parseInt(payload.calories ?? payload.kcal) || 0;
+          await addCalorie({ foodName: finalFood, calories: finalCalories, date: new Date().toLocaleDateString("fr-CA") });
         }
+
         if (type==="DELETE_CALORIE_LOG" && payload.id) await deleteCalorie(payload.id);
 
-        if (type==="SET_BUDGET_GOAL"||type==="UPDATE_BUDGET_GOAL") {
-          const nextGoal = parseInt(payload.goal??payload.budgetGoal??payload.amount??payload.spent);
-          if (Number.isFinite(nextGoal)&&nextGoal>0) { setBudgetGoal(nextGoal); setInputBudgetGoal(nextGoal.toString()); }
+        if (type==="SET_BUDGET_GOAL" || type==="UPDATE_BUDGET_GOAL") {
+          const nextGoal = parseInt(payload.goal ?? payload.budgetGoal ?? payload.amount ?? payload.spent);
+          if (Number.isFinite(nextGoal) && nextGoal > 0) { setBudgetGoal(nextGoal); setInputBudgetGoal(nextGoal.toString()); }
         }
-        if (type==="SET_CALORIE_GOAL"||type==="UPDATE_CALORIE_GOAL") {
-          const nextGoal = parseInt(payload.goal??payload.calorieGoal??payload.calories);
+
+        if (type==="SET_CALORIE_GOAL" || type==="UPDATE_CALORIE_GOAL") {
+          const nextGoal = parseInt(payload.goal ?? payload.calorieGoal ?? payload.calories);
           if (payload.weight) setUserWeight(String(payload.weight));
           if (payload.height) setUserHeight(String(payload.height));
-          if (Number.isFinite(nextGoal)&&nextGoal>0) { setCalorieGoal(nextGoal); setInputCalorieGoal(nextGoal.toString()); }
+          if (Number.isFinite(nextGoal) && nextGoal > 0) { setCalorieGoal(nextGoal); setInputCalorieGoal(nextGoal.toString()); }
         }
       }
     } catch {
@@ -397,6 +476,9 @@ export default function VitalityPage() {
   return (
     <main className="vitality-page h-screen w-full bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans relative transition-colors duration-200 selection:bg-cyan-500/30">
 
+      {/* POPUP QUOTA */}
+      {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
+
       {tutorialStep===1 && (
         <div className="absolute top-44 left-6 sm:left-72 w-80 sm:w-[460px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in duration-300 z-50">
           <TutorialHeaderControls onClose={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} />
@@ -405,11 +487,9 @@ export default function VitalityPage() {
             <h4 className="font-black text-xs font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">ECHO BUDGET (1/2)</h4>
           </div>
           <div className="text-xs text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4 space-y-2">
-            {lang==="fr" ? (
-              <p>Hey! 👋 Je suis aussi la pour garder le controle sur ton budget. Definis ton objectif financier en haut, puis parle-moi dans le chat — je m'occupe du reste. ✨✨✨✨✨✨</p>
-            ) : (
-              <p>Hey! 👋 I am here to help you stay on track with finances. Set your goal above, then just tell me what you spent — I will handle the rest. ✨✨✨✨✨</p>
-            )}
+            {lang==="fr"
+              ? <p>Hey! 👋 Je suis aussi la pour garder le controle sur ton budget. Definis ton objectif financier en haut, puis parle-moi dans le chat — je m'occupe du reste. ✨✨✨✨✨✨</p>
+              : <p>Hey! 👋 I am here to help you stay on track with finances. Set your goal above, then just tell me what you spent — I will handle the rest. ✨✨✨✨✨</p>}
           </div>
           <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800 dark:border-zinc-200">
             <button onClick={()=>setTutorialStep(2)} className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
@@ -427,11 +507,9 @@ export default function VitalityPage() {
             <h4 className="font-black text-xs font-mono uppercase tracking-widest text-emerald-400 dark:text-emerald-600">ECHO CALORIES (2/2)</h4>
           </div>
           <div className="text-xs text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4">
-            {lang==="fr" ? (
-              <p>Salut! 😋 Chaque repas devient une donnee utile. Parle-moi de ce que tu manges et je calcule tout automatiquement. ✨✨✨✨✨✨✨</p>
-            ) : (
-              <p>Hi! 😋 Every meal is useful data. Tell me what you ate and I will calculate everything automatically. ✨✨✨✨✨✨✨</p>
-            )}
+            {lang==="fr"
+              ? <p>Salut! 😋 Chaque repas devient une donnee utile. Parle-moi de ce que tu manges et je calcule tout automatiquement. ✨✨✨✨✨✨✨</p>
+              : <p>Hi! 😋 Every meal is useful data. Tell me what you ate and I will calculate everything automatically. ✨✨✨✨✨✨✨</p>}
           </div>
           <button onClick={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
             {lang==="fr"?"C'EST PARTI !":"LET'S LOG !"}
@@ -592,7 +670,6 @@ export default function VitalityPage() {
 
           {/* ECHO CONTROLLER */}
           <aside className="min-w-0 xl:border-l border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative h-full w-full">
-
             <div className="p-3 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-900/60 shrink-0 flex items-center justify-between gap-2 shadow-sm">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
@@ -666,7 +743,6 @@ export default function VitalityPage() {
                   className="flex-1 bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-xs resize-none focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 transition-colors leading-relaxed shadow-inner placeholder-zinc-400" />
                 <div className="flex flex-col gap-2 w-12 shrink-0 self-end">
                   <button type="button" onClick={()=>isImageButtonLocked?setShowPremiumModal(true):fileInputRef.current?.click()}
-                    title={isImageButtonLocked ? (lang==="fr"?"Plan Premium requis":"Premium plan required") : ""}
                     className={`h-9 w-full rounded-xl flex items-center justify-center border text-sm transition-all ${isImageButtonLocked?"cursor-not-allowed border-zinc-200 dark:border-zinc-800 text-zinc-400 bg-zinc-100 dark:bg-zinc-900":imageBase64?"border-emerald-500/40 text-emerald-400 bg-emerald-500/10":"border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-600 bg-white dark:bg-zinc-900"}`}>
                     {isImageButtonLocked?"🔒":imageBase64?"V":"IMG"}
                   </button>
@@ -761,31 +837,6 @@ export default function VitalityPage() {
               {dict.btnApply}
             </button>
           </form>
-        </div>
-      )}
-
-      {/* QUOTA MODAL */}
-      {showLimitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={()=>setShowLimitModal(false)}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center text-xs" onClick={e=>e.stopPropagation()}>
-            <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto mb-4 text-xl">🔒</div>
-            <h3 className="font-bold text-sm mb-2 uppercase font-mono tracking-wider">
-              {lang==="fr"?"Limite de Quota Atteinte":"Plan Cycle Limit Reached"}
-            </h3>
-            <p className="text-zinc-500 dark:text-zinc-400 mb-5 leading-relaxed font-medium">
-              {activeLimitCategory==="vitality_actions"
-                ? (lang==="fr"
-                    ? "Votre quota d'actions Vitalite est atteint pour ce cycle."
-                    : "Your Vitality action quota has been reached for this cycle.")
-                : (lang==="fr"
-                    ? "Limite d'actions calendrier atteinte pour ce cycle."
-                    : "Calendar action limit reached for this cycle.")}
-            </p>
-            <Link href="/services" onClick={()=>setShowLimitModal(false)}
-              className="bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl py-2.5 px-4 font-bold transition block text-center uppercase tracking-wider text-[11px]">
-              {lang==="fr"?"Voir les abonnements":"Upgrade Plan Tier"}
-            </Link>
-          </div>
         </div>
       )}
 
