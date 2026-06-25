@@ -9,7 +9,6 @@ import TutorialHeaderControls from "./components/TutorialHeaderControls";
 import PremiumRequiredModal from "./components/PremiumRequiredModal";
 import { useApp } from "../context/AppContext";
 
-type HistoryEntry = { id: string; title: string; date: string; messages: string[] };
 type EchoMessage  = { raw: string; imageB64?: string };
 type StickyNote   = { id: string; text: string; color: "yellow"|"blue"|"green"|"pink" };
 type CalendarEvent  = { id: string; title: string; start: string; end: string; notes: string };
@@ -47,14 +46,8 @@ const WATER = [
   { g:"∾",  top:"83%", left:"2%",   rot:"-12deg", sz:"54px" },
 ];
 
-const deriveTitle = (raws: string[], lang: string): string => {
-  const first = raws.find(r => /^(You|Toi)\s*:/i.test(r));
-  if (first) {
-    const clean = first.replace(/^(You|Toi)\s*:\s*/i,"").trim();
-    if (clean) return clean.length > 42 ? `${clean.slice(0,42)}…` : clean;
-  }
-  return lang === "fr" ? "Nouvelle conversation" : "New conversation";
-};
+// ── SOURCE UNIFIÉE home + chat ────────────────────────────────────────────────
+const CONV_SOURCE = "echo";
 
 // ── COMPOSANT POPUP QUOTA ─────────────────────────────────────────────────────
 function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
@@ -97,10 +90,10 @@ function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onC
 export default function Home() {
   const { t, lang, theme, toggleTheme, triggerToast } = useApp();
 
-  const [message,   setMessage]   = useState("");
-  const [messages,  setMessages]  = useState<EchoMessage[]>([]);
-  const [isLoaded,  setIsLoaded]  = useState(false);
-  const [userId,    setUserId]    = useState<string|null>(null);
+  const [message,      setMessage]      = useState("");
+  const [messages,     setMessages]     = useState<EchoMessage[]>([]);
+  const [isLoaded,     setIsLoaded]     = useState(false);
+  const [userId,       setUserId]       = useState<string|null>(null);
   const [activeConvId, setActiveConvId] = useState<string|null>(null);
   const [memorySummary, setMemorySummary] = useState("");
 
@@ -110,22 +103,16 @@ export default function Home() {
   const saveTimerRef  = useRef<ReturnType<typeof setTimeout>|null>(null);
 
   const [isListening,       setIsListening]       = useState(false);
-  const [selectedImage,      setSelectedImage]      = useState<string|null>(null);
+  const [selectedImage,     setSelectedImage]      = useState<string|null>(null);
   const [selectedImageName, setSelectedImageName]  = useState("");
-  const [showPremiumModal, setShowPremiumModal]    = useState(false);
+  const [showPremiumModal,  setShowPremiumModal]   = useState(false);
 
-  // ── QUOTA POPUP ───────────────────────────────────────────────────────────
   const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
   const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
-
-  const triggerQuotaPopup = (label: string) => {
-    setQuotaPopupLabel(label);
-    setShowQuotaPopup(true);
-  };
+  const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
 
   const DEFAULT_INPUT_HEIGHT = 112;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
-
   const shrinkInput = () => {
     const el = textareaRef.current;
     const cur = el ? el.getBoundingClientRect().height : inputHeight;
@@ -138,7 +125,6 @@ export default function Home() {
     setInputHeight(DEFAULT_INPUT_HEIGHT);
   };
 
-  // ── PANELS ────────────────────────────────────────────────────────────────
   const [leftPanelWidth,  setLeftPanelWidth]  = useState(220);
   const [rightPanelWidth, setRightPanelWidth] = useState(272);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -183,7 +169,6 @@ export default function Home() {
   useEffect(() => { localStorage.setItem("echo-home-left-width",  String(leftPanelWidth));  }, [leftPanelWidth]);
   useEffect(() => { localStorage.setItem("echo-home-panel-width", String(rightPanelWidth)); }, [rightPanelWidth]);
 
-  // ── STATE ─────────────────────────────────────────────────────────────────
   const [stickies,       setStickies]       = useState<StickyNote[]>([]);
   const [newStickyText,  setNewStickyText]  = useState("");
   const [selectedColor,  setSelectedColor]  = useState<StickyNote["color"]>("yellow");
@@ -197,26 +182,20 @@ export default function Home() {
   const [tutorialStep,   setTutorialStep]   = useState<number|null>(null);
   const [selectedButtons,        setSelectedButtons]        = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
-  const [showLimitModal,        setShowLimitModal]    = useState(false);
-  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar">("vitality_actions");
-  const [showTreasureModal, setShowTreasureModal] = useState(false);
-  const [isLoadingTreasure, setIsLoadingTreasure] = useState(false);
+  const [showTreasureModal,     setShowTreasureModal]      = useState(false);
+  const [isLoadingTreasure,     setIsLoadingTreasure]      = useState(false);
   const [showLoginRequiredModal, setShowLoginRequiredModal] = useState(false);
 
+  const buttonsData = ["clarity","humain","critical","expert","precision","philosophy","strategy","decompose","refine","double"].map(id => ({ id }));
   const localButtonsLabels: Record<"fr"|"en", Record<string,string>> = {
     fr: { clarity:"1🧠 Clarté", humain:"2👤 Humain", critical:"3⚔️ Regard critique", expert:"4🎓 Expert", precision:"5🎯 Précision", philosophy:"6🏛️ Philosophie", strategy:"7♟️ Stratégie", decompose:"8🧩 Décomposer", refine:"9❓ Affiner", double:"10⚡ Double Regard" },
     en: { clarity:"1🧠 Clarity", humain:"2👤 Human", critical:"3⚔️ Critical View", expert:"4🎓 Expert", precision:"5🎯 Precision", philosophy:"6🏛️ Philosophy", strategy:"7♟️ Strategy", decompose:"8🧩 Decompose", refine:"9❓ Refine", double:"10⚡ Double Regard" },
   };
-  const buttonsData = ["clarity","humain","critical","expert","precision","philosophy","strategy","decompose","refine","double"].map(id => ({ id }));
 
   const handleButtonClick = (id: string) => {
-    // Vérifier quota buttons avant d'activer
     if (!selectedButtons.includes(id) && id !== "double") {
       const status = checkQuota("buttons", userTier, false, userId);
-      if (!status.allowed) {
-        triggerQuotaPopup(lang === "fr" ? "Invites comportementales" : "Behavioral prompts");
-        return;
-      }
+      if (!status.allowed) { triggerQuotaPopup(lang === "fr" ? "Invites comportementales" : "Behavioral prompts"); return; }
     }
     if (id === "double") { if (selectedButtons.length === 1) setIsDoubleRegardUnlocked(true); return; }
     if (selectedButtons.includes(id)) {
@@ -239,11 +218,7 @@ export default function Home() {
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
   // ── SAVE TO SUPABASE + CRON MEMORY ───────────────────────────────────────
-  const saveToSupabase = async (
-    uid: string,
-    convId: string|null,
-    raws: string[]
-  ): Promise<string|null> => {
+  const saveToSupabase = async (uid: string, convId: string|null, raws: string[]): Promise<string|null> => {
     let finalSummary  = memorySummary;
     let finalMessages = raws;
 
@@ -253,20 +228,14 @@ export default function Home() {
         const res = await fetch(`${API_URL}/memory-summary`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            summary:  memorySummary,
-            messages: raws.slice(0, 500),
-            userTier,
-          }),
+          body: JSON.stringify({ summary: memorySummary, messages: raws.slice(0, 500), userTier }),
         });
         const data   = await res.json();
         finalSummary  = data.summary || memorySummary;
         finalMessages = raws.slice(-100);
         setMemorySummary(finalSummary);
-        console.log("[MEMORY] Résumé mis à jour");
-      } catch (e) {
-        console.error("[MEMORY]", e);
-      }
+        console.log("[MEMORY Home] Résumé mis à jour");
+      } catch (e) { console.error("[MEMORY Home]", e); }
     }
 
     const payload = {
@@ -281,10 +250,51 @@ export default function Home() {
       return convId;
     } else {
       const { data, error } = await supabase.from("echo_conversations")
-        .insert({ user_id: uid, source: "home", ...payload })
+        .insert({ user_id: uid, source: CONV_SOURCE, ...payload })
         .select("id").single();
       if (error) { console.error("[Home] insert conv:", error.message); return null; }
       return data?.id ?? null;
+    }
+  };
+
+  // ── PUSH GOOGLE CALENDAR depuis Echo ─────────────────────────────────────
+  const pushEchoEventToGoogle = async (
+    uid: string, dateKey: string, title: string,
+    startTime: string, endTime: string, notes: string
+  ): Promise<string|null> => {
+    let token = localStorage.getItem(`echo-google-token-${uid}`);
+    if (!token) {
+      try {
+        const { data: row } = await supabase.from("user_tokens").select("google_access_token").eq("id", uid).maybeSingle();
+        token = row?.google_access_token || null;
+      } catch { token = null; }
+    }
+    if (!token) return null;
+
+    try {
+      const hasTime  = !!(startTime || endTime);
+      const startObj = hasTime
+        ? { dateTime: new Date(`${dateKey}T${startTime || "00:00"}:00`).toISOString() }
+        : { date: dateKey };
+      const endObj   = hasTime
+        ? { dateTime: new Date(`${dateKey}T${endTime || "23:59"}:00`).toISOString() }
+        : { date: dateKey };
+
+      const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ summary: title, description: notes, start: startObj, end: endObj }),
+      });
+      if (!res.ok) {
+        console.warn("[Home] Google Calendar push failed:", res.status);
+        return null;
+      }
+      const d = await res.json();
+      console.log("[Home] Google Calendar push OK:", d.id);
+      return d.id ?? null;
+    } catch (err) {
+      console.error("[Home] pushEchoEventToGoogle:", err);
+      return null;
     }
   };
 
@@ -296,12 +306,12 @@ export default function Home() {
 
       try {
         if (uid) {
-          // Chat croisé : charge home ET chat dans la même conversation (source "home")
+          // Chat croisé : charge la conversation unifiée (source "echo")
           const { data: convRows } = await supabase
             .from("echo_conversations")
             .select("id, messages, summary")
             .eq("user_id", uid)
-            .eq("source", "home")
+            .eq("source", CONV_SOURCE)
             .order("updated_at", { ascending: false })
             .limit(1);
 
@@ -317,8 +327,7 @@ export default function Home() {
           if (stickyRows?.length)
             setStickies(stickyRows.map(r => ({ id: r.id, text: r.text, color: r.color as StickyNote["color"] })));
 
-          const { data: calRows } = await supabase
-            .from("echo_calendar").select("*").eq("user_id", uid);
+          const { data: calRows } = await supabase.from("echo_calendar").select("*").eq("user_id", uid);
           if (calRows?.length) {
             const rebuilt: CalendarEvents = {};
             calRows.forEach(r => {
@@ -335,9 +344,7 @@ export default function Home() {
           if (saved) setMessages(deserializeMsgs(JSON.parse(saved)));
         }
 
-        const isTutoDone = localStorage.getItem("echo-tuto-done-v1");
-        if (!isTutoDone) setTutorialStep(1);
-
+        if (!localStorage.getItem("echo-tuto-done-v1")) setTutorialStep(1);
       } catch(e) { console.error("Bootstrap error", e); }
       setIsLoaded(true);
     });
@@ -345,19 +352,19 @@ export default function Home() {
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session?.user) {
         setUserId(null); setCalendarEvents({}); setStickies([]);
-        setMessages([]); setUserTier("connected_free"); setActiveConvId(null);
-        return;
+        setMessages([]); setUserTier("connected_free"); setActiveConvId(null); setMemorySummary(""); return;
       }
       if (session?.user) {
         const uid = session.user.id;
         setUserId(uid);
         const { data: convRows } = await supabase
           .from("echo_conversations").select("id, messages, summary")
-          .eq("user_id", uid).eq("source", "home")
+          .eq("user_id", uid).eq("source", CONV_SOURCE)
           .order("updated_at", { ascending: false }).limit(1);
         if (convRows?.length) {
           setActiveConvId(convRows[0].id);
           setMessages(deserializeMsgs(convRows[0].messages || []));
+          setMemorySummary(convRows[0].summary || "");
         }
         setUserTier(await fetchUserTier(uid));
       }
@@ -370,7 +377,6 @@ export default function Home() {
   useEffect(() => {
     if (!isLoaded) return;
     const raws = serializeMsgs(messages);
-
     if (userId) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(async () => {
@@ -380,7 +386,6 @@ export default function Home() {
     } else {
       localStorage.setItem("echo-conversation-v2", JSON.stringify(raws));
     }
-
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [messages, isLoaded]);
 
@@ -414,8 +419,6 @@ export default function Home() {
     });
 
   // ── ENVOYER ───────────────────────────────────────────────────────────────
-  // /home est illimité pour les messages — quota chat_ia seulement sur /chat
-  // Quota buttons vérifié au clic du bouton
   const envoyer = async () => {
     if (!message.trim() && !selectedImage) return;
 
@@ -451,7 +454,6 @@ export default function Home() {
       const data = await response.json();
       setEchoState("speaking");
 
-      // ── QUOTA ACTIONS AUTOMATIQUES ────────────────────────────────────────
       let isActionBlocked = false;
       if (data.action) {
         const { type } = data.action;
@@ -468,7 +470,7 @@ export default function Home() {
         }
       }
 
-      const echoText    = data.response || "";
+      const echoText     = data.response || "";
       const actionNotice = isActionBlocked ? `\n\n[🔒 ${lang === "fr" ? "Action bloquée — quota atteint" : "Action blocked — quota reached"}]` : "";
       setMessages([...baseMessages, { raw: `Echo: ${echoText}${actionNotice}` }]);
 
@@ -477,59 +479,51 @@ export default function Home() {
 
         if (type === "ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt } = payload;
-          const finalTitle  = title || "Achat";
-          const finalAmount = parseFloat(amount ?? spent) || 0;
-          const finalDate   = paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA");
-          if (userId) {
-            await supabase.from("echo_expenses").insert({ user_id: userId, title: finalTitle, amount: finalAmount, date: finalDate });
-          }
+          if (userId) await supabase.from("echo_expenses").insert({
+            user_id: userId,
+            title:   title || "Achat",
+            amount:  parseFloat(amount ?? spent) || 0,
+            date:    paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
+          });
         }
 
         if (type === "ADD_CALORIE_LOG") {
-          const { foodName, title, food_name, calories } = payload;
-          const finalFoodName = title || foodName || food_name || "Aliment";
-          const finalCalories = parseInt(calories) || 0;
-          if (userId) {
-            await supabase.from("echo_calories").insert({ user_id: userId, food_name: finalFoodName, calories: finalCalories, date: new Date().toLocaleDateString("fr-CA") });
-          }
+          const { foodName, food_name, meal, title, calories } = payload;
+          if (userId) await supabase.from("echo_calories").insert({
+            user_id:   userId,
+            food_name: foodName || food_name || meal || title || "Aliment",
+            calories:  parseInt(calories) || 0,
+            date:      new Date().toLocaleDateString("fr-CA"),
+          });
         }
 
         if (type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") {
           const { goal, calorieGoal, calories } = payload;
           const nextGoal = parseInt(goal ?? calorieGoal ?? calories);
-          if (Number.isFinite(nextGoal) && nextGoal > 0) {
+          if (Number.isFinite(nextGoal) && nextGoal > 0)
             localStorage.setItem("echo-calorie-goal", nextGoal.toString());
-          }
         }
 
-        // ── CALENDRIER — sync champs heure start_time et end_time ─────────
+        // ── CALENDRIER — ISO 8601 + push Google ──────────────────────────
         if (type === "ADD_CALENDAR_EVENT") {
-          const { title, start, end, notes, date } = payload;
+          const { title, start, end, notes } = payload;
 
-          // Extraire date et heure depuis les champs ISO ou fallback
-          let dateKey    = "";
-          let startTime  = "";
-          let endTime    = "";
+          let dateKey   = "";
+          let startTime = "";
+          let endTime   = "";
 
           if (start) {
             if (start.includes("T")) {
               dateKey   = start.split("T")[0];
-              startTime = start.split("T")[1]?.slice(0, 5) || ""; // "HH:MM"
-            } else if (start.match(/^\d{4}-\d{2}-\d{2}$/)) {
-              dateKey   = start;
+              startTime = start.split("T")[1]?.slice(0, 5) || "";
             } else {
-              dateKey   = start;
+              dateKey = start;
             }
           }
-          if (!dateKey && date) dateKey = date.split("T")[0] || date;
           if (!dateKey) dateKey = new Date().toLocaleDateString("fr-CA");
 
-          if (end) {
-            if (end.includes("T")) {
-              endTime = end.split("T")[1]?.slice(0, 5) || "";
-            } else if (!end.match(/^\d{4}-\d{2}-\d{2}$/)) {
-              endTime = end;
-            }
+          if (end?.includes("T")) {
+            endTime = end.split("T")[1]?.slice(0, 5) || "";
           }
 
           const finalTitle = title || "Rendez-vous sans titre";
@@ -537,22 +531,30 @@ export default function Home() {
 
           if (dateKey && userId) {
             try {
+              // 1. Push vers Google Calendar d'abord
+              const googleEventId = await pushEchoEventToGoogle(
+                userId, dateKey, finalTitle, startTime, endTime, finalNotes
+              );
+
+              // 2. Insert dans Supabase
               const insertPayload: any = {
-                user_id:    userId,
-                title:      finalTitle,
-                start_date: dateKey,
-                end_date:   dateKey,
-                notes:      finalNotes,
+                user_id:      userId,
+                title:        finalTitle,
+                start_date:   dateKey,
+                end_date:     dateKey,
+                notes:        finalNotes,
                 is_from_echo: true,
               };
-              if (startTime) insertPayload.start_time = startTime;
-              if (endTime)   insertPayload.end_time   = endTime;
+              if (startTime)    insertPayload.start_time = startTime;
+              if (endTime)      insertPayload.end_time   = endTime;
+              if (googleEventId) insertPayload.google_event_id = googleEventId;
 
               const { data: insertedList, error } = await supabase
                 .from("echo_calendar").insert(insertPayload).select();
 
               const finalId = (!error && insertedList?.length) ? insertedList[0].id : `temp-${Date.now()}`;
 
+              // 3. Mettre à jour le state local
               setCalendarEvents(prev => {
                 const currentList = prev[dateKey] || [];
                 if (currentList.some(ev => ev.title === finalTitle && ev.notes === finalNotes)) return prev;
@@ -568,8 +570,11 @@ export default function Home() {
                 };
               });
 
+              if (googleEventId) {
+                triggerToast("info", lang === "fr" ? "Rendez-vous ajouté dans Google Calendar ✓" : "Event added to Google Calendar ✓");
+              }
             } catch (err) {
-              console.error("[Home] Crash insertion calendrier :", err);
+              console.error("[Home] Crash insertion calendrier:", err);
             }
           }
         }
@@ -587,8 +592,7 @@ export default function Home() {
     if (!userId) {
       const id = `local-${Date.now()}`;
       setStickies(prev => [...prev, { id, text: newStickyText.trim(), color: selectedColor }]);
-      setNewStickyText("");
-      return;
+      setNewStickyText(""); return;
     }
     const { data: inserted, error } = await supabase.from("echo_stickies").insert({
       user_id: userId, text: newStickyText.trim(), color: selectedColor,
@@ -599,29 +603,25 @@ export default function Home() {
   };
 
   const deleteSticky = async (id: string) => {
-    if (userId && !id.startsWith("local-")) {
-      await supabase.from("echo_stickies").delete().eq("id", id).eq("user_id", userId);
-    }
+    if (userId && !id.startsWith("local-")) await supabase.from("echo_stickies").delete().eq("id", id).eq("user_id", userId);
     setStickies(prev => prev.filter(s => s.id !== id));
   };
 
   const saveStickyEdit = async () => {
     if (!expandedSticky) return;
-    if (userId && !expandedSticky.id.startsWith("local-")) {
+    if (userId && !expandedSticky.id.startsWith("local-"))
       await supabase.from("echo_stickies").update({ text: editText }).eq("id", expandedSticky.id).eq("user_id", userId);
-    }
     setStickies(prev => prev.map(s => s.id === expandedSticky.id ? { ...s, text: editText } : s));
     setExpandedSticky(null);
   };
 
-  // ── MISC ──────────────────────────────────────────────────────────────────
   const isImageButtonLocked = userTier === "connected_free" || userTier === "basic";
 
   const lancerDictation = () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { alert("Speech recognition is not supported."); return; }
     const recognition = new SR();
-    recognition.lang = lang === "fr" ? "fr-FR" : "en-US";
+    recognition.lang     = lang === "fr" ? "fr-FR" : "en-US";
     recognition.onstart  = () => setIsListening(true);
     recognition.onend    = () => setIsListening(false);
     recognition.onresult = (e: any) => setMessage(p => p + (p?" ":"") + e.results[0][0].transcript);
@@ -688,22 +688,13 @@ export default function Home() {
     return () => window.removeEventListener("click", handleOutsideClick);
   }, [isSettingsOpen]);
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
 
-      {/* POPUP QUOTA */}
-      {showQuotaPopup && (
-        <QuotaPopup
-          label={quotaPopupLabel}
-          lang={lang}
-          onClose={() => setShowQuotaPopup(false)}
-        />
-      )}
+      {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* NAV SIDEBAR */}
         <aside
           style={isDesktop ? { width: leftPanelWidth, flexBasis: leftPanelWidth } : undefined}
           className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
@@ -712,15 +703,15 @@ export default function Home() {
               <Link href="/" className="text-cyan-600 dark:text-cyan-400 font-bold">{t.sidebar.home}</Link>
             </h2>
             <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
-              <Link href="/chat"     className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
-              <Link href="/books"    className="block hover:text-cyan-500">{t.sidebar.books}</Link>
-              <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
-              <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
-              <Link href="/services" className="block hover:text-cyan-500">💎 {lang==="fr"?"Services":"Services"}</Link>
-              <Link href="/account"  className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
+              <Link href="/chat"       className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
+              <Link href="/books"      className="block hover:text-cyan-500">{t.sidebar.books}</Link>
+              <Link href="/calendar"   className="block hover:text-cyan-500">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
+              <Link href="/vitality"   className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
+              <Link href="/services"   className="block hover:text-cyan-500">💎 {lang==="fr"?"Services":"Services"}</Link>
+              <Link href="/account"    className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
               <Link href="/horizonweb" className="block hover:text-cyan-500">📡 HorizonWeb</Link>
               <hr className="border-zinc-200 dark:border-zinc-800 my-4" />
-              <Link href="/history"  className="block hover:text-amber-500">⭐ {lang==="fr"?"Historique":"History"}</Link>
+              <Link href="/history"    className="block hover:text-amber-500">⭐ {lang==="fr"?"Historique":"History"}</Link>
             </div>
           </div>
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
@@ -734,10 +725,8 @@ export default function Home() {
 
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
 
-          {/* MAIN SECTION */}
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
 
-            {/* DASHBOARD ECHO */}
             <div className="relative w-full shrink-0 flex items-center justify-center gap-3 xl:gap-5 py-3">
 
               {tutorialStep === 1 && (
@@ -774,7 +763,6 @@ export default function Home() {
                 <Link href="/calendar" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
                   style={{background:"linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(37,99,235,0.05) 100%)",borderColor:"rgba(59,130,246,0.35)",boxShadow:"0 0 20px rgba(59,130,246,0.1),inset 0 1px 0 rgba(59,130,246,0.2)"}}>
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(59,130,246,0.2) 0%,rgba(59,130,246,0.08) 100%)"}}/>
-                  <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(59,130,246,1),transparent)"}}/>
                   <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-blue-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-blue-400/50"/>
                   <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
                     <rect x="6" y="10" width="52" height="48" rx="8" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.6)" strokeWidth="2"/>
@@ -789,11 +777,9 @@ export default function Home() {
                   </svg>
                   <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-blue-400">{lang==="fr"?"CALENDRIER":"CALENDAR"}</span>
                 </Link>
-
                 <Link href="/vitality" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
                   style={{background:"linear-gradient(135deg,rgba(234,179,8,0.12) 0%,rgba(202,138,4,0.05) 100%)",borderColor:"rgba(234,179,8,0.35)",boxShadow:"0 0 20px rgba(234,179,8,0.1),inset 0 1px 0 rgba(234,179,8,0.2)"}}>
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(234,179,8,0.2) 0%,rgba(234,179,8,0.08) 100%)"}}/>
-                  <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(234,179,8,1),transparent)"}}/>
                   <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-yellow-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-yellow-400/50"/>
                   <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
                     <circle cx="32" cy="36" r="22" fill="rgba(234,179,8,0.15)" stroke="rgba(234,179,8,0.6)" strokeWidth="2"/>
@@ -806,7 +792,7 @@ export default function Home() {
                 </Link>
               </div>
 
-              {/* CENTRE : ECHO */}
+              {/* CENTRE */}
               <div className={`relative shrink-0 flex flex-col items-center ${echoState==="idle"?"echo-idle":echoState==="thinking"?"echo-thinking":"echo-speaking"}`}>
                 <div className="relative w-24 h-24 flex items-center justify-center">
                   <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spinDash 4s linear infinite"}}/>
@@ -822,7 +808,6 @@ export default function Home() {
                 <Link href="/vitality" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
                   style={{background:"linear-gradient(135deg,rgba(34,197,94,0.12) 0%,rgba(22,163,74,0.05) 100%)",borderColor:"rgba(34,197,94,0.35)",boxShadow:"0 0 20px rgba(34,197,94,0.1),inset 0 1px 0 rgba(34,197,94,0.2)"}}>
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(34,197,94,0.2) 0%,rgba(34,197,94,0.08) 100%)"}}/>
-                  <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(34,197,94,1),transparent)"}}/>
                   <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-green-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-green-400/50"/>
                   <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
                     <ellipse cx="32" cy="38" rx="18" ry="16" fill="rgba(34,197,94,0.2)" stroke="rgba(34,197,94,0.6)" strokeWidth="2"/>
@@ -833,21 +818,15 @@ export default function Home() {
                   </svg>
                   <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-green-400">CALORIES</span>
                 </Link>
-
                 <Link href="/books" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
                   style={{background:"linear-gradient(135deg,rgba(139,92,246,0.12) 0%,rgba(109,40,217,0.05) 100%)",borderColor:"rgba(139,92,246,0.35)",boxShadow:"0 0 20px rgba(139,92,246,0.1),inset 0 1px 0 rgba(139,92,246,0.2)"}}>
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(139,92,246,0.2) 0%,rgba(139,92,246,0.08) 100%)"}}/>
-                  <div className="absolute top-0 left-0 right-0 h-px opacity-0 group-hover:opacity-100 transition-opacity" style={{background:"linear-gradient(90deg,transparent,rgba(139,92,246,1),transparent)"}}/>
                   <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-violet-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-violet-400/50"/>
                   <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
                     <rect x="8"  y="12" width="20" height="40" rx="3" fill="rgba(139,92,246,0.5)" stroke="rgba(139,92,246,0.7)" strokeWidth="1.5"/>
                     <rect x="10" y="14" width="16" height="36" rx="2" fill="rgba(139,92,246,0.2)"/>
                     <rect x="30" y="10" width="20" height="42" rx="3" fill="rgba(168,85,247,0.5)" stroke="rgba(168,85,247,0.7)" strokeWidth="1.5"/>
                     <rect x="32" y="12" width="16" height="38" rx="2" fill="rgba(168,85,247,0.2)"/>
-                    <line x1="13" y1="20" x2="23" y2="20" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
-                    <line x1="13" y1="25" x2="23" y2="25" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
-                    <line x1="33" y1="18" x2="47" y2="18" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
-                    <line x1="33" y1="23" x2="47" y2="23" stroke="rgba(255,255,255,0.3)" strokeWidth="1.2"/>
                   </svg>
                   <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-violet-400">{lang==="fr"?"LIVRE":"BOOK"}</span>
                 </Link>
@@ -862,11 +841,11 @@ export default function Home() {
               ) : (
                 <div className="max-w-4xl mx-auto py-4 flex flex-col gap-10 min-w-0">
                   {messages.map((msg, index) => {
-                    const isEcho = /^Echo\s*:/i.test(msg.raw);
-                    const isUser = /^(You|Toi)\s*:/i.test(msg.raw);
-                    const isLastEcho = isEcho && index === lastEchoIndex;
-                    const cleanText = msg.raw.replace(/^(Echo|You|Toi)\s*:\s*/i,"");
-                    const isDefaultImgText = cleanText === "Analyse cette image." || cleanText === "Analyze this image.";
+                    const isEcho      = /^Echo\s*:/i.test(msg.raw);
+                    const isUser      = /^(You|Toi)\s*:/i.test(msg.raw);
+                    const isLastEcho  = isEcho && index === lastEchoIndex;
+                    const cleanText   = msg.raw.replace(/^(Echo|You|Toi)\s*:\s*/i,"");
+                    const isDefaultImg = cleanText === "Analyse cette image." || cleanText === "Analyze this image.";
 
                     if (isEcho) return (
                       <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 min-w-0">
@@ -887,12 +866,12 @@ export default function Home() {
                     if (isUser) return (
                       <div key={index} className="flex flex-col items-end animate-in fade-in duration-200 min-w-0">
                         {msg.imageB64 && <img src={msg.imageB64} alt="image envoyée" className="max-w-[180px] max-h-[140px] rounded-xl border border-zinc-300 dark:border-zinc-700 object-cover shadow-md mb-1" />}
-                        {!(msg.imageB64 && isDefaultImgText) && (
+                        {!(msg.imageB64 && isDefaultImg) && (
                           <div className="max-w-xl text-right">
                             <p className="text-zinc-700 dark:text-zinc-300 text-[14px] leading-7 tracking-wide bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3 inline-block text-left whitespace-pre-wrap break-words selection:bg-cyan-500/30">{cleanText}</p>
                           </div>
                         )}
-                        {msg.imageB64 && isDefaultImgText && <span className="text-zinc-500 dark:text-zinc-600 text-[10px] italic mt-0.5">{lang==="fr"?"Analyse cette image.":"Analyze this image."}</span>}
+                        {msg.imageB64 && isDefaultImg && <span className="text-zinc-500 dark:text-zinc-600 text-[10px] italic mt-0.5">{lang==="fr"?"Analyse cette image.":"Analyze this image."}</span>}
                       </div>
                     );
 
@@ -930,7 +909,7 @@ export default function Home() {
                   <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-zinc-200 dark:border-zinc-900">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <button type="button" onClick={shrinkInput} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">➖</button>
-                      <button type="button" onClick={resetInput} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">↺</button>
+                      <button type="button" onClick={resetInput}  className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">↺</button>
                       <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
                       <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
                       <button type="button" onClick={() => isImageButtonLocked ? setShowPremiumModal(true) : imageInputRef.current?.click()}
@@ -980,9 +959,7 @@ export default function Home() {
                   <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2 pr-8">
                     🤖 {lang==="fr"?"PARAMÈTRES GLOBAUX":"GLOBAL SETTINGS"} (2/2)
                   </h4>
-                  <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">
-                    {t.tutorial?.text2}
-                  </p>
+                  <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">{t.tutorial?.text2}</p>
                   <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }}
                     className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs transition-colors shadow-md uppercase tracking-wider">
                     {t.tutorial?.finish}
@@ -1049,7 +1026,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* EXPANDED STICKY MODAL */}
+      {/* EXPANDED STICKY */}
       {expandedSticky && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setExpandedSticky(null)}>
           <div className={`max-w-md w-full rounded-2xl p-6 shadow-2xl border ${STICKY_STYLES[expandedSticky.color].bg} ${STICKY_STYLES[expandedSticky.color].border} ${STICKY_STYLES[expandedSticky.color].text}`} onClick={e => e.stopPropagation()}>

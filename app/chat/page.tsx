@@ -10,6 +10,9 @@ import { useApp } from "../../context/AppContext";
 type ChatMessage  = { raw: string; imageB64?: string };
 type Conversation = { id: string; title: string; messages: string[]; summary: string; updatedAt: number };
 
+// ── SOURCE UNIFIÉE home + chat ────────────────────────────────────────────────
+const CONV_SOURCE = "echo";
+
 const normalizeTier = (raw: string | null): UserTier => {
   if (!raw) return "connected_free";
   const c = raw.toLowerCase().trim();
@@ -79,7 +82,7 @@ function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onC
 }
 
 export default function ChatPage() {
-  const { t, lang } = useApp();
+  const { t, lang, triggerToast } = useApp();
 
   const [messages,  setMessages]  = useState<ChatMessage[]>([]);
   const [input,     setInput]     = useState("");
@@ -104,20 +107,15 @@ export default function ChatPage() {
   const [echoState,   setEchoState]   = useState("idle");
   const [tutorialStep, setTutorialStep] = useState<number | null>(null);
 
-  // ── QUOTA POPUP ───────────────────────────────────────────────────────────
   const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
   const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
   const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
 
-  // ── DELETE CONFIRM ────────────────────────────────────────────────────────
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-
-  // ── RENAME ────────────────────────────────────────────────────────────────
-  const [renamingId,   setRenamingId]   = useState<string | null>(null);
-  const [renameValue,  setRenameValue]  = useState("");
+  const [renamingId,      setRenamingId]      = useState<string | null>(null);
+  const [renameValue,     setRenameValue]     = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
 
-  // ── INPUT HEIGHT ──────────────────────────────────────────────────────────
   const DEFAULT_INPUT_HEIGHT = 80;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
   const shrinkInput = () => {
@@ -153,7 +151,6 @@ export default function ChatPage() {
 
   const handleButtonClick = (id: string) => {
     if (isSurpriseActive) return;
-    // Quota buttons
     if (!selectedButtons.includes(id) && id !== "double") {
       const status = checkQuota("buttons", userTier, false, userId);
       if (!status.allowed) { triggerQuotaPopup(lang === "fr" ? "Invites comportementales" : "Behavioral prompts"); return; }
@@ -186,11 +183,11 @@ export default function ChatPage() {
   const deserializeMsgs = (raws: string[]): ChatMessage[] => raws.map(r => ({ raw: r }));
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
-  // ── SUPABASE ──────────────────────────────────────────────────────────────
+  // ── SUPABASE — source unifiée "echo" ─────────────────────────────────────
   const loadConversationsFromDB = async (uid: string) => {
     const { data, error } = await supabase
       .from("echo_conversations").select("id, messages, summary, updated_at")
-      .eq("user_id", uid).eq("source", "chat")
+      .eq("user_id", uid).eq("source", CONV_SOURCE)
       .order("updated_at", { ascending: false });
     if (error) { console.error("[Chat] load:", error.message); return []; }
     return (data || []).map(row => ({
@@ -220,10 +217,9 @@ export default function ChatPage() {
         const data   = await res.json();
         finalSummary  = data.summary || currentSummary;
         finalMessages = raws.slice(-100);
-        // Met à jour le summary dans la conv locale
         setConversations(prev => prev.map(c => c.id === convId ? { ...c, summary: finalSummary } : c));
-        console.log("[MEMORY] Résumé mis à jour");
-      } catch (e) { console.error("[MEMORY]", e); }
+        console.log("[MEMORY Chat] Résumé mis à jour");
+      } catch (e) { console.error("[MEMORY Chat]", e); }
     }
 
     const { error } = await supabase.from("echo_conversations").update({
@@ -234,6 +230,38 @@ export default function ChatPage() {
     }).eq("id", convId).eq("user_id", uid);
     if (error) console.error("[Chat] update:", error.message);
     return convId;
+  };
+
+  // ── PUSH GOOGLE CALENDAR depuis Echo ─────────────────────────────────────
+  const pushEchoEventToGoogle = async (
+    uid: string, dateKey: string, title: string,
+    startTime: string, endTime: string, notes: string
+  ): Promise<string|null> => {
+    let token = localStorage.getItem(`echo-google-token-${uid}`);
+    if (!token) {
+      try {
+        const { data: row } = await supabase.from("user_tokens").select("google_access_token").eq("id", uid).maybeSingle();
+        token = row?.google_access_token || null;
+      } catch { token = null; }
+    }
+    if (!token) return null;
+    try {
+      const hasTime  = !!(startTime || endTime);
+      const startObj = hasTime ? { dateTime: new Date(`${dateKey}T${startTime || "00:00"}:00`).toISOString() } : { date: dateKey };
+      const endObj   = hasTime ? { dateTime: new Date(`${dateKey}T${endTime  || "23:59"}:00`).toISOString() } : { date: dateKey };
+      const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ summary: title, description: notes, start: startObj, end: endObj }),
+      });
+      if (!res.ok) { console.warn("[Chat] Google Calendar push failed:", res.status); return null; }
+      const d = await res.json();
+      console.log("[Chat] Google Calendar push OK:", d.id);
+      return d.id ?? null;
+    } catch (err) {
+      console.error("[Chat] pushEchoEventToGoogle:", err);
+      return null;
+    }
   };
 
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
@@ -313,7 +341,6 @@ export default function ChatPage() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // ── PANEL RESIZE ──────────────────────────────────────────────────────────
   useEffect(() => {
     const savedOpen  = localStorage.getItem("echo-chat-convo-open");
     const savedWidth = parseInt(localStorage.getItem("echo-chat-convo-width") || "", 10);
@@ -338,7 +365,6 @@ export default function ChatPage() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
-  // ── CONVERSATIONS ─────────────────────────────────────────────────────────
   const startNewConversation = () => {
     if (activeConversationId === "new") { setInput(""); setSelectedImage(null); setSelectedImageName(""); return; }
     const emptyDraft = conversations.find(c => c.id === "new" || c.messages.length === 0);
@@ -383,7 +409,6 @@ export default function ChatPage() {
     setRenamingId(null);
   };
 
-  // ── PASTE IMAGE ───────────────────────────────────────────────────────────
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
       const items = event.clipboardData?.items; if (!items) return;
@@ -405,12 +430,8 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!input.trim() && !selectedImage) return;
 
-    // ── Quota chat_ia ────────────────────────────────────────────────────────
     const quotaStatus = checkQuota("chat_ia", userTier, true, userId);
-    if (!quotaStatus.allowed) {
-      triggerQuotaPopup(lang === "fr" ? "Chat IA" : "AI Chat");
-      return;
-    }
+    if (!quotaStatus.allowed) { triggerQuotaPopup(lang === "fr" ? "Chat IA" : "AI Chat"); return; }
 
     const userMessage = input.trim() || (lang === "fr" ? "Analyse cette image." : "Analyze this image.");
     const imageToSend = selectedImage;
@@ -421,16 +442,16 @@ export default function ChatPage() {
     setMessages([...baseMessages, { raw: "Echo: ..." }]);
     setInput(""); setSelectedImage(null); setSelectedImageName("");
 
-    // Récupérer le summary de la conv active
-    const activeConv    = conversations.find(c => c.id === activeConversationId);
+    const activeConv     = conversations.find(c => c.id === activeConversationId);
     const currentSummary = activeConv?.summary || "";
 
     let activeConvoId = activeConversationId;
     if (activeConversationId === "new") {
       try {
         if (userId) {
+          // ── source unifiée "echo" ────────────────────────────────────────
           const { data, error } = await supabase.from("echo_conversations")
-            .insert({ user_id: userId, source: "chat", messages: serializeMsgs([userEntry]), summary: "", updated_at: new Date().toISOString() })
+            .insert({ user_id: userId, source: CONV_SOURCE, messages: serializeMsgs([userEntry]), summary: "", updated_at: new Date().toISOString() })
             .select("id").single();
           if (error) throw error;
           if (data?.id) {
@@ -471,7 +492,6 @@ export default function ChatPage() {
       const data = await response.json();
       setEchoState("speaking");
 
-      // ── Quota actions auto ────────────────────────────────────────────────
       let isActionBlocked = false;
       if (data.action) {
         const { type } = data.action;
@@ -507,8 +527,8 @@ export default function ChatPage() {
         }
 
         if (type === "ADD_CALORIE_LOG") {
-          const { foodName, meal, title, calories } = payload;
-          await supabase.from("echo_calories").insert({ user_id: userId, food_name: foodName || meal || title || "Food Item", calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA") });
+          const { foodName, food_name, meal, title, calories } = payload;
+          await supabase.from("echo_calories").insert({ user_id: userId, food_name: foodName || food_name || meal || title || "Food Item", calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA") });
         }
 
         if (type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") {
@@ -517,9 +537,9 @@ export default function ChatPage() {
           if (Number.isFinite(nextGoal) && nextGoal > 0) localStorage.setItem("echo-calorie-goal", nextGoal.toString());
         }
 
-        // ── Calendrier — sync start_time et end_time ─────────────────────
+        // ── Calendrier — ISO 8601 + push Google ──────────────────────────
         if (type === "ADD_CALENDAR_EVENT") {
-          const { title, start, end, notes = "", date } = payload;
+          const { title, start, end, notes = "" } = payload;
 
           let dateKey   = "";
           let startTime = "";
@@ -529,26 +549,45 @@ export default function ChatPage() {
             if (start.includes("T")) { dateKey = start.split("T")[0]; startTime = start.split("T")[1]?.slice(0, 5) || ""; }
             else { dateKey = start; }
           }
-          if (!dateKey && date) dateKey = date.split("T")[0] || date;
           if (!dateKey) dateKey = new Date().toLocaleDateString("fr-CA");
+          if (end?.includes("T")) endTime = end.split("T")[1]?.slice(0, 5) || "";
 
-          if (end) {
-            if (end.includes("T")) endTime = end.split("T")[1]?.slice(0, 5) || "";
-            else if (!end.match(/^\d{4}-\d{2}-\d{2}$/)) endTime = end;
-          }
+          const finalTitle = title || "Untitled Event";
+          const finalNotes = notes || "";
 
           if (dateKey && userId) {
+            // 1. Push vers Google Calendar
+            const googleEventId = await pushEchoEventToGoogle(userId, dateKey, finalTitle, startTime, endTime, finalNotes);
+
+            // 2. Insert dans Supabase
             const insertPayload: any = {
-              user_id: userId, title: title || "Untitled Event",
-              start_date: dateKey, end_date: dateKey,
-              notes: notes || "", is_from_echo: true,
+              user_id:      userId,
+              title:        finalTitle,
+              start_date:   dateKey,
+              end_date:     dateKey,
+              notes:        finalNotes,
+              is_from_echo: true,
             };
-            if (startTime) insertPayload.start_time = startTime;
-            if (endTime)   insertPayload.end_time   = endTime;
+            if (startTime)     insertPayload.start_time      = startTime;
+            if (endTime)       insertPayload.end_time        = endTime;
+            if (googleEventId) insertPayload.google_event_id = googleEventId;
+
             await supabase.from("echo_calendar").insert(insertPayload);
+
+            if (googleEventId && typeof triggerToast === "function") {
+              triggerToast("info", lang === "fr" ? "Rendez-vous ajouté dans Google Calendar ✓" : "Event added to Google Calendar ✓");
+            }
           }
         }
       }
+
+      if (userId && activeConvoId && !activeConvoId.startsWith("local-") && activeConvoId !== "new") {
+        if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+        saveDebounceRef.current = setTimeout(async () => {
+          await saveConversationToDB(userId, activeConvoId, serializeMsgs(generatedMsgs), currentSummary);
+        }, 1500);
+      }
+
     } catch {
       setMessages([...baseMessages, { raw: "Echo: Unable to connect to backend server." }]);
     } finally {
@@ -576,14 +615,11 @@ export default function ChatPage() {
 
   const isImageLocked = userTier === "connected_free" || userTier === "basic";
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
 
-      {/* POPUP QUOTA */}
       {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
 
-      {/* DELETE CONFIRM */}
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={() => setDeleteConfirmId(null)}>
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-7 rounded-2xl max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -612,7 +648,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* TUTORIAL */}
       {tutorialStep === 1 && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[92vw] max-w-[460px] sm:max-w-[640px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
           <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1","true"); }} />
@@ -641,7 +676,6 @@ export default function ChatPage() {
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
-        {/* NAV SIDEBAR */}
         <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
@@ -684,7 +718,6 @@ export default function ChatPage() {
           </div>
         </aside>
 
-        {/* PANNEAU CONVERSATIONS */}
         {isConvoPanelOpen ? (
           <>
             <div ref={convoPanelRef} style={{ width: convoPanelWidth, flexBasis: convoPanelWidth }}
@@ -738,11 +771,9 @@ export default function ChatPage() {
           </button>
         )}
 
-        {/* CHAT SECTION */}
         <section className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-black transition-colors duration-200 min-w-0">
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">
 
-            {/* MESSAGES */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-white dark:bg-black">
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center gap-4">
@@ -758,10 +789,10 @@ export default function ChatPage() {
               )}
               <div className="max-w-4xl mx-auto pl-10 pr-6 py-10 flex flex-col gap-10 w-full">
                 {messages.map((msg, index) => {
-                  const isEcho = /^Echo\s*:/i.test(msg.raw);
-                  const isUser = /^(You|Toi)\s*:/i.test(msg.raw);
+                  const isEcho     = /^Echo\s*:/i.test(msg.raw);
+                  const isUser     = /^(You|Toi)\s*:/i.test(msg.raw);
                   const isLastEcho = isEcho && index === lastEchoIndex;
-                  const cleanText = isEcho ? msg.raw.replace(/^Echo\s*:\s*/i,"") : msg.raw.replace(/^(You|Toi)\s*:\s*/i,"");
+                  const cleanText  = isEcho ? msg.raw.replace(/^Echo\s*:\s*/i,"") : msg.raw.replace(/^(You|Toi)\s*:\s*/i,"");
 
                   if (isEcho) return (
                     <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 max-w-3xl">
@@ -796,7 +827,6 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* BOUTONS COMPORTEMENTAUX */}
             <div className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-100 dark:border-zinc-900/60 flex flex-col bg-zinc-50/20 dark:bg-zinc-950/10 overflow-hidden max-h-[42vh] lg:max-h-none lg:h-full">
               <div className="p-3 border-b border-zinc-100 dark:border-zinc-900/80 flex items-center justify-between shrink-0">
                 <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">Modes</span>
@@ -828,7 +858,6 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* INPUT ZONE */}
           <div className="border-t border-zinc-200 dark:border-zinc-900 px-4 py-4 shrink-0 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-200">
             <div className="max-w-4xl mx-auto flex flex-col gap-3">
               {selectedImage && (
