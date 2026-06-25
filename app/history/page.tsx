@@ -8,7 +8,7 @@ import LangDropdown from "../components/LangDropdown";
 import { useApp } from "../../context/AppContext";
 
 type HistoryEntry = {
-  id: string;       // UUID Supabase
+  id: string;
   title: string;
   date: string;
   messages: string[];
@@ -22,12 +22,51 @@ const normalizeTier = (raw: string | null | undefined): UserTier => {
   return "connected_free";
 };
 
+// ── POPUP QUOTA ───────────────────────────────────────────────────────────────
+function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
+        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-2xl">⚠️</span>
+          <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
+            {lang === "fr" ? "Limite atteinte" : "Limit reached"}
+          </h3>
+        </div>
+        <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-1">
+          {lang === "fr"
+            ? `Vous avez atteint la limite ${label} de votre plan.`
+            : `You've reached the ${label} limit of your plan.`}
+        </p>
+        <p className="text-zinc-500 text-xs font-mono mb-6">
+          {lang === "fr"
+            ? "Revenez dans 1 heure pour récupérer un crédit ou passez à un plan supérieur."
+            : "Come back in 1 hour to recover a credit or upgrade your plan."}
+        </p>
+        <div className="flex gap-3">
+          <Link href="/services"
+            className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all"
+            onClick={onClose}>
+            {lang === "fr" ? "Voir les plans" : "View plans"}
+          </Link>
+          <button onClick={onClose}
+            className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all">
+            {lang === "fr" ? "Fermer" : "Close"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HistoryPage() {
   const { t, lang, theme, toggleTheme } = useApp();
   const [history,        setHistory]        = useState<HistoryEntry[]>([]);
   const [viewingHistory, setViewingHistory] = useState<HistoryEntry | null>(null);
   const [chatMessages,   setChatMessages]   = useState<string[]>([]);
   const [activeChatId,   setActiveChatId]   = useState<string | null>(null);
+  const [memorySummary,  setMemorySummary]  = useState("");
   const [input,          setInput]          = useState("");
   const [isLoaded,       setIsLoaded]       = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -35,8 +74,11 @@ export default function HistoryPage() {
   const [user,          setUser]          = useState<any>(null);
   const [userTier,      setUserTier]      = useState<UserTier>("connected_free");
   const [isPageBlocked, setIsPageBlocked] = useState(true);
-  const [showLimitModal, setShowLimitModal] = useState(false);
-  const [activeLimitCategory, setActiveLimitCategory] = useState<"vitality_actions"|"calendar">("vitality_actions");
+
+  // ── QUOTA POPUP ───────────────────────────────────────────────────────────
+  const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
+  const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
+  const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
 
   const [leftWidth, setLeftWidth] = useState(450);
   const isResizing = useRef(false);
@@ -51,14 +93,12 @@ export default function HistoryPage() {
       const uid = data.user.id;
       setUser(data.user);
 
-      // Tier depuis profiles
       const { data: profile } = await supabase.from("profiles").select("user_tier").eq("id", uid).single();
       const tier = normalizeTier(profile?.user_tier);
       setUserTier(tier);
       setIsPageBlocked(tier === "connected_free" || tier === "basic");
 
       if (tier !== "connected_free" && tier !== "basic") {
-        // 1. Charger les entrées History depuis echo_conversations source="history"
         const { data: histRows } = await supabase
           .from("echo_conversations")
           .select("id, messages, updated_at")
@@ -75,10 +115,9 @@ export default function HistoryPage() {
           })));
         }
 
-        // 2. Charger la conversation Chat active (source="chat", la plus récente)
         const { data: chatRows } = await supabase
           .from("echo_conversations")
-          .select("id, messages")
+          .select("id, messages, summary")
           .eq("user_id", uid)
           .eq("source", "chat")
           .order("updated_at", { ascending: false })
@@ -87,6 +126,7 @@ export default function HistoryPage() {
         if (chatRows?.[0]) {
           setActiveChatId(chatRows[0].id);
           setChatMessages(chatRows[0].messages || []);
+          setMemorySummary(chatRows[0].summary || "");
         }
       }
 
@@ -96,7 +136,7 @@ export default function HistoryPage() {
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!session?.user) {
         setUser(null); setUserTier("connected_free"); setIsPageBlocked(true);
-        setChatMessages([]); setHistory([]); setActiveChatId(null);
+        setChatMessages([]); setHistory([]); setActiveChatId(null); setMemorySummary("");
         return;
       }
       const uid = session.user.id;
@@ -112,19 +152,13 @@ export default function HistoryPage() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
-  // ── SAUVEGARDER UNE ENTRÉE HISTORY dans Supabase ─────────────────────────
+  // ── SAUVEGARDER UNE ENTRÉE HISTORY ───────────────────────────────────────
   const saveHistoryEntry = async (msgs: string[]) => {
     if (!user || msgs.length === 0) return;
     const { data, error } = await supabase
       .from("echo_conversations")
-      .insert({
-        user_id:    user.id,
-        source:     "history",
-        messages:   msgs,
-        updated_at: new Date().toISOString(),
-      })
-      .select("id, updated_at")
-      .single();
+      .insert({ user_id: user.id, source: "history", messages: msgs, updated_at: new Date().toISOString() })
+      .select("id, updated_at").single();
     if (error) { console.error("[History] save entry:", error.message); return; }
     const entry: HistoryEntry = {
       id:       data.id,
@@ -138,29 +172,44 @@ export default function HistoryPage() {
   // ── SUPPRIMER UNE ENTRÉE ──────────────────────────────────────────────────
   const deleteEntry = async (id: string) => {
     if (user) {
-      const { error } = await supabase
-        .from("echo_conversations")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", user.id);
-      if (error) console.error("[History] delete entry:", error.message);
+      await supabase.from("echo_conversations").delete().eq("id", id).eq("user_id", user.id);
     }
     setHistory(prev => prev.filter(e => e.id !== id));
     if (viewingHistory?.id === id) setViewingHistory(null);
   };
 
-  // ── SAUVEGARDER LES MESSAGES CHAT ACTIFS en Supabase (debounce) ──────────
+  // ── SAUVEGARDER CHAT + CRON MEMORY ───────────────────────────────────────
   const chatSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const saveChatToDB = (msgs: string[]) => {
     if (!user || !activeChatId) return;
     if (chatSaveRef.current) clearTimeout(chatSaveRef.current);
     chatSaveRef.current = setTimeout(async () => {
-      const { error } = await supabase
-        .from("echo_conversations")
-        .update({ messages: msgs, updated_at: new Date().toISOString() })
-        .eq("id", activeChatId)
-        .eq("user_id", user.id);
-      if (error) console.error("[History] update chat:", error.message);
+      let finalSummary  = memorySummary;
+      let finalMessages = msgs;
+
+      if (msgs.length > 10) {
+        try {
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+          const res = await fetch(`${API_URL}/memory-summary`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ summary: memorySummary, messages: msgs.slice(0, 500), userTier }),
+          });
+          const data   = await res.json();
+          finalSummary  = data.summary || memorySummary;
+          finalMessages = msgs.slice(-100);
+          setMemorySummary(finalSummary);
+          console.log("[MEMORY History] Résumé mis à jour");
+        } catch (e) { console.error("[MEMORY History]", e); }
+      }
+
+      await supabase.from("echo_conversations").update({
+        messages:           finalMessages,
+        summary:            finalSummary,
+        summary_updated_at: new Date().toISOString(),
+        updated_at:         new Date().toISOString(),
+      }).eq("id", activeChatId).eq("user_id", user.id);
 
       // Auto-archive tous les 2000 chars
       const totalChars = msgs.join("").length;
@@ -179,7 +228,11 @@ export default function HistoryPage() {
       if (!isResizing.current) return;
       setLeftWidth(Math.max(300, Math.min(800, ev.clientX - 224)));
     };
-    const onUp = () => { isResizing.current = false; document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+    const onUp = () => {
+      isResizing.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   };
@@ -189,7 +242,12 @@ export default function HistoryPage() {
     const textToSubmit = forcedText ?? input;
     if (!textToSubmit.trim() || !user || isPageBlocked) return;
 
-    
+    // Quota chat_ia
+    const quotaStatus = checkQuota("chat_ia", userTier, true, user.id);
+    if (!quotaStatus.allowed) {
+      triggerQuotaPopup(lang === "fr" ? "Chat IA" : "AI Chat");
+      return;
+    }
 
     const baseMessages = [...chatMessages, `You: ${textToSubmit}`];
     setChatMessages([...baseMessages, "Echo: ..."]);
@@ -197,13 +255,14 @@ export default function HistoryPage() {
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const response = await fetch(`${API_URL}/chat`, {
+      const response = await fetch(`${API_URL}/history`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: textToSubmit,
-          image: null,
-          history: baseMessages,
+          message:        textToSubmit,
+          image:          null,
+          history:        baseMessages,
+          summary:        memorySummary,
           userTier,
           calendarEvents: {},
         }),
@@ -211,13 +270,20 @@ export default function HistoryPage() {
       const data = await response.json();
       const echoText = data.response || "";
 
+      // Quota actions auto
       if (data.action) {
         const { type } = data.action;
-        const qCat: "vitality_actions"|"calendar" = (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") ? "vitality_actions" : "calendar";
-        const status = checkQuota(qCat, userTier);
+        const qCat: "vitality_actions"|"calendar" =
+          (type === "ADD_BUDGET_EXPENSE" || type === "ADD_CALORIE_LOG" || type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL")
+            ? "vitality_actions" : "calendar";
+        const status = checkQuota(qCat, userTier, true, user.id);
         if (!status.allowed) {
-          setChatMessages([...baseMessages, `Echo: ${echoText}\n\n[Action bloquee — quota ${qCat}]`]);
-          setActiveLimitCategory(qCat); setShowLimitModal(true); return;
+          const label = qCat === "calendar"
+            ? (lang === "fr" ? "Calendrier" : "Calendar")
+            : (lang === "fr" ? "Vitalité" : "Vitality");
+          setChatMessages([...baseMessages, `Echo: ${echoText}\n\n[🔒 ${lang === "fr" ? "Action bloquée — quota atteint" : "Action blocked — quota reached"}]`]);
+          triggerQuotaPopup(label);
+          return;
         }
       }
 
@@ -225,27 +291,23 @@ export default function HistoryPage() {
       setChatMessages(finalMsgs);
       saveChatToDB(finalMsgs);
 
-      // ── Actions Echo → Supabase ──────────────────────────────────────────
       if (data.action && user) {
         const { type, payload } = data.action;
 
         if (type === "ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt } = payload;
           await supabase.from("echo_expenses").insert({
-            user_id: user.id,
-            title:   title || "Purchase",
-            amount:  parseFloat(amount ?? spent) || 0,
-            date:    paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
+            user_id: user.id, title: title || "Purchase",
+            amount: parseFloat(amount ?? spent) || 0,
+            date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
           });
         }
 
         if (type === "ADD_CALORIE_LOG") {
           const { foodName, calories } = payload;
           await supabase.from("echo_calories").insert({
-            user_id:   user.id,
-            food_name: foodName || "Food",
-            calories:  parseInt(calories) || 0,
-            date:      new Date().toLocaleDateString("fr-CA"),
+            user_id: user.id, food_name: foodName || "Food",
+            calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA"),
           });
         }
 
@@ -258,16 +320,19 @@ export default function HistoryPage() {
 
         if (type === "ADD_CALENDAR_EVENT") {
           const { title, start, end, notes } = payload;
-          const dateKey = start?.split("T")[0] || start || "";
+          let dateKey   = "";
+          let startTime = "";
+          let endTime   = "";
+          if (start) {
+            if (start.includes("T")) { dateKey = start.split("T")[0]; startTime = start.split("T")[1]?.slice(0, 5) || ""; }
+            else { dateKey = start; }
+          }
+          if (end?.includes("T")) endTime = end.split("T")[1]?.slice(0, 5) || "";
           if (dateKey) {
-            await supabase.from("echo_calendar").insert({
-              user_id:      user.id,
-              title:        title || "Untitled Event",
-              start_date:   dateKey,
-              end_date:     dateKey,
-              notes:        notes || "",
-              is_from_echo: true,
-            });
+            const payload2: any = { user_id: user.id, title: title || "Untitled Event", start_date: dateKey, end_date: dateKey, notes: notes || "", is_from_echo: true };
+            if (startTime) payload2.start_time = startTime;
+            if (endTime)   payload2.end_time   = endTime;
+            await supabase.from("echo_calendar").insert(payload2);
           }
         }
       }
@@ -296,9 +361,11 @@ export default function HistoryPage() {
     </main>
   );
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200">
+
+      {/* POPUP QUOTA */}
+      {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
 
       <div className="absolute top-4 right-4 z-50 bg-zinc-100/80 dark:bg-zinc-900/80 backdrop-blur-sm border border-zinc-300 dark:border-zinc-700 p-2 rounded-xl text-xs flex gap-3 items-center shadow-md">
         <LangDropdown />
@@ -317,15 +384,15 @@ export default function HistoryPage() {
               <Link href="/" className="hover:text-cyan-500 dark:hover:text-cyan-400">{t.sidebar.home}</Link>
             </h2>
             <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
-              <Link href="/chat"     className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
-              <Link href="/books"    className="block hover:text-cyan-500">{t.sidebar.books}</Link>
-              <Link href="/calendar" className="block hover:text-cyan-500">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
-              <Link href="/vitality" className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
-              <Link href="/services" className="block hover:text-cyan-500">💎 {lang==="fr"?"Services":"Services"}</Link>
-              <Link href="/account"  className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
+              <Link href="/chat"       className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
+              <Link href="/books"      className="block hover:text-cyan-500">{t.sidebar.books}</Link>
+              <Link href="/calendar"   className="block hover:text-cyan-500">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
+              <Link href="/vitality"   className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
+              <Link href="/services"   className="block hover:text-cyan-500">💎 {lang==="fr"?"Services":"Services"}</Link>
+              <Link href="/account"    className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
               <Link href="/horizonweb" className="block hover:text-cyan-500">📡 HorizonWeb</Link>
               <hr className="border-zinc-200 dark:border-zinc-800 my-4" />
-              <Link href="/history"  className="block text-amber-600 dark:text-amber-400 font-bold">⭐ {lang==="fr"?"Historique":"History"}</Link>
+              <Link href="/history"    className="block text-amber-600 dark:text-amber-400 font-bold">⭐ {lang==="fr"?"Historique":"History"}</Link>
             </div>
           </div>
           <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
@@ -378,8 +445,7 @@ export default function HistoryPage() {
             </div>
 
             {/* SPLITTER */}
-            <div onMouseDown={startResizing}
-              className="w-1.5 shrink-0 bg-zinc-200 dark:bg-zinc-800 cursor-col-resize hover:bg-cyan-500 dark:hover:bg-cyan-500 transition-colors duration-150 h-full relative z-10" />
+            <div onMouseDown={startResizing} className="w-1.5 shrink-0 bg-zinc-200 dark:bg-zinc-800 cursor-col-resize hover:bg-cyan-500 dark:hover:bg-cyan-500 transition-colors duration-150 h-full relative z-10" />
 
             {/* DISCUSSION DROITE */}
             <section className="flex-1 flex flex-col overflow-hidden min-w-0 bg-white dark:bg-black transition-colors duration-200">
@@ -492,22 +558,6 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
-
-      {/* LIMIT MODAL */}
-      {showLimitModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={()=>setShowLimitModal(false)}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl" onClick={e=>e.stopPropagation()}>
-            <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">🔒</div>
-            <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2 capitalize">{activeLimitCategory} Limit</h3>
-            <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">
-              {lang==="fr"?"Limite d'actions automatisees atteinte.":"Automated action limit reached."}
-            </p>
-            <div className="flex flex-col gap-3">
-              <Link href="/services" onClick={()=>setShowLimitModal(false)} className="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl font-bold text-sm transition-all text-center text-white">🚀 Upgrade Plan</Link>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
