@@ -23,19 +23,19 @@ const localT = {
     // Easter egg
     treasureEgg: {
       closePortal: "Fermer le portail",
-      title: "🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉",
-      subtitle: "Tu viens de découvrir un Easter Egg caché dans les profondeurs d'Echo AI... et ça mérite une récompense. 😎",
+      title: "🎉✨ ACCÈS PORTAIL SECRET ✨🎉",
+      subtitle: "Félicitations, tu as découvert le secret d'Echo AI !",
       congrats: "🏆 FÉLICITATIONS!",
-      unlock: "Tu débloques un accès à l'abonnement ULTRA avec une réduction exceptionnelle de 40 % pendant 1 mois.",
-      rare: "Peu de gens tombent sur cette surprise. Encore moins prennent le temps d'explorer suffisamment pour la trouver. 👀",
-      bonusTitle: "💎 Ton bonus :",
-      bonus1: "• 40 % de réduction sur ULTRA pendant 1 mois",
-      bonus2: "• Accès complet aux fonctionnalités avancées",
-      bonus3: "• Le droit officiel de te vanter d'avoir trouvé un secret caché d'Echo AI",
-      disclaimer: "⚠️ Cette récompense est valable pour un seul mois d'abonnement ULTRA et ne peut être combinée avec d'autres promotions.",
-      urgency: "Profites-en tant que le portail est encore ouvert... les Easter Eggs ont tendance à disparaître aussi mystérieusement qu'ils apparaissent. 😉",
+      unlock: "Tu débloques un accès à l'abonnement ULTRA avec une réduction exceptionnelle de 40 %.",
+      rare: "Le plan Ultra à 40 % de rabais, passe de 19,99 $ à 11,99 $.",
+      bonusTitle: "💎 Ultra débloque :",
+      bonus1: "• 1 200 messages IA par cycle 💎",
+      bonus2: "• 300 Actions HorizonWeb 💎",
+      bonus3: "• Historique et chat illimité 💎",
+      disclaimer: "C'est le 3e plus gros plan disponible 💎",
+      urgency: "Profites-en tant que le portail est encore ouvert...",
       outro: "🚀 Bien joué. Echo te regardait depuis le début.",
-      claim: "RÉCLAMER LE TRÉSOR (9.99$) ➔",
+      claim: "RÉCLAMER LE TRÉSOR (11.99$) ➔",
       connecting: "CONNEXION...",
       leaveIt: "Laisser le secret tranquille",
     },
@@ -58,19 +58,19 @@ const localT = {
     supportLocked: "🔒 Support is reserved for Basic, Premium, Ultra, and Founder plans.",
     treasureEgg: {
       closePortal: "Close the portal",
-      title: "🎉✨ HEY THERE, DIGITAL EXPLORER! ✨🎉",
-      subtitle: "You just discovered an Easter Egg hidden deep within Echo AI... and that deserves a reward. 😎",
+      title: "🎉✨ SECRET PORTAL ACCESSED ✨🎉",
+      subtitle: "Congratulations, you found Echo AI's secret!",
       congrats: "🏆 CONGRATULATIONS!",
-      unlock: "You're unlocking access to the ULTRA subscription with an exceptional 40% discount for 1 month.",
-      rare: "Few people stumble onto this surprise. Even fewer take the time to explore enough to find it. 👀",
-      bonusTitle: "💎 Your bonus:",
-      bonus1: "• 40% off ULTRA for 1 month",
-      bonus2: "• Full access to advanced features",
-      bonus3: "• The official right to brag about finding a hidden Echo AI secret",
-      disclaimer: "⚠️ This reward is valid for a single month of ULTRA subscription and cannot be combined with other promotions.",
-      urgency: "Take advantage while the portal is still open... Easter Eggs tend to vanish as mysteriously as they appear. 😉",
+      unlock: "You're unlocking access to the ULTRA subscription with an exceptional 40% discount.",
+      rare: "The Ultra plan with 40% off, goes from $19.99 to $11.99.",
+      bonusTitle: "💎 Ultra unlocks:",
+      bonus1: "• 1,200 AI messages per cycle 💎",
+      bonus2: "• 300 HorizonWeb Actions 💎",
+      bonus3: "• Unlimited history and chat 💎",
+      disclaimer: "It is the 3rd biggest plan available 💎",
+      urgency: "Take advantage while the portal is still open...",
       outro: "🚀 Well played. Echo was watching you the whole time.",
-      claim: "CLAIM THE TREASURE ($9.99) ➔",
+      claim: "CLAIM THE TREASURE ($11.99) ➔",
       connecting: "CONNECTING...",
       leaveIt: "Leave the secret alone",
     },
@@ -125,7 +125,15 @@ export default function ServicesPage() {
   }, []);
 
   const handleUpgradeWithStripe = async (planName: "basic" | "premium" | "ultra" | "founder" | "treasure") => {
-    if (!user) { setShowLoginRequiredModal(true); return; }
+    if (!user) {
+      if (planName === "treasure") {
+        localStorage.setItem("echo-treasure-redirect", "1");
+        window.location.href = "/account";
+      } else {
+        setShowLoginRequiredModal(true);
+      }
+      return;
+    }
     if (planName !== "treasure" && TIER_RANK[planName] <= TIER_RANK[userTier]) return;
     if (planName === "treasure" && TIER_RANK[userTier] >= TIER_RANK["ultra"]) {
       alert(lang === "fr" ? "Tu possèdes déjà un forfait supérieur !" : "You already own a higher tier!");
@@ -419,34 +427,44 @@ export default function ServicesPage() {
       {/* ── EASTER EGG TRÉSOR ── */}
       {showTreasureModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] transform animate-in zoom-in-95 duration-200 text-white max-h-[90vh] overflow-y-auto relative">
+          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.4)] text-white max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="absolute top-4 right-5 flex items-center gap-2 z-10">
               <LangDropdown />
               <button type="button" onClick={() => setShowTreasureModal(false)} className="text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1">✕</button>
             </div>
-            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">👑</div>
-            <div className="space-y-1">
+            
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce mt-4">👑</div>
+            
+            <div className="text-center space-y-2 mt-3">
               <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">{activeT.treasureEgg.title}</h3>
-              <p className="text-zinc-400 text-[11px] font-semibold leading-relaxed">{activeT.treasureEgg.subtitle}</p>
+              <p className="text-zinc-300 font-medium text-xs sm:text-sm bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 inline-block leading-relaxed">
+                {activeT.treasureEgg.rare}
+              </p>
             </div>
-            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl text-left text-[12px] sm:text-[13px] leading-relaxed text-zinc-100 font-semibold space-y-3">
-              <p className="text-center font-black text-amber-400 text-sm">{activeT.treasureEgg.congrats}</p>
-              <p>{activeT.treasureEgg.unlock}</p>
-              <p>{activeT.treasureEgg.rare}</p>
-              <div className="pt-1 text-cyan-400 font-mono space-y-0.5">
-                <p>{activeT.treasureEgg.bonusTitle}</p>
+
+            {/* INTEGRATION PROPRE DES AVANTAGES */}
+            <div className="mt-5 space-y-2.5 text-left text-xs sm:text-sm text-zinc-300 font-sans border-t border-b border-zinc-900 py-4 max-w-xs mx-auto">
+              <p className="text-amber-400 font-bold font-mono tracking-wide mb-1 text-center sm:text-left">
+                {activeT.treasureEgg.bonusTitle}
+              </p>
+              <div className="space-y-1 text-zinc-200 font-medium">
                 <p>{activeT.treasureEgg.bonus1}</p>
                 <p>{activeT.treasureEgg.bonus2}</p>
                 <p>{activeT.treasureEgg.bonus3}</p>
               </div>
-              <p className="text-[11px] text-zinc-400 italic">{activeT.treasureEgg.disclaimer}</p>
-              <p className="text-zinc-300 font-medium">{activeT.treasureEgg.urgency}</p>
-              <p className="text-center font-bold text-emerald-400 pt-1">{activeT.treasureEgg.outro}</p>
+              <p className="text-zinc-400 font-bold font-mono text-[11px] mt-2 text-center sm:text-left">
+                {activeT.treasureEgg.disclaimer}
+              </p>
             </div>
-            <div className="flex flex-col gap-2">
+
+            <div className="mt-6 flex flex-col gap-2">
               <button type="button" disabled={isLoadingTreasure} onClick={() => handleUpgradeWithStripe("treasure")}
                 className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md">
-                {isLoadingTreasure ? activeT.treasureEgg.connecting : activeT.treasureEgg.claim}
+                {isLoadingTreasure 
+                  ? activeT.treasureEgg.connecting 
+                  : user 
+                    ? activeT.treasureEgg.claim 
+                    : (lang === "fr" ? "S'authentifier et réclamer l'offre ➔" : "Login to claim offer ➔")}
               </button>
               <button type="button" onClick={() => setShowTreasureModal(false)} className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800">
                 {activeT.treasureEgg.leaveIt}
