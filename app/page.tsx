@@ -734,21 +734,23 @@ export default function Home() {
                   <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
                   <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }} />
                   <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
-                    <span className="text-xl">✨</span>
-                    <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">ECHO AI (1/2)</h4>
-                  </div>
+  <span className="text-xl">✨</span>
+  <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
+    ECHO AI — ASSISTANT IA PERSONNEL (1/2)
+  </h4>
+</div>
                   <div className="grid grid-cols-[72px_1fr] sm:grid-cols-[96px_1fr] gap-4 sm:gap-5 mb-5 items-start">
-                    <div className="relative w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 bg-zinc-900 dark:bg-zinc-100 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner overflow-hidden isolate">
-                      <img src="/echo1.png" alt="Echo Avatar" className="block w-full h-full object-cover" />
-                    </div>
-                    <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line min-w-0">
-                      {lang === "fr" ? (
-                        <>Hey bienvenue ! 👋{"\n"}Je suis Echo. Je traîne un peu partout sur ce site.{"\n"}Les boutons là-haut influencent ma façon de voir les choses.{"\n"}Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux, espiègle et légèrement chaotique. 😄{"\n"}Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}Ça devient souvent intéressant. 💀{"\n"}Adiooo ! ✨</>
-                      ) : (
-                        <>Hey, welcome! 👋{"\n"}I'm Echo. I tend to wander all over this site.{"\n"}The buttons up there influence the way I see things.{"\n"}If you don't select anything, you'll meet me in my natural state: curious, playful, and slightly chaotic. 😄{"\n"}And if you activate Double Vision, you'll combine two perspectives. 👀{"\n"}That's usually where things get interesting. 💀{"\n"}Adiooo ! ✨</>
-                      )}
-                    </div>
-                  </div>
+  <div className="relative w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 bg-zinc-900 dark:bg-zinc-100 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner overflow-hidden isolate">
+    <img src="/echo1.png" alt="Echo Avatar" className="block w-full h-full object-cover" />
+  </div>
+  <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line min-w-0">
+    {lang === "fr" ? (
+      <>Hey bienvenue ! 👋{"\n"}Je suis Echo AI, un assistant intelligent qui t'aide à gérer ton calendrier, ton budget, tes projets et tout ce qui mérite un peu plus d'attention.{"\n"}Je traîne un peu partout sur ce site.{"\n"}Les boutons là-haut influencent ma façon de voir les choses.{"\n"}Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux, espiègle et légèrement chaotique. 😄{"\n"}J'aime autant parler organisation, productivité et créativité qu'explorer des idées un peu folles.{"\n"}Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}Là, ça devient souvent intéressant. 💀{"\n"}Adiooo ! ✨</>
+    ) : (
+      <>Hey, welcome! 👋{"\n"}I'm Echo AI, an intelligent assistant designed to help you manage your calendar, budget, projects and daily productivity.{"\n"}I tend to wander all over this site.{"\n"}The buttons up there influence the way I see things.{"\n"}If you don't select anything, you'll meet me in my natural state: curious, playful, and slightly chaotic. 😄{"\n"}I enjoy talking about organization, productivity and creativity as much as exploring unusual ideas.{"\n"}And if you activate Double Vision, you'll combine two perspectives. 👀{"\n"}That's usually where things get interesting. 💀{"\n"}Adiooo ! ✨</>
+    )}
+  </div>
+</div>
                   <div className="flex flex-col gap-2.5 items-center border-t border-zinc-800 dark:border-zinc-200 pt-4">
                     <button onClick={() => setTutorialStep(2)}
                       className="w-full text-center px-8 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase">
@@ -1085,7 +1087,25 @@ export default function Home() {
         </div>
       )}
 
-      <PremiumRequiredModal open={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
+      {/* SEO HOME */}
+<div className="sr-only">
+  <h1>
+    Echo AI - Assistant IA personnel
+  </h1>
+
+  <p>
+    Echo AI est un assistant intelligent qui aide à gérer le calendrier,
+    le budget, la nutrition, l'écriture, les projets et la productivité
+    depuis une seule plateforme.
+  </p>
+
+  <p>
+    Assistant IA pour l'organisation personnelle, la gestion des tâches,
+    le suivi des dépenses, le suivi nutritionnel et la création de contenu.
+  </p>
+</div>
+
+<PremiumRequiredModal open={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
     </main>
   );
 }
