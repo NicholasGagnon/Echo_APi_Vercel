@@ -1,9 +1,7 @@
-"use client";
-
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AppProvider } from "../context/AppContext"; // 👈 On utilise le chemin d'importation propre de ton architecture
-import { Analytics } from "@vercel/analytics/react"; // 👈 Injection du tracker officiel de Vercel
+import { AppProvider } from "../context/AppContext"; 
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
   title: "Echo AI | Assistant IA personnel pour calendrier, budget et productivité",
@@ -101,8 +99,6 @@ export const metadata = {
   ]
 };
 
-
-
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -119,9 +115,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // 🎯 On enlève la classe statique "dark" d'ici pour laisser l'AppContext piloter le HTML !
     <html
-      lang="en"
+      lang="fr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-white dark:bg-black text-black dark:text-white transition-colors duration-200">
@@ -130,7 +125,7 @@ export default function RootLayout({
           {children}
         </AppProvider>
 
-        {/* 📊 Ton compteur de visites privé, visible uniquement sur ton dashboard Vercel */}
+        {/* 📊 Suivi d'audience Vercel Analytics */}
         <Analytics />
 
       </body>
