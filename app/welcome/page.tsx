@@ -39,14 +39,14 @@ export default function WelcomePage() {
 
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
-  const [email,    setEmail]    = useState("");
+  const [email,     setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [signInError,   setSignInError]   = useState<string | null>(null);
   const [signUpError,   setSignUpError]   = useState<string | null>(null);
   const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
 
   const fullTextPart1 = fr
-    ? "Bonjour Je suis Echo. \n\nC'est mon nom... J'ai vraiment dit ça 💀💀💀, \nJe suis une Présence augmentée, Synchronisée à votre réalité... "
+    ? "Bonjour Je suis Echo. \n\nC'est mon nom... J'ai vraiment dit ça 💀💀💀, \nJe suis une Présence augmentée, Synchronisée à votre reality... "
     : "Hello I am Echo. \n\nThat's my name... Did I really just say that? 💀💀💀, \nI am an Augmented Presence, Synchronized with your reality... ";
 
   const fullTextPart2 = fr
@@ -209,22 +209,39 @@ export default function WelcomePage() {
 
   const clearInputs = () => { setEmail(""); setPassword(""); setSignInError(null); setSignUpError(null); setSignUpSuccess(null); };
 
+  // 🎯 STRATÉGIE INFAILLIBLE : Capturer le clic global intelligemment
+  const handleGlobalClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (echoStep !== "closed") return;
+
+    const target = e.target as HTMLElement;
+
+    // Si le clic provient d'un bouton, d'un input, du sélecteur de langue ou d'un modal actif, on ne fait rien
+    if (
+      target.closest("button") || 
+      target.closest("input") || 
+      target.closest("form") || 
+      target.closest("[ref='langRef']") ||
+      showSignInModal || 
+      showSignUpModal
+    ) {
+      return; 
+    }
+
+    // Sinon, redirection immédiate et fluide sans bloquer les popups
+    router.push("/account");
+  };
+
   return (
-    <main className="relative min-h-screen w-full bg-black overflow-x-hidden flex flex-col items-center">
+    <main 
+      onClick={handleGlobalClick} 
+      className="relative min-h-screen w-full bg-black overflow-x-hidden flex flex-col items-center"
+    >
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-0"/>
 
       <div className="absolute inset-0 z-0 pointer-events-none"
         style={{background:"radial-gradient(ellipse 80% 55% at 50% 0%, rgba(6,182,212,0.10) 0%, transparent 70%)"}}/>
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.025]"
         style={{backgroundImage:"linear-gradient(rgba(6,182,212,1) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,1) 1px, transparent 1px)", backgroundSize:"60px 60px"}}/>
-
-      {/* ── FOND CLIQUABLE — derrière tout le contenu, seulement quand closed ── */}
-      {echoStep === "closed" && (
-        <div
-          className="absolute inset-0 z-[5] cursor-pointer"
-          onClick={() => router.push("/account")}
-        />
-      )}
 
       {/* ── LANG DROPDOWN ── */}
       <div ref={langRef} className="absolute top-5 right-5 z-30">
@@ -249,7 +266,7 @@ export default function WelcomePage() {
         )}
       </div>
 
-      {/* ── CONTENU PRINCIPAL — z-10 pour passer au-dessus du fond cliquable ── */}
+      {/* ── CONTENU PRINCIPAL ── */}
       <div className="relative z-10 w-full max-w-6xl mx-auto px-6 pt-10 pb-16 flex flex-col items-center gap-6">
 
         {/* BADGE */}
@@ -342,7 +359,7 @@ export default function WelcomePage() {
           )}
 
           {echoStep === "closed" && (
-            <div className="relative z-20 bg-zinc-950/85 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+            <div className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
               <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-4">
                 {fr ? "Un écosystème conçu pour gérer l'essentiel :" : "An ecosystem built to manage the essentials:"}
               </p>
@@ -362,8 +379,8 @@ export default function WelcomePage() {
             </div>
           )}
 
-          {/* ── BLOC DROIT — CONNEXION — z-20 pour être au-dessus du fond cliquable ── */}
-          <div className="relative z-20 bg-zinc-950/90 border border-cyan-500/25 rounded-2xl p-6 backdrop-blur-sm shadow-[0_0_40px_rgba(6,182,212,0.06)] flex flex-col gap-4">
+          {/* ── BLOC DROIT — CONNEXION ── */}
+          <div className="bg-zinc-950/90 border border-cyan-500/25 rounded-2xl p-6 backdrop-blur-sm shadow-[0_0_40px_rgba(6,182,212,0.06)] flex flex-col gap-4">
             <p className="text-center text-white font-bold text-lg">
               {fr ? "Connectez-vous pour commencer" : "Sign in to get started"}
             </p>
@@ -423,7 +440,7 @@ export default function WelcomePage() {
         </div>
 
         {/* FOOTER */}
-        <p className="relative z-20 text-zinc-700 text-[10px] font-mono mt-2">
+        <p className="text-zinc-700 text-[10px] font-mono mt-2">
           {fr ? "Cliquez n'importe où pour continuer" : "Click anywhere to continue"} · © {new Date().getFullYear()} Echo AI
         </p>
       </div>
