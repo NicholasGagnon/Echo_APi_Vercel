@@ -46,7 +46,7 @@ export default function WelcomePage() {
   const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
 
   const fullTextPart1 = fr
-    ? "Bonjour Je suis Echo. \n\nC'est mon nom... J'ai vraiment dit ça 💀💀💀, \nJe suis une Présence augmentée, Synchronisée à votre reality... "
+    ? "Bonjour Je suis Echo. \n\nC'est mon nom... J'ai vraiment dit ça 💀💀💀, \nJe suis une Présence augmentée, Synchronisée à votre réalité... "
     : "Hello I am Echo. \n\nThat's my name... Did I really just say that? 💀💀💀, \nI am an Augmented Presence, Synchronized with your reality... ";
 
   const fullTextPart2 = fr
@@ -209,33 +209,15 @@ export default function WelcomePage() {
 
   const clearInputs = () => { setEmail(""); setPassword(""); setSignInError(null); setSignUpError(null); setSignUpSuccess(null); };
 
-  // 🎯 STRATÉGIE INFAILLIBLE : Capturer le clic global intelligemment
-  const handleGlobalClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (echoStep !== "closed") return;
-
-    const target = e.target as HTMLElement;
-
-    // Si le clic provient d'un bouton, d'un input, du sélecteur de langue ou d'un modal actif, on ne fait rien
-    if (
-      target.closest("button") || 
-      target.closest("input") || 
-      target.closest("form") || 
-      target.closest("[ref='langRef']") ||
-      showSignInModal || 
-      showSignUpModal
-    ) {
-      return; 
+  // Fonction de redirection directe déclenchée par les composants ciblés
+  const goToAccount = () => {
+    if (echoStep === "closed") {
+      router.push("/account");
     }
-
-    // Sinon, redirection immédiate et fluide sans bloquer les popups
-    router.push("/account");
   };
 
   return (
-    <main 
-      onClick={handleGlobalClick} 
-      className="relative min-h-screen w-full bg-black overflow-x-hidden flex flex-col items-center"
-    >
+    <main className="relative min-h-screen w-full bg-black overflow-x-hidden flex flex-col items-center">
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-0"/>
 
       <div className="absolute inset-0 z-0 pointer-events-none"
@@ -269,15 +251,21 @@ export default function WelcomePage() {
       {/* ── CONTENU PRINCIPAL ── */}
       <div className="relative z-10 w-full max-w-6xl mx-auto px-6 pt-10 pb-16 flex flex-col items-center gap-6">
 
-        {/* BADGE */}
-        <div className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-cyan-400">
+        {/* BADGE (Cliquable) */}
+        <div 
+          onClick={goToAccount}
+          className={`flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-cyan-400 ${echoStep === "closed" ? "cursor-pointer select-none" : ""}`}
+        >
           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"/>
           Echo AI Ecosystem
         </div>
 
-        {/* ECHO FLOTTANT CENTRAL */}
+        {/* ECHO FLOTTANT CENTRAL (Cliquable) */}
         <div className="flex flex-col items-center gap-3">
-          <div className="relative w-44 h-44 flex items-center justify-center">
+          <div 
+            onClick={goToAccount}
+            className={`relative w-44 h-44 flex items-center justify-center ${echoStep === "closed" ? "cursor-pointer select-none" : ""}`}
+          >
             <div className="absolute inset-0 rounded-full"
               style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.45) 80%, #06b6d4 100%)", animation:"spinRadar 3s linear infinite"}}/>
             <div className="absolute inset-2 rounded-full"
@@ -296,7 +284,7 @@ export default function WelcomePage() {
                 }}/>
             ))}
           </div>
-          <div className="text-center">
+          <div onClick={goToAccount} className={`text-center ${echoStep === "closed" ? "cursor-pointer select-none" : ""}`}>
             <h1 className="text-5xl sm:text-6xl font-black tracking-tighter text-white font-mono leading-none">
               ECHO <span className="text-cyan-400">AI</span>
             </h1>
@@ -359,7 +347,10 @@ export default function WelcomePage() {
           )}
 
           {echoStep === "closed" && (
-            <div className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm">
+            <div 
+              onClick={goToAccount}
+              className="bg-zinc-950/85 border border-zinc-800 rounded-2xl p-6 backdrop-blur-sm cursor-pointer select-none"
+            >
               <p className="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-4">
                 {fr ? "Un écosystème conçu pour gérer l'essentiel :" : "An ecosystem built to manage the essentials:"}
               </p>
@@ -379,7 +370,7 @@ export default function WelcomePage() {
             </div>
           )}
 
-          {/* ── BLOC DROIT — CONNEXION ── */}
+          {/* ── BLOC DROIT — CONNEXION (Reste inchangé pour préserver la saisie) ── */}
           <div className="bg-zinc-950/90 border border-cyan-500/25 rounded-2xl p-6 backdrop-blur-sm shadow-[0_0_40px_rgba(6,182,212,0.06)] flex flex-col gap-4">
             <p className="text-center text-white font-bold text-lg">
               {fr ? "Connectez-vous pour commencer" : "Sign in to get started"}
@@ -439,8 +430,11 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        {/* FOOTER */}
-        <p className="text-zinc-700 text-[10px] font-mono mt-2">
+        {/* FOOTER (Cliquable) */}
+        <p 
+          onClick={goToAccount}
+          className={`text-zinc-700 text-[10px] font-mono mt-2 ${echoStep === "closed" ? "cursor-pointer select-none" : ""}`}
+        >
           {fr ? "Cliquez n'importe où pour continuer" : "Click anywhere to continue"} · © {new Date().getFullYear()} Echo AI
         </p>
       </div>
