@@ -1094,7 +1094,9 @@ export default function Home() {
   </h1>
 
   <p>
-    chatgpt, chat gpt, gemini, gemini ai, canva, deepseek, google translate, translate, traductor, speed test, calculator, google maps, maps, gmail, yahoo mail, aol mail, outlook, youtube, yt, facebook, fb, instagram, ig, tiktok, tik tok, twitter, x, pinterest, whatsapp, whatsapp web, wsp web, telegram, discord, netflix, spotify, twitch, weather, weather tomorrow, clima, meteo, hava durumu, погода, restaurants, restaurants near me, food near me, hotels, walmart, amazon, ebay, shein, temu, craigslist, etsy, zillow, usps tracking, fedex tracking, wordle, roblox, poki, blooket, solitaire, nba, nfl, premier league, serie a, real madrid, fc barcelona, australian open, cricbuzz, ind vs nz, india vs new zealand, what is my ip, what time is it, where am i, what day is it, how to tie a tie, how to delete instagram account, why am i so tired.
+    Echo AI est un assistant intelligent qui aide à gérer le calendrier,
+    le budget, la nutrition, l'écriture, les projets et la productivité
+    depuis une seule plateforme.
   </p>
 
   <p>
