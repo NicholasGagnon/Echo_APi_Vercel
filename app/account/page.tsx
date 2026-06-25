@@ -357,7 +357,6 @@ export default function AccountPage() {
     showToast(lang === "fr" ? "Déconnexion sécurisée effectuée." : "Disconnected safely.", "info");
   };
 
-  // TUNNEL DE CAPTURE ET REDIRECTION EN AMONT POUR S'ASSURER QUE STRIPE REÇOIVE L'ID DE SESSION APRÈS AUTH
   const handleTreasureCheckout = async () => {
     if (!user) {
       localStorage.setItem("echo-treasure-redirect", "1");
@@ -898,7 +897,7 @@ export default function AccountPage() {
               {lang === "fr" ? (
                 <>
                   <p className="text-amber-600 dark:text-amber-500 font-bold border border-amber-500/20 bg-amber-500/5 rounded-xl p-4">
-                    ⚠️ NOTIFICATION DE SÉCURITÉ : Lors du déclenchement du nœud d'authentification, la cellule Google affichera un avertissement indiquant que l'application n'est pas validée C'est le comportement attendu et tout à fait normal puisque l'écosystème Echo AI est en phase active de développement interne.
+                    ⚠️ NOTIFICATION DE SÉCURITÉ : Lors du déclenchement du nœud d'authentification, la cellule Google affichera un avertissement indiquant que l'application n'est pas validée. C'est le comportement attendu et tout à fait normal puisque l'écosystème Echo AI est en phase active de développement interne.
                   </p>
                   
                   <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-900 rounded-2xl p-5 space-y-3">
@@ -950,7 +949,7 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* TREASURE MODAL CORRIGÉ — ROUTAGE SANS POP-UP INTERMÉDIAIRE BLOQUANTE */}
+      {/* TREASURE MODAL COMPACT ET HARMONISÉ SANS CONFLITS */}
       {showTreasureModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
           <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.4)] text-white max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -973,7 +972,7 @@ export default function AccountPage() {
               </p>
             </div>
 
-            {/* INTEGRATION DES AVANTAGES ULTRA */}
+            {/* AVANTAGES ULTRA INTEGRÉS */}
             <div className="mt-5 space-y-2.5 text-left text-xs sm:text-sm text-zinc-300 font-sans border-t border-b border-zinc-900 py-4 max-w-xs mx-auto">
               <p className="text-amber-400 font-bold font-mono tracking-wide mb-1 text-center sm:text-left">
                 {fr ? "✨ Ultra débloque :" : "✨ Ultra unlocks:"}
@@ -989,7 +988,6 @@ export default function AccountPage() {
                 <p>• {fr ? "Historique et chat illimité 💎" : "Unlimited history and chat 💎"}</p>
                 <p>• {fr ? "Un mois du 3ième meilleur plan 💎" : "1 month of the 3rd best plan 💎"}</p>
               </div>
-              
             </div>
 
             <div className="mt-6 flex flex-col gap-2">
