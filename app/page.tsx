@@ -31,15 +31,25 @@ const fetchUserTier = async (uid: string): Promise<UserTier> => {
 
 const STICKY_STYLES = {
   yellow: { bg:"bg-yellow-950/40 dark:bg-yellow-950", border:"border-yellow-600/50", text:"text-yellow-900 dark:text-yellow-200", dot:"bg-yellow-400" },
-  blue:   { bg:"bg-blue-950/40 dark:bg-blue-950",      border:"border-blue-500/50",   text:"text-blue-900 dark:text-blue-200",   dot:"bg-blue-400"   },
+  blue:   { bg:"bg-blue-950/40 dark:bg-blue-950",     border:"border-blue-500/50",   text:"text-blue-900 dark:text-blue-200",   dot:"bg-blue-400"   },
   green:  { bg:"bg-green-950/40 dark:bg-green-950",  border:"border-green-600/50",  text:"text-green-900 dark:text-green-200", dot:"bg-green-400"  },
-  pink:   { bg:"bg-pink-950/40 dark:bg-pink-950",      border:"border-pink-600/50",   text:"text-pink-900 dark:text-pink-200",   dot:"bg-pink-400"   },
+  pink:   { bg:"bg-pink-950/40 dark:bg-pink-950",     border:"border-pink-600/50",   text:"text-pink-900 dark:text-pink-200",   dot:"bg-pink-400"   },
 };
 
 const EVENT_DOT_COLORS = ["bg-cyan-400","bg-green-400","bg-yellow-400"];
 
+const WATER = [
+  { g:"〰", top:"6%",  left:"1%",   rot:"-18deg", sz:"58px" },
+  { g:"∿",  top:"20%", right:"2%",  rot:"12deg",  sz:"70px" },
+  { g:"〜", top:"44%", left:"0.5%", rot:"-8deg",  sz:"50px" },
+  { g:"≈",  top:"67%", right:"1.5%",rot:"18deg",  sz:"64px" },
+  { g:"∾",  top:"83%", left:"2%",   rot:"-12deg", sz:"54px" },
+];
+
+// ── SOURCE UNIFIÉE home + chat ────────────────────────────────────────────────
 const CONV_SOURCE = "echo";
 
+// ── COMPOSANT POPUP QUOTA ─────────────────────────────────────────────────────
 function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
@@ -79,7 +89,6 @@ function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onC
 
 export default function Home() {
   const { t, lang, theme, toggleTheme, triggerToast } = useApp();
-  const fr = lang === "fr";
 
   const [message,      setMessage]      = useState("");
   const [messages,     setMessages]     = useState<EchoMessage[]>([]);
@@ -93,10 +102,10 @@ export default function Home() {
   const textareaRef   = useRef<HTMLTextAreaElement>(null);
   const saveTimerRef  = useRef<ReturnType<typeof setTimeout>|null>(null);
 
-  const [isListening,        setIsListening]        = useState(false);
-  const [selectedImage,      setSelectedImage]      = useState<string|null>(null);
+  const [isListening,       setIsListening]       = useState(false);
+  const [selectedImage,     setSelectedImage]      = useState<string|null>(null);
   const [selectedImageName, setSelectedImageName]  = useState("");
-  const [showPremiumModal,   setShowPremiumModal]   = useState(false);
+  const [showPremiumModal,  setShowPremiumModal]   = useState(false);
 
   const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
   const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
@@ -173,8 +182,8 @@ export default function Home() {
   const [tutorialStep,   setTutorialStep]   = useState<number|null>(null);
   const [selectedButtons,        setSelectedButtons]        = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
-  const [showTreasureModal,      setShowTreasureModal]      = useState(false);
-  const [isLoadingTreasure,      setIsLoadingTreasure]      = useState(false);
+  const [showTreasureModal,     setShowTreasureModal]      = useState(false);
+  const [isLoadingTreasure,     setIsLoadingTreasure]      = useState(false);
   const [showLoginRequiredModal, setShowLoginRequiredModal] = useState(false);
 
   const buttonsData = ["clarity","humain","critical","expert","precision","philosophy","strategy","decompose","refine","double"].map(id => ({ id }));
@@ -208,6 +217,7 @@ export default function Home() {
   const deserializeMsgs = (raws: string[]): EchoMessage[] => raws.map(r => ({ raw: r }));
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
+  // ── SAVE TO SUPABASE + CRON MEMORY ───────────────────────────────────────
   const saveToSupabase = async (uid: string, convId: string|null, raws: string[]): Promise<string|null> => {
     let finalSummary  = memorySummary;
     let finalMessages = raws;
@@ -247,6 +257,7 @@ export default function Home() {
     }
   };
 
+  // ── PUSH GOOGLE CALENDAR depuis Echo ─────────────────────────────────────
   const pushEchoEventToGoogle = async (
     uid: string, dateKey: string, title: string,
     startTime: string, endTime: string, notes: string
@@ -261,7 +272,7 @@ export default function Home() {
     if (!token) return null;
 
     try {
-      const hasTime   = !!(startTime || endTime);
+      const hasTime  = !!(startTime || endTime);
       const startObj = hasTime
         ? { dateTime: new Date(`${dateKey}T${startTime || "00:00"}:00`).toISOString() }
         : { date: dateKey };
@@ -287,6 +298,7 @@ export default function Home() {
     }
   };
 
+  // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
@@ -294,6 +306,7 @@ export default function Home() {
 
       try {
         if (uid) {
+          // Chat croisé : charge la conversation unifiée (source "echo")
           const { data: convRows } = await supabase
             .from("echo_conversations")
             .select("id, messages, summary")
@@ -360,6 +373,7 @@ export default function Home() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  // ── AUTOSAVE ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isLoaded) return;
     const raws = serializeMsgs(messages);
@@ -377,6 +391,7 @@ export default function Home() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+  // ── UPCOMING EVENTS ───────────────────────────────────────────────────────
   const upcomingEvents: UpcomingEvent[] = (() => {
     const today = new Date(); today.setHours(0,0,0,0);
     const results: UpcomingEvent[] = [];
@@ -388,6 +403,7 @@ export default function Home() {
     return results.sort((a,b) => a.diffDays - b.diffDays).slice(0,6);
   })();
 
+  // ── IMAGE ─────────────────────────────────────────────────────────────────
   const compressImage = (base64: string): Promise<string> =>
     new Promise(resolve => {
       const img = document.createElement("img");
@@ -402,6 +418,7 @@ export default function Home() {
       img.src = base64;
     });
 
+  // ── ENVOYER ───────────────────────────────────────────────────────────────
   const envoyer = async () => {
     if (!message.trim() && !selectedImage) return;
 
@@ -473,7 +490,7 @@ export default function Home() {
         if (type === "ADD_CALORIE_LOG") {
           const { foodName, food_name, meal, title, calories } = payload;
           if (userId) await supabase.from("echo_calories").insert({
-            user_id:  userId,
+            user_id:   userId,
             food_name: foodName || food_name || meal || title || "Aliment",
             calories:  parseInt(calories) || 0,
             date:      new Date().toLocaleDateString("fr-CA"),
@@ -487,6 +504,7 @@ export default function Home() {
             localStorage.setItem("echo-calorie-goal", nextGoal.toString());
         }
 
+        // ── CALENDRIER — ISO 8601 + push Google ──────────────────────────
         if (type === "ADD_CALENDAR_EVENT") {
           const { title, start, end, notes } = payload;
 
@@ -513,10 +531,12 @@ export default function Home() {
 
           if (dateKey && userId) {
             try {
+              // 1. Push vers Google Calendar d'abord
               const googleEventId = await pushEchoEventToGoogle(
                 userId, dateKey, finalTitle, startTime, endTime, finalNotes
               );
 
+              // 2. Insert dans Supabase
               const insertPayload: any = {
                 user_id:      userId,
                 title:        finalTitle,
@@ -534,6 +554,7 @@ export default function Home() {
 
               const finalId = (!error && insertedList?.length) ? insertedList[0].id : `temp-${Date.now()}`;
 
+              // 3. Mettre à jour le state local
               setCalendarEvents(prev => {
                 const currentList = prev[dateKey] || [];
                 if (currentList.some(ev => ev.title === finalTitle && ev.notes === finalNotes)) return prev;
@@ -565,14 +586,15 @@ export default function Home() {
     }
   };
 
+  // ── STICKIES ──────────────────────────────────────────────────────────────
   const addSticky = async () => {
     if (!newStickyText.trim()) return;
     if (!userId) {
       const id = `local-${Date.now()}`;
-      setStickies(prev => [...prev, { id: id, text: newStickyText.trim(), color: selectedColor }]);
+      setStickies(prev => [...prev, { id, text: newStickyText.trim(), color: selectedColor }]);
       setNewStickyText(""); return;
     }
-    const { data: inserted, error = null } = await supabase.from("echo_stickies").insert({
+    const { data: inserted, error } = await supabase.from("echo_stickies").insert({
       user_id: userId, text: newStickyText.trim(), color: selectedColor,
     }).select().single();
     if (error) { console.error("[Home] echo_stickies insert:", error.message); return; }
@@ -713,9 +735,7 @@ export default function Home() {
                   <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }} />
                   <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
                     <span className="text-xl">✨</span>
-                    <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
-                      ECHO AI — ASSISTANT IA PERSONNEL (1/2)
-                    </h4>
+                    <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">ECHO AI (1/2)</h4>
                   </div>
                   <div className="grid grid-cols-[72px_1fr] sm:grid-cols-[96px_1fr] gap-4 sm:gap-5 mb-5 items-start">
                     <div className="relative w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 bg-zinc-900 dark:bg-zinc-100 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner overflow-hidden isolate">
@@ -723,9 +743,9 @@ export default function Home() {
                     </div>
                     <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line min-w-0">
                       {lang === "fr" ? (
-                        <>Hey bienvenue ! 👋{"\n"}Je suis Echo AI, un assistant intelligent qui t'aide à gérer ton calendrier, ton budget, tes projets et tout ce qui mérite un peu plus d'attention.{"\n"}Je traîne un peu partout sur ce site.{"\n"}Les boutons là-haut influencent ma façon de voir les choses.{"\n"}Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux, espiègle et légèrement chaotique. 😄{"\n"}J'aime autant parler organisation, productivité et créativité qu'explorer des idées un peu folles.{"\n"}Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}Là, ça devient souvent intéressant. 💀{"\n"}Adiooo ! ✨</>
+                        <>Hey bienvenue ! 👋{"\n"}Je suis Echo. Je traîne un peu partout sur ce site.{"\n"}Les boutons là-haut influencent ma façon de voir les choses.{"\n"}Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux, espiègle et légèrement chaotique. 😄{"\n"}Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}Ça devient souvent intéressant. 💀{"\n"}Adiooo ! ✨</>
                       ) : (
-                        <>Hey, welcome! 👋{"\n"}I'm Echo AI, an intelligent assistant designed to help you manage your calendar, budget, projects and daily productivity.{"\n"}I tend to wander all over this site.{"\n"}The buttons up there influence the way I see things.{"\n"}If you don't select anything, you'll meet me in my natural state: curious, playful, and slightly chaotic. 😄{"\n"}I enjoy talking about organization, productivity and creativity as much as exploring unusual ideas.{"\n"}And if you activate Double Vision, you'll combine two perspectives. 👀{"\n"}That's usually where things get interesting. 💀{"\n"}Adiooo ! ✨</>
+                        <>Hey, welcome! 👋{"\n"}I'm Echo. I tend to wander all over this site.{"\n"}The buttons up there influence the way I see things.{"\n"}If you don't select anything, you'll meet me in my natural state: curious, playful, and slightly chaotic. 😄{"\n"}And if you activate Double Vision, you'll combine two perspectives. 👀{"\n"}That's usually where things get interesting. 💀{"\n"}Adiooo ! ✨</>
                       )}
                     </div>
                   </div>
@@ -778,7 +798,7 @@ export default function Home() {
                   <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spinDash 4s linear infinite"}}/>
                   <div className="absolute inset-1.5 rounded-full bg-black/80"/>
                   <img src="/echo1.png" alt="Echo" className="relative z-10 w-20 h-20 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
-                  <button type="button" onClick={() => setShowTreasureModal(true)} className="absolute inset-0 z-20 rounded-full opacity-0 cursor-pointer" />
+                  <button type="button" onClick={() => setShowTreasureModal(true)} className="absolute inset-0 z-20 rounded-full opacity-0 cursor-default" />
                 </div>
                 <span className="text-zinc-600 text-[8px] mt-1 tracking-widest uppercase font-mono">{echoState}</span>
               </div>
@@ -862,7 +882,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* INPUT CORRIGÉ SANS LA LIGNE ERRONÉE */}
+            {/* INPUT */}
             <div className="flex flex-col gap-2 mt-4 shrink-0 px-2 min-w-0">
               <div className="max-w-4xl w-full mx-auto flex flex-col gap-2 min-w-0">
                 {selectedImage && (
@@ -1025,84 +1045,45 @@ export default function Home() {
           <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center relative shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
             <img src="/echo1.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
             <p className="text-zinc-900 dark:text-zinc-100 font-sans text-sm font-semibold leading-relaxed">
-              {fr ? "Connecte-toi d'abord, je te garde la surprise au chaud ! 😉" : "Log in first, I'll keep the surprise warm for you! 😉"}
+              {lang === "fr" ? "Connecte-toi d'abord, je te garde la surprise au chaud ! 😉" : "Log in first, I'll keep the surprise warm for you! 😉"}
             </p>
             <div className="flex flex-col gap-2">
               <Link href="/account" onClick={() => { localStorage.setItem("echo-treasure-redirect","1"); setShowLoginRequiredModal(false); }}
                 className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md text-center">
-                {fr ? "Se connecter" : "Log in"}
+                {lang === "fr" ? "Se connecter" : "Log in"}
               </Link>
               <button onClick={() => setShowLoginRequiredModal(false)} className="w-full py-1.5 text-zinc-500 font-mono text-[11px] hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
-                {fr ? "Plus tard" : "Later"}
+                {lang === "fr" ? "Plus tard" : "Later"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* TREASURE MODAL COMPLÈTEMENT ALIGNÉ AVEC LES DIAMANTS ET LE NOUVEAU DESIGN */}
+      {/* TREASURE MODAL */}
       {showTreasureModal && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.4)] text-white max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4">
+          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] text-white max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
             <div className="absolute top-4 right-5 flex items-center gap-2 z-10">
               <LangDropdown />
               <button type="button" onClick={() => setShowTreasureModal(false)} className="text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1">✕</button>
             </div>
-            
-            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce mt-4">👑</div>
-            
-            <div className="text-center space-y-2 mt-3">
-              <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">
-                {fr ? "🎉✨ ACCÈS PORTAIL SECRET ✨🎉" : "🎉✨ SECRET PORTAL ACCESSED ✨🎉"}
-              </h3>
-              <h4 className="text-white font-bold text-base font-mono uppercase tracking-wide">
-                {fr ? "🏆 FÉLICITATIONS !" : "🏆 CONGRATULATIONS!"}
-              </h4>
-              <p className="text-zinc-300 font-medium text-xs sm:text-sm bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 inline-block leading-relaxed">
-                {fr ? "« Le plan Ultra à 40 %, de rabais, passe de 19,99 $ à 11,99 $ »" : "“The Ultra plan with 40% off, goes from $19.99 to $11.99”"}
-              </p>
-            </div>
-
-            {/* INTEGRATION DES AVANTAGES ULTRA ALIGNÉ CONFORMÉMENT À IMAGE_23F0E3.PNG */}
-            <div className="mt-5 space-y-2.5 text-left text-xs sm:text-sm text-zinc-300 font-sans border-t border-b border-zinc-900 py-4 max-w-xs mx-auto">
-              <p className="text-amber-400 font-bold font-mono tracking-wide mb-1 text-center sm:text-left">
-                {fr ? "✨ Ultra débloque :" : "✨ Ultra unlocks:"}
-              </p>
-              <div className="space-y-1 text-zinc-200 font-medium">
-                <p>• {fr ? "1 200 messages IA par cycle 💎" : "1,200 AI messages per cycle 💎"}</p>
-                <p>• {fr ? "300 Actions HorizonWeb 💎" : "300 HorizonWeb Actions 💎"}</p>
-                <p>• {fr ? "240 prompts comportementales 💎" : "240 behavioral prompts 💎"}</p>
-                <p>• {fr ? "120 actions Calendrier 💎" : "120 Calendar actions 💎"}</p>
-                <p>• {fr ? "300 actions Budget&Nutrition 💎" : "300 Budget&Nutrition actions 💎"}</p>
-                <p>• {fr ? "Support prioritaire 💎" : "Priority support 💎"}</p>
-                <p>• {fr ? "Analyse d'image 💎" : "Image analysis 💎"}</p>
-                <p>• {fr ? "Historique et chat illimité 💎" : "Unlimited history and chat 💎"}</p>
-                <p>• {fr ? "Un mois du 3ième meilleur plan 💎" : "1 month of the 3rd best plan 💎"}</p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex flex-col gap-2">
+            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">👑</div>
+            <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">
+              {lang === "fr" ? "🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉" : "🎉✨ HEY THERE, DIGITAL EXPLORER! ✨🎉"}
+            </h3>
+            <div className="flex flex-col gap-2">
               <button type="button" disabled={isLoadingTreasure} onClick={handleTreasureCheckout}
                 className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md">
-                {isLoadingTreasure ? (fr ? "CONNEXION..." : "CONNECTING...") : (fr ? "Vous devez vous connecter pour en profiter ➔" : "Connect to get it ➔")}
+                {isLoadingTreasure ? (lang === "fr" ? "CONNEXION..." : "CONNECTING...") : (lang === "fr" ? "RÉCLAMER LE TRÉSOR (9.99$) ➔" : "CLAIM THE TREASURE ($9.99) ➔")}
               </button>
               <button type="button" onClick={() => setShowTreasureModal(false)} className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800">
-                {fr ? "Laisser le secret tranquille" : "Leave the secret alone"}
+                {lang === "fr" ? "Laisser le secret tranquille" : "Leave the secret alone"}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* SEO HOME */}
-      <div className="sr-only">
-        <h1>Echo AI - Assistant IA personnel</h1>
-        <p>
-          Echo AI est un assistant intelligent qui aide à gérér le calendrier,
-          le budget, la nutrition, l'écriture, les projets et la productivité
-          depuis une seule plateforme.
-        </p>
-      </div>
 
       <PremiumRequiredModal open={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
     </main>

@@ -779,7 +779,7 @@ export default function ChatPage() {
                 <div className="h-full flex flex-col items-center justify-center gap-4">
                   {!tutorialStep && (
                     <div className="w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-900 rounded-full shadow-md overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center echo-idle">
-                      <img src="/Echo2.png" alt="Echo Avatar" className="w-full h-full object-cover" />
+                      <img src="/Echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
                     </div>
                   )}
                   <p className="text-zinc-400 dark:text-zinc-700 text-sm italic">
