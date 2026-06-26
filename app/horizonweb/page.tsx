@@ -112,6 +112,9 @@ export default function HorizonWebPage() {
   const [isAvatarBroken, setIsAvatarBroken]   = useState(false);
   const [activeLens, setActiveLens]     = useState<"critical" | "expert" | "strategy" | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
+  const [isWarming, setIsWarming]       = useState(false);
+  const warmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warmupAbortRef = useRef<AbortController | null>(null);
   const introLangRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -194,6 +197,45 @@ export default function HorizonWebPage() {
   const closePopupAndSave = () => {
     setIsPopupOpen(false);
     localStorage.setItem("horizon_intro_seen", "true");
+  };
+
+  const triggerWarmup = () => {
+    if (isWarming || echoState === "thinking" || echoState === "speaking") return;
+
+    setIsWarming(true);
+    warmupAbortRef.current = new AbortController();
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://echo-api-fixed.onrender.com";
+
+    fetch(`${API_URL}/horizon`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "...",
+        userTier,
+        lang,
+        selectedButtons: [],
+        warmup: true,
+      }),
+      signal: warmupAbortRef.current.signal,
+    }).catch(() => {});
+
+    warmupTimerRef.current = setTimeout(() => {
+      if (warmupAbortRef.current) {
+        warmupAbortRef.current.abort();
+        warmupAbortRef.current = null;
+      }
+      setIsWarming(false);
+    }, 2000);
+  };
+
+  const handleInputFocus = () => {
+    setInputFocused(true);
+    triggerWarmup();
+  };
+
+  const handleInputBlur = () => {
+    setInputFocused(false);
   };
 
   const handleLensClick = (lens: "critical" | "expert" | "strategy") => {
@@ -380,13 +422,22 @@ export default function HorizonWebPage() {
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === "Enter" && executeHorizonSearch(query)}
-              onFocus={() => setInputFocused(true)}
-              onBlur={() => setInputFocused(false)}
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
               placeholder={lang === "fr" ? "TAPER VOTRE RECHERCHE ICI..." : "TYPE YOUR SEARCH HERE..."}
               className="relative z-10 w-full bg-white dark:bg-zinc-900 text-black dark:text-white font-mono uppercase text-sm border-2 rounded-2xl py-4 pl-6 pr-32 transition-all outline-none"
               style={{
-                borderColor: inputFocused ? "rgba(6,182,212,0.8)" : "transparent",
-                boxShadow: inputFocused ? "0 0 0 3px rgba(6,182,212,0.12), inset 0 0 20px rgba(6,182,212,0.04)" : "none",
+                borderColor: isWarming
+                  ? "rgba(220,38,38,0.9)"
+                  : inputFocused
+                    ? "rgba(6,182,212,0.8)"
+                    : "transparent",
+                boxShadow: isWarming
+                  ? "0 0 0 3px rgba(220,38,38,0.15), 0 0 20px rgba(220,38,38,0.2), inset 0 0 20px rgba(220,38,38,0.04)"
+                  : inputFocused
+                    ? "0 0 0 3px rgba(6,182,212,0.12), inset 0 0 20px rgba(6,182,212,0.04)"
+                    : "none",
+                transition: "border-color 0.3s ease, box-shadow 0.3s ease",
               }}
             />
             <button
@@ -395,6 +446,12 @@ export default function HorizonWebPage() {
               style={{background:"linear-gradient(135deg, #991b1b, #dc2626)", boxShadow:"0 0 12px rgba(220,38,38,0.5)"}}>
               EXPLORE
             </button>
+            {isWarming && (
+              <div className="absolute right-[calc(6rem+1rem)] top-1/2 -translate-y-1/2 z-20 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" style={{animationDuration:"0.8s"}}/>
+                <span className="text-[9px] font-mono uppercase text-red-500/70 tracking-widest">warm</span>
+              </div>
+            )}
           </div>
 
           {/* LENS BUTTONS */}
