@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
+import QuotaPopup from "../components/QuotaPopup";
 import { useApp } from "../../context/AppContext";
 
 type ChatMessage  = { raw: string; imageB64?: string };
@@ -42,44 +43,6 @@ const loadLocalConvos = (): Conversation[] => {
   try { const raw = localStorage.getItem(LOCAL_CONVOS_KEY); return raw ? JSON.parse(raw) : []; }
   catch { return []; }
 };
-
-// ── COMPOSANT POPUP QUOTA ─────────────────────────────────────────────────────
-function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
-        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-2xl">⚠️</span>
-          <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
-            {lang === "fr" ? "Limite atteinte" : "Limit reached"}
-          </h3>
-        </div>
-        <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-1">
-          {lang === "fr"
-            ? `Vous avez atteint la limite ${label} de votre plan.`
-            : `You've reached the ${label} limit of your plan.`}
-        </p>
-        <p className="text-zinc-500 text-xs font-mono mb-6">
-          {lang === "fr"
-            ? "Revenez dans 1 heure pour récupérer un crédit ou passez à un plan supérieur."
-            : "Come back in 1 hour to recover a credit or upgrade your plan."}
-        </p>
-        <div className="flex gap-3">
-          <Link href="/services"
-            className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all"
-            onClick={onClose}>
-            {lang === "fr" ? "Voir les plans" : "View plans"}
-          </Link>
-          <button onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all">
-            {lang === "fr" ? "Fermer" : "Close"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function ChatPage() {
   const { t, lang, triggerToast } = useApp();
@@ -431,7 +394,12 @@ export default function ChatPage() {
     if (!input.trim() && !selectedImage) return;
 
     const quotaStatus = checkQuota("chat_ia", userTier, true, userId);
-    if (!quotaStatus.allowed) { triggerQuotaPopup(lang === "fr" ? "Chat IA" : "AI Chat"); return; }
+    if (!quotaStatus.allowed) {
+      const label = quotaStatus.error === "anon_limit" ? "anon_limit"
+        : (lang === "fr" ? "Chat IA" : "AI Chat");
+      triggerQuotaPopup(label);
+      return;
+    }
 
     const userMessage = input.trim() || (lang === "fr" ? "Analyse cette image." : "Analyze this image.");
     const imageToSend = selectedImage;
@@ -625,7 +593,7 @@ export default function ChatPage() {
           <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-7 rounded-2xl max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex flex-col items-center gap-3 mb-5">
               <div className="w-16 h-16 rounded-full border-2 border-cyan-400/60 overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.3)]">
-                <img src="/echo2.png" alt="Echo" className="w-full h-full object-cover" />
+                <img src="/Echo.png" alt="Echo" className="w-full h-full object-cover" />
               </div>
               <p className="text-zinc-800 dark:text-zinc-100 font-bold text-base text-center">
                 {lang === "fr" ? "Hé hé… attention ! 👀" : "Hey hey… hold on! 👀"}
@@ -659,7 +627,7 @@ export default function ChatPage() {
           </div>
           <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
             <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
-              <img src="/echo2.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
+              <img src="/Echo.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
             </div>
             <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
               {lang === "fr"
@@ -779,7 +747,7 @@ export default function ChatPage() {
                 <div className="h-full flex flex-col items-center justify-center gap-4">
                   {!tutorialStep && (
                     <div className="w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-900 rounded-full shadow-md overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center echo-idle">
-                      <img src="/echo2.png" alt="Echo Avatar" className="w-full h-full object-cover" />
+                      <img src="/Echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
                     </div>
                   )}
                   <p className="text-zinc-400 dark:text-zinc-700 text-sm italic">
@@ -798,7 +766,7 @@ export default function ChatPage() {
                     <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 max-w-3xl">
                       <div className="flex items-center gap-4">
                         <div className={`w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-sm overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center ${isLastEcho ? echoState==="thinking"?"echo-thinking":echoState==="speaking"?"echo-speaking":"echo-idle":"echo-idle"}`}>
-                          <img src="/echo2.png" alt="Echo Avatar" className="w-full h-full object-cover" />
+                          <img src="/Echo.png" alt="Echo Avatar" className="w-full h-full object-cover" />
                         </div>
                         <div className="flex flex-col">
                           <span className="text-zinc-500 dark:text-zinc-300 text-sm font-mono uppercase tracking-widest font-bold">Echo</span>

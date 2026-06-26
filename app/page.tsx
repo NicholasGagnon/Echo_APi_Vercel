@@ -7,6 +7,7 @@ import { checkQuota, getMessageMaxLength, UserTier } from "../utils/quota";
 import LangDropdown from "./components/LangDropdown";
 import TutorialHeaderControls from "./components/TutorialHeaderControls";
 import PremiumRequiredModal from "./components/PremiumRequiredModal";
+import QuotaPopup from "./components/QuotaPopup";
 import { useApp } from "../context/AppContext";
 
 type EchoMessage  = { raw: string; imageB64?: string };
@@ -48,44 +49,6 @@ const WATER = [
 
 // ── SOURCE UNIFIÉE home + chat ────────────────────────────────────────────────
 const CONV_SOURCE = "echo";
-
-// ── COMPOSANT POPUP QUOTA ─────────────────────────────────────────────────────
-function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
-        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-2xl">⚠️</span>
-          <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
-            {lang === "fr" ? "Limite atteinte" : "Limit reached"}
-          </h3>
-        </div>
-        <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-1">
-          {lang === "fr"
-            ? `Vous avez atteint la limite ${label} de votre plan.`
-            : `You've reached the ${label} limit of your plan.`}
-        </p>
-        <p className="text-zinc-500 text-xs font-mono mb-6">
-          {lang === "fr"
-            ? "Revenez dans 1 heure pour récupérer un crédit ou passez à un plan supérieur."
-            : "Come back in 1 hour to recover a credit or upgrade your plan."}
-        </p>
-        <div className="flex gap-3">
-          <Link href="/services"
-            className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all"
-            onClick={onClose}>
-            {lang === "fr" ? "Voir les plans" : "View plans"}
-          </Link>
-          <button onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all">
-            {lang === "fr" ? "Fermer" : "Close"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function Home() {
   const { t, lang, theme, toggleTheme, triggerToast } = useApp();
@@ -182,9 +145,8 @@ export default function Home() {
   const [tutorialStep,   setTutorialStep]   = useState<number|null>(null);
   const [selectedButtons,        setSelectedButtons]        = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
-  const [showTreasureModal,     setShowTreasureModal]      = useState(false);
-  const [isLoadingTreasure,     setIsLoadingTreasure]      = useState(false);
-  const [showLoginRequiredModal, setShowLoginRequiredModal] = useState(false);
+  const [showEasterModal,      setShowEasterModal]      = useState(false);
+  const [isLoadingTreasure,   setIsLoadingTreasure]   = useState(false);
 
   const buttonsData = ["clarity","humain","critical","expert","precision","philosophy","strategy","decompose","refine","double"].map(id => ({ id }));
   const localButtonsLabels: Record<"fr"|"en", Record<string,string>> = {
@@ -462,9 +424,11 @@ export default function Home() {
             ? "vitality_actions" : "calendar";
         const status = checkQuota(qCat, userTier, true, userId);
         if (!status.allowed) {
-          const label = qCat === "calendar"
-            ? (lang === "fr" ? "Calendrier" : "Calendar")
-            : (lang === "fr" ? "Vitalité" : "Vitality");
+          const label = status.error === "anon_blocked" || status.error === "anon_limit"
+            ? status.error
+            : qCat === "calendar"
+              ? (lang === "fr" ? "Calendrier" : "Calendar")
+              : (lang === "fr" ? "Vitalité" : "Vitality");
           triggerQuotaPopup(label);
           isActionBlocked = true;
         }
@@ -628,22 +592,30 @@ export default function Home() {
     recognition.start();
   };
 
-  const handleTreasureCheckout = async () => {
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
-    if (!user) { setShowLoginRequiredModal(true); return; }
+  const handleEasterEggClick = () => {
+    setShowEasterModal(true);
+  };
+
+  const handleEasterCheckout = async () => {
+    setShowEasterModal(false);
+    if (!userId) {
+      localStorage.setItem("echo-treasure-redirect", "1");
+      window.location.href = "/account";
+      return;
+    }
     try {
       setIsLoadingTreasure(true);
+      const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "treasure", userId: user.id, userEmail: user.email }),
+        body: JSON.stringify({ plan: "treasure", userId, userEmail: session?.user?.email }),
       });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "Checkout error");
-      if (result.url) window.location.href = result.url;
-    } catch (err: any) {
-      alert(`Erreur : ${err.message}`);
+      const data = await response.json();
+      if (data.url) window.location.href = data.url;
+    } catch {
+      localStorage.setItem("echo-treasure-redirect", "1");
+      window.location.href = "/account";
     } finally {
       setIsLoadingTreasure(false);
     }
@@ -745,8 +717,8 @@ export default function Home() {
                       {lang === "fr" ? (
                         <>Hey bienvenue ! 👋{"\n"}Je suis Echo. Je traîne un peu partout sur ce site.{"\n"}Les boutons là-haut influencent ma façon de voir les choses.{"\n"}Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux, espiègle et légèrement chaotique. 😄{"\n"}Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}Ça devient souvent intéressant. 💀{"\n"}Adiooo ! ✨</>
                       ) : (
-                        <>Hey, welcome! 👋{"\n"}I'm Echo. I tend to wander all over this site.{"\n"}The buttons up there influence the way I see things.{"\n"}If you don't select anything, you'll meet me in my natural state: curious, playful, and slightly chaotic. 😄{"\n"}And if you activate Double Vision, you'll combine two perspectives. 👀{"\n"}That's usually where things get interesting. 💀{"\n"}Adiooo ! ✨</>
-                      )}
+                          <>Hey, welcome! 👋{"\n"}I'm Echo. I tend to wander all over this site.{"\n"}The buttons up there influence the way I see things.{"\n"}If you don't select anything, you'll meet me in my natural state: curious, playful, and slightly chaotic. 😄{"\n"}And if you activate Double Vision, you'll combine two perspectives. 👀{"\n"}That's usually where things get interesting. 💀{"\n"}Adiooo ! ✨</>
+                        )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-2.5 items-center border-t border-zinc-800 dark:border-zinc-200 pt-4">
@@ -798,7 +770,7 @@ export default function Home() {
                   <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spinDash 4s linear infinite"}}/>
                   <div className="absolute inset-1.5 rounded-full bg-black/80"/>
                   <img src="/echo1.png" alt="Echo" className="relative z-10 w-20 h-20 object-cover rounded-full border border-cyan-500/30 shadow-lg"/>
-                  <button type="button" onClick={() => setShowTreasureModal(true)} className="absolute inset-0 z-20 rounded-full opacity-0 cursor-default" />
+                  <button type="button" onClick={handleEasterEggClick} className="absolute inset-0 z-20 rounded-full opacity-0 cursor-default" />
                 </div>
                 <span className="text-zinc-600 text-[8px] mt-1 tracking-widest uppercase font-mono">{echoState}</span>
               </div>
@@ -1039,46 +1011,56 @@ export default function Home() {
         </div>
       )}
 
-      {/* LOGIN REQUIRED */}
-      {showLoginRequiredModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100000] p-6 backdrop-blur-md" onClick={() => setShowLoginRequiredModal(false)}>
-          <div className="bg-zinc-50 dark:bg-zinc-950 border-2 border-cyan-500/50 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center relative shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
-            <img src="/echo1.png" alt="Echo" className="w-16 h-16 rounded-full object-cover mx-auto border border-cyan-500/30 shadow-md" />
-            <p className="text-zinc-900 dark:text-zinc-100 font-sans text-sm font-semibold leading-relaxed">
-              {lang === "fr" ? "Connecte-toi d'abord, je te garde la surprise au chaud ! 😉" : "Log in first, I'll keep the surprise warm for you! 😉"}
-            </p>
-            <div className="flex flex-col gap-2">
-              <Link href="/account" onClick={() => { localStorage.setItem("echo-treasure-redirect","1"); setShowLoginRequiredModal(false); }}
-                className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-wider transition-all shadow-md text-center">
-                {lang === "fr" ? "Se connecter" : "Log in"}
-              </Link>
-              <button onClick={() => setShowLoginRequiredModal(false)} className="w-full py-1.5 text-zinc-500 font-mono text-[11px] hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
-                {lang === "fr" ? "Plus tard" : "Later"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* EASTER EGG MODAL */}
+      {showEasterModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border-2 border-amber-500 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.3)] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => setShowEasterModal(false)} className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors">✕</button>
 
-      {/* TREASURE MODAL */}
-      {showTreasureModal && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4">
-          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.4)] text-white max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
-            <div className="absolute top-4 right-5 flex items-center gap-2 z-10">
-              <LangDropdown />
-              <button type="button" onClick={() => setShowTreasureModal(false)} className="text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1">✕</button>
+            <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce">👑</div>
+
+            <div className="text-center space-y-2 mt-3">
+              <h3 className="text-sm font-black text-amber-400 tracking-wider font-mono uppercase">
+                {lang === "fr" ? "🎉✨ ACCÈS PORTAIL SECRET ✨🎉" : "🎉✨ SECRET PORTAL ACCESSED ✨🎉"}
+              </h3>
+              <h4 className="text-white font-bold text-base font-mono uppercase tracking-wide">
+                {lang === "fr" ? "🏆 FÉLICITATIONS !" : "🏆 CONGRATULATIONS!"}
+              </h4>
+              <p className="text-zinc-300 font-medium text-xs sm:text-sm bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 inline-block leading-relaxed">
+                {lang === "fr"
+                  ? "« Le plan Ultra à 40 % de rabais, passe de 19,99 $ à 11,99 $ »"
+                  : "The Ultra plan with 40% off, goes from $19.99 to $11.99"}
+              </p>
             </div>
-            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce">👑</div>
-            <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">
-              {lang === "fr" ? "🎉✨ HOLA, EXPLORATEUR DU NUMÉRIQUE! ✨🎉" : "🎉✨ HEY THERE, DIGITAL EXPLORER! ✨🎉"}
-            </h3>
-            <div className="flex flex-col gap-2">
-              <button type="button" disabled={isLoadingTreasure} onClick={handleTreasureCheckout}
-                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md">
-                {isLoadingTreasure ? (lang === "fr" ? "CONNEXION..." : "CONNECTING...") : (lang === "fr" ? "RÉCLAMER LE TRÉSOR (9.99$) ➔" : "CLAIM THE TREASURE ($9.99) ➔")}
+
+            <div className="mt-5 space-y-2.5 text-left text-xs sm:text-sm text-zinc-300 font-sans border-t border-b border-zinc-900 py-4 max-w-xs mx-auto">
+              <p className="text-amber-400 font-bold font-mono tracking-wide mb-1 text-center sm:text-left">
+                {lang === "fr" ? "✨ Ultra débloque :" : "✨ Ultra unlocks:"}
+              </p>
+              <div className="space-y-1 text-zinc-200 font-medium">
+                <p>• {lang === "fr" ? "1 200 messages IA par cycle 💎" : "1,200 AI messages per cycle 💎"}</p>
+                <p>• {lang === "fr" ? "300 Actions HorizonWeb 💎" : "300 HorizonWeb Actions 💎"}</p>
+                <p>• {lang === "fr" ? "240 prompts comportementales 💎" : "240 behavioral prompts 💎"}</p>
+                <p>• {lang === "fr" ? "120 actions Calendrier 💎" : "120 Calendar actions 💎"}</p>
+                <p>• {lang === "fr" ? "300 actions Budget & Nutrition 💎" : "300 Budget & Nutrition actions 💎"}</p>
+                <p>• {lang === "fr" ? "Support prioritaire 💎" : "Priority support 💎"}</p>
+                <p>• {lang === "fr" ? "Analyse d'image 💎" : "Image analysis 💎"}</p>
+                <p>• {lang === "fr" ? "Historique et chat illimité 💎" : "Unlimited history and chat 💎"}</p>
+                <p>• {lang === "fr" ? "1 mois du 3ième meilleur plan 💎" : "1 month of the 3rd best plan 💎"}</p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2">
+              <button type="button" disabled={isLoadingTreasure} onClick={handleEasterCheckout}
+                className="w-full py-3 bg-amber-600 hover:bg-amber-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-widest transition-all shadow-md text-center">
+                {isLoadingTreasure
+                  ? (lang === "fr" ? "CONNEXION..." : "CONNECTING...")
+                  : userId
+                    ? (lang === "fr" ? "Réclamer le trésor (11.99$) ➔" : "Claim the treasure ($11.99) ➔")
+                    : (lang === "fr" ? "Se connecter pour en profiter ➔" : "Log in to claim ➔")}
               </button>
-              <button type="button" onClick={() => setShowTreasureModal(false)} className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800">
-                {lang === "fr" ? "Laisser le secret tranquille" : "Leave the secret alone"}
+              <button type="button" onClick={() => setShowEasterModal(false)} className="w-full py-1.5 text-zinc-600 font-mono text-[11px] hover:text-zinc-400 transition-colors">
+                {lang === "fr" ? "Plus tard" : "Later"}
               </button>
             </div>
           </div>

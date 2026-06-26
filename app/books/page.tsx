@@ -8,6 +8,7 @@ import { checkQuota, UserTier } from "../../utils/quota";
 import LangDropdown from "../components/LangDropdown";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import PremiumRequiredModal from "../components/PremiumRequiredModal";
+import QuotaPopup from "../components/QuotaPopup";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -159,44 +160,6 @@ function applyPreset(preset: "print"|"kindle", s: {
     s.setMirrorMargins(false); s.setShowPageNumbers(false); s.setShowHeader(false);
     s.setLineHeight(1.6); s.setFontSize(14); s.setIsJustified(false);
   }
-}
-
-// ── POPUP QUOTA ───────────────────────────────────────────────────────────────
-function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[9999] p-4">
-      <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
-        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-2xl">⚠️</span>
-          <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
-            {lang === "fr" ? "Limite atteinte" : "Limit reached"}
-          </h3>
-        </div>
-        <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-1">
-          {lang === "fr"
-            ? `Vous avez atteint la limite ${label} de votre plan.`
-            : `You've reached the ${label} limit of your plan.`}
-        </p>
-        <p className="text-zinc-500 text-xs font-mono mb-6">
-          {lang === "fr"
-            ? "Revenez dans 1 heure pour récupérer un crédit ou passez à un plan supérieur."
-            : "Come back in 1 hour to recover a credit or upgrade your plan."}
-        </p>
-        <div className="flex gap-3">
-          <Link href="/services"
-            className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all"
-            onClick={onClose}>
-            {lang === "fr" ? "Voir les plans" : "View plans"}
-          </Link>
-          <button onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all">
-            {lang === "fr" ? "Fermer" : "Close"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function BooksPage() {

@@ -989,7 +989,9 @@ export default function AccountPage() {
                 <p>• {fr ? "Historique et chat illimité 💎" : "Unlimited history and chat 💎"}</p>
                 <p>• {fr ? "Un mois du 3ième meilleur plan 💎" : "1 month of the 3rd best plan 💎"}</p>
               </div>
-              
+              <p className="text-zinc-400 font-bold font-mono text-[11px] mt-2 text-center sm:text-left">
+                {fr ? "C'est 3e plus gros plan disponible💎" : "It is the 3rd biggest plan available💎"}
+              </p>
             </div>
 
             <div className="mt-6 flex flex-col gap-2">

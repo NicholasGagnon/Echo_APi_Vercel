@@ -426,48 +426,54 @@ export default function ServicesPage() {
 
       {/* ── EASTER EGG TRÉSOR ── */}
       {showTreasureModal && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.4)] text-white max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="absolute top-4 right-5 flex items-center gap-2 z-10">
-              <LangDropdown />
-              <button type="button" onClick={() => setShowTreasureModal(false)} className="text-zinc-500 hover:text-white text-lg font-mono transition-colors p-1">✕</button>
-            </div>
-            
-            <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-3xl animate-bounce mt-4">👑</div>
-            
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border-2 border-amber-500 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.3)] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => setShowTreasureModal(false)} className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors">✕</button>
+
+            <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce">👑</div>
+
             <div className="text-center space-y-2 mt-3">
-              <h3 className="text-base font-black text-amber-400 tracking-wider font-mono uppercase">{activeT.treasureEgg.title}</h3>
+              <h3 className="text-sm font-black text-amber-400 tracking-wider font-mono uppercase">
+                {lang === "fr" ? "🎉✨ ACCÈS PORTAIL SECRET ✨🎉" : "🎉✨ SECRET PORTAL ACCESSED ✨🎉"}
+              </h3>
+              <h4 className="text-white font-bold text-base font-mono uppercase tracking-wide">
+                {lang === "fr" ? "🏆 FÉLICITATIONS !" : "🏆 CONGRATULATIONS!"}
+              </h4>
               <p className="text-zinc-300 font-medium text-xs sm:text-sm bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 inline-block leading-relaxed">
-                {activeT.treasureEgg.rare}
+                {lang === "fr"
+                  ? "« Le plan Ultra à 40 % de rabais, passe de 19,99 $ à 11,99 $ »"
+                  : "The Ultra plan with 40% off, goes from $19.99 to $11.99"}
               </p>
             </div>
 
-            {/* INTEGRATION PROPRE DES AVANTAGES */}
             <div className="mt-5 space-y-2.5 text-left text-xs sm:text-sm text-zinc-300 font-sans border-t border-b border-zinc-900 py-4 max-w-xs mx-auto">
               <p className="text-amber-400 font-bold font-mono tracking-wide mb-1 text-center sm:text-left">
-                {activeT.treasureEgg.bonusTitle}
+                {lang === "fr" ? "✨ Ultra débloque :" : "✨ Ultra unlocks:"}
               </p>
               <div className="space-y-1 text-zinc-200 font-medium">
-                <p>{activeT.treasureEgg.bonus1}</p>
-                <p>{activeT.treasureEgg.bonus2}</p>
-                <p>{activeT.treasureEgg.bonus3}</p>
+                <p>• {lang === "fr" ? "1 200 messages IA par cycle 💎" : "1,200 AI messages per cycle 💎"}</p>
+                <p>• {lang === "fr" ? "300 Actions HorizonWeb 💎" : "300 HorizonWeb Actions 💎"}</p>
+                <p>• {lang === "fr" ? "240 prompts comportementales 💎" : "240 behavioral prompts 💎"}</p>
+                <p>• {lang === "fr" ? "120 actions Calendrier 💎" : "120 Calendar actions 💎"}</p>
+                <p>• {lang === "fr" ? "300 actions Budget & Nutrition 💎" : "300 Budget & Nutrition actions 💎"}</p>
+                <p>• {lang === "fr" ? "Support prioritaire 💎" : "Priority support 💎"}</p>
+                <p>• {lang === "fr" ? "Analyse d'image 💎" : "Image analysis 💎"}</p>
+                <p>• {lang === "fr" ? "Historique et chat illimité 💎" : "Unlimited history and chat 💎"}</p>
+                <p>• {lang === "fr" ? "1 mois du 3ième meilleur plan 💎" : "1 month of the 3rd best plan 💎"}</p>
               </div>
-              <p className="text-zinc-400 font-bold font-mono text-[11px] mt-2 text-center sm:text-left">
-                {activeT.treasureEgg.disclaimer}
-              </p>
             </div>
 
             <div className="mt-6 flex flex-col gap-2">
               <button type="button" disabled={isLoadingTreasure} onClick={() => handleUpgradeWithStripe("treasure")}
-                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs py-3.5 rounded-xl uppercase tracking-widest transition shadow-md">
-                {isLoadingTreasure 
-                  ? activeT.treasureEgg.connecting 
-                  : user 
-                    ? activeT.treasureEgg.claim 
-                    : (lang === "fr" ? "S'authentifier et réclamer l'offre ➔" : "Login to claim offer ➔")}
+                className="w-full py-3 bg-amber-600 hover:bg-amber-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-widest transition-all shadow-md text-center">
+                {isLoadingTreasure
+                  ? (lang === "fr" ? "CONNEXION..." : "CONNECTING...")
+                  : user
+                    ? (lang === "fr" ? "Réclamer le trésor (11.99$) ➔" : "Claim the treasure ($11.99) ➔")
+                    : (lang === "fr" ? "Se connecter pour en profiter ➔" : "Log in to claim ➔")}
               </button>
-              <button type="button" onClick={() => setShowTreasureModal(false)} className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-500 font-mono text-[11px] py-1.5 rounded-xl transition border border-zinc-800">
-                {activeT.treasureEgg.leaveIt}
+              <button type="button" onClick={() => setShowTreasureModal(false)} className="w-full py-1.5 text-zinc-600 font-mono text-[11px] hover:text-zinc-400 transition-colors">
+                {lang === "fr" ? "Plus tard" : "Later"}
               </button>
             </div>
           </div>

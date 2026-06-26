@@ -111,6 +111,7 @@ export default function HorizonWebPage() {
   const [isIntroLangOpen, setIsIntroLangOpen] = useState(false);
   const [isAvatarBroken, setIsAvatarBroken]   = useState(false);
   const [activeLens, setActiveLens]     = useState<"critical" | "expert" | "strategy" | null>(null);
+  const [inputFocused, setInputFocused] = useState(false);
   const introLangRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -202,12 +203,13 @@ export default function HorizonWebPage() {
   };
 
   return (
-    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
+    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-red-500/30 relative">
 
+      {/* TOP NEON BAR — rouge + cyan split */}
       <div className="pointer-events-none fixed top-0 left-0 right-0 h-[2px] z-40"
-        style={{background:"linear-gradient(90deg, transparent 0%, #06b6d4 30%, #22d3ee 50%, #06b6d4 70%, transparent 100%)", boxShadow:"0 0 12px 2px rgba(6,182,212,0.6), 0 0 30px 6px rgba(6,182,212,0.2)", animation:"neonSlide 4s ease-in-out infinite alternate"}}/>
+        style={{background:"linear-gradient(90deg, transparent 0%, #dc2626 20%, #06b6d4 50%, #dc2626 80%, transparent 100%)", boxShadow:"0 0 12px 2px rgba(220,38,38,0.7), 0 0 30px 6px rgba(220,38,38,0.25)", animation:"neonSlide 4s ease-in-out infinite alternate"}}/>
 
-      {/* POPUP QUOTA DÉPASSÉ */}
+      {/* QUOTA POPUP */}
       {showQuotaPopup && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
@@ -230,7 +232,7 @@ export default function HorizonWebPage() {
             </p>
             <div className="flex gap-3">
               <Link href="/services"
-                className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                className="flex-1 py-2.5 rounded-xl bg-red-700 hover:bg-red-600 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all shadow-[0_0_12px_rgba(220,38,38,0.3)]"
                 onClick={() => setShowQuotaPopup(false)}>
                 {lang === "fr" ? "Voir les plans" : "View plans"}
               </Link>
@@ -243,12 +245,17 @@ export default function HorizonWebPage() {
         </div>
       )}
 
+      {/* INTRO POPUP */}
       {isPopupOpen && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-950 border-2 border-cyan-500/40 p-6 rounded-2xl max-w-lg w-full relative shadow-[0_0_50px_rgba(6,182,212,0.25)]">
+          <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-lg w-full relative shadow-[0_0_50px_rgba(220,38,38,0.2),0_0_80px_rgba(6,182,212,0.1)]">
             <button onClick={closePopupAndSave} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
             <div className="flex justify-between items-center mb-4 pr-8">
-              <h3 className="text-sm font-mono uppercase tracking-widest text-cyan-400 font-bold">📡 HorizonWeb Protocol</h3>
+              <h3 className="text-sm font-mono uppercase tracking-widest font-bold">
+                <span className="text-cyan-400">📡 Horizon</span>
+                <span className="text-red-500"> Deep</span>
+                <span className="text-zinc-400"> Protocol</span>
+              </h3>
               <div ref={introLangRef} className="relative shrink-0">
                 <button type="button" onClick={() => setIsIntroLangOpen(o => !o)}
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-cyan-500/60 hover:text-cyan-400 transition-all text-[11px] font-mono font-bold">
@@ -259,7 +266,7 @@ export default function HorizonWebPage() {
                   <div className="absolute right-0 mt-1.5 w-32 rounded-xl border border-zinc-800 bg-zinc-950 p-1.5 shadow-xl z-10">
                     {(["fr","en"] as const).map(l => (
                       <button key={l} type="button" onClick={() => { setLang(l); setIsIntroLangOpen(false); }}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold text-left transition-colors ${lang===l?"bg-cyan-500/10 text-cyan-400":"text-zinc-400 hover:bg-zinc-900"}`}>
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold text-left transition-colors ${lang===l?"bg-red-500/10 text-red-400":"text-zinc-400 hover:bg-zinc-900"}`}>
                         {l === "fr" ? "Français" : "English"}
                       </button>
                     ))}
@@ -270,23 +277,24 @@ export default function HorizonWebPage() {
             <div className="space-y-3 text-xs sm:text-sm text-zinc-300 leading-relaxed font-mono">
               {lang === "fr" ? (
                 <>
-                  <p><span className="text-cyan-400 font-bold">HorizonWeb</span> déploie un moteur d'exploration externe ultra-rigoureux.</p>
+                  <p><span className="text-cyan-400 font-bold">Horizon Deep</span> <span className="text-red-400 font-bold">Web Search</span> déploie un moteur d'exploration externe ultra-rigoureux.</p>
                   <p>Il ne livre pas de listes publicitaires : il extrait la donnée brute du terrain pour formuler des conclusions utiles.</p>
                 </>
               ) : (
                 <>
-                  <p><span className="text-cyan-400 font-bold">HorizonWeb</span> deploys an ultra-rigorous external search engine.</p>
+                  <p><span className="text-cyan-400 font-bold">Horizon Deep</span> <span className="text-red-400 font-bold">Web Search</span> deploys an ultra-rigorous external search engine.</p>
                   <p>It doesn't deliver ads or spam — it extracts raw terrain data to provide actionable conclusions.</p>
                 </>
               )}
             </div>
-            <button onClick={closePopupAndSave} className="w-full mt-6 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black tracking-widest text-xs uppercase transition-all">
+            <button onClick={closePopupAndSave} className="w-full mt-6 py-2 rounded-xl bg-gradient-to-r from-red-700 via-red-600 to-cyan-700 hover:from-red-600 hover:to-cyan-600 text-white font-black tracking-widest text-xs uppercase transition-all shadow-[0_0_20px_rgba(220,38,38,0.3)]">
               {lang === "fr" ? "Démarrer l'exploration" : "Initialize exploration"}
             </button>
           </div>
         </div>
       )}
 
+      {/* SIDEBAR */}
       <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex-col justify-between hidden md:flex">
         <div className="space-y-20">
           <h2 className="font-bold text-lg">
@@ -299,7 +307,7 @@ export default function HorizonWebPage() {
             <Link href="/vitality"   className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
             <Link href="/services"   className="block hover:text-cyan-500">💎 {lang==="fr"?"Services":"Services"}</Link>
             <Link href="/account"    className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
-            <Link href="/horizonweb" className="block text-cyan-600 dark:text-cyan-400 font-bold">📡 HorizonWeb</Link>
+            <Link href="/horizonweb" className="block font-bold" style={{color:"#dc2626"}}>📡 HorizonWeb</Link>
             <hr className="border-zinc-200 dark:border-zinc-800 my-4"/>
             <Link href="/history"    className="block hover:text-amber-500">⭐ {lang==="fr"?"Historique":"History"}</Link>
           </div>
@@ -309,37 +317,88 @@ export default function HorizonWebPage() {
         </div>
       </aside>
 
+      {/* MAIN */}
       <section className="flex-1 flex flex-col min-w-0 bg-white dark:bg-black transition-colors duration-200 relative overflow-hidden">
 
-        <div className="p-8 pb-6 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center text-center shrink-0 pt-14 relative">
-          <div className="relative mb-7">
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase font-mono select-none text-cyan-500 dark:text-cyan-400"
-              style={{textShadow:"0 0 20px rgba(6,182,212,0.5), 0 0 60px rgba(6,182,212,0.2)"}}>
-              HORIZON WEB SEARCH
+        {/* HEADER ZONE */}
+        <div className="p-8 pb-6 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center text-center shrink-0 pt-14 relative overflow-hidden">
+
+          {/* RED AMBIENT GLOW BACKGROUND */}
+          <div className="pointer-events-none absolute inset-0 z-0"
+            style={{background:"radial-gradient(ellipse 80% 60% at 50% 0%, rgba(180,20,20,0.08) 0%, transparent 70%)"}}/>
+
+          <div className="relative mb-7 z-10">
+            {/* SPLIT TITLE */}
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase font-mono select-none">
+              <span
+                className="text-cyan-500 dark:text-cyan-400"
+                style={{textShadow:"0 0 20px rgba(6,182,212,0.6), 0 0 60px rgba(6,182,212,0.25), 0 0 100px rgba(6,182,212,0.1)"}}>
+                HORIZON DEEP
+              </span>
+              {" "}
+              <span
+                className="text-red-600 dark:text-red-500"
+                style={{textShadow:"0 0 20px rgba(220,38,38,0.7), 0 0 60px rgba(220,38,38,0.3), 0 0 100px rgba(220,38,38,0.15)"}}>
+                WEB SEARCH
+              </span>
             </h1>
+
+            {/* DUAL UNDERLINE — cyan + red */}
             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3/4 h-[1px]"
-              style={{background:"linear-gradient(90deg, transparent, #06b6d4, #22d3ee, #06b6d4, transparent)", boxShadow:"0 0 8px 2px rgba(6,182,212,0.4)"}}/>
+              style={{background:"linear-gradient(90deg, transparent, #06b6d4, rgba(220,38,38,0.8), #dc2626, rgba(6,182,212,0.8), #06b6d4, transparent)", boxShadow:"0 0 8px 2px rgba(220,38,38,0.4), 0 0 4px 1px rgba(6,182,212,0.3)"}}/>
           </div>
 
-          <div className="w-full max-w-3xl relative group">
-            <div className="absolute -inset-[1px] rounded-2xl pointer-events-none z-0"
-              style={{background:"linear-gradient(135deg, rgba(6,182,212,0.4), rgba(34,211,238,0.1), rgba(6,182,212,0.4))", boxShadow:"0 0 15px rgba(6,182,212,0.2)", borderRadius:"1rem"}}/>
+          {/* LASER INPUT WRAPPER */}
+          <div className="w-full max-w-3xl relative z-10">
+            {/* Outer glow shell — animates on focus */}
+            <div
+              className="absolute -inset-[2px] rounded-2xl pointer-events-none z-0 transition-all duration-500"
+              style={inputFocused ? {
+                background: "transparent",
+                boxShadow: "none",
+                opacity: 0,
+              } : {
+                background: "linear-gradient(135deg, rgba(6,182,212,0.5), rgba(220,38,38,0.3), rgba(6,182,212,0.5))",
+                boxShadow: "0 0 18px rgba(6,182,212,0.25), 0 0 8px rgba(220,38,38,0.15)",
+                borderRadius: "1rem",
+                opacity: 1,
+              }}/>
+
+            {/* Laser scan beam — hidden on focus */}
+            {!inputFocused && (
+              <div className="absolute -inset-[1px] rounded-2xl pointer-events-none z-0 overflow-hidden">
+                <div style={{
+                  position:"absolute", inset:0, borderRadius:"1rem",
+                  background:"conic-gradient(from 0deg, transparent 60%, rgba(6,182,212,0.5) 80%, rgba(220,38,38,0.4) 90%, transparent 100%)",
+                  animation:"laserOrbit 2.5s linear infinite",
+                }}/>
+              </div>
+            )}
+
             <input
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === "Enter" && executeHorizonSearch(query)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
               placeholder={lang === "fr" ? "TAPER VOTRE RECHERCHE ICI..." : "TYPE YOUR SEARCH HERE..."}
-              className="relative z-10 w-full bg-white dark:bg-zinc-900 text-black dark:text-white font-mono uppercase text-sm border-2 border-cyan-500/40 focus:border-cyan-500 rounded-2xl py-4 pl-6 pr-32 transition-all outline-none focus:shadow-[0_0_25px_rgba(6,182,212,0.15)]"
+              className="relative z-10 w-full bg-white dark:bg-zinc-900 text-black dark:text-white font-mono uppercase text-sm border-2 rounded-2xl py-4 pl-6 pr-32 transition-all outline-none"
+              style={{
+                borderColor: inputFocused ? "rgba(6,182,212,0.8)" : "transparent",
+                boxShadow: inputFocused ? "0 0 0 3px rgba(6,182,212,0.12), inset 0 0 20px rgba(6,182,212,0.04)" : "none",
+              }}
             />
             <button
               onClick={() => executeHorizonSearch(query)}
-              className="absolute right-2 top-2 bottom-2 z-10 bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white font-black text-xs font-mono px-6 rounded-xl transition-all uppercase tracking-widest shadow-[0_0_12px_rgba(6,182,212,0.4)]">
+              className="absolute right-2 top-2 bottom-2 z-10 text-white font-black text-xs font-mono px-6 rounded-xl transition-all uppercase tracking-widest"
+              style={{background:"linear-gradient(135deg, #991b1b, #dc2626)", boxShadow:"0 0 12px rgba(220,38,38,0.5)"}}>
               EXPLORE
             </button>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 mt-4 w-full max-w-3xl justify-center font-mono">
+          {/* LENS BUTTONS */}
+          <div className="flex flex-col sm:flex-row gap-2 mt-4 w-full max-w-3xl justify-center font-mono z-10">
             {([
               { id:"critical" as const, label:lang==="fr"?"REGARD CRITIQUE":"CRITICAL VIEW", prefix:"3⚔️", color:"red"   },
               { id:"expert"   as const, label:lang==="fr"?"EXPERT":"EXPERT",                 prefix:"4🎓", color:"cyan"   },
@@ -361,28 +420,33 @@ export default function HorizonWebPage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-10 min-h-0 bg-white dark:bg-black flex flex-col items-center"
-          style={{scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent"}}>
+        {/* RESULTS ZONE */}
+        <div className="flex-1 overflow-y-auto p-6 md:p-10 min-h-0 bg-white dark:bg-black flex flex-col items-center relative"
+          style={{scrollbarWidth:"thin", scrollbarColor:"rgba(220,38,38,0.2) transparent"}}>
+
+          {/* Subtle red ambient in results area */}
+          <div className="pointer-events-none absolute top-0 left-0 right-0 h-32"
+            style={{background:"linear-gradient(to bottom, rgba(180,20,20,0.04), transparent)"}}/>
 
           {echoState === "thinking" && (
             <div className="h-64 flex flex-col items-center justify-center gap-4 font-mono">
               {isAvatarBroken ? <EchoSvgMascot className="w-20 h-20"/> : (
                 <img src="/echo1.png" alt="Echo" className="w-20 h-20 object-contain echo-thinking" onError={() => setIsAvatarBroken(true)}/>
               )}
-              <p className="text-cyan-500 dark:text-cyan-400 text-xs uppercase tracking-widest animate-pulse">
-                {lang === "fr" ? "Exploration du sillage..." : "Exploring the wake..."}
+              <p className="text-red-500 dark:text-red-400 text-xs uppercase tracking-widest animate-pulse">
+                {lang === "fr" ? "Plongée dans les profondeurs..." : "Diving into the deep..."}
               </p>
             </div>
           )}
 
           {echoState !== "thinking" && echoResponse && (
-            <div className="w-full max-w-3xl space-y-6 animate-in fade-in duration-300 pb-16">
+            <div className="w-full max-w-3xl space-y-6 animate-in fade-in duration-300 pb-16 relative z-10">
 
               {attributes.length > 0 && (
                 <div className="flex gap-2 items-center flex-wrap font-mono text-[10px]">
                   <span className="text-zinc-400 uppercase font-bold">{lang === "fr" ? "Critères :" : "Criteria :"}</span>
                   {attributes.map((attr, idx) => (
-                    <span key={idx} className="bg-cyan-500/8 text-cyan-600 dark:text-cyan-400/80 border border-cyan-500/20 px-2 py-0.5 rounded-md uppercase">{attr}</span>
+                    <span key={idx} className="bg-red-500/8 text-red-600 dark:text-red-400/80 border border-red-500/20 px-2 py-0.5 rounded-md uppercase">{attr}</span>
                   ))}
                 </div>
               )}
@@ -395,7 +459,7 @@ export default function HorizonWebPage() {
                   <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-500/70 font-bold">
                     {lang === "fr" ? "Analyse Echo" : "Echo's Analysis"}
                   </span>
-                  <div className="flex-1 h-[1px]" style={{background:"linear-gradient(90deg, rgba(6,182,212,0.3), transparent)"}}/>
+                  <div className="flex-1 h-[1px]" style={{background:"linear-gradient(90deg, rgba(220,38,38,0.4), rgba(6,182,212,0.3), transparent)"}}/>
                 </div>
                 <BreathingResponse text={echoResponse} lang={lang} />
               </div>
@@ -403,11 +467,14 @@ export default function HorizonWebPage() {
           )}
 
           {echoState === "idle" && !echoResponse && (
-            <div className="h-full flex flex-col items-center justify-center text-center py-16">
+            <div className="h-full flex flex-col items-center justify-center text-center py-16 relative z-10">
               {isAvatarBroken ? <EchoSvgMascot className="w-24 h-24 mb-6"/> : (
                 <img src="/echo1.png" alt="Echo Idle" className="w-24 h-24 object-contain echo-idle mb-6 select-none" onError={() => setIsAvatarBroken(true)}/>
               )}
-              <h4 className="font-mono text-xs uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold mb-1">ECHO IDLE</h4>
+              <h4 className="font-mono text-xs uppercase tracking-widest font-bold mb-1">
+                <span className="text-cyan-600 dark:text-cyan-400">ECHO</span>
+                <span className="text-red-600 dark:text-red-500"> IDLE</span>
+              </h4>
               <p className="text-[11px] font-mono text-zinc-400 dark:text-zinc-600 uppercase max-w-xs px-4">
                 {lang === "fr" ? "Entrez une intention pour démarrer la boucle d'exploration." : "Enter a query to launch the exploration loop."}
               </p>
@@ -421,6 +488,10 @@ export default function HorizonWebPage() {
           0%   { opacity: 0.4; transform: scaleX(0.7); }
           50%  { opacity: 1;   transform: scaleX(1); }
           100% { opacity: 0.4; transform: scaleX(0.7); }
+        }
+        @keyframes laserOrbit {
+          0%   { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       `}</style>
     </main>
