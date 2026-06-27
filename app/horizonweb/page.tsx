@@ -113,6 +113,7 @@ export default function HorizonWebPage() {
   const [activeLens, setActiveLens]     = useState<"critical" | "expert" | "strategy" | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [isWarming, setIsWarming]       = useState(false);
+  const [savedSearches, setSavedSearches] = useState<{ query: string; response: string; date: string }[]>([]);
   const warmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warmupAbortRef = useRef<AbortController | null>(null);
   const introLangRef = useRef<HTMLDivElement>(null);
@@ -245,7 +246,6 @@ export default function HorizonWebPage() {
   };
 
   // ── Saved searches ──────────────────────────────────────────────────────
-  const [savedSearches, setSavedSearches] = useState<{ query: string; response: string; date: string }[]>([]);
 
   useEffect(() => {
     try {
