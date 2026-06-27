@@ -12,20 +12,11 @@ type ModalType = "support" | "contact" | null;
 type Currency = "CAD" | "USD" | "EUR";
 
 // ── PAYS / DEVISE ─────────────────────────────────────────────────────────────
-const COUNTRY_OPTIONS: { code: Currency; flag: string; label_fr: string; label_en: string; symbol: string }[] = [
-  { code: "CAD", flag: "🇨🇦", label_fr: "Canada (CAD)",   label_en: "Canada (CAD)",   symbol: "CA$" },
-  { code: "USD", flag: "🇺🇸", label_fr: "États-Unis (USD)", label_en: "United States (USD)", symbol: "US$" },
-  { code: "EUR", flag: "🇪🇺", label_fr: "Europe (EUR)",   label_en: "Europe (EUR)",   symbol: "€"   },
+const COUNTRY_OPTIONS: { code: Currency; flag: string; label_fr: string; label_en: string }[] = [
+  { code: "CAD", flag: "🇨🇦", label_fr: "Canada",       label_en: "Canada"        },
+  { code: "USD", flag: "🇺🇸", label_fr: "États-Unis",   label_en: "United States" },
+  { code: "EUR", flag: "🇪🇺", label_fr: "Europe",       label_en: "Europe"        },
 ];
-
-// ── PRIX PAR DEVISE ───────────────────────────────────────────────────────────
-const PRICES: Record<string, Record<Currency, string>> = {
-  basic:    { CAD: "CA$5.99",  USD: "US$4.49",  EUR: "€3.99"  },
-  premium:  { CAD: "CA$9.99",  USD: "US$7.49",  EUR: "€6.99"  },
-  ultra:    { CAD: "CA$19.99", USD: "US$14.99",  EUR: "€13.99" },
-  founder:  { CAD: "CA$99",    USD: "US$74",    EUR: "€69"    },
-  treasure: { CAD: "CA$11.99", USD: "US$8.99",  EUR: "€8.49"  },
-};
 
 const detectCurrency = (): Currency => {
   if (typeof window === "undefined") return "CAD";
@@ -51,11 +42,21 @@ const localT = {
     supportLocked: "🔒 Le support est réservé aux plans Basic, Premium, Ultra et Fondateur.",
     countryBtn: "🌍 Pays / Devise",
     plans: {
-      connected_free: { title: "Accès libre", sub: "GRATUIT À VIE", f1: "✅ AI Standard Model", f2: "✅ Intégration Recherche Web", f3: "✅ Écrire un Livre", f4: "✅ Calendrier", f5: "✅ Vitalité", f6: "✅ Invites Comportementales Limitées", f7: "❌ Page Historique", ai1: "✅ Calendrier Echo AI Limité", ai2: "✅ Vitalité Echo AI Limité" },
-      basic:          { title: "Avantage", sub: "PAR MOIS", f1: "✅ AI Enhanced Models", f2: "✅ Intégration Recherche Web", f3: "✅ Écrire un Livre", f4: "✅ Calendrier", f5: "✅ Vitalité", f6: "✅ Invites Comportementales x4", f7: "❌ Page Historique", f8: "✅ Support par Courriel", ai1: "✅ Calendrier Echo AI x4", ai2: "✅ Vitalité Echo AI x4" },
-      premium:        { title: "Premium", sub: "PAR MOIS", badge: "⭐ LE PLUS POPULAIRE", f1: "✅ AI Advanced Model", f2: "✅ Intégration Recherche Web", f3: "✅ Écrire un Livre", f4: "✅ Calendrier", f4_1: "✅ Vitalité", f5: "✅ Page Historique Limitée", f6: "✅ Support par Courriel", f7: "✅ Analyse d'Image", f8: "✅ Invites Comportementales x10", ai1: "✅ Calendrier Echo AI x10", ai2: "✅ Vitalité Echo AI x10" },
-      ultra:          { title: "Ultra", sub: "PAR MOIS", power: "Utilisateurs Avancés", f1: "✅ AI Pro Models", f2: "✅ Intégration Recherche Web", f3: "✅ Écrire un Livre", f4: "✅ Calendrier", f5: "✅ Vitalité", f6: "✅ Page Historique Illimitée", f7: "✅ Traitement Prioritaire", f8: "✅ Support par Courriel", f9: "✅ Analyse d'Image", f10: "✅ Invites Comportementales x30", ai1: "✅ Calendrier Echo AI x30", ai2: "✅ Vitalité Echo AI x30" },
-      founder:        { title: "Fondateur", sub: "PAR MOIS", power: "Soutenir le Développement d'Echo", f1: "✅ AI Expert Model illimité", f2: "✅ Intégration Recherche Web", f3: "✅ Écrire un Livre", f4: "✅ Calendrier", f5: "✅ Vitalité", f6: "✅ Page Historique Illimitée", f7: "✅ Traitement Prioritaire", f8: "✅ Support par Courriel", f9: "✅ Analyse d'Image", f10: "✅ Capacités Avancées", f11: "✅ Invites Comportementales Illimitées", ai1: "✅ Calendrier Echo AI Illimité", ai2: "✅ Vitalité Echo AI Illimité" },
+      connected_free: { title: "Accès libre", sub: "GRATUIT À VIE",
+        f1: "✅ AI Standard Model", f2: "✅ Écrire un Livre", f3: "✅ Calendrier", f4: "✅ Vitalité", f5: "❌ Page Historique", f6: "📧 Email Contact", f7: "🔍 Deep Web Search", f8: "✅ Invites Comportementales Limitées",
+        ai1: "✅ Calendrier Echo AI Limité", ai2: "✅ Vitalité Echo AI Limité" },
+      basic: { title: "Avantage", sub: "PAR MOIS",
+        f1: "✅ AI Enhanced Models", f2: "✅ Écrire un Livre", f3: "✅ Calendrier", f4: "✅ Vitalité", f5: "❌ Page Historique", f6: "✅ Support par Courriel", f7: "🔍 Deep Web Search x4", f8: "✅ Invites Comportementales x4",
+        ai1: "✅ Calendrier Echo AI x4", ai2: "✅ Vitalité Echo AI x4" },
+      premium: { title: "Premium", sub: "PAR MOIS", badge: "⭐ LE PLUS POPULAIRE",
+        f1: "✅ AI Advanced Model", f2: "✅ Écrire un Livre", f3: "✅ Calendrier", f4: "✅ Vitalité", f5: "✅ Page Historique Limitée", f6: "✅ Analyse d'Image", f7: "✅ Support par Courriel", f8: "🔍 Deep Web Search x10", f9: "✅ Invites Comportementales x10",
+        ai1: "✅ Calendrier Echo AI x10", ai2: "✅ Vitalité Echo AI x10" },
+      ultra: { title: "Ultra", sub: "PAR MOIS", power: "Utilisateurs Avancés",
+        f1: "✅ AI Pro Models", f2: "✅ Écrire un Livre", f3: "✅ Calendrier", f4: "✅ Vitalité", f5: "✅ Page Historique Illimitée", f6: "✅ Traitement Prioritaire", f7: "✅ Analyse d'Image", f8: "✅ Support par Courriel", f9: "🔍 Deep Web Search x30", f10: "✅ Invites Comportementales x30",
+        ai1: "✅ Calendrier Echo AI x30", ai2: "✅ Vitalité Echo AI x30" },
+      founder: { title: "Fondateur", sub: "PAR MOIS", power: "Soutenir le Développement d'Echo",
+        f1: "✅ AI Expert Model illimité", f2: "✅ Écrire un Livre", f3: "✅ Calendrier", f4: "✅ Vitalité", f5: "✅ Page Historique Illimitée", f6: "✅ Traitement Prioritaire", f7: "✅ Analyse d'Image", f8: "✅ Capacités Avancées", f9: "✅ Support par Courriel", f10: "🔍 Deep Web Search Illimité", f11: "✅ Invites Comportementales Illimitées",
+        ai1: "✅ Calendrier Echo AI Illimité", ai2: "✅ Vitalité Echo AI Illimité" },
     },
   },
   en: {
@@ -69,11 +70,21 @@ const localT = {
     supportLocked: "🔒 Support is reserved for Basic, Premium, Ultra, and Founder plans.",
     countryBtn: "🌍 Country / Currency",
     plans: {
-      connected_free: { title: "FreeConnect", sub: "FOREVER FREE", f1: "✅ AI Standard Model", f2: "✅ WebSearch Integration", f3: "✅ Write A Book", f4: "✅ Calendar", f5: "✅ Vitality", f6: "✅ Behavioral Prompts Limited", f7: "❌ History page", ai1: "✅ Calendar Echo AI Limited", ai2: "✅ Vitality Echo AI Limited" },
-      basic:          { title: "Advantage", sub: "PER MONTH", f1: "✅ AI Enhanced Models", f2: "✅ WebSearch Integration", f3: "✅ Write A Book", f4: "✅ Calendar", f5: "✅ Vitality", f6: "✅ Behavioral Prompts x4", f7: "❌ History page", f8: "✅ Email Support", ai1: "✅ Calendar Echo AI x4", ai2: "✅ Vitality Echo AI x4" },
-      premium:        { title: "Premium", sub: "PER MONTH", badge: "⭐ MOST POPULAR", f1: "✅ AI Advanced Model", f2: "✅ WebSearch Integration", f3: "✅ Write A Book", f4: "✅ Calendar", f4_1: "✅ Vitality", f5: "✅ History page limited", f6: "✅ Email Support", f7: "✅ Image Analysis", f8: "✅ Behavioral Prompts x10", ai1: "✅ Calendar Echo AI x10", ai2: "✅ Vitality Echo AI x10" },
-      ultra:          { title: "Ultra", sub: "PER MONTH", power: "Power Users", f1: "✅ AI Pro Models", f2: "✅ WebSearch Integration", f3: "✅ Write A Book", f4: "✅ Calendar", f5: "✅ Vitality", f6: "✅ History page unlimited", f7: "✅ Priority Processing", f8: "✅ Email Support", f9: "✅ Image Analysis", f10: "✅ Behavioral Prompts x30", ai1: "✅ Calendar Echo AI x30", ai2: "✅ Vitality Echo AI x30" },
-      founder:        { title: "Founder", sub: "PER MONTH", power: "Support Echo Development", f1: "✅ AI Expert Model unlimited", f2: "✅ WebSearch Integration", f3: "✅ Write A Book", f4: "✅ Calendar", f5: "✅ Vitality", f6: "✅ History page unlimited", f7: "✅ Priority Processing", f8: "✅ Email Support", f9: "✅ Image Analysis", f10: "✅ Advanced Capabilities", f11: "✅ Unlimited Behavioral Prompts", ai1: "✅ Calendar Echo AI unlimited", ai2: "✅ Vitality Echo AI unlimited" },
+      connected_free: { title: "FreeConnect", sub: "FOREVER FREE",
+        f1: "✅ AI Standard Model", f2: "✅ Write A Book", f3: "✅ Calendar", f4: "✅ Vitality", f5: "❌ History page", f6: "📧 Email Contact", f7: "🔍 Deep Web Search", f8: "✅ Behavioral Prompts Limited",
+        ai1: "✅ Calendar Echo AI Limited", ai2: "✅ Vitality Echo AI Limited" },
+      basic: { title: "Advantage", sub: "PER MONTH",
+        f1: "✅ AI Enhanced Models", f2: "✅ Write A Book", f3: "✅ Calendar", f4: "✅ Vitality", f5: "❌ History page", f6: "✅ Email Support", f7: "🔍 Deep Web Search x4", f8: "✅ Behavioral Prompts x4",
+        ai1: "✅ Calendar Echo AI x4", ai2: "✅ Vitality Echo AI x4" },
+      premium: { title: "Premium", sub: "PER MONTH", badge: "⭐ MOST POPULAR",
+        f1: "✅ AI Advanced Model", f2: "✅ Write A Book", f3: "✅ Calendar", f4: "✅ Vitality", f5: "✅ History page limited", f6: "✅ Image Analysis", f7: "✅ Email Support", f8: "🔍 Deep Web Search x10", f9: "✅ Behavioral Prompts x10",
+        ai1: "✅ Calendar Echo AI x10", ai2: "✅ Vitality Echo AI x10" },
+      ultra: { title: "Ultra", sub: "PER MONTH", power: "Power Users",
+        f1: "✅ AI Pro Models", f2: "✅ Write A Book", f3: "✅ Calendar", f4: "✅ Vitality", f5: "✅ History page unlimited", f6: "✅ Priority Processing", f7: "✅ Image Analysis", f8: "✅ Email Support", f9: "🔍 Deep Web Search x30", f10: "✅ Behavioral Prompts x30",
+        ai1: "✅ Calendar Echo AI x30", ai2: "✅ Vitality Echo AI x30" },
+      founder: { title: "Founder", sub: "PER MONTH", power: "Support Echo Development",
+        f1: "✅ AI Expert Model unlimited", f2: "✅ Write A Book", f3: "✅ Calendar", f4: "✅ Vitality", f5: "✅ History page unlimited", f6: "✅ Priority Processing", f7: "✅ Image Analysis", f8: "✅ Advanced Capabilities", f9: "✅ Email Support", f10: "🔍 Deep Web Search Unlimited", f11: "✅ Unlimited Behavioral Prompts",
+        ai1: "✅ Calendar Echo AI unlimited", ai2: "✅ Vitality Echo AI unlimited" },
     },
   },
 };
@@ -193,7 +204,6 @@ export default function ServicesPage() {
   };
 
   // ── Prix affiché selon devise ──────────────────────────────────────────────
-  const price = (plan: string) => PRICES[plan]?.[currency] ?? PRICES[plan]?.CAD ?? "";
 
   return (
     <main className="h-screen w-full bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
@@ -236,7 +246,7 @@ export default function ServicesPage() {
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase block mb-1">{activeT.features}</span>
-                      {["f1","f2","f3","f4","f5","f6","f7"].map(k => <div key={k} className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{(activeT.plans.connected_free as any)[k]}</div>)}
+                      {["f1","f2","f3","f4","f5","f6","f7","f8"].map(k => <div key={k} className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{(activeT.plans.connected_free as any)[k]}</div>)}
                     </div>
                     <div className="space-y-1.5 pt-3.5 border-t border-zinc-200 dark:border-zinc-800">
                       <span className="text-[11px] font-bold tracking-wide uppercase block text-zinc-400 dark:text-zinc-500">{activeT.echoAiDoIt}</span>
@@ -255,7 +265,7 @@ export default function ServicesPage() {
                 className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[580px] select-none ${userTier === "basic" ? "border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20" : TIER_RANK["basic"] < TIER_RANK[userTier] ? "border-zinc-200 dark:border-zinc-800 opacity-80 cursor-default" : "border-zinc-200 dark:border-zinc-800 hover:border-cyan-500/60 hover:shadow-[0_0_25px_rgba(6,182,212,0.2)] cursor-pointer hover:scale-102"}`}>
                 <div>
                   <h2 className="text-lg font-black mb-1">{activeT.plans.basic.title}</h2>
-                  <div className="text-3xl font-black mb-0.5">{price("basic")}</div>
+                  <div className="text-3xl font-black mb-0.5">$5.99</div>
                   <div className="text-zinc-400 text-[10px] mb-4 font-bold tracking-wide uppercase">{activeT.plans.basic.sub}</div>
                   <div className="space-y-4">
                     <div className="space-y-1.5">
@@ -280,12 +290,12 @@ export default function ServicesPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-black mb-1 mt-1">{activeT.plans.premium.title}</h2>
-                  <div className="text-3xl font-black mb-0.5">{price("premium")}</div>
+                  <div className="text-3xl font-black mb-0.5">$9.99</div>
                   <div className="text-zinc-400 text-[10px] mb-4 font-bold tracking-wide uppercase">{activeT.plans.premium.sub}</div>
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <span className="text-[9px] font-mono font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase block mb-1">{activeT.features}</span>
-                      {["f1","f2","f3","f4","f4_1","f5","f6","f7","f8"].map(k => <div key={k} className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{(activeT.plans.premium as any)[k]}</div>)}
+                      {["f1","f2","f3","f4","f5","f6","f7","f8","f9"].map(k => <div key={k} className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">{(activeT.plans.premium as any)[k]}</div>)}
                     </div>
                     <div className="space-y-1.5 pt-3.5 border-t border-zinc-200 dark:border-zinc-800">
                       <span className="text-[11px] font-bold tracking-wide uppercase block text-cyan-600 dark:text-cyan-400">{activeT.echoAiDoIt}</span>
@@ -302,7 +312,7 @@ export default function ServicesPage() {
                 className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[580px] select-none ${userTier === "ultra" ? "border-purple-500 shadow-[0_0_20px_rgba(147,51,234,0.15)] ring-1 ring-purple-500/20" : TIER_RANK["ultra"] < TIER_RANK[userTier] ? "border-zinc-200 dark:border-zinc-800 opacity-80 cursor-default" : "border-zinc-200 dark:border-zinc-800 hover:border-purple-500/60 hover:shadow-[0_0_30px_rgba(147,51,234,0.3)] cursor-pointer hover:scale-102"}`}>
                 <div>
                   <h2 className="text-lg font-black mb-1">{activeT.plans.ultra.title}</h2>
-                  <div className="text-3xl font-black mb-0.5">{price("ultra")}</div>
+                  <div className="text-3xl font-black mb-0.5">$19.99</div>
                   <div className="text-zinc-400 text-[10px] mb-0.5 font-bold tracking-wide uppercase">{activeT.plans.ultra.sub}</div>
                   <div className="text-zinc-400 dark:text-zinc-500 text-[9px] mb-4 italic font-mono">{activeT.plans.ultra.power}</div>
                   <div className="space-y-4">
@@ -325,7 +335,7 @@ export default function ServicesPage() {
                 className={`bg-zinc-50 dark:bg-zinc-900 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 min-h-[580px] select-none ${userTier === "founder" ? "border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20 shadow-md" : "border-zinc-200 dark:border-zinc-800 hover:border-amber-500/60 hover:shadow-[0_0_35px_rgba(245,158,11,0.35)] cursor-pointer hover:scale-102"}`}>
                 <div>
                   <h2 className="text-lg font-black mb-1 text-amber-500 dark:text-amber-400">{activeT.plans.founder.title}</h2>
-                  <div className="text-3xl font-black mb-0.5">{price("founder")}</div>
+                  <div className="text-3xl font-black mb-0.5">$99</div>
                   <div className="text-zinc-400 text-[10px] mb-4 font-bold tracking-wide uppercase">{activeT.plans.founder.sub}</div>
                   <div className="text-zinc-400 dark:text-zinc-500 text-[9px] mb-4 font-mono">{activeT.plans.founder.power}</div>
                   <div className="space-y-4">
@@ -471,6 +481,30 @@ export default function ServicesPage() {
           <div className="bg-zinc-950 border-2 border-amber-500 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.3)] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <button type="button" onClick={() => setShowTreasureModal(false)} className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors">✕</button>
 
+            {/* Bouton Country dans l'easter egg */}
+            <div className="absolute top-4 left-4">
+              <div className="relative">
+                <button type="button" onClick={() => setShowCountryPicker(v => !v)}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-amber-500/50 hover:text-amber-400 transition-all text-[10px] font-mono font-bold">
+                  <span>{currentCountry.flag}</span>
+                  <span>{lang === "fr" ? currentCountry.label_fr : currentCountry.label_en}</span>
+                </button>
+                {showCountryPicker && (
+                  <div className="absolute top-full mt-1.5 left-0 w-48 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50">
+                    {COUNTRY_OPTIONS.map(opt => (
+                      <button key={opt.code} type="button"
+                        onClick={() => { setCurrency(opt.code); setShowCountryPicker(false); }}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-[10px] font-mono font-semibold transition-colors text-left ${currency === opt.code ? "bg-amber-500/10 text-amber-400" : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"}`}>
+                        <span>{opt.flag}</span>
+                        <span>{lang === "fr" ? opt.label_fr : opt.label_en}</span>
+                        {currency === opt.code && <span className="ml-auto text-amber-400">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce">👑</div>
 
             <div className="text-center space-y-2 mt-3">
@@ -482,8 +516,8 @@ export default function ServicesPage() {
               </h4>
               <p className="text-zinc-300 font-medium text-xs sm:text-sm bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 inline-block leading-relaxed">
                 {lang === "fr"
-                  ? `« Le plan Ultra à 40 % de rabais, passe de 19,99 $ à ${price("treasure")} »`
-                  : `"The Ultra plan with 40% off, goes from $19.99 to ${price("treasure")}"`}
+                  ? "« Le plan Ultra à 40 % de rabais — offre exclusive »"
+                  : "The Ultra plan at 40% off — exclusive offer"}
               </p>
             </div>
 
@@ -510,7 +544,7 @@ export default function ServicesPage() {
                 {isLoadingTreasure
                   ? (lang === "fr" ? "CONNEXION..." : "CONNECTING...")
                   : user
-                    ? (lang === "fr" ? `Réclamer le trésor (${price("treasure")}) ➔` : `Claim the treasure (${price("treasure")}) ➔`)
+                    ? (lang === "fr" ? "Réclamer le trésor ➔" : "Claim the treasure ➔")
                     : (lang === "fr" ? "Se connecter pour en profiter ➔" : "Log in to claim ➔")}
               </button>
               <button type="button" onClick={() => setShowTreasureModal(false)} className="w-full py-1.5 text-zinc-600 font-mono text-[11px] hover:text-zinc-400 transition-colors">
