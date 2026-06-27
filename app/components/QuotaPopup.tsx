@@ -115,7 +115,7 @@ const sub = isAnon
   onClick={onClose}
   className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all"
 >
-  {lang === "fr" ? "Vous pouvez attendre un peu ou découvrir les plans Premium." : " "}
+  {lang === "fr" ? "Fermer" : "Close"}
 </button>
         </div>
       </div>
