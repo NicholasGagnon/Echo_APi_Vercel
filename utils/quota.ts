@@ -25,7 +25,7 @@ interface QuotaResult {
 // payants        : cycle 30 jours, +1 crédit/heure classique
 // ANONYME (userId null) : 5 chat seulement, rien d'autre — pas de regen
 const LIMITS: Record<UserTier, Record<ActionType, number>> = {
-  connected_free: { chat_ia: 30,    horizon: 8,     buttons: 10,    calendar: 5,     vitality_actions: 10    },
+  connected_free: { chat_ia: 30,    horizon: 14,    buttons: 10,    calendar: 5,     vitality_actions: 10    },
   basic:          { chat_ia: 160,   horizon: 40,    buttons: 32,    calendar: 12,    vitality_actions: 40    },
   premium:        { chat_ia: 400,   horizon: 100,   buttons: 80,    calendar: 40,    vitality_actions: 100   },
   ultra:          { chat_ia: 1200,  horizon: 300,   buttons: 240,   calendar: 120,   vitality_actions: 300   },
@@ -44,7 +44,7 @@ const ANON_LIMITS: Record<ActionType, number> = {
 // Crédits récupérés par heure (connected_free uniquement)
 const FREE_REGEN_PER_HOUR: Record<ActionType, number> = {
   chat_ia:          5,
-  horizon:          1,
+  horizon:          2,
   buttons:          1,
   calendar:         1,
   vitality_actions: 3,
