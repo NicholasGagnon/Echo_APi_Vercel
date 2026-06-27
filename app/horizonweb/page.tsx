@@ -294,13 +294,13 @@ export default function HorizonWebPage() {
             </div>
             <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-2">
               {lang === "fr"
-                ? "Tu as atteint la limite de recherches HorizonWeb pour ce cycle de 30 jours."
-                : "You've reached the HorizonWeb search limit for this 30-day cycle."}
+                ? "Tu as atteint la limite de recherches HorizonWeb pour ce cycle de 24 heures."
+                : "You've reached the HorizonWeb search limit for this 24-hour cycle."}
             </p>
             <p className="text-zinc-500 text-xs font-mono mb-6">
               {lang === "fr"
-                ? "Passe à un plan supérieur pour débloquer plus de recherches."
-                : "Upgrade your plan to unlock more searches."}
+                ? "Reviens dans 30 minutes pour récupérer 1 crédit, ou passe à un plan supérieur."
+                : "Come back in 30 minutes to recover 1 credit, or upgrade your plan."}
             </p>
             <div className="flex gap-3">
               <Link href="/services"
