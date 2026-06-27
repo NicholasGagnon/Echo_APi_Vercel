@@ -241,7 +241,37 @@ export default function HorizonWebPage() {
   const handleLensClick = (lens: "critical" | "expert" | "strategy") => {
     const nextLens = activeLens === lens ? null : lens;
     setActiveLens(nextLens);
-    if (query) executeHorizonSearch(query, nextLens);
+    // Prompt injection only — no auto-search triggered here
+  };
+
+  // ── Saved searches ──────────────────────────────────────────────────────
+  const [savedSearches, setSavedSearches] = useState<{ query: string; response: string; date: string }[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("horizon_saved_searches");
+      if (raw) setSavedSearches(JSON.parse(raw));
+    } catch {}
+  }, []);
+
+  const saveCurrentSearch = () => {
+    if (!query || !echoResponse) return;
+    const entry = { query, response: echoResponse, date: new Date().toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) };
+    const updated = [entry, ...savedSearches].slice(0, 20);
+    setSavedSearches(updated);
+    localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
+  };
+
+  const deleteSaved = (idx: number) => {
+    const updated = savedSearches.filter((_, i) => i !== idx);
+    setSavedSearches(updated);
+    localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
+  };
+
+  const loadSaved = (s: { query: string; response: string }) => {
+    setQuery(s.query);
+    setEchoResponse(s.response);
+    setEchoState("speaking");
   };
 
   return (
@@ -520,6 +550,17 @@ export default function HorizonWebPage() {
                 </div>
                 <BreathingResponse text={echoResponse} lang={lang} />
               </div>
+
+              {/* SAVE BUTTON */}
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={saveCurrentSearch}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/60 text-red-500 dark:text-red-400 text-[11px] font-mono uppercase tracking-widest font-bold transition-all"
+                  style={{boxShadow:"0 0 10px rgba(220,38,38,0.05)"}}>
+                  <span>💾</span>
+                  {lang === "fr" ? "Sauvegarder" : "Save"}
+                </button>
+              </div>
             </div>
           )}
 
@@ -539,6 +580,60 @@ export default function HorizonWebPage() {
           )}
         </div>
       </section>
+
+      {/* RIGHT PANEL — SAVED SEARCHES */}
+      <aside className="w-64 shrink-0 border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex-col hidden lg:flex overflow-hidden">
+        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+          <h3 className="text-[10px] font-mono uppercase tracking-widest font-bold">
+            <span className="text-cyan-500">💾 </span>
+            <span className="text-zinc-400 dark:text-zinc-300">{lang === "fr" ? "Recherches sauvegardées" : "Saved searches"}</span>
+          </h3>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-2" style={{scrollbarWidth:"thin", scrollbarColor:"rgba(220,38,38,0.15) transparent"}}>
+          {savedSearches.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-center">
+              <span className="text-2xl mb-2 opacity-30">📭</span>
+              <p className="text-[10px] font-mono uppercase text-zinc-400 dark:text-zinc-600 tracking-widest">
+                {lang === "fr" ? "Aucune sauvegarde" : "Nothing saved yet"}
+              </p>
+            </div>
+          ) : (
+            savedSearches.map((s, idx) => (
+              <div key={idx}
+                className="group relative rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-3 hover:border-red-500/30 hover:bg-red-500/3 transition-all cursor-pointer"
+                onClick={() => loadSaved(s)}>
+                {/* Delete */}
+                <button
+                  onClick={e => { e.stopPropagation(); deleteSaved(idx); }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 text-[10px] flex items-center justify-center transition-all font-bold">
+                  ✕
+                </button>
+                <p className="text-[11px] font-mono font-bold text-zinc-700 dark:text-zinc-200 uppercase leading-tight pr-5 line-clamp-2 mb-1">
+                  {s.query}
+                </p>
+                <p className="text-[9px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
+                  {s.date}
+                </p>
+                {/* Lens tag if present */}
+                <div className="absolute bottom-2 right-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500/40"/>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {savedSearches.length > 0 && (
+          <div className="px-3 py-3 border-t border-zinc-200 dark:border-zinc-800 shrink-0">
+            <button
+              onClick={() => { setSavedSearches([]); localStorage.removeItem("horizon_saved_searches"); }}
+              className="w-full py-1.5 rounded-lg text-[9px] font-mono uppercase tracking-widest text-zinc-400 hover:text-red-400 hover:bg-red-500/5 transition-all border border-transparent hover:border-red-500/20">
+              {lang === "fr" ? "Tout effacer" : "Clear all"}
+            </button>
+          </div>
+        )}
+      </aside>
 
       <style>{`
         @keyframes neonSlide {
