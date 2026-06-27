@@ -3,7 +3,7 @@ import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-// ── LE MAPPING SÉCURISÉ INCLUANT TON ID DE COFFRE PROD ──
+// ── TON MAPPING PARFAIT (5 VARIABLES INTACTES) ──
 const PRICE_IDS = {
   basic: process.env.STRIPE_BASIC_PRICE_ID!,
   premium: process.env.STRIPE_PREMIUM_PRICE_ID!,
@@ -15,7 +15,8 @@ const PRICE_IDS = {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { plan, userId, userEmail } = body;
+    // 🛠️ ON RÉCUPÈRE LE PLAN ET LA DEVISE SOUHAITÉE (CAD PAR DÉFAUT SI RIEN N'EST ENVOYÉ)
+    const { plan, userId, userEmail, currency = "CAD" } = body;
 
     // --- SÉCURITÉ #1 : Validation des données reçues ---
     if (!plan || !PRICE_IDS[plan as keyof typeof PRICE_IDS]) {
@@ -27,41 +28,41 @@ export async function POST(req: Request) {
 
     const priceId = PRICE_IDS[plan as keyof typeof PRICE_IDS];
 
-console.log("PLAN REÇU =", plan);
-console.log("PRICE ID UTILISÉ =", priceId);
-console.log("STRIPE KEY =", process.env.STRIPE_SECRET_KEY?.slice(0, 12));
-console.log("BASIC =", process.env.STRIPE_BASIC_PRICE_ID);
-console.log("PRICE_IDS =", PRICE_IDS);
-
-
-    
     const origin = req.headers.get("origin") ?? "http://localhost:3000";
-
-    // --- SÉCURITÉ #2 : Configuration simplifiée pour le Checkout ---
-    // On laisse l'objet d'abonnement standard à la création pour éviter les bogues TypeScript
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {};
 
-    // --- SÉCURITÉ #3 : Création de la session Checkout ---
+    // --- CONFIGURATION DYNAMIQUE DES MOYENS DE PAIEMENT ---
+    let paymentMethodTypes: string[] = ["card"];
+    if (currency.toUpperCase() === "EUR") {
+      paymentMethodTypes = ["card", "sepa_debit", "bancontact"]; // Active les banques d'Europe
+    } else if (currency.toUpperCase() === "USD") {
+      paymentMethodTypes = ["card", "link"]; // Active Link pour les USA
+    }
+
+    // --- CRÉATION DE LA SESSION CHECKOUT ---
     const session = await stripe.checkout.sessions.create({
-  payment_method_types: ["card"],
-  mode: "subscription",
+      payment_method_types: paymentMethodTypes as any,
+      mode: "subscription",
+      allow_promotion_codes: true,
+      customer_email: userEmail,
+      line_items: [
+        {
+          price: priceId, // C'est ton ID unique qui contient tes 3 devises
+          quantity: 1,
+        },
+      ],
 
-  allow_promotion_codes: true,
+      // ── 🛠️ LA SEULE LIGNE CRITIQUE AJOUTÉE ──
+      // C'est ça qui force Stripe à aller lire la ligne EUR ou USD de ton produit !
+      currency: currency.toLowerCase(), 
 
-  customer_email: userEmail,
-  line_items: [
-    {
-      price: priceId,
-      quantity: 1,
-    },
-  ],
       subscription_data: subscriptionData,
       success_url: `${origin}/services?success=true`,
       cancel_url: `${origin}/services?canceled=true`,
       
       metadata: {
         userId: userId,
-        planName: plan, // Transmis au Webhook pour déclencher la suite
+        planName: plan,
       },
     });
 

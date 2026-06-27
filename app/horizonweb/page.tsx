@@ -112,11 +112,9 @@ export default function HorizonWebPage() {
   const [isAvatarBroken, setIsAvatarBroken]   = useState(false);
   const [activeLens, setActiveLens]     = useState<"critical" | "expert" | "strategy" | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
-  const [isWarming, setIsWarming]       = useState(false);
-  const [savedSearches, setSavedSearches] = useState<{ query: string; response: string; date: string }[]>([]);
-  const warmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const warmupAbortRef = useRef<AbortController | null>(null);
-  const introLangRef = useRef<HTMLDivElement>(null);
+  const [savedSearches, setSavedSearches] = useState<{ id?: string; query: string; response: string; lens?: string; date: string }[]>([]);
+  const introLangRef  = useRef<HTMLDivElement>(null);
+  const preDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const closeOnOutside = (e: MouseEvent) => {
@@ -200,39 +198,21 @@ export default function HorizonWebPage() {
     localStorage.setItem("horizon_intro_seen", "true");
   };
 
-  const triggerWarmup = () => {
-    if (isWarming || echoState === "thinking" || echoState === "speaking") return;
-
-    setIsWarming(true);
-    warmupAbortRef.current = new AbortController();
-
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://echo-api-fixed.onrender.com";
-
-    fetch(`${API_URL}/horizon`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: "...",
-        userTier,
-        lang,
-        selectedButtons: [],
-        warmup: true,
-      }),
-      signal: warmupAbortRef.current.signal,
-    }).catch(() => {});
-
-    warmupTimerRef.current = setTimeout(() => {
-      if (warmupAbortRef.current) {
-        warmupAbortRef.current.abort();
-        warmupAbortRef.current = null;
-      }
-      setIsWarming(false);
-    }, 2000);
+  const triggerPre = (q: string) => {
+    if (preDebounceRef.current) clearTimeout(preDebounceRef.current);
+    if (q.length < 4) return;
+    preDebounceRef.current = setTimeout(() => {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://echo-api-fixed.onrender.com";
+      fetch(`${API_URL}/horizon-pre`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      }).catch(() => {});
+    }, 600);
   };
 
   const handleInputFocus = () => {
     setInputFocused(true);
-    triggerWarmup();
   };
 
   const handleInputBlur = () => {
@@ -247,25 +227,47 @@ export default function HorizonWebPage() {
 
   // ── Saved searches ──────────────────────────────────────────────────────
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("horizon_saved_searches");
-      if (raw) setSavedSearches(JSON.parse(raw));
-    } catch {}
-  }, []);
 
-  const saveCurrentSearch = () => {
+
+  // ── Saves : localStorage (non-connecté) + Supabase (connecté) ─────────────
+  const saveCurrentSearch = async () => {
     if (!query || !echoResponse) return;
-    const entry = { query, response: echoResponse, date: new Date().toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) };
-    const updated = [entry, ...savedSearches].slice(0, 20);
-    setSavedSearches(updated);
-    localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
+    const entry = {
+      query,
+      response: echoResponse,
+      lens: activeLens || undefined,
+      date: new Date().toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+    };
+
+    if (userId) {
+      // Connecté → Supabase
+      try {
+        const { data: inserted, error } = await supabase
+          .from("echo_horizon_saves")
+          .insert({ user_id: userId, query: entry.query, response: entry.response, lens: entry.lens || null })
+          .select()
+          .single();
+        if (!error && inserted) {
+          const withDate = { ...entry, id: inserted.id };
+          setSavedSearches(prev => [withDate, ...prev].slice(0, 50));
+        }
+      } catch (e) { console.error("Save Supabase error:", e); }
+    } else {
+      // Non-connecté → localStorage
+      const updated = [entry, ...savedSearches].slice(0, 20);
+      setSavedSearches(updated);
+      localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
+    }
   };
 
-  const deleteSaved = (idx: number) => {
-    const updated = savedSearches.filter((_, i) => i !== idx);
-    setSavedSearches(updated);
-    localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
+  const deleteSaved = async (idx: number, id?: string) => {
+    if (userId && id) {
+      await supabase.from("echo_horizon_saves").delete().eq("id", id);
+    } else {
+      const updated = savedSearches.filter((_, i) => i !== idx);
+      localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
+    }
+    setSavedSearches(prev => prev.filter((_, i) => i !== idx));
   };
 
   const loadSaved = (s: { query: string; response: string }) => {
@@ -273,6 +275,39 @@ export default function HorizonWebPage() {
     setEchoResponse(s.response);
     setEchoState("speaking");
   };
+
+  // Chargement initial des saves
+  useEffect(() => {
+    const loadSaves = async () => {
+      if (userId) {
+        // Connecté → charger depuis Supabase
+        const { data } = await supabase
+          .from("echo_horizon_saves")
+          .select("id, query, response, lens, created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(50);
+        if (data) {
+          setSavedSearches(data.map(r => ({
+            id: r.id,
+            query: r.query,
+            response: r.response,
+            lens: r.lens,
+            date: new Date(r.created_at).toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+          })));
+        }
+      } else {
+        // Non-connecté → localStorage
+        try {
+          const raw = localStorage.getItem("horizon_saves_v2");
+          if (raw) setSavedSearches(JSON.parse(raw));
+        } catch {}
+      }
+    };
+    loadSaves();
+  }, [userId]);
+
+
 
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-red-500/30 relative">
@@ -294,13 +329,13 @@ export default function HorizonWebPage() {
             </div>
             <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-2">
               {lang === "fr"
-                ? "Tu as atteint la limite de recherches HorizonWeb pour ce cycle de 24 heures."
-                : "You've reached the HorizonWeb search limit for this 24-hour cycle."}
+                ? "Tu as atteint la limite de recherches HorizonWeb pour ce cycle de 30 jours."
+                : "You've reached the HorizonWeb search limit for this 30-day cycle."}
             </p>
             <p className="text-zinc-500 text-xs font-mono mb-6">
               {lang === "fr"
-                ? "Reviens dans 30 minutes pour récupérer 1 crédit, ou passe à un plan supérieur."
-                : "Come back in 30 minutes to recover 1 credit, or upgrade your plan."}
+                ? "Passe à un plan supérieur pour débloquer plus de recherches."
+                : "Upgrade your plan to unlock more searches."}
             </p>
             <div className="flex gap-3">
               <Link href="/services"
@@ -450,23 +485,15 @@ export default function HorizonWebPage() {
             <input
               type="text"
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={e => { setQuery(e.target.value); triggerPre(e.target.value); }}
               onKeyDown={e => e.key === "Enter" && executeHorizonSearch(query)}
               onFocus={handleInputFocus}
               onBlur={handleInputBlur}
               placeholder={lang === "fr" ? "TAPER VOTRE RECHERCHE ICI..." : "TYPE YOUR SEARCH HERE..."}
               className="relative z-10 w-full bg-white dark:bg-zinc-900 text-black dark:text-white font-mono uppercase text-sm border-2 rounded-2xl py-4 pl-6 pr-32 transition-all outline-none"
               style={{
-                borderColor: isWarming
-                  ? "rgba(220,38,38,0.9)"
-                  : inputFocused
-                    ? "rgba(6,182,212,0.8)"
-                    : "transparent",
-                boxShadow: isWarming
-                  ? "0 0 0 3px rgba(220,38,38,0.15), 0 0 20px rgba(220,38,38,0.2), inset 0 0 20px rgba(220,38,38,0.04)"
-                  : inputFocused
-                    ? "0 0 0 3px rgba(6,182,212,0.12), inset 0 0 20px rgba(6,182,212,0.04)"
-                    : "none",
+                borderColor: inputFocused ? "rgba(6,182,212,0.8)" : "transparent",
+                boxShadow: inputFocused ? "0 0 0 3px rgba(6,182,212,0.12), inset 0 0 20px rgba(6,182,212,0.04)" : "none",
                 transition: "border-color 0.3s ease, box-shadow 0.3s ease",
               }}
             />
@@ -476,12 +503,7 @@ export default function HorizonWebPage() {
               style={{background:"linear-gradient(135deg, #991b1b, #dc2626)", boxShadow:"0 0 12px rgba(220,38,38,0.5)"}}>
               EXPLORE
             </button>
-            {isWarming && (
-              <div className="absolute right-[calc(6rem+1rem)] top-1/2 -translate-y-1/2 z-20 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" style={{animationDuration:"0.8s"}}/>
-                <span className="text-[9px] font-mono uppercase text-red-500/70 tracking-widest">warm</span>
-              </div>
-            )}
+
           </div>
 
           {/* LENS BUTTONS */}
@@ -605,7 +627,7 @@ export default function HorizonWebPage() {
                 onClick={() => loadSaved(s)}>
                 {/* Delete */}
                 <button
-                  onClick={e => { e.stopPropagation(); deleteSaved(idx); }}
+                  onClick={e => { e.stopPropagation(); deleteSaved(idx, s.id); }}
                   className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 text-[10px] flex items-center justify-center transition-all font-bold">
                   ✕
                 </button>
@@ -627,7 +649,14 @@ export default function HorizonWebPage() {
         {savedSearches.length > 0 && (
           <div className="px-3 py-3 border-t border-zinc-200 dark:border-zinc-800 shrink-0">
             <button
-              onClick={() => { setSavedSearches([]); localStorage.removeItem("horizon_saved_searches"); }}
+              onClick={async () => {
+                if (userId) {
+                  await supabase.from("echo_horizon_saves").delete().eq("user_id", userId);
+                } else {
+                  localStorage.removeItem("horizon_saves_v2");
+                }
+                setSavedSearches([]);
+              }}
               className="w-full py-1.5 rounded-lg text-[9px] font-mono uppercase tracking-widest text-zinc-400 hover:text-red-400 hover:bg-red-500/5 transition-all border border-transparent hover:border-red-500/20">
               {lang === "fr" ? "Tout effacer" : "Clear all"}
             </button>
