@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "./lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../utils/quota";
-import LangDropdown from "./components/LangDropdown";
 import TutorialHeaderControls from "./components/TutorialHeaderControls";
 import PremiumRequiredModal from "./components/PremiumRequiredModal";
 import QuotaPopup from "./components/QuotaPopup";
@@ -15,6 +14,22 @@ type StickyNote   = { id: string; text: string; color: "yellow"|"blue"|"green"|"
 type CalendarEvent  = { id: string; title: string; start: string; end: string; notes: string };
 type CalendarEvents = Record<string, CalendarEvent[]>;
 type UpcomingEvent  = CalendarEvent & { dateKey: string; diffDays: number };
+type Currency = "CAD" | "USD" | "EUR";
+
+const COUNTRY_OPTIONS: { code: Currency; flag: string; label_fr: string; label_en: string }[] = [
+  { code: "CAD", flag: "🇨🇦", label_fr: "Canada",      label_en: "Canada"        },
+  { code: "USD", flag: "🇺🇸", label_fr: "États-Unis",  label_en: "United States" },
+  { code: "EUR", flag: "🇪🇺", label_fr: "Europe",      label_en: "Europe"        },
+];
+
+const detectCurrency = (): Currency => {
+  if (typeof window === "undefined") return "CAD";
+  const loc = navigator.language?.toLowerCase() || "";
+  if (loc.startsWith("fr-fr") || loc.startsWith("de") || loc.startsWith("es") ||
+      loc.startsWith("it") || loc.startsWith("nl") || loc.startsWith("pt-pt")) return "EUR";
+  if (loc.startsWith("en-us")) return "USD";
+  return "CAD";
+};
 
 const normalizeTier = (raw: unknown): UserTier => {
   if (typeof raw !== "string") return "connected_free";
@@ -39,19 +54,13 @@ const STICKY_STYLES = {
 
 const EVENT_DOT_COLORS = ["bg-cyan-400","bg-green-400","bg-yellow-400"];
 
-const WATER = [
-  { g:"〰", top:"6%",  left:"1%",   rot:"-18deg", sz:"58px" },
-  { g:"∿",  top:"20%", right:"2%",  rot:"12deg",  sz:"70px" },
-  { g:"〜", top:"44%", left:"0.5%", rot:"-8deg",  sz:"50px" },
-  { g:"≈",  top:"67%", right:"1.5%",rot:"18deg",  sz:"64px" },
-  { g:"∾",  top:"83%", left:"2%",   rot:"-12deg", sz:"54px" },
-];
-
 // ── SOURCE UNIFIÉE home + chat ────────────────────────────────────────────────
 const CONV_SOURCE = "echo";
+// Chat croisé par navigateur (anonyme) — clé partagée home + chat
+const LOCAL_CONV_KEY = "echo-conversation-v2";
 
 export default function Home() {
-  const { t, lang, theme, toggleTheme, triggerToast } = useApp();
+  const { t, lang, setLang, theme, toggleTheme, triggerToast } = useApp();
 
   const [message,      setMessage]      = useState("");
   const [messages,     setMessages]     = useState<EchoMessage[]>([]);
@@ -73,6 +82,11 @@ export default function Home() {
   const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
   const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
   const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
+
+  // ── Taille de police du chat ──────────────────────────────────────────────
+  const [chatFontSize, setChatFontSize] = useState(15);
+  const increaseFontSize = () => setChatFontSize(s => Math.min(s + 1, 22));
+  const decreaseFontSize = () => setChatFontSize(s => Math.max(s - 1, 11));
 
   const DEFAULT_INPUT_HEIGHT = 112;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
@@ -148,6 +162,51 @@ export default function Home() {
   const [showEasterModal,      setShowEasterModal]      = useState(false);
   const [isLoadingTreasure,   setIsLoadingTreasure]   = useState(false);
 
+  // ── Menu Hub unifié ───────────────────────────────────────────────────────
+  const [hubMenuOpen, setHubMenuOpen] = useState(false);
+  const hubMenuRef = useRef<HTMLDivElement>(null);
+
+  // ── Pays / Devise ─────────────────────────────────────────────────────────
+  const [currency, setCurrency] = useState<Currency>("CAD");
+  useEffect(() => { setCurrency(detectCurrency()); }, []);
+  const currentCountry = COUNTRY_OPTIONS.find(c => c.code === currency) || COUNTRY_OPTIONS[0];
+
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (hubMenuRef.current && !hubMenuRef.current.contains(e.target as Node))
+        setHubMenuOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+
+  // ── Warmup ling — intention pendant que le user tape ──────────────────────
+  const [warmupIntent, setWarmupIntent] = useState<string | null>(null);
+  const warmupDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerLingWarmup = useCallback((text: string) => {
+    if (warmupDebounceRef.current) clearTimeout(warmupDebounceRef.current);
+    if (text.length < 3) { setWarmupIntent(null); return; }
+    warmupDebounceRef.current = setTimeout(async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+        const res = await fetch(`${API_URL}/horizon-warmup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ partial: text }),
+        });
+        const data = await res.json();
+        if (data.intent?.response) {
+          try { setWarmupIntent(JSON.parse(data.intent.response)?.intent || null); } catch {}
+        }
+      } catch {}
+    }, 400);
+  }, []);
+
+  useEffect(() => () => { if (warmupDebounceRef.current) clearTimeout(warmupDebounceRef.current); }, []);
+
   const buttonsData = ["clarity","humain","critical","expert","precision","philosophy","strategy","decompose","refine","double"].map(id => ({ id }));
   const localButtonsLabels: Record<"fr"|"en", Record<string,string>> = {
     fr: { clarity:"1🧠 Clarté", humain:"2👤 Humain", critical:"3⚔️ Regard critique", expert:"4🎓 Expert", precision:"5🎯 Précision", philosophy:"6🏛️ Philosophie", strategy:"7♟️ Stratégie", decompose:"8🧩 Décomposer", refine:"9❓ Affiner", double:"10⚡ Double Regard" },
@@ -183,7 +242,6 @@ export default function Home() {
   const saveToSupabase = async (uid: string, convId: string|null, raws: string[]): Promise<string|null> => {
     let finalSummary  = memorySummary;
     let finalMessages = raws;
-
     if (raws.length > 10) {
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -196,34 +254,25 @@ export default function Home() {
         finalSummary  = data.summary || memorySummary;
         finalMessages = raws.slice(-100);
         setMemorySummary(finalSummary);
-        console.log("[MEMORY Home] Résumé mis à jour");
       } catch (e) { console.error("[MEMORY Home]", e); }
     }
-
     const payload = {
-      messages:           finalMessages,
-      summary:            finalSummary,
-      summary_updated_at: new Date().toISOString(),
-      updated_at:         new Date().toISOString(),
+      messages: finalMessages, summary: finalSummary,
+      summary_updated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
-
     if (convId) {
       await supabase.from("echo_conversations").update(payload).eq("id", convId).eq("user_id", uid);
       return convId;
     } else {
       const { data, error } = await supabase.from("echo_conversations")
-        .insert({ user_id: uid, source: CONV_SOURCE, ...payload })
-        .select("id").single();
+        .insert({ user_id: uid, source: CONV_SOURCE, ...payload }).select("id").single();
       if (error) { console.error("[Home] insert conv:", error.message); return null; }
       return data?.id ?? null;
     }
   };
 
-  // ── PUSH GOOGLE CALENDAR depuis Echo ─────────────────────────────────────
-  const pushEchoEventToGoogle = async (
-    uid: string, dateKey: string, title: string,
-    startTime: string, endTime: string, notes: string
-  ): Promise<string|null> => {
+  // ── PUSH GOOGLE CALENDAR ─────────────────────────────────────────────────
+  const pushEchoEventToGoogle = async (uid: string, dateKey: string, title: string, startTime: string, endTime: string, notes: string): Promise<string|null> => {
     let token = localStorage.getItem(`echo-google-token-${uid}`);
     if (!token) {
       try {
@@ -232,32 +281,19 @@ export default function Home() {
       } catch { token = null; }
     }
     if (!token) return null;
-
     try {
       const hasTime  = !!(startTime || endTime);
-      const startObj = hasTime
-        ? { dateTime: new Date(`${dateKey}T${startTime || "00:00"}:00`).toISOString() }
-        : { date: dateKey };
-      const endObj   = hasTime
-        ? { dateTime: new Date(`${dateKey}T${endTime || "23:59"}:00`).toISOString() }
-        : { date: dateKey };
-
+      const startObj = hasTime ? { dateTime: new Date(`${dateKey}T${startTime || "00:00"}:00`).toISOString() } : { date: dateKey };
+      const endObj   = hasTime ? { dateTime: new Date(`${dateKey}T${endTime || "23:59"}:00`).toISOString() }  : { date: dateKey };
       const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ summary: title, description: notes, start: startObj, end: endObj }),
       });
-      if (!res.ok) {
-        console.warn("[Home] Google Calendar push failed:", res.status);
-        return null;
-      }
+      if (!res.ok) return null;
       const d = await res.json();
-      console.log("[Home] Google Calendar push OK:", d.id);
       return d.id ?? null;
-    } catch (err) {
-      console.error("[Home] pushEchoEventToGoogle:", err);
-      return null;
-    }
+    } catch { return null; }
   };
 
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
@@ -265,30 +301,18 @@ export default function Home() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
       setUserId(uid);
-
       try {
         if (uid) {
-          // Chat croisé : charge la conversation unifiée (source "echo")
-          const { data: convRows } = await supabase
-            .from("echo_conversations")
-            .select("id, messages, summary")
-            .eq("user_id", uid)
-            .eq("source", CONV_SOURCE)
-            .order("updated_at", { ascending: false })
-            .limit(1);
-
+          const { data: convRows } = await supabase.from("echo_conversations")
+            .select("id, messages, summary").eq("user_id", uid).eq("source", CONV_SOURCE)
+            .order("updated_at", { ascending: false }).limit(1);
           if (convRows?.length) {
             setActiveConvId(convRows[0].id);
             setMessages(deserializeMsgs(convRows[0].messages || []));
             setMemorySummary(convRows[0].summary || "");
           }
-
-          const { data: stickyRows } = await supabase
-            .from("echo_stickies").select("*").eq("user_id", uid)
-            .order("created_at", { ascending: true });
-          if (stickyRows?.length)
-            setStickies(stickyRows.map(r => ({ id: r.id, text: r.text, color: r.color as StickyNote["color"] })));
-
+          const { data: stickyRows } = await supabase.from("echo_stickies").select("*").eq("user_id", uid).order("created_at", { ascending: true });
+          if (stickyRows?.length) setStickies(stickyRows.map(r => ({ id: r.id, text: r.text, color: r.color as StickyNote["color"] })));
           const { data: calRows } = await supabase.from("echo_calendar").select("*").eq("user_id", uid);
           if (calRows?.length) {
             const rebuilt: CalendarEvents = {};
@@ -299,13 +323,12 @@ export default function Home() {
             });
             setCalendarEvents(rebuilt);
           }
-
           setUserTier(await fetchUserTier(uid));
         } else {
-          const saved = localStorage.getItem("echo-conversation-v2");
+          // Chat croisé par navigateur — clé partagée avec page chat
+          const saved = localStorage.getItem(LOCAL_CONV_KEY);
           if (saved) setMessages(deserializeMsgs(JSON.parse(saved)));
         }
-
         if (!localStorage.getItem("echo-tuto-done-v1")) setTutorialStep(1);
       } catch(e) { console.error("Bootstrap error", e); }
       setIsLoaded(true);
@@ -319,10 +342,8 @@ export default function Home() {
       if (session?.user) {
         const uid = session.user.id;
         setUserId(uid);
-        const { data: convRows } = await supabase
-          .from("echo_conversations").select("id, messages, summary")
-          .eq("user_id", uid).eq("source", CONV_SOURCE)
-          .order("updated_at", { ascending: false }).limit(1);
+        const { data: convRows } = await supabase.from("echo_conversations").select("id, messages, summary")
+          .eq("user_id", uid).eq("source", CONV_SOURCE).order("updated_at", { ascending: false }).limit(1);
         if (convRows?.length) {
           setActiveConvId(convRows[0].id);
           setMessages(deserializeMsgs(convRows[0].messages || []));
@@ -331,7 +352,6 @@ export default function Home() {
         setUserTier(await fetchUserTier(uid));
       }
     });
-
     return () => listener.subscription.unsubscribe();
   }, []);
 
@@ -346,7 +366,8 @@ export default function Home() {
         if (newId && !activeConvId) setActiveConvId(newId);
       }, 1500);
     } else {
-      localStorage.setItem("echo-conversation-v2", JSON.stringify(raws));
+      // Chat croisé navigateur — même clé que page chat
+      localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(raws));
     }
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [messages, isLoaded]);
@@ -383,19 +404,18 @@ export default function Home() {
   // ── ENVOYER ───────────────────────────────────────────────────────────────
   const envoyer = async () => {
     if (!message.trim() && !selectedImage) return;
-
     const userMessage  = message.trim();
     const currentImage = selectedImage;
     const currentName  = selectedImageName;
     const userRaw = userMessage
       ? `You: ${userMessage}`
       : `You: ${lang === "fr" ? "Analyse cette image" : "Analyze this image"}${currentName ? ` (${currentName})` : ""}.`;
-
     const userEntry: EchoMessage = { raw: userRaw, imageB64: currentImage ?? undefined };
     const baseMessages = [...messages, userEntry];
     setEchoState("thinking");
     setMessages([...baseMessages, { raw: "Echo: ..." }]);
     setMessage(""); setSelectedImage(null); setSelectedImageName("");
+    setWarmupIntent(null);
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -406,13 +426,9 @@ export default function Home() {
           message: userMessage || `${lang === "fr" ? "Analyse cette image" : "Analyze this image"}${currentName ? ` (${currentName})` : ""}.`,
           image:   currentImage ?? null,
           history: serializeMsgs(baseMessages),
-          userTier,
-          calendarEvents,
-          selectedButtons,
-          summary: memorySummary,
+          userTier, calendarEvents, selectedButtons, summary: memorySummary,
         }),
       });
-
       const data = await response.json();
       setEchoState("speaking");
 
@@ -426,9 +442,7 @@ export default function Home() {
         if (!status.allowed) {
           const label = status.error === "anon_blocked" || status.error === "anon_limit"
             ? status.error
-            : qCat === "calendar"
-              ? (lang === "fr" ? "Calendrier" : "Calendar")
-              : (lang === "fr" ? "Vitalité" : "Vitality");
+            : qCat === "calendar" ? (lang === "fr" ? "Calendrier" : "Calendar") : (lang === "fr" ? "Vitalité" : "Vitality");
           triggerQuotaPopup(label);
           isActionBlocked = true;
         }
@@ -444,20 +458,17 @@ export default function Home() {
         if (type === "ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt } = payload;
           if (userId) await supabase.from("echo_expenses").insert({
-            user_id: userId,
-            title:   title || "Achat",
-            amount:  parseFloat(amount ?? spent) || 0,
-            date:    paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
+            user_id: userId, title: title || "Achat",
+            amount: parseFloat(amount ?? spent) || 0,
+            date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
           });
         }
 
         if (type === "ADD_CALORIE_LOG") {
           const { foodName, food_name, meal, title, calories } = payload;
           if (userId) await supabase.from("echo_calories").insert({
-            user_id:   userId,
-            food_name: foodName || food_name || meal || title || "Aliment",
-            calories:  parseInt(calories) || 0,
-            date:      new Date().toLocaleDateString("fr-CA"),
+            user_id: userId, food_name: foodName || food_name || meal || title || "Aliment",
+            calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA"),
           });
         }
 
@@ -468,78 +479,33 @@ export default function Home() {
             localStorage.setItem("echo-calorie-goal", nextGoal.toString());
         }
 
-        // ── CALENDRIER — ISO 8601 + push Google ──────────────────────────
         if (type === "ADD_CALENDAR_EVENT") {
           const { title, start, end, notes } = payload;
-
-          let dateKey   = "";
-          let startTime = "";
-          let endTime   = "";
-
+          let dateKey = "", startTime = "", endTime = "";
           if (start) {
-            if (start.includes("T")) {
-              dateKey   = start.split("T")[0];
-              startTime = start.split("T")[1]?.slice(0, 5) || "";
-            } else {
-              dateKey = start;
-            }
+            if (start.includes("T")) { dateKey = start.split("T")[0]; startTime = start.split("T")[1]?.slice(0, 5) || ""; }
+            else { dateKey = start; }
           }
           if (!dateKey) dateKey = new Date().toLocaleDateString("fr-CA");
-
-          if (end?.includes("T")) {
-            endTime = end.split("T")[1]?.slice(0, 5) || "";
-          }
-
+          if (end?.includes("T")) endTime = end.split("T")[1]?.slice(0, 5) || "";
           const finalTitle = title || "Rendez-vous sans titre";
           const finalNotes = notes || "";
-
           if (dateKey && userId) {
             try {
-              // 1. Push vers Google Calendar d'abord
-              const googleEventId = await pushEchoEventToGoogle(
-                userId, dateKey, finalTitle, startTime, endTime, finalNotes
-              );
-
-              // 2. Insert dans Supabase
-              const insertPayload: any = {
-                user_id:      userId,
-                title:        finalTitle,
-                start_date:   dateKey,
-                end_date:     dateKey,
-                notes:        finalNotes,
-                is_from_echo: true,
-              };
-              if (startTime)    insertPayload.start_time = startTime;
-              if (endTime)      insertPayload.end_time   = endTime;
+              const googleEventId = await pushEchoEventToGoogle(userId, dateKey, finalTitle, startTime, endTime, finalNotes);
+              const insertPayload: any = { user_id: userId, title: finalTitle, start_date: dateKey, end_date: dateKey, notes: finalNotes, is_from_echo: true };
+              if (startTime) insertPayload.start_time = startTime;
+              if (endTime)   insertPayload.end_time   = endTime;
               if (googleEventId) insertPayload.google_event_id = googleEventId;
-
-              const { data: insertedList, error } = await supabase
-                .from("echo_calendar").insert(insertPayload).select();
-
+              const { data: insertedList, error } = await supabase.from("echo_calendar").insert(insertPayload).select();
               const finalId = (!error && insertedList?.length) ? insertedList[0].id : `temp-${Date.now()}`;
-
-              // 3. Mettre à jour le state local
               setCalendarEvents(prev => {
                 const currentList = prev[dateKey] || [];
                 if (currentList.some(ev => ev.title === finalTitle && ev.notes === finalNotes)) return prev;
-                return {
-                  ...prev,
-                  [dateKey]: [...currentList, {
-                    id:    finalId,
-                    title: finalTitle,
-                    start: startTime,
-                    end:   endTime,
-                    notes: finalNotes,
-                  }],
-                };
+                return { ...prev, [dateKey]: [...currentList, { id: finalId, title: finalTitle, start: startTime, end: endTime, notes: finalNotes }] };
               });
-
-              if (googleEventId) {
-                triggerToast("info", lang === "fr" ? "Rendez-vous ajouté dans Google Calendar ✓" : "Event added to Google Calendar ✓");
-              }
-            } catch (err) {
-              console.error("[Home] Crash insertion calendrier:", err);
-            }
+              if (googleEventId) triggerToast("info", lang === "fr" ? "Rendez-vous ajouté dans Google Calendar ✓" : "Event added to Google Calendar ✓");
+            } catch (err) { console.error("[Home] Crash insertion calendrier:", err); }
           }
         }
       }
@@ -553,14 +519,8 @@ export default function Home() {
   // ── STICKIES ──────────────────────────────────────────────────────────────
   const addSticky = async () => {
     if (!newStickyText.trim()) return;
-    if (!userId) {
-      const id = `local-${Date.now()}`;
-      setStickies(prev => [...prev, { id, text: newStickyText.trim(), color: selectedColor }]);
-      setNewStickyText(""); return;
-    }
-    const { data: inserted, error } = await supabase.from("echo_stickies").insert({
-      user_id: userId, text: newStickyText.trim(), color: selectedColor,
-    }).select().single();
+    if (!userId) { setStickies(prev => [...prev, { id: `local-${Date.now()}`, text: newStickyText.trim(), color: selectedColor }]); setNewStickyText(""); return; }
+    const { data: inserted, error } = await supabase.from("echo_stickies").insert({ user_id: userId, text: newStickyText.trim(), color: selectedColor }).select().single();
     if (error) { console.error("[Home] echo_stickies insert:", error.message); return; }
     setStickies(prev => [...prev, { id: inserted.id, text: inserted.text, color: inserted.color }]);
     setNewStickyText("");
@@ -592,33 +552,23 @@ export default function Home() {
     recognition.start();
   };
 
-  const handleEasterEggClick = () => {
-    setShowEasterModal(true);
-  };
+  const handleEasterEggClick = () => setShowEasterModal(true);
 
   const handleEasterCheckout = async () => {
     setShowEasterModal(false);
-    if (!userId) {
-      localStorage.setItem("echo-treasure-redirect", "1");
-      window.location.href = "/account";
-      return;
-    }
+    if (!userId) { localStorage.setItem("echo-treasure-redirect", "1"); window.location.href = "/account"; return; }
     try {
       setIsLoadingTreasure(true);
       const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "treasure", userId, userEmail: session?.user?.email }),
+        body: JSON.stringify({ plan: "treasure", userId, userEmail: session?.user?.email, currency }),
       });
       const data = await response.json();
       if (data.url) window.location.href = data.url;
-    } catch {
-      localStorage.setItem("echo-treasure-redirect", "1");
-      window.location.href = "/account";
-    } finally {
-      setIsLoadingTreasure(false);
-    }
+    } catch { localStorage.setItem("echo-treasure-redirect", "1"); window.location.href = "/account"; }
+    finally { setIsLoadingTreasure(false); }
   };
 
   const handleImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -717,8 +667,8 @@ export default function Home() {
                       {lang === "fr" ? (
                         <>Hey bienvenue ! 👋{"\n"}Je suis Echo. Je traîne un peu partout sur ce site.{"\n"}Les boutons là-haut influencent ma façon de voir les choses.{"\n"}Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux, espiègle et légèrement chaotique. 😄{"\n"}Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}Ça devient souvent intéressant. 💀{"\n"}Adiooo ! ✨</>
                       ) : (
-                          <>Hey, welcome! 👋{"\n"}I'm Echo. I tend to wander all over this site.{"\n"}The buttons up there influence the way I see things.{"\n"}If you don't select anything, you'll meet me in my natural state: curious, playful, and slightly chaotic. 😄{"\n"}And if you activate Double Vision, you'll combine two perspectives. 👀{"\n"}That's usually where things get interesting. 💀{"\n"}Adiooo ! ✨</>
-                        )}
+                        <>Hey, welcome! 👋{"\n"}I'm Echo. I tend to wander all over this site.{"\n"}The buttons up there influence the way I see things.{"\n"}If you don't select anything, you'll meet me in my natural state: curious, playful, and slightly chaotic. 😄{"\n"}And if you activate Double Vision, you'll combine two perspectives. 👀{"\n"}That's usually where things get interesting. 💀{"\n"}Adiooo ! ✨</>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col gap-2.5 items-center border-t border-zinc-800 dark:border-zinc-200 pt-4">
@@ -764,7 +714,7 @@ export default function Home() {
                 </Link>
               </div>
 
-              {/* CENTRE */}
+              {/* CENTRE — Echo */}
               <div className={`relative shrink-0 flex flex-col items-center ${echoState==="idle"?"echo-idle":echoState==="thinking"?"echo-thinking":"echo-speaking"}`}>
                 <div className="relative w-24 h-24 flex items-center justify-center">
                   <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spinDash 4s linear infinite"}}/>
@@ -829,8 +779,8 @@ export default function Home() {
                             <span className="text-zinc-400 dark:text-zinc-600 text-[10px] font-mono">Core Frequency</span>
                           </div>
                         </div>
-                        <div className="text-zinc-800 dark:text-zinc-200 text-[15px] leading-8 font-normal tracking-wide selection:bg-cyan-500/30 flex flex-col gap-5 pl-2 sm:pl-18 break-words min-w-0">
-                          {cleanText.split(/\n\n+/).map((block, i) => <p key={i} className="whitespace-pre-wrap break-words">{block}</p>)}
+                        <div className="tracking-wide selection:bg-cyan-500/30 flex flex-col gap-5 pl-2 sm:pl-18 break-words min-w-0" style={{ fontSize: chatFontSize, lineHeight: "1.8" }}>
+                          {cleanText.split(/\n\n+/).map((block, i) => <p key={i} className="whitespace-pre-wrap break-words font-normal text-zinc-800 dark:text-zinc-200">{block}</p>)}
                         </div>
                       </div>
                     );
@@ -840,7 +790,7 @@ export default function Home() {
                         {msg.imageB64 && <img src={msg.imageB64} alt="image envoyée" className="max-w-[180px] max-h-[140px] rounded-xl border border-zinc-300 dark:border-zinc-700 object-cover shadow-md mb-1" />}
                         {!(msg.imageB64 && isDefaultImg) && (
                           <div className="max-w-xl text-right">
-                            <p className="text-zinc-700 dark:text-zinc-300 text-[14px] leading-7 tracking-wide bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3 inline-block text-left whitespace-pre-wrap break-words selection:bg-cyan-500/30">{cleanText}</p>
+                            <p className="text-zinc-700 dark:text-zinc-300 leading-7 tracking-wide bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3 inline-block text-left whitespace-pre-wrap break-words selection:bg-cyan-500/30" style={{ fontSize: chatFontSize - 1 }}>{cleanText}</p>
                           </div>
                         )}
                         {msg.imageB64 && isDefaultImg && <span className="text-zinc-500 dark:text-zinc-600 text-[10px] italic mt-0.5">{lang==="fr"?"Analyse cette image.":"Analyze this image."}</span>}
@@ -867,13 +817,23 @@ export default function Home() {
                   </div>
                 )}
 
+                {/* Indicateur warmup intention */}
+                {warmupIntent && warmupIntent !== "autre" && (
+                  <div className="flex items-center gap-1.5 px-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"/>
+                    <span className="text-[10px] font-mono text-cyan-500/60 uppercase tracking-widest">
+                      {{recherche_locale:"📍",prix:"💰",comparaison:"⚖️",definition:"📖",actualite:"📰"}[warmupIntent] || "🔍"} {warmupIntent}
+                    </span>
+                  </div>
+                )}
+
                 <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl shadow-inner focus-within:border-cyan-500/40 transition-colors overflow-hidden">
                   <textarea ref={textareaRef}
                     className="w-full bg-transparent text-black dark:text-white placeholder-zinc-400 dark:placeholder-zinc-700 text-sm leading-relaxed resize-y min-h-[48px] max-h-[300px] p-4 focus:outline-none break-words whitespace-pre-wrap"
                     style={{ height: inputHeight }}
                     maxLength={getMessageMaxLength(userTier)}
                     value={message}
-                    onChange={e => setMessage(e.target.value)}
+                    onChange={e => { setMessage(e.target.value); triggerLingWarmup(e.target.value); }}
                     onPaste={handlePaste}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
                     placeholder={t.chat.placeholder}
@@ -882,6 +842,9 @@ export default function Home() {
                     <div className="flex items-center gap-1.5 min-w-0">
                       <button type="button" onClick={shrinkInput} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">➖</button>
                       <button type="button" onClick={resetInput}  className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">↺</button>
+                      {/* Grossisseur de caractères */}
+                      <button type="button" onClick={decreaseFontSize} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-[10px] font-bold">A-</button>
+                      <button type="button" onClick={increaseFontSize} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-[13px] font-bold">A+</button>
                       <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
                       <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
                       <button type="button" onClick={() => isImageButtonLocked ? setShowPremiumModal(true) : imageInputRef.current?.click()}
@@ -916,13 +879,82 @@ export default function Home() {
             className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 p-3 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
 
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0" onClick={e => e.stopPropagation()}>
-              <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold">Hub</span>
-              <div className="flex items-center gap-2">
-                <LangDropdown />
-                <button onClick={toggleTheme} className="p-1.5 rounded-lg bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:text-cyan-500 hover:border-cyan-500/50 transition-all text-xs">
-                  {theme === "dark" ? "☀️" : "🌙"}
+
+              {/* Menu déroulant unifié — Langue + Pays + Apparence */}
+              <div ref={hubMenuRef} className="relative w-full">
+                <button type="button" onClick={() => setHubMenuOpen(v => !v)}
+                  className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold hover:text-cyan-500 transition-colors w-full">
+                  <span>{currentCountry.flag}</span>
+                  <span className="truncate">{lang === "fr" ? currentCountry.label_fr : currentCountry.label_en}</span>
+                  <span className="text-zinc-600 ml-auto">·</span>
+                  <span>{lang === "fr" ? "FR" : "EN"}</span>
+                  <span>{theme === "dark" ? "🌙" : "☀️"}</span>
+                  <svg className={`w-2 h-2 transition-transform ${hubMenuOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25 12 15.75 4.5 8.25"/>
+                  </svg>
                 </button>
+
+                {hubMenuOpen && (
+                  <div className="absolute left-0 top-full mt-2 w-56 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden z-[200] animate-in fade-in slide-in-from-top-2 duration-150">
+
+                    {/* ── LANGUE ── */}
+                    <div className="px-3 pt-3 pb-1">
+                      <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-400 dark:text-zinc-600 font-bold mb-1.5">
+                        {lang === "fr" ? "Langue" : "Language"}
+                      </p>
+                      <div className="flex gap-1.5">
+                        {(["fr","en"] as const).map(l => (
+                          <button key={l} type="button"
+                            onClick={() => setLang(l)}
+                            className={`flex-1 py-1.5 rounded-lg text-[11px] font-mono font-bold transition-colors ${lang === l ? "bg-cyan-500/10 text-cyan-500 border border-cyan-500/30" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent"}`}>
+                            {l === "fr" ? "🇫🇷 Français" : "🇬🇧 English"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mx-3 my-2 h-px bg-zinc-100 dark:bg-zinc-800"/>
+
+                    {/* ── PAYS ── */}
+                    <div className="px-3 pb-1">
+                      <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-400 dark:text-zinc-600 font-bold mb-1.5">
+                        {lang === "fr" ? "Pays" : "Country"}
+                      </p>
+                      <div className="flex flex-col gap-1">
+                        {COUNTRY_OPTIONS.map(opt => (
+                          <button key={opt.code} type="button"
+                            onClick={() => { setCurrency(opt.code); }}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold transition-colors text-left ${currency === opt.code ? "bg-cyan-500/10 text-cyan-500 border border-cyan-500/30" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent"}`}>
+                            <span>{opt.flag}</span>
+                            <span>{lang === "fr" ? opt.label_fr : opt.label_en}</span>
+                            {currency === opt.code && <span className="ml-auto text-cyan-500 text-[10px]">✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mx-3 my-2 h-px bg-zinc-100 dark:bg-zinc-800"/>
+
+                    {/* ── APPARENCE ── */}
+                    <div className="px-3 pb-3">
+                      <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-400 dark:text-zinc-600 font-bold mb-1.5">
+                        {lang === "fr" ? "Apparence" : "Appearance"}
+                      </p>
+                      <div className="flex gap-1.5">
+                        <button type="button" onClick={() => { if (theme !== "light") toggleTheme(); }}
+                          className={`flex-1 py-1.5 rounded-lg text-[11px] font-mono font-bold transition-colors flex items-center justify-center gap-1 ${theme === "light" ? "bg-amber-500/10 text-amber-500 border border-amber-500/30" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent"}`}>
+                          ☀️ {lang === "fr" ? "Clair" : "Light"}
+                        </button>
+                        <button type="button" onClick={() => { if (theme !== "dark") toggleTheme(); }}
+                          className={`flex-1 py-1.5 rounded-lg text-[11px] font-mono font-bold transition-colors flex items-center justify-center gap-1 ${theme === "dark" ? "bg-blue-500/10 text-blue-400 border border-blue-500/30" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent"}`}>
+                          🌙 {lang === "fr" ? "Sombre" : "Dark"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+
 
               {tutorialStep === 2 && (
                 <div className="absolute right-4 top-16 w-72 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
@@ -1017,7 +1049,7 @@ export default function Home() {
           <div className="bg-zinc-950 border-2 border-amber-500 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.3)] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <button type="button" onClick={() => setShowEasterModal(false)} className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors">✕</button>
 
-            <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce">👑</div>
+            <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce mt-4">👑</div>
 
             <div className="text-center space-y-2 mt-3">
               <h3 className="text-sm font-black text-amber-400 tracking-wider font-mono uppercase">
