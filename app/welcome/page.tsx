@@ -176,7 +176,7 @@ export default function WelcomePage() {
             setDisplayedText(fullTextPart1 + fullTextPart2.substring(0, secondIndex));
             if (secondIndex >= fullTextPart2.length) {
               clearInterval(typingInterval2Ref.current!); typingInterval2Ref.current = null;
-              closeTimerRef.current = setTimeout(() => { closeTimerRef.current = null; closePanelNow(); }, 2500);
+              closeTimerRef.current = setTimeout(() => { closeTimerRef.current = null; closePanelNow(); }, 6500);
             }
           }, 12);
         }, 1000);
