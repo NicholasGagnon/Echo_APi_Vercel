@@ -334,8 +334,13 @@ export default function Home() {
           }
           setUserTier(await fetchUserTier(uid));
         } else {
-          const saved = localStorage.getItem(LOCAL_CONV_KEY);
-          if (saved) setMessages(deserializeMsgs(JSON.parse(saved)));
+          // Chat croisé navigateur — charge seulement si chat n'a pas de conv propre
+          const chatConvos = localStorage.getItem("echo-chat-local-convos");
+          const hasChatConvos = chatConvos && JSON.parse(chatConvos).some((c: any) => c.messages?.length > 0);
+          if (!hasChatConvos) {
+            const saved = localStorage.getItem(LOCAL_CONV_KEY);
+            if (saved) setMessages(deserializeMsgs(JSON.parse(saved)));
+          }
         }
         if (!localStorage.getItem("echo-tuto-done-v1")) setTutorialStep(1);
       } catch(e) { console.error("Bootstrap error", e); }

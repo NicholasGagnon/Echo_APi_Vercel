@@ -771,31 +771,6 @@ export default function ChatPage() {
               {isPressingSurprise ? "💎 Émergence 💎" : "💎 Surprise 💎"}
             </button>
 
-            {/* Bouton Pays — sous le bouton Surprise */}
-            <div ref={countryPickerRef} className="relative">
-              <button type="button" onClick={() => setShowCountryPicker(v => !v)}
-                className="w-full flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-500 transition-all text-[10px] font-mono font-bold uppercase tracking-widest">
-                <span>{currentCountry.flag}</span>
-                <span className="truncate">{lang === "fr" ? currentCountry.label_fr : currentCountry.label_en}</span>
-                <svg className={`w-2 h-2 ml-auto transition-transform ${showCountryPicker?"rotate-180":""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25 12 15.75 4.5 8.25"/>
-                </svg>
-              </button>
-              {showCountryPicker && (
-                <div className="absolute bottom-full mb-1.5 left-0 w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50">
-                  {COUNTRY_OPTIONS.map(opt => (
-                    <button key={opt.code} type="button"
-                      onClick={() => { setCurrency(opt.code); setShowCountryPicker(false); }}
-                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-[11px] font-mono font-semibold transition-colors text-left ${currency === opt.code ? "bg-cyan-500/10 text-cyan-500" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-800 dark:hover:text-zinc-200"}`}>
-                      <span>{opt.flag}</span>
-                      <span>{lang === "fr" ? opt.label_fr : opt.label_en}</span>
-                      {currency === opt.code && <span className="ml-auto text-cyan-500">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
             <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
               Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">
                 {userTier === "connected_free" ? (lang === "fr" ? "Accès libre" : "FreeConnect") : userTier}
@@ -973,8 +948,8 @@ export default function ChatPage() {
                 onChange={e => { setInput(e.target.value); triggerLingWarmup(e.target.value); }}
                 onKeyDown={e => { if (e.key==="Enter"&&!e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 placeholder={t.chat.placeholder}
-                style={{ height: inputHeight }}
-                className="w-full bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 resize-y text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400 dark:placeholder-zinc-700 transition-colors leading-relaxed shadow-inner" />
+                style={{ height: inputHeight, minHeight: 80 }}
+                className="w-full bg-white dark:bg-zinc-900 text-black dark:text-white border border-zinc-200 dark:border-zinc-900 rounded-xl p-4 resize-y text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700 placeholder-zinc-400 dark:placeholder-zinc-700 transition-colors leading-relaxed shadow-inner flex-1" />
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="grid grid-cols-3 gap-3 flex-1">
