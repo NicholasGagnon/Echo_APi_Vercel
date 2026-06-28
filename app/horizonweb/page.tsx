@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, UserTier } from "../../utils/quota";
@@ -31,45 +31,30 @@ const EchoSvgMascot = ({ className = "w-20 h-20" }: { className?: string }) => (
 );
 
 function BreathingResponse({ text, lang }: { text: string; lang: string }) {
-  const cleaned = text
-    .replace(/\\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-
+  const cleaned = text.replace(/\\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   const lines = cleaned.split("\n").filter(l => l.trim() !== "");
 
   return (
     <div className="space-y-3">
       {lines.map((line, i) => {
         const trimmed = line.trim();
-
         const numberedMatch = trimmed.match(/^(\d+)[.\-\)]\s+(.+)/);
-        if (numberedMatch) {
-          return (
-            <div key={i} className="flex gap-3 items-start">
-              <span className="shrink-0 w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-[10px] font-black font-mono flex items-center justify-center mt-0.5">
-                {numberedMatch[1]}
-              </span>
-              <p className="text-[15px] text-zinc-700 dark:text-zinc-200 leading-relaxed flex-1">
-                {numberedMatch[2]}
-              </p>
-            </div>
-          );
-        }
-
+        if (numberedMatch) return (
+          <div key={i} className="flex gap-3 items-start">
+            <span className="shrink-0 w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-[10px] font-black font-mono flex items-center justify-center mt-0.5">{numberedMatch[1]}</span>
+            <p className="text-[15px] text-zinc-700 dark:text-zinc-200 leading-relaxed flex-1">{numberedMatch[2]}</p>
+          </div>
+        );
         const sectionMatch = trimmed.match(/^(Analyse|Recommandation|Analysis|Recommendation|Note|Conclusion)\s*[:–-]/i);
         if (sectionMatch) {
           const rest = trimmed.replace(/^[^:–-]+[:–-]\s*/, "");
           return (
             <div key={i} className="pt-2">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-500/70 font-bold block mb-1">
-                {sectionMatch[1]}
-              </span>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-500/70 font-bold block mb-1">{sectionMatch[1]}</span>
               {rest && <p className="text-[15px] text-zinc-700 dark:text-zinc-200 leading-relaxed">{rest}</p>}
             </div>
           );
         }
-
         if (trimmed.includes("**")) {
           const parts = trimmed.split(/\*\*(.+?)\*\*/g);
           return (
@@ -78,20 +63,10 @@ function BreathingResponse({ text, lang }: { text: string; lang: string }) {
             </p>
           );
         }
-
         if (trimmed.length < 60 && !trimmed.endsWith(".") && !trimmed.endsWith(",")) {
-          return (
-            <p key={i} className="text-[13px] font-mono uppercase tracking-widest text-zinc-400 dark:text-zinc-500 pt-2">
-              {trimmed}
-            </p>
-          );
+          return <p key={i} className="text-[13px] font-mono uppercase tracking-widest text-zinc-400 dark:text-zinc-500 pt-2">{trimmed}</p>;
         }
-
-        return (
-          <p key={i} className="text-[15px] text-zinc-700 dark:text-zinc-200 leading-relaxed">
-            {trimmed}
-          </p>
-        );
+        return <p key={i} className="text-[15px] text-zinc-700 dark:text-zinc-200 leading-relaxed">{trimmed}</p>;
       })}
     </div>
   );
@@ -112,9 +87,14 @@ export default function HorizonWebPage() {
   const [isAvatarBroken, setIsAvatarBroken]   = useState(false);
   const [activeLens, setActiveLens]     = useState<"critical" | "expert" | "strategy" | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
-  const [savedSearches, setSavedSearches] = useState<{ id?: string; query: string; response: string; lens?: string; date: string }[]>([]);
-  const introLangRef  = useRef<HTMLDivElement>(null);
-  const preDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [savedSearches, setSavedSearches] = useState<{ query: string; response: string; date: string }[]>([]);
+
+  // ── Warmup intention ──────────────────────────────────────────────────────
+  const [warmupIntent, setWarmupIntent]   = useState<string | null>(null);
+  const [isWarmingUp, setIsWarmingUp]     = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const introLangRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const closeOnOutside = (e: MouseEvent) => {
@@ -149,12 +129,55 @@ export default function HorizonWebPage() {
     });
   }, []);
 
+  // ── Warmup — ling détecte l'intention pendant que le user tape ────────────
+  const triggerWarmup = useCallback((text: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (text.length < 3) { setWarmupIntent(null); return; }
+
+    debounceRef.current = setTimeout(async () => {
+      setIsWarmingUp(true);
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://echo-api-fixed.onrender.com";
+        const res = await fetch(`${API_URL}/horizon-warmup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ partial: text }),
+        });
+        const data = await res.json();
+        if (data.intent?.response) {
+          // Le JSON retourné est dans data.intent.response si parsé comme texte brut
+          try {
+            const parsed = JSON.parse(data.intent.response);
+            setWarmupIntent(parsed.intent || null);
+          } catch {
+            setWarmupIntent(null);
+          }
+        }
+      } catch {
+        // Silencieux — le warmup est non-bloquant
+      } finally {
+        setIsWarmingUp(false);
+      }
+    }, 400); // debounce 400ms
+  }, []);
+
+  // ── Nettoyage debounce ────────────────────────────────────────────────────
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
+
   const executeHorizonSearch = async (targetQuery: string, overrideLens?: "critical" | "expert" | "strategy" | null) => {
     if (!targetQuery.trim()) return;
+
+    // Vider le cache avant la nouvelle recherche
+    localStorage.removeItem("horizon_last_response");
+    localStorage.removeItem("horizon_last_attributes");
+
     setQuery(targetQuery);
     setEchoState("thinking");
     setEchoResponse("");
     setAttributes([]);
+    setWarmupIntent(null);
 
     const lensToSend = overrideLens !== undefined ? overrideLens : activeLens;
 
@@ -178,7 +201,6 @@ export default function HorizonWebPage() {
         setEchoResponse(data.response);
         setAttributes(data.attributes || []);
         setEchoState("speaking");
-
         localStorage.setItem("horizon_last_query",      targetQuery);
         localStorage.setItem("horizon_last_response",   data.response);
         localStorage.setItem("horizon_last_attributes", JSON.stringify(data.attributes || []));
@@ -198,76 +220,30 @@ export default function HorizonWebPage() {
     localStorage.setItem("horizon_intro_seen", "true");
   };
 
-  const triggerPre = (q: string) => {
-    if (preDebounceRef.current) clearTimeout(preDebounceRef.current);
-    if (q.length < 4) return;
-    preDebounceRef.current = setTimeout(() => {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://echo-api-fixed.onrender.com";
-      fetch(`${API_URL}/horizon-pre`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q }),
-      }).catch(() => {});
-    }, 600);
-  };
-
-  const handleInputFocus = () => {
-    setInputFocused(true);
-  };
-
-  const handleInputBlur = () => {
-    setInputFocused(false);
-  };
-
   const handleLensClick = (lens: "critical" | "expert" | "strategy") => {
-    const nextLens = activeLens === lens ? null : lens;
-    setActiveLens(nextLens);
-    // Prompt injection only — no auto-search triggered here
+    setActiveLens(activeLens === lens ? null : lens);
   };
 
-  // ── Saved searches ──────────────────────────────────────────────────────
+  // ── Saved searches ────────────────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("horizon_saved_searches");
+      if (raw) setSavedSearches(JSON.parse(raw));
+    } catch {}
+  }, []);
 
-
-
-  // ── Saves : localStorage (non-connecté) + Supabase (connecté) ─────────────
-  const saveCurrentSearch = async () => {
+  const saveCurrentSearch = () => {
     if (!query || !echoResponse) return;
-    const entry = {
-      query,
-      response: echoResponse,
-      lens: activeLens || undefined,
-      date: new Date().toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
-    };
-
-    if (userId) {
-      // Connecté → Supabase
-      try {
-        const { data: inserted, error } = await supabase
-          .from("echo_horizon_saves")
-          .insert({ user_id: userId, query: entry.query, response: entry.response, lens: entry.lens || null })
-          .select()
-          .single();
-        if (!error && inserted) {
-          const withDate = { ...entry, id: inserted.id };
-          setSavedSearches(prev => [withDate, ...prev].slice(0, 50));
-        }
-      } catch (e) { console.error("Save Supabase error:", e); }
-    } else {
-      // Non-connecté → localStorage
-      const updated = [entry, ...savedSearches].slice(0, 20);
-      setSavedSearches(updated);
-      localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
-    }
+    const entry = { query, response: echoResponse, date: new Date().toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) };
+    const updated = [entry, ...savedSearches].slice(0, 20);
+    setSavedSearches(updated);
+    localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
   };
 
-  const deleteSaved = async (idx: number, id?: string) => {
-    if (userId && id) {
-      await supabase.from("echo_horizon_saves").delete().eq("id", id);
-    } else {
-      const updated = savedSearches.filter((_, i) => i !== idx);
-      localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
-    }
-    setSavedSearches(prev => prev.filter((_, i) => i !== idx));
+  const deleteSaved = (idx: number) => {
+    const updated = savedSearches.filter((_, i) => i !== idx);
+    setSavedSearches(updated);
+    localStorage.setItem("horizon_saved_searches", JSON.stringify(updated));
   };
 
   const loadSaved = (s: { query: string; response: string }) => {
@@ -276,43 +252,20 @@ export default function HorizonWebPage() {
     setEchoState("speaking");
   };
 
-  // Chargement initial des saves
-  useEffect(() => {
-    const loadSaves = async () => {
-      if (userId) {
-        // Connecté → charger depuis Supabase
-        const { data } = await supabase
-          .from("echo_horizon_saves")
-          .select("id, query, response, lens, created_at")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(50);
-        if (data) {
-          setSavedSearches(data.map(r => ({
-            id: r.id,
-            query: r.query,
-            response: r.response,
-            lens: r.lens,
-            date: new Date(r.created_at).toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
-          })));
-        }
-      } else {
-        // Non-connecté → localStorage
-        try {
-          const raw = localStorage.getItem("horizon_saves_v2");
-          if (raw) setSavedSearches(JSON.parse(raw));
-        } catch {}
-      }
-    };
-    loadSaves();
-  }, [userId]);
-
-
+  // Label intention pour affichage discret
+  const intentLabel: Record<string, string> = {
+    recherche_locale: lang === "fr" ? "📍 Local" : "📍 Local",
+    prix:             lang === "fr" ? "💰 Prix" : "💰 Price",
+    comparaison:      lang === "fr" ? "⚖️ Comparaison" : "⚖️ Compare",
+    definition:       lang === "fr" ? "📖 Définition" : "📖 Definition",
+    actualite:        lang === "fr" ? "📰 Actualité" : "📰 News",
+    autre:            lang === "fr" ? "🔍 Recherche" : "🔍 Search",
+  };
 
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-red-500/30 relative">
 
-      {/* TOP NEON BAR — rouge + cyan split */}
+      {/* TOP NEON BAR */}
       <div className="pointer-events-none fixed top-0 left-0 right-0 h-[2px] z-40"
         style={{background:"linear-gradient(90deg, transparent 0%, #dc2626 20%, #06b6d4 50%, #dc2626 80%, transparent 100%)", boxShadow:"0 0 12px 2px rgba(220,38,38,0.7), 0 0 30px 6px rgba(220,38,38,0.25)", animation:"neonSlide 4s ease-in-out infinite alternate"}}/>
 
@@ -329,13 +282,13 @@ export default function HorizonWebPage() {
             </div>
             <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-2">
               {lang === "fr"
-                ? "Tu as atteint la limite de recherches HorizonWeb pour ce cycle de 30 jours."
-                : "You've reached the HorizonWeb search limit for this 30-day cycle."}
+                ? "Tu as atteint la limite de recherches HorizonWeb pour ce cycle de 24 heures."
+                : "You've reached the HorizonWeb search limit for this 24-hour cycle."}
             </p>
             <p className="text-zinc-500 text-xs font-mono mb-6">
               {lang === "fr"
-                ? "Passe à un plan supérieur pour débloquer plus de recherches."
-                : "Upgrade your plan to unlock more searches."}
+                ? "Reviens dans 30 minutes pour récupérer 1 crédit, ou passe à un plan supérieur."
+                : "Come back in 30 minutes to recover 1 credit, or upgrade your plan."}
             </p>
             <div className="flex gap-3">
               <Link href="/services"
@@ -429,72 +382,57 @@ export default function HorizonWebPage() {
 
         {/* HEADER ZONE */}
         <div className="p-8 pb-6 border-b border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center text-center shrink-0 pt-14 relative overflow-hidden">
-
-          {/* RED AMBIENT GLOW BACKGROUND */}
           <div className="pointer-events-none absolute inset-0 z-0"
             style={{background:"radial-gradient(ellipse 80% 60% at 50% 0%, rgba(180,20,20,0.08) 0%, transparent 70%)"}}/>
 
           <div className="relative mb-7 z-10">
-            {/* SPLIT TITLE */}
             <h1 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase font-mono select-none">
-              <span
-                className="text-cyan-500 dark:text-cyan-400"
-                style={{textShadow:"0 0 20px rgba(6,182,212,0.6), 0 0 60px rgba(6,182,212,0.25), 0 0 100px rgba(6,182,212,0.1)"}}>
+              <span className="text-cyan-500 dark:text-cyan-400"
+                style={{textShadow:"0 0 20px rgba(6,182,212,0.6), 0 0 60px rgba(6,182,212,0.25)"}}>
                 HORIZON DEEP
               </span>
               {" "}
-              <span
-                className="text-red-600 dark:text-red-500"
-                style={{textShadow:"0 0 20px rgba(220,38,38,0.7), 0 0 60px rgba(220,38,38,0.3), 0 0 100px rgba(220,38,38,0.15)"}}>
+              <span className="text-red-600 dark:text-red-500"
+                style={{textShadow:"0 0 20px rgba(220,38,38,0.7), 0 0 60px rgba(220,38,38,0.3)"}}>
                 WEB SEARCH
               </span>
             </h1>
-
-            {/* DUAL UNDERLINE — cyan + red */}
             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3/4 h-[1px]"
-              style={{background:"linear-gradient(90deg, transparent, #06b6d4, rgba(220,38,38,0.8), #dc2626, rgba(6,182,212,0.8), #06b6d4, transparent)", boxShadow:"0 0 8px 2px rgba(220,38,38,0.4), 0 0 4px 1px rgba(6,182,212,0.3)"}}/>
+              style={{background:"linear-gradient(90deg, transparent, #06b6d4, rgba(220,38,38,0.8), #dc2626, rgba(6,182,212,0.8), #06b6d4, transparent)", boxShadow:"0 0 8px 2px rgba(220,38,38,0.4)"}}/>
           </div>
 
-          {/* LASER INPUT WRAPPER */}
+          {/* INPUT */}
           <div className="w-full max-w-3xl relative z-10">
-            {/* Outer glow shell — animates on focus */}
-            <div
-              className="absolute -inset-[2px] rounded-2xl pointer-events-none z-0 transition-all duration-500"
-              style={inputFocused ? {
-                background: "transparent",
-                boxShadow: "none",
-                opacity: 0,
-              } : {
+            <div className="absolute -inset-[2px] rounded-2xl pointer-events-none z-0 transition-all duration-500"
+              style={inputFocused ? { opacity: 0 } : {
                 background: "linear-gradient(135deg, rgba(6,182,212,0.5), rgba(220,38,38,0.3), rgba(6,182,212,0.5))",
                 boxShadow: "0 0 18px rgba(6,182,212,0.25), 0 0 8px rgba(220,38,38,0.15)",
-                borderRadius: "1rem",
-                opacity: 1,
+                borderRadius: "1rem", opacity: 1,
               }}/>
 
-            {/* Laser scan beam — hidden on focus */}
             {!inputFocused && (
               <div className="absolute -inset-[1px] rounded-2xl pointer-events-none z-0 overflow-hidden">
-                <div style={{
-                  position:"absolute", inset:0, borderRadius:"1rem",
+                <div style={{position:"absolute", inset:0, borderRadius:"1rem",
                   background:"conic-gradient(from 0deg, transparent 60%, rgba(6,182,212,0.5) 80%, rgba(220,38,38,0.4) 90%, transparent 100%)",
-                  animation:"laserOrbit 2.5s linear infinite",
-                }}/>
+                  animation:"laserOrbit 2.5s linear infinite"}}/>
               </div>
             )}
 
             <input
               type="text"
               value={query}
-              onChange={e => { setQuery(e.target.value); triggerPre(e.target.value); }}
+              onChange={e => {
+                setQuery(e.target.value);
+                triggerWarmup(e.target.value);
+              }}
               onKeyDown={e => e.key === "Enter" && executeHorizonSearch(query)}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
               placeholder={lang === "fr" ? "TAPER VOTRE RECHERCHE ICI..." : "TYPE YOUR SEARCH HERE..."}
               className="relative z-10 w-full bg-white dark:bg-zinc-900 text-black dark:text-white font-mono uppercase text-sm border-2 rounded-2xl py-4 pl-6 pr-32 transition-all outline-none"
               style={{
                 borderColor: inputFocused ? "rgba(6,182,212,0.8)" : "transparent",
                 boxShadow: inputFocused ? "0 0 0 3px rgba(6,182,212,0.12), inset 0 0 20px rgba(6,182,212,0.04)" : "none",
-                transition: "border-color 0.3s ease, box-shadow 0.3s ease",
               }}
             />
             <button
@@ -504,12 +442,28 @@ export default function HorizonWebPage() {
               EXPLORE
             </button>
 
+            {/* Indicateur d'intention détectée */}
+            {isWarmingUp && (
+              <div className="absolute right-[calc(6rem+1rem)] top-1/2 -translate-y-1/2 z-20 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-ping" style={{animationDuration:"0.8s"}}/>
+                <span className="text-[9px] font-mono uppercase text-cyan-500/70 tracking-widest">
+                  {lang === "fr" ? "analyse..." : "scanning..."}
+                </span>
+              </div>
+            )}
+            {!isWarmingUp && warmupIntent && warmupIntent !== "autre" && (
+              <div className="absolute right-[calc(6rem+1rem)] top-1/2 -translate-y-1/2 z-20">
+                <span className="text-[9px] font-mono text-cyan-400/70 tracking-widest">
+                  {intentLabel[warmupIntent] || ""}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* LENS BUTTONS */}
           <div className="flex flex-col sm:flex-row gap-2 mt-4 w-full max-w-3xl justify-center font-mono z-10">
             {([
-              { id:"critical" as const, label:lang==="fr"?"REGARD CRITIQUE":"CRITICAL VIEW", prefix:"3⚔️", color:"red"   },
+              { id:"critical" as const, label:lang==="fr"?"REGARD CRITIQUE":"CRITICAL VIEW", prefix:"3⚔️", color:"red"    },
               { id:"expert"   as const, label:lang==="fr"?"EXPERT":"EXPERT",                 prefix:"4🎓", color:"cyan"   },
               { id:"strategy" as const, label:lang==="fr"?"STRATÉGIE":"STRATEGY",            prefix:"7♟️", color:"purple" },
             ]).map(btn => {
@@ -533,7 +487,6 @@ export default function HorizonWebPage() {
         <div className="flex-1 overflow-y-auto p-6 md:p-10 min-h-0 bg-white dark:bg-black flex flex-col items-center relative"
           style={{scrollbarWidth:"thin", scrollbarColor:"rgba(220,38,38,0.2) transparent"}}>
 
-          {/* Subtle red ambient in results area */}
           <div className="pointer-events-none absolute top-0 left-0 right-0 h-32"
             style={{background:"linear-gradient(to bottom, rgba(180,20,20,0.04), transparent)"}}/>
 
@@ -550,7 +503,6 @@ export default function HorizonWebPage() {
 
           {echoState !== "thinking" && echoResponse && (
             <div className="w-full max-w-3xl space-y-6 animate-in fade-in duration-300 pb-16 relative z-10">
-
               {attributes.length > 0 && (
                 <div className="flex gap-2 items-center flex-wrap font-mono text-[10px]">
                   <span className="text-zinc-400 uppercase font-bold">{lang === "fr" ? "Critères :" : "Criteria :"}</span>
@@ -559,7 +511,6 @@ export default function HorizonWebPage() {
                   ))}
                 </div>
               )}
-
               <div className="space-y-1">
                 <div className="flex items-center gap-2 mb-5">
                   {isAvatarBroken ? <EchoSvgMascot className="w-7 h-7"/> : (
@@ -572,13 +523,9 @@ export default function HorizonWebPage() {
                 </div>
                 <BreathingResponse text={echoResponse} lang={lang} />
               </div>
-
-              {/* SAVE BUTTON */}
               <div className="flex justify-end pt-2">
-                <button
-                  onClick={saveCurrentSearch}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/60 text-red-500 dark:text-red-400 text-[11px] font-mono uppercase tracking-widest font-bold transition-all"
-                  style={{boxShadow:"0 0 10px rgba(220,38,38,0.05)"}}>
+                <button onClick={saveCurrentSearch}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/60 text-red-500 dark:text-red-400 text-[11px] font-mono uppercase tracking-widest font-bold transition-all">
                   <span>💾</span>
                   {lang === "fr" ? "Sauvegarder" : "Save"}
                 </button>
@@ -611,7 +558,6 @@ export default function HorizonWebPage() {
             <span className="text-zinc-400 dark:text-zinc-300">{lang === "fr" ? "Recherches sauvegardées" : "Saved searches"}</span>
           </h3>
         </div>
-
         <div className="flex-1 overflow-y-auto p-3 space-y-2" style={{scrollbarWidth:"thin", scrollbarColor:"rgba(220,38,38,0.15) transparent"}}>
           {savedSearches.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-center">
@@ -623,40 +569,20 @@ export default function HorizonWebPage() {
           ) : (
             savedSearches.map((s, idx) => (
               <div key={idx}
-                className="group relative rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-3 hover:border-red-500/30 hover:bg-red-500/3 transition-all cursor-pointer"
+                className="group relative rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 p-3 hover:border-red-500/30 transition-all cursor-pointer"
                 onClick={() => loadSaved(s)}>
-                {/* Delete */}
-                <button
-                  onClick={e => { e.stopPropagation(); deleteSaved(idx, s.id); }}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 text-[10px] flex items-center justify-center transition-all font-bold">
-                  ✕
-                </button>
-                <p className="text-[11px] font-mono font-bold text-zinc-700 dark:text-zinc-200 uppercase leading-tight pr-5 line-clamp-2 mb-1">
-                  {s.query}
-                </p>
-                <p className="text-[9px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
-                  {s.date}
-                </p>
-                {/* Lens tag if present */}
-                <div className="absolute bottom-2 right-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500/40"/>
-                </div>
+                <button onClick={e => { e.stopPropagation(); deleteSaved(idx); }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 text-[10px] flex items-center justify-center transition-all font-bold">✕</button>
+                <p className="text-[11px] font-mono font-bold text-zinc-700 dark:text-zinc-200 uppercase leading-tight pr-5 line-clamp-2 mb-1">{s.query}</p>
+                <p className="text-[9px] font-mono text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">{s.date}</p>
+                <div className="absolute bottom-2 right-2"><div className="w-1.5 h-1.5 rounded-full bg-red-500/40"/></div>
               </div>
             ))
           )}
         </div>
-
         {savedSearches.length > 0 && (
           <div className="px-3 py-3 border-t border-zinc-200 dark:border-zinc-800 shrink-0">
-            <button
-              onClick={async () => {
-                if (userId) {
-                  await supabase.from("echo_horizon_saves").delete().eq("user_id", userId);
-                } else {
-                  localStorage.removeItem("horizon_saves_v2");
-                }
-                setSavedSearches([]);
-              }}
+            <button onClick={() => { setSavedSearches([]); localStorage.removeItem("horizon_saved_searches"); }}
               className="w-full py-1.5 rounded-lg text-[9px] font-mono uppercase tracking-widest text-zinc-400 hover:text-red-400 hover:bg-red-500/5 transition-all border border-transparent hover:border-red-500/20">
               {lang === "fr" ? "Tout effacer" : "Clear all"}
             </button>
@@ -665,15 +591,8 @@ export default function HorizonWebPage() {
       </aside>
 
       <style>{`
-        @keyframes neonSlide {
-          0%   { opacity: 0.4; transform: scaleX(0.7); }
-          50%  { opacity: 1;   transform: scaleX(1); }
-          100% { opacity: 0.4; transform: scaleX(0.7); }
-        }
-        @keyframes laserOrbit {
-          0%   { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
+        @keyframes neonSlide { 0% { opacity:0.4; transform:scaleX(0.7); } 50% { opacity:1; transform:scaleX(1); } 100% { opacity:0.4; transform:scaleX(0.7); } }
+        @keyframes laserOrbit { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
       `}</style>
     </main>
   );
