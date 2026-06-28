@@ -6,12 +6,49 @@ import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
 import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import PremiumRequiredModal from "../components/PremiumRequiredModal";
-import QuotaPopup from "../components/QuotaPopup";
 import { useApp } from "../../context/AppContext";
 
-type BudgetExpense  = { id: string; title: string; amount: number; currency: "$"|"€"; date: string };
+type BudgetExpense  = { id: string; title: string; amount: number; currency: "$"|"US$"|"€"; date: string };
 type CalorieLog     = { id: string; foodName: string; calories: number; date: string };
 type VitalityMessage = { raw: string; imageB64?: string };
+
+// ── POPUP QUOTA ───────────────────────────────────────────────────────────────
+function QuotaPopup({ label, lang, onClose }: { label: string; lang: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)]">
+        <button onClick={onClose} className="absolute top-4 right-4 text-zinc-500 hover:text-white font-bold font-mono text-lg">✕</button>
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-2xl">⚠️</span>
+          <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
+            {lang === "fr" ? "Limite atteinte" : "Limit reached"}
+          </h3>
+        </div>
+        <p className="text-zinc-300 text-sm font-mono leading-relaxed mb-1">
+          {lang === "fr"
+            ? `Vous avez atteint la limite ${label} de votre plan.`
+            : `You've reached the ${label} limit of your plan.`}
+        </p>
+        <p className="text-zinc-500 text-xs font-mono mb-6">
+          {lang === "fr"
+            ? "Revenez dans 1 heure pour récupérer un crédit ou passez à un plan supérieur."
+            : "Come back in 1 hour to recover a credit or upgrade your plan."}
+        </p>
+        <div className="flex gap-3">
+          <Link href="/services"
+            className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs font-mono uppercase tracking-widest text-center transition-all"
+            onClick={onClose}>
+            {lang === "fr" ? "Voir les plans" : "View plans"}
+          </Link>
+          <button onClick={onClose}
+            className="px-4 py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:text-white text-xs font-mono uppercase tracking-widest transition-all">
+            {lang === "fr" ? "Fermer" : "Close"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function VitalityPage() {
   const { t, lang, theme, userTier } = useApp();
@@ -40,7 +77,7 @@ export default function VitalityPage() {
 
   const [manualExpenseTitle,    setManualExpenseTitle]    = useState("");
   const [manualExpenseAmount,   setManualExpenseAmount]   = useState("");
-  const [manualExpenseCurrency, setManualExpenseCurrency] = useState<"$"|"€">("$");
+  const [manualExpenseCurrency, setManualExpenseCurrency] = useState<"$"|"US$"|"€">("$");
   const [manualExpenseDate,     setManualExpenseDate]     = useState(new Date().toLocaleDateString("fr-CA"));
   const [manualFoodName, setManualFoodName] = useState("");
   const [manualCalories, setManualCalories] = useState("");
@@ -104,7 +141,7 @@ export default function VitalityPage() {
       try {
         if (uid) {
           const { data: expRows } = await supabase.from("echo_expenses").select("*").eq("user_id", uid).order("date", { ascending: false });
-          setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"€", date: r.date })));
+          setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"US$"|"€", date: r.date })));
           const { data: calRows } = await supabase.from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
           setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
         }
@@ -145,7 +182,7 @@ export default function VitalityPage() {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const uid = session.user.id; setUserId(uid);
         const { data: expRows } = await supabase.from("echo_expenses").select("*").eq("user_id", uid).order("date", { ascending: false });
-        setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"€", date: r.date })));
+        setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"US$"|"€", date: r.date })));
         const { data: calRows } = await supabase.from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
         setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
         const convo   = localStorage.getItem(getVitalityConvoKey(uid));
@@ -173,7 +210,7 @@ export default function VitalityPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [echoMessages, isLoaded, userId]);
 
-  const totalSpentUSD      = expenses.filter(i => i.currency==="$").reduce((s,i) => s+i.amount, 0);
+  const totalSpentUSD      = expenses.filter(i => i.currency==="$" || i.currency==="US$").reduce((s,i) => s+i.amount, 0);
   const totalSpentEUR      = expenses.filter(i => i.currency==="€").reduce((s,i) => s+i.amount, 0);
   const totalSpentCombined = totalSpentUSD + totalSpentEUR;
   const budgetPercentage   = Math.min((totalSpentCombined/budgetGoal)*100, 100);
@@ -352,7 +389,7 @@ export default function VitalityPage() {
           const finalTitle  = rawTitle.length > 60 ? rawTitle.slice(0, 60) : rawTitle;
           const finalAmount = parseFloat(payload.amount ?? payload.spent ?? payload.price) || 0;
           const finalDate   = payload.paymentDate || payload.paidAt || payload.date || new Date().toLocaleDateString("fr-CA");
-          const detectedCurrency: "$"|"€" = payload.currency || (textToSubmit?.toLowerCase().includes("euro") || textToSubmit?.includes("€") ? "€" : "$");
+          const detectedCurrency: "$"|"US$"|"€" = payload.currency || (textToSubmit?.toLowerCase().includes("euro") || textToSubmit?.includes("€") ? "€" : "$");
           await addExpense({ title: finalTitle, amount: finalAmount, currency: detectedCurrency, date: finalDate });
         }
 
@@ -519,7 +556,7 @@ export default function VitalityPage() {
                 <div className="absolute z-20 bg-white dark:bg-zinc-950/90 rounded-full w-[76%] h-[76%] flex flex-col justify-center items-center border border-zinc-200 dark:border-zinc-800 text-center px-1">
                   <span className="text-zinc-400 dark:text-zinc-500 text-[9px] uppercase font-bold tracking-wider">{dict.spent}</span>
                   <div className="flex flex-col items-center leading-none">
-                    {(totalSpentUSD>0||totalSpentEUR===0) && <span className="text-lg font-black text-cyan-400">${totalSpentUSD.toFixed(2)}</span>}
+                    {(totalSpentUSD>0||totalSpentEUR===0) && <span className="text-lg font-black text-cyan-400">{totalSpentUSD.toFixed(2)}</span>}
                     {totalSpentEUR>0 && <span className="text-sm font-black text-emerald-400">{totalSpentEUR.toFixed(2)}€</span>}
                   </div>
                   {isEditingBudget ? (
@@ -544,7 +581,7 @@ export default function VitalityPage() {
                     className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-2 text-xs text-center focus:outline-none font-mono shadow-inner" />
                   <select value={manualExpenseCurrency} onChange={e=>setManualExpenseCurrency(e.target.value as any)}
                     className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-center font-bold cursor-pointer focus:outline-none">
-                    <option value="$">$</option><option value="€">€</option>
+                    <option value="$">CA$</option><option value="US$">US$</option><option value="€">€</option>
                   </select>
                 </div>
                 <div className="grid grid-cols-[1fr_2.5rem] gap-1.5">
@@ -566,8 +603,8 @@ export default function VitalityPage() {
                     <span className="text-[10px] text-zinc-400">📅 {exp.date}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <span className={`font-mono font-bold text-sm ${exp.currency==="€"?"text-emerald-400":"text-cyan-400"}`}>
-                      {exp.currency==="$"?`$${exp.amount.toFixed(2)}`:`${exp.amount.toFixed(2)}€`}
+                    <span className={`font-mono font-bold text-sm ${exp.currency==="€"?"text-emerald-400":exp.currency==="US$"?"text-blue-400":"text-cyan-400"}`}>
+                      {exp.currency==="$"?`CA$${exp.amount.toFixed(2)}`:exp.currency==="US$"?`US$${exp.amount.toFixed(2)}`:`${exp.amount.toFixed(2)}€`}
                     </span>
                     <button onClick={()=>deleteExpense(exp.id)} className="text-zinc-400 hover:text-red-500 text-xs">✕</button>
                   </div>

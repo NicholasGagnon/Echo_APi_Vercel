@@ -106,12 +106,27 @@ export default function ServicesPage() {
   const [isLoadingTreasure, setIsLoadingTreasure] = useState(false);
   const [showLoginRequiredModal, setShowLoginRequiredModal] = useState(false);
 
-  // ── Devise / Pays ──────────────────────────────────────────────────────────
-  const [currency, setCurrency]           = useState<Currency>("CAD");
+  // ── Devise / Pays — partagé via localStorage ──────────────────────────────
+  const [currency, setCurrencyState] = useState<Currency>("CAD");
   const [showCountryPicker, setShowCountryPicker] = useState(false);
 
   useEffect(() => {
-    setCurrency(detectCurrency());
+    const saved = localStorage.getItem("echo-currency") as Currency | null;
+    setCurrencyState(saved || detectCurrency());
+  }, []);
+
+  const setCurrency = (c: Currency) => {
+    setCurrencyState(c);
+    localStorage.setItem("echo-currency", c);
+    window.dispatchEvent(new StorageEvent("storage", { key: "echo-currency", newValue: c }));
+  };
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "echo-currency" && e.newValue) setCurrencyState(e.newValue as Currency);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const activeT = lang === "fr" ? localT.fr : localT.en;
@@ -480,30 +495,6 @@ export default function ServicesPage() {
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-200">
           <div className="bg-zinc-950 border-2 border-amber-500 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.3)] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <button type="button" onClick={() => setShowTreasureModal(false)} className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors">✕</button>
-
-            {/* Bouton Country dans l'easter egg */}
-            <div className="absolute top-4 left-4">
-              <div className="relative">
-                <button type="button" onClick={() => setShowCountryPicker(v => !v)}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-amber-500/50 hover:text-amber-400 transition-all text-[10px] font-mono font-bold">
-                  <span>{currentCountry.flag}</span>
-                  <span>{lang === "fr" ? currentCountry.label_fr : currentCountry.label_en}</span>
-                </button>
-                {showCountryPicker && (
-                  <div className="absolute top-full mt-1.5 left-0 w-48 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50">
-                    {COUNTRY_OPTIONS.map(opt => (
-                      <button key={opt.code} type="button"
-                        onClick={() => { setCurrency(opt.code); setShowCountryPicker(false); }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-[10px] font-mono font-semibold transition-colors text-left ${currency === opt.code ? "bg-amber-500/10 text-amber-400" : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"}`}>
-                        <span>{opt.flag}</span>
-                        <span>{lang === "fr" ? opt.label_fr : opt.label_en}</span>
-                        {currency === opt.code && <span className="ml-auto text-amber-400">✓</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
 
             <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce">👑</div>
 

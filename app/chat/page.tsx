@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
@@ -10,9 +10,27 @@ import { useApp } from "../../context/AppContext";
 
 type ChatMessage  = { raw: string; imageB64?: string };
 type Conversation = { id: string; title: string; messages: string[]; summary: string; updatedAt: number };
+type Currency = "CAD" | "USD" | "EUR";
 
 // ── SOURCE UNIFIÉE home + chat ────────────────────────────────────────────────
-const CONV_SOURCE = "echo";
+const CONV_SOURCE    = "echo";
+const LOCAL_CONV_KEY = "echo-conversation-v2"; // clé partagée avec home (navigateur)
+
+// ── PAYS / DEVISE ─────────────────────────────────────────────────────────────
+const COUNTRY_OPTIONS: { code: Currency; flag: string; label_fr: string; label_en: string }[] = [
+  { code: "CAD", flag: "🇨🇦", label_fr: "Canada",      label_en: "Canada"        },
+  { code: "USD", flag: "🇺🇸", label_fr: "États-Unis",  label_en: "United States" },
+  { code: "EUR", flag: "🇪🇺", label_fr: "Europe",      label_en: "Europe"        },
+];
+
+const detectCurrency = (): Currency => {
+  if (typeof window === "undefined") return "CAD";
+  const loc = navigator.language?.toLowerCase() || "";
+  if (loc.startsWith("fr-fr") || loc.startsWith("de") || loc.startsWith("es") ||
+      loc.startsWith("it") || loc.startsWith("nl") || loc.startsWith("pt-pt")) return "EUR";
+  if (loc.startsWith("en-us")) return "USD";
+  return "CAD";
+};
 
 const normalizeTier = (raw: string | null): UserTier => {
   if (!raw) return "connected_free";
@@ -79,6 +97,11 @@ export default function ChatPage() {
   const [renameValue,     setRenameValue]     = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Grossisseur de caractères ─────────────────────────────────────────────
+  const [chatFontSize, setChatFontSize] = useState(15);
+  const increaseFontSize = () => setChatFontSize(s => Math.min(s + 1, 22));
+  const decreaseFontSize = () => setChatFontSize(s => Math.max(s - 1, 11));
+
   const DEFAULT_INPUT_HEIGHT = 80;
   const [inputHeight, setInputHeight] = useState(DEFAULT_INPUT_HEIGHT);
   const shrinkInput = () => {
@@ -97,6 +120,66 @@ export default function ChatPage() {
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
   const [isSurpriseActive,       setIsSurpriseActive]       = useState(false);
   const [isPressingSurprise,     setIsPressingSurprise]     = useState(false);
+
+  // ── Pays / Devise — partagé via localStorage ──────────────────────────────
+  const [currency, setCurrencyState] = useState<Currency>("CAD");
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const countryPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("echo-currency") as Currency | null;
+    setCurrencyState(saved || detectCurrency());
+  }, []);
+
+  const setCurrency = (c: Currency) => {
+    setCurrencyState(c);
+    localStorage.setItem("echo-currency", c);
+    window.dispatchEvent(new StorageEvent("storage", { key: "echo-currency", newValue: c }));
+  };
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "echo-currency" && e.newValue) setCurrencyState(e.newValue as Currency);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const currentCountry = COUNTRY_OPTIONS.find(c => c.code === currency) || COUNTRY_OPTIONS[0];
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (countryPickerRef.current && !countryPickerRef.current.contains(e.target as Node))
+        setShowCountryPicker(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  // ── Warmup ling ───────────────────────────────────────────────────────────
+  const [warmupIntent, setWarmupIntent] = useState<string|null>(null);
+  const warmupDebounceRef = useRef<ReturnType<typeof setTimeout>|null>(null);
+
+  const triggerLingWarmup = useCallback((text: string) => {
+    if (warmupDebounceRef.current) clearTimeout(warmupDebounceRef.current);
+    if (text.length < 3) { setWarmupIntent(null); return; }
+    warmupDebounceRef.current = setTimeout(async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+        const res = await fetch(`${API_URL}/horizon-warmup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ partial: text }),
+        });
+        const data = await res.json();
+        if (data.intent?.response) {
+          try { setWarmupIntent(JSON.parse(data.intent.response)?.intent || null); } catch {}
+        }
+      } catch {}
+    }, 400);
+  }, []);
+
+  useEffect(() => () => { if (warmupDebounceRef.current) clearTimeout(warmupDebounceRef.current); }, []);
 
   const buttonsLabels: Record<string, { fr: string; en: string }> = {
     clarity:    { fr:"1🧠 Clarté",          en:"1🧠 Clarity"       },
@@ -146,7 +229,7 @@ export default function ChatPage() {
   const deserializeMsgs = (raws: string[]): ChatMessage[] => raws.map(r => ({ raw: r }));
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
-  // ── SUPABASE — source unifiée "echo" ─────────────────────────────────────
+  // ── SUPABASE ──────────────────────────────────────────────────────────────
   const loadConversationsFromDB = async (uid: string) => {
     const { data, error } = await supabase
       .from("echo_conversations").select("id, messages, summary, updated_at")
@@ -162,13 +245,10 @@ export default function ChatPage() {
     })) as Conversation[];
   };
 
-  // ── CRON MEMORY SUMMARY ───────────────────────────────────────────────────
   const saveConversationToDB = async (uid: string, convId: string | null, raws: string[], currentSummary: string): Promise<string | null> => {
     if (!convId || convId === "new" || convId.startsWith("local-")) return convId;
-
     let finalSummary  = currentSummary;
     let finalMessages = raws;
-
     if (raws.length > 10) {
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -181,25 +261,18 @@ export default function ChatPage() {
         finalSummary  = data.summary || currentSummary;
         finalMessages = raws.slice(-100);
         setConversations(prev => prev.map(c => c.id === convId ? { ...c, summary: finalSummary } : c));
-        console.log("[MEMORY Chat] Résumé mis à jour");
       } catch (e) { console.error("[MEMORY Chat]", e); }
     }
-
     const { error } = await supabase.from("echo_conversations").update({
-      messages:           finalMessages,
-      summary:            finalSummary,
-      summary_updated_at: new Date().toISOString(),
-      updated_at:         new Date().toISOString(),
+      messages: finalMessages, summary: finalSummary,
+      summary_updated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq("id", convId).eq("user_id", uid);
     if (error) console.error("[Chat] update:", error.message);
     return convId;
   };
 
-  // ── PUSH GOOGLE CALENDAR depuis Echo ─────────────────────────────────────
-  const pushEchoEventToGoogle = async (
-    uid: string, dateKey: string, title: string,
-    startTime: string, endTime: string, notes: string
-  ): Promise<string|null> => {
+  // ── PUSH GOOGLE CALENDAR ─────────────────────────────────────────────────
+  const pushEchoEventToGoogle = async (uid: string, dateKey: string, title: string, startTime: string, endTime: string, notes: string): Promise<string|null> => {
     let token = localStorage.getItem(`echo-google-token-${uid}`);
     if (!token) {
       try {
@@ -217,24 +290,36 @@ export default function ChatPage() {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ summary: title, description: notes, start: startObj, end: endObj }),
       });
-      if (!res.ok) { console.warn("[Chat] Google Calendar push failed:", res.status); return null; }
+      if (!res.ok) return null;
       const d = await res.json();
-      console.log("[Chat] Google Calendar push OK:", d.id);
       return d.id ?? null;
-    } catch (err) {
-      console.error("[Chat] pushEchoEventToGoogle:", err);
-      return null;
-    }
+    } catch { return null; }
   };
 
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   const initForUser = async (uid: string | null) => {
     if (!uid) {
+      // Chat croisé navigateur — charge depuis la clé partagée avec home
+      const sharedRaw = localStorage.getItem(LOCAL_CONV_KEY);
+      const sharedMsgs = sharedRaw ? JSON.parse(sharedRaw) : [];
+
       const localConvos = loadLocalConvos();
       if (localConvos.length > 0) {
+        // Fusionner les messages partagés dans la première conv locale si elle est vide
+        if (sharedMsgs.length > 0 && localConvos[0].messages.length === 0) {
+          localConvos[0].messages = sharedMsgs;
+          localConvos[0].title = deriveTitle(sharedMsgs, lang);
+        }
         setConversations(localConvos);
         setActiveConversationId(localConvos[0].id);
         setMessages(deserializeMsgs(localConvos[0].messages));
+      } else if (sharedMsgs.length > 0) {
+        const localId = `local-${Date.now()}`;
+        const conv: Conversation = { id: localId, title: deriveTitle(sharedMsgs, lang), messages: sharedMsgs, summary: "", updatedAt: Date.now() };
+        setConversations([conv]);
+        setActiveConversationId(localId);
+        setMessages(deserializeMsgs(sharedMsgs));
+        saveLocalConvos([conv]);
       } else {
         const empty: Conversation = { id: "new", title: lang === "fr" ? "Nouvelle conversation" : "New conversation", messages: [], summary: "", updatedAt: Date.now() };
         setConversations([empty]); setActiveConversationId("new"); setMessages([]);
@@ -273,7 +358,13 @@ export default function ChatPage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { if (!isLoaded || userId) return; saveLocalConvos(conversations); }, [conversations, isLoaded, userId]);
+  // Sync chat croisé navigateur — met à jour LOCAL_CONV_KEY quand messages changent
+  useEffect(() => {
+    if (!isLoaded || userId) return;
+    const raws = serializeMsgs(messages);
+    localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(raws));
+    saveLocalConvos(conversations);
+  }, [messages, conversations, isLoaded, userId]);
 
   useEffect(() => {
     if (!isLoaded || !userId || !activeConversationId || activeConversationId === "new" || activeConversationId.startsWith("local-")) return;
@@ -291,16 +382,6 @@ export default function ChatPage() {
     }, 1500);
     return () => { if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current); };
   }, [messages, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded || userId || !activeConversationId || activeConversationId === "new") return;
-    const raws = serializeMsgs(messages);
-    setConversations(prev => prev.map(c =>
-      c.id === activeConversationId
-        ? { ...c, messages: raws, updatedAt: Date.now(), title: raws.length > 0 && isDefaultTitle(c.title) ? deriveTitle(raws, lang) : c.title }
-        : c
-    ));
-  }, [messages, isLoaded, userId]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -395,8 +476,7 @@ export default function ChatPage() {
 
     const quotaStatus = checkQuota("chat_ia", userTier, true, userId);
     if (!quotaStatus.allowed) {
-      const label = quotaStatus.error === "anon_limit" ? "anon_limit"
-        : (lang === "fr" ? "Chat IA" : "AI Chat");
+      const label = quotaStatus.error === "anon_limit" ? "anon_limit" : (lang === "fr" ? "Chat IA" : "AI Chat");
       triggerQuotaPopup(label);
       return;
     }
@@ -409,6 +489,7 @@ export default function ChatPage() {
     setEchoState("thinking");
     setMessages([...baseMessages, { raw: "Echo: ..." }]);
     setInput(""); setSelectedImage(null); setSelectedImageName("");
+    setWarmupIntent(null);
 
     const activeConv     = conversations.find(c => c.id === activeConversationId);
     const currentSummary = activeConv?.summary || "";
@@ -417,7 +498,6 @@ export default function ChatPage() {
     if (activeConversationId === "new") {
       try {
         if (userId) {
-          // ── source unifiée "echo" ────────────────────────────────────────
           const { data, error } = await supabase.from("echo_conversations")
             .insert({ user_id: userId, source: CONV_SOURCE, messages: serializeMsgs([userEntry]), summary: "", updated_at: new Date().toISOString() })
             .select("id").single();
@@ -448,13 +528,9 @@ export default function ChatPage() {
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message:        userMessage,
-          image:          imageToSend,
-          history:        serializeMsgs(baseMessages),
-          userTier,
-          calendarEvents: {},
-          selectedButtons,
-          summary:        currentSummary,
+          message: userMessage, image: imageToSend,
+          history: serializeMsgs(baseMessages),
+          userTier, calendarEvents: {}, selectedButtons, summary: currentSummary,
         }),
       });
       const data = await response.json();
@@ -468,10 +544,7 @@ export default function ChatPage() {
             ? "vitality_actions" : "calendar";
         const status = checkQuota(qCat, userTier, true, userId);
         if (!status.allowed) {
-          const label = qCat === "calendar"
-            ? (lang === "fr" ? "Calendrier" : "Calendar")
-            : (lang === "fr" ? "Vitalité" : "Vitality");
-          triggerQuotaPopup(label);
+          triggerQuotaPopup(qCat === "calendar" ? (lang === "fr" ? "Calendrier" : "Calendar") : (lang === "fr" ? "Vitalité" : "Vitality"));
           isActionBlocked = true;
         }
       }
@@ -489,14 +562,22 @@ export default function ChatPage() {
       if (data.action && !isActionBlocked && userId) {
         const { type, payload } = data.action;
 
+        // ── Vitality agentic ───────────────────────────────────────────────
         if (type === "ADD_BUDGET_EXPENSE") {
           const { title, amount, spent, date, paymentDate, paidAt } = payload;
-          await supabase.from("echo_expenses").insert({ user_id: userId, title: title || "Purchase", amount: parseFloat(amount ?? spent) || 0, date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA") });
+          await supabase.from("echo_expenses").insert({
+            user_id: userId, title: title || "Purchase",
+            amount: parseFloat(amount ?? spent) || 0,
+            date: paymentDate || paidAt || date || new Date().toLocaleDateString("fr-CA"),
+          });
         }
 
         if (type === "ADD_CALORIE_LOG") {
           const { foodName, food_name, meal, title, calories } = payload;
-          await supabase.from("echo_calories").insert({ user_id: userId, food_name: foodName || food_name || meal || title || "Food Item", calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA") });
+          await supabase.from("echo_calories").insert({
+            user_id: userId, food_name: foodName || food_name || meal || title || "Food Item",
+            calories: parseInt(calories) || 0, date: new Date().toLocaleDateString("fr-CA"),
+          });
         }
 
         if (type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") {
@@ -505,43 +586,25 @@ export default function ChatPage() {
           if (Number.isFinite(nextGoal) && nextGoal > 0) localStorage.setItem("echo-calorie-goal", nextGoal.toString());
         }
 
-        // ── Calendrier — ISO 8601 + push Google ──────────────────────────
+        // ── Calendrier ────────────────────────────────────────────────────
         if (type === "ADD_CALENDAR_EVENT") {
           const { title, start, end, notes = "" } = payload;
-
-          let dateKey   = "";
-          let startTime = "";
-          let endTime   = "";
-
+          let dateKey = "", startTime = "", endTime = "";
           if (start) {
             if (start.includes("T")) { dateKey = start.split("T")[0]; startTime = start.split("T")[1]?.slice(0, 5) || ""; }
             else { dateKey = start; }
           }
           if (!dateKey) dateKey = new Date().toLocaleDateString("fr-CA");
           if (end?.includes("T")) endTime = end.split("T")[1]?.slice(0, 5) || "";
-
           const finalTitle = title || "Untitled Event";
           const finalNotes = notes || "";
-
           if (dateKey && userId) {
-            // 1. Push vers Google Calendar
             const googleEventId = await pushEchoEventToGoogle(userId, dateKey, finalTitle, startTime, endTime, finalNotes);
-
-            // 2. Insert dans Supabase
-            const insertPayload: any = {
-              user_id:      userId,
-              title:        finalTitle,
-              start_date:   dateKey,
-              end_date:     dateKey,
-              notes:        finalNotes,
-              is_from_echo: true,
-            };
-            if (startTime)     insertPayload.start_time      = startTime;
-            if (endTime)       insertPayload.end_time        = endTime;
+            const insertPayload: any = { user_id: userId, title: finalTitle, start_date: dateKey, end_date: dateKey, notes: finalNotes, is_from_echo: true };
+            if (startTime) insertPayload.start_time = startTime;
+            if (endTime)   insertPayload.end_time   = endTime;
             if (googleEventId) insertPayload.google_event_id = googleEventId;
-
             await supabase.from("echo_calendar").insert(insertPayload);
-
             if (googleEventId && typeof triggerToast === "function") {
               triggerToast("info", lang === "fr" ? "Rendez-vous ajouté dans Google Calendar ✓" : "Event added to Google Calendar ✓");
             }
@@ -625,6 +688,34 @@ export default function ChatPage() {
               {lang === "fr" ? "CHAPITRE 2 : L'ESPACE IMMERSIF" : "CHAPTER 2: IMMERSIVE SPACE"}
             </h4>
           </div>
+
+          {/* Bouton pays dans le tutorial */}
+          <div className="flex justify-end mb-3" ref={countryPickerRef}>
+            <div className="relative">
+              <button type="button" onClick={() => setShowCountryPicker(v => !v)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-cyan-500/60 hover:text-cyan-400 transition-all text-[11px] font-mono font-bold">
+                <span>{currentCountry.flag}</span>
+                <span>{lang === "fr" ? currentCountry.label_fr : currentCountry.label_en}</span>
+                <svg className={`w-2.5 h-2.5 transition-transform ${showCountryPicker?"rotate-180":""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25 12 15.75 4.5 8.25"/>
+                </svg>
+              </button>
+              {showCountryPicker && (
+                <div className="absolute right-0 top-full mt-1.5 w-44 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50">
+                  {COUNTRY_OPTIONS.map(opt => (
+                    <button key={opt.code} type="button"
+                      onClick={() => { setCurrency(opt.code); setShowCountryPicker(false); }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] font-mono font-semibold transition-colors text-left ${currency === opt.code ? "bg-cyan-500/10 text-cyan-400" : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"}`}>
+                      <span>{opt.flag}</span>
+                      <span>{lang === "fr" ? opt.label_fr : opt.label_en}</span>
+                      {currency === opt.code && <span className="ml-auto text-cyan-400">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
             <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
               <img src="/echo3.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
@@ -644,6 +735,7 @@ export default function ChatPage() {
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
+        {/* SIDEBAR */}
         <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
@@ -678,6 +770,32 @@ export default function ChatPage() {
                     : "bg-purple-500/[0.04] dark:bg-purple-950/[0.06] text-purple-600 dark:text-purple-400 border-purple-700/40 hover:border-purple-400 hover:bg-purple-500/10"}`}>
               {isPressingSurprise ? "💎 Émergence 💎" : "💎 Surprise 💎"}
             </button>
+
+            {/* Bouton Pays — sous le bouton Surprise */}
+            <div ref={countryPickerRef} className="relative">
+              <button type="button" onClick={() => setShowCountryPicker(v => !v)}
+                className="w-full flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-500 transition-all text-[10px] font-mono font-bold uppercase tracking-widest">
+                <span>{currentCountry.flag}</span>
+                <span className="truncate">{lang === "fr" ? currentCountry.label_fr : currentCountry.label_en}</span>
+                <svg className={`w-2 h-2 ml-auto transition-transform ${showCountryPicker?"rotate-180":""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25 12 15.75 4.5 8.25"/>
+                </svg>
+              </button>
+              {showCountryPicker && (
+                <div className="absolute bottom-full mb-1.5 left-0 w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50">
+                  {COUNTRY_OPTIONS.map(opt => (
+                    <button key={opt.code} type="button"
+                      onClick={() => { setCurrency(opt.code); setShowCountryPicker(false); }}
+                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-[11px] font-mono font-semibold transition-colors text-left ${currency === opt.code ? "bg-cyan-500/10 text-cyan-500" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-800 dark:hover:text-zinc-200"}`}>
+                      <span>{opt.flag}</span>
+                      <span>{lang === "fr" ? opt.label_fr : opt.label_en}</span>
+                      {currency === opt.code && <span className="ml-auto text-cyan-500">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
               Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">
                 {userTier === "connected_free" ? (lang === "fr" ? "Accès libre" : "FreeConnect") : userTier}
@@ -686,6 +804,7 @@ export default function ChatPage() {
           </div>
         </aside>
 
+        {/* CONVO PANEL */}
         {isConvoPanelOpen ? (
           <>
             <div ref={convoPanelRef} style={{ width: convoPanelWidth, flexBasis: convoPanelWidth }}
@@ -739,9 +858,11 @@ export default function ChatPage() {
           </button>
         )}
 
+        {/* MAIN */}
         <section className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-black transition-colors duration-200 min-w-0">
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">
 
+            {/* MESSAGES */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-white dark:bg-black">
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center gap-4">
@@ -773,8 +894,8 @@ export default function ChatPage() {
                           <span className="text-zinc-400 dark:text-zinc-600 text-[10px] font-mono">Core Frequency</span>
                         </div>
                       </div>
-                      <div className="text-zinc-800 dark:text-zinc-200 text-[15px] leading-8 font-normal tracking-wide selection:bg-cyan-500/30 flex flex-col gap-5 pl-2 sm:pl-20 overflow-hidden">
-                        {cleanText.split(/\n\n+/).map((block,i) => <p key={i} className="whitespace-pre-wrap break-words">{block}</p>)}
+                      <div className="tracking-wide selection:bg-cyan-500/30 flex flex-col gap-5 pl-2 sm:pl-20 overflow-hidden" style={{ fontSize: chatFontSize, lineHeight: "1.8" }}>
+                        {cleanText.split(/\n\n+/).map((block,i) => <p key={i} className="whitespace-pre-wrap break-words font-normal text-zinc-800 dark:text-zinc-200">{block}</p>)}
                       </div>
                     </div>
                   );
@@ -784,7 +905,7 @@ export default function ChatPage() {
                       <div className="max-w-xl min-w-0 flex flex-col items-start gap-2">
                         {msg.imageB64 && <img src={msg.imageB64} alt="img" className="max-w-[160px] max-h-[120px] rounded-xl border border-zinc-700 object-cover shadow-md" />}
                         {cleanText && cleanText !== "Analyse cette image." && cleanText !== "Analyze this image." && (
-                          <p className="text-zinc-800 dark:text-zinc-300 text-[14px] leading-7 tracking-wide bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3 inline-block text-left break-words whitespace-pre-wrap shadow-inner selection:bg-cyan-500/30 max-w-full">{cleanText}</p>
+                          <p className="text-zinc-800 dark:text-zinc-300 leading-7 tracking-wide bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3 inline-block text-left break-words whitespace-pre-wrap shadow-inner selection:bg-cyan-500/30 max-w-full" style={{ fontSize: chatFontSize - 1 }}>{cleanText}</p>
                         )}
                       </div>
                     </div>
@@ -795,6 +916,7 @@ export default function ChatPage() {
               </div>
             </div>
 
+            {/* MODES */}
             <div className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-100 dark:border-zinc-900/60 flex flex-col bg-zinc-50/20 dark:bg-zinc-950/10 overflow-hidden max-h-[42vh] lg:max-h-none lg:h-full">
               <div className="p-3 border-b border-zinc-100 dark:border-zinc-900/80 flex items-center justify-between shrink-0">
                 <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">Modes</span>
@@ -826,6 +948,7 @@ export default function ChatPage() {
             </div>
           </div>
 
+          {/* INPUT */}
           <div className="border-t border-zinc-200 dark:border-zinc-900 px-4 py-4 shrink-0 bg-zinc-50 dark:bg-zinc-950 transition-colors duration-200">
             <div className="max-w-4xl mx-auto flex flex-col gap-3">
               {selectedImage && (
@@ -836,8 +959,18 @@ export default function ChatPage() {
                 </div>
               )}
 
+              {/* Indicateur warmup */}
+              {warmupIntent && warmupIntent !== "autre" && (
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"/>
+                  <span className="text-[10px] font-mono text-cyan-500/60 uppercase tracking-widest">
+                    {{recherche_locale:"📍",prix:"💰",comparaison:"⚖️",definition:"📖",actualite:"📰"}[warmupIntent] || "🔍"} {warmupIntent}
+                  </span>
+                </div>
+              )}
+
               <textarea ref={textareaRef} value={input} maxLength={getMessageMaxLength(userTier)}
-                onChange={e => setInput(e.target.value)}
+                onChange={e => { setInput(e.target.value); triggerLingWarmup(e.target.value); }}
                 onKeyDown={e => { if (e.key==="Enter"&&!e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 placeholder={t.chat.placeholder}
                 style={{ height: inputHeight }}
@@ -866,6 +999,10 @@ export default function ChatPage() {
                   </button>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 justify-center sm:justify-end">
+                  <button type="button" onClick={decreaseFontSize}
+                    className="h-12 w-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/30 dark:bg-zinc-900/40 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-[10px] font-bold shadow-sm">A-</button>
+                  <button type="button" onClick={increaseFontSize}
+                    className="h-12 w-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/30 dark:bg-zinc-900/40 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-[13px] font-bold shadow-sm">A+</button>
                   <button type="button" onClick={shrinkInput}
                     className="h-12 w-12 rounded-xl border border-zinc-200 dark:border-zinc-300 bg-zinc-100/30 dark:bg-zinc-900/40 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-sm shadow-sm">➖</button>
                   <button type="button" onClick={resetInput}

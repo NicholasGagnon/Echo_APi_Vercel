@@ -9,8 +9,8 @@ import PremiumRequiredModal from "./components/PremiumRequiredModal";
 import QuotaPopup from "./components/QuotaPopup";
 import { useApp } from "../context/AppContext";
 
-type EchoMessage  = { raw: string; imageB64?: string };
-type StickyNote   = { id: string; text: string; color: "yellow"|"blue"|"green"|"pink" };
+type EchoMessage   = { raw: string; imageB64?: string };
+type StickyNote    = { id: string; text: string; color: "yellow"|"blue"|"green"|"pink" };
 type CalendarEvent  = { id: string; title: string; start: string; end: string; notes: string };
 type CalendarEvents = Record<string, CalendarEvent[]>;
 type UpcomingEvent  = CalendarEvent & { dateKey: string; diffDays: number };
@@ -48,25 +48,23 @@ const fetchUserTier = async (uid: string): Promise<UserTier> => {
 const STICKY_STYLES = {
   yellow: { bg:"bg-yellow-950/40 dark:bg-yellow-950", border:"border-yellow-600/50", text:"text-yellow-900 dark:text-yellow-200", dot:"bg-yellow-400" },
   blue:   { bg:"bg-blue-950/40 dark:bg-blue-950",     border:"border-blue-500/50",   text:"text-blue-900 dark:text-blue-200",   dot:"bg-blue-400"   },
-  green:  { bg:"bg-green-950/40 dark:bg-green-950",  border:"border-green-600/50",  text:"text-green-900 dark:text-green-200", dot:"bg-green-400"  },
+  green:  { bg:"bg-green-950/40 dark:bg-green-950",   border:"border-green-600/50",  text:"text-green-900 dark:text-green-200", dot:"bg-green-400"  },
   pink:   { bg:"bg-pink-950/40 dark:bg-pink-950",     border:"border-pink-600/50",   text:"text-pink-900 dark:text-pink-200",   dot:"bg-pink-400"   },
 };
 
 const EVENT_DOT_COLORS = ["bg-cyan-400","bg-green-400","bg-yellow-400"];
 
-// ── SOURCE UNIFIÉE home + chat ────────────────────────────────────────────────
-const CONV_SOURCE = "echo";
-// Chat croisé par navigateur (anonyme) — clé partagée home + chat
+const CONV_SOURCE   = "echo";
 const LOCAL_CONV_KEY = "echo-conversation-v2";
 
 export default function Home() {
   const { t, lang, setLang, theme, toggleTheme, triggerToast } = useApp();
 
-  const [message,      setMessage]      = useState("");
-  const [messages,     setMessages]     = useState<EchoMessage[]>([]);
-  const [isLoaded,     setIsLoaded]     = useState(false);
-  const [userId,       setUserId]       = useState<string|null>(null);
-  const [activeConvId, setActiveConvId] = useState<string|null>(null);
+  const [message,       setMessage]       = useState("");
+  const [messages,      setMessages]      = useState<EchoMessage[]>([]);
+  const [isLoaded,      setIsLoaded]      = useState(false);
+  const [userId,        setUserId]        = useState<string|null>(null);
+  const [activeConvId,  setActiveConvId]  = useState<string|null>(null);
   const [memorySummary, setMemorySummary] = useState("");
 
   const bottomRef     = useRef<HTMLDivElement>(null);
@@ -78,12 +76,10 @@ export default function Home() {
   const [selectedImage,     setSelectedImage]      = useState<string|null>(null);
   const [selectedImageName, setSelectedImageName]  = useState("");
   const [showPremiumModal,  setShowPremiumModal]   = useState(false);
-
-  const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
-  const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
+  const [showQuotaPopup,    setShowQuotaPopup]     = useState(false);
+  const [quotaPopupLabel,   setQuotaPopupLabel]    = useState("");
   const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
 
-  // ── Taille de police du chat ──────────────────────────────────────────────
   const [chatFontSize, setChatFontSize] = useState(15);
   const increaseFontSize = () => setChatFontSize(s => Math.min(s + 1, 22));
   const decreaseFontSize = () => setChatFontSize(s => Math.max(s - 1, 11));
@@ -110,8 +106,8 @@ export default function Home() {
   useEffect(() => {
     const sl = parseInt(localStorage.getItem("echo-home-left-width")  || "", 10);
     const sr = parseInt(localStorage.getItem("echo-home-panel-width") || "", 10);
-    if (Number.isFinite(sl)) setLeftPanelWidth(Math.min(340,Math.max(180,sl)));
-    if (Number.isFinite(sr)) setRightPanelWidth(Math.min(440,Math.max(220,sr)));
+    if (Number.isFinite(sl)) setLeftPanelWidth(Math.min(340, Math.max(180, sl)));
+    if (Number.isFinite(sr)) setRightPanelWidth(Math.min(440, Math.max(220, sr)));
     const check = () => setIsDesktop(window.innerWidth >= 1024);
     check();
     window.addEventListener("resize", check);
@@ -152,25 +148,19 @@ export default function Home() {
   const [expandedSticky, setExpandedSticky] = useState<StickyNote|null>(null);
   const [editText,       setEditText]       = useState("");
 
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvents>({});
-  const [userTier,       setUserTier]       = useState<UserTier>("connected_free");
-  const [echoState,      setEchoState]      = useState("idle");
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [tutorialStep,   setTutorialStep]   = useState<number|null>(null);
+  const [calendarEvents,         setCalendarEvents]         = useState<CalendarEvents>({});
+  const [userTier,               setUserTier]               = useState<UserTier>("connected_free");
+  const [echoState,              setEchoState]              = useState("idle");
+  const [isSettingsOpen,         setIsSettingsOpen]         = useState(false);
+  const [tutorialStep,           setTutorialStep]           = useState<number|null>(null);
   const [selectedButtons,        setSelectedButtons]        = useState<string[]>([]);
   const [isDoubleRegardUnlocked, setIsDoubleRegardUnlocked] = useState(false);
-  const [showEasterModal,      setShowEasterModal]      = useState(false);
-  const [isLoadingTreasure,   setIsLoadingTreasure]   = useState(false);
+  const [showEasterModal,        setShowEasterModal]        = useState(false);
+  const [isLoadingTreasure,      setIsLoadingTreasure]      = useState(false);
 
-  // ── Menu Hub unifié ───────────────────────────────────────────────────────
+  // ── Menu Hub ──────────────────────────────────────────────────────────────
   const [hubMenuOpen, setHubMenuOpen] = useState(false);
   const hubMenuRef = useRef<HTMLDivElement>(null);
-
-  // ── Pays / Devise ─────────────────────────────────────────────────────────
-  const [currency, setCurrency] = useState<Currency>("CAD");
-  useEffect(() => { setCurrency(detectCurrency()); }, []);
-  const currentCountry = COUNTRY_OPTIONS.find(c => c.code === currency) || COUNTRY_OPTIONS[0];
-
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -181,10 +171,33 @@ export default function Home() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  // ── Pays / Devise — partagé via localStorage ──────────────────────────────
+  const [currency, setCurrencyState] = useState<Currency>("CAD");
 
-  // ── Warmup ling — intention pendant que le user tape ──────────────────────
-  const [warmupIntent, setWarmupIntent] = useState<string | null>(null);
-  const warmupDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const saved = localStorage.getItem("echo-currency") as Currency | null;
+    setCurrencyState(saved || detectCurrency());
+  }, []);
+
+  const setCurrency = (c: Currency) => {
+    setCurrencyState(c);
+    localStorage.setItem("echo-currency", c);
+    window.dispatchEvent(new StorageEvent("storage", { key: "echo-currency", newValue: c }));
+  };
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "echo-currency" && e.newValue) setCurrencyState(e.newValue as Currency);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const currentCountry = COUNTRY_OPTIONS.find(c => c.code === currency) || COUNTRY_OPTIONS[0];
+
+  // ── Warmup ling ───────────────────────────────────────────────────────────
+  const [warmupIntent, setWarmupIntent] = useState<string|null>(null);
+  const warmupDebounceRef = useRef<ReturnType<typeof setTimeout>|null>(null);
 
   const triggerLingWarmup = useCallback((text: string) => {
     if (warmupDebounceRef.current) clearTimeout(warmupDebounceRef.current);
@@ -207,7 +220,6 @@ export default function Home() {
 
   useEffect(() => () => { if (warmupDebounceRef.current) clearTimeout(warmupDebounceRef.current); }, []);
 
-  const buttonsData = ["clarity","humain","critical","expert","precision","philosophy","strategy","decompose","refine","double"].map(id => ({ id }));
   const localButtonsLabels: Record<"fr"|"en", Record<string,string>> = {
     fr: { clarity:"1🧠 Clarté", humain:"2👤 Humain", critical:"3⚔️ Regard critique", expert:"4🎓 Expert", precision:"5🎯 Précision", philosophy:"6🏛️ Philosophie", strategy:"7♟️ Stratégie", decompose:"8🧩 Décomposer", refine:"9❓ Affiner", double:"10⚡ Double Regard" },
     en: { clarity:"1🧠 Clarity", humain:"2👤 Human", critical:"3⚔️ Critical View", expert:"4🎓 Expert", precision:"5🎯 Precision", philosophy:"6🏛️ Philosophy", strategy:"7♟️ Strategy", decompose:"8🧩 Decompose", refine:"9❓ Refine", double:"10⚡ Double Regard" },
@@ -238,7 +250,6 @@ export default function Home() {
   const deserializeMsgs = (raws: string[]): EchoMessage[] => raws.map(r => ({ raw: r }));
   const lastEchoIndex   = messages.findLastIndex(m => /^Echo\s*:/i.test(m.raw));
 
-  // ── SAVE TO SUPABASE + CRON MEMORY ───────────────────────────────────────
   const saveToSupabase = async (uid: string, convId: string|null, raws: string[]): Promise<string|null> => {
     let finalSummary  = memorySummary;
     let finalMessages = raws;
@@ -250,7 +261,7 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ summary: memorySummary, messages: raws.slice(0, 500), userTier }),
         });
-        const data   = await res.json();
+        const data = await res.json();
         finalSummary  = data.summary || memorySummary;
         finalMessages = raws.slice(-100);
         setMemorySummary(finalSummary);
@@ -271,7 +282,6 @@ export default function Home() {
     }
   };
 
-  // ── PUSH GOOGLE CALENDAR ─────────────────────────────────────────────────
   const pushEchoEventToGoogle = async (uid: string, dateKey: string, title: string, startTime: string, endTime: string, notes: string): Promise<string|null> => {
     let token = localStorage.getItem(`echo-google-token-${uid}`);
     if (!token) {
@@ -284,7 +294,7 @@ export default function Home() {
     try {
       const hasTime  = !!(startTime || endTime);
       const startObj = hasTime ? { dateTime: new Date(`${dateKey}T${startTime || "00:00"}:00`).toISOString() } : { date: dateKey };
-      const endObj   = hasTime ? { dateTime: new Date(`${dateKey}T${endTime || "23:59"}:00`).toISOString() }  : { date: dateKey };
+      const endObj   = hasTime ? { dateTime: new Date(`${dateKey}T${endTime   || "23:59"}:00`).toISOString() } : { date: dateKey };
       const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -296,7 +306,6 @@ export default function Home() {
     } catch { return null; }
   };
 
-  // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
@@ -325,7 +334,6 @@ export default function Home() {
           }
           setUserTier(await fetchUserTier(uid));
         } else {
-          // Chat croisé par navigateur — clé partagée avec page chat
           const saved = localStorage.getItem(LOCAL_CONV_KEY);
           if (saved) setMessages(deserializeMsgs(JSON.parse(saved)));
         }
@@ -355,7 +363,6 @@ export default function Home() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // ── AUTOSAVE ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isLoaded) return;
     const raws = serializeMsgs(messages);
@@ -366,7 +373,6 @@ export default function Home() {
         if (newId && !activeConvId) setActiveConvId(newId);
       }, 1500);
     } else {
-      // Chat croisé navigateur — même clé que page chat
       localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(raws));
     }
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
@@ -374,7 +380,6 @@ export default function Home() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // ── UPCOMING EVENTS ───────────────────────────────────────────────────────
   const upcomingEvents: UpcomingEvent[] = (() => {
     const today = new Date(); today.setHours(0,0,0,0);
     const results: UpcomingEvent[] = [];
@@ -386,7 +391,6 @@ export default function Home() {
     return results.sort((a,b) => a.diffDays - b.diffDays).slice(0,6);
   })();
 
-  // ── IMAGE ─────────────────────────────────────────────────────────────────
   const compressImage = (base64: string): Promise<string> =>
     new Promise(resolve => {
       const img = document.createElement("img");
@@ -401,7 +405,6 @@ export default function Home() {
       img.src = base64;
     });
 
-  // ── ENVOYER ───────────────────────────────────────────────────────────────
   const envoyer = async () => {
     if (!message.trim() && !selectedImage) return;
     const userMessage  = message.trim();
@@ -424,7 +427,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage || `${lang === "fr" ? "Analyse cette image" : "Analyze this image"}${currentName ? ` (${currentName})` : ""}.`,
-          image:   currentImage ?? null,
+          image: currentImage ?? null,
           history: serializeMsgs(baseMessages),
           userTier, calendarEvents, selectedButtons, summary: memorySummary,
         }),
@@ -516,7 +519,6 @@ export default function Home() {
     }
   };
 
-  // ── STICKIES ──────────────────────────────────────────────────────────────
   const addSticky = async () => {
     if (!newStickyText.trim()) return;
     if (!userId) { setStickies(prev => [...prev, { id: `local-${Date.now()}`, text: newStickyText.trim(), color: selectedColor }]); setNewStickyText(""); return; }
@@ -610,6 +612,7 @@ export default function Home() {
     return () => window.removeEventListener("click", handleOutsideClick);
   }, [isSettingsOpen]);
 
+  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
 
@@ -617,6 +620,7 @@ export default function Home() {
 
       <div className="flex flex-1 overflow-hidden min-h-0">
 
+        {/* SIDEBAR */}
         <aside
           style={isDesktop ? { width: leftPanelWidth, flexBasis: leftPanelWidth } : undefined}
           className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
@@ -647,6 +651,7 @@ export default function Home() {
 
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
 
+          {/* MAIN CHAT */}
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
 
             <div className="relative w-full shrink-0 flex items-center justify-center gap-3 xl:gap-5 py-3">
@@ -817,7 +822,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Indicateur warmup intention */}
                 {warmupIntent && warmupIntent !== "autre" && (
                   <div className="flex items-center gap-1.5 px-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"/>
@@ -842,16 +846,17 @@ export default function Home() {
                     <div className="flex items-center gap-1.5 min-w-0">
                       <button type="button" onClick={shrinkInput} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">➖</button>
                       <button type="button" onClick={resetInput}  className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">↺</button>
-                      {/* Grossisseur de caractères */}
                       <button type="button" onClick={decreaseFontSize} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-[10px] font-bold">A-</button>
                       <button type="button" onClick={increaseFontSize} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-[13px] font-bold">A+</button>
                       <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
                       <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
                       <button type="button" onClick={() => isImageButtonLocked ? setShowPremiumModal(true) : imageInputRef.current?.click()}
                         className={`h-8 px-4 rounded-lg font-bold text-[11px] flex items-center gap-2 border transition-all shrink-0 ${
-                          isImageButtonLocked ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
-                            : selectedImage ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-                            : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"}`}>
+                          isImageButtonLocked
+                            ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
+                            : selectedImage
+                              ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                              : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"}`}>
                         <span>{isImageButtonLocked?"🔒":selectedImage?"✓":"🖼️"}</span>
                         <span className="truncate hidden sm:inline">{isImageButtonLocked?(lang==="fr"?"Image":"Image"):selectedImage?(lang==="fr"?"Image prête":"Image Ready"):(lang==="fr"?"Analyse d'image":"Image Analysis")}</span>
                       </button>
@@ -875,15 +880,20 @@ export default function Home() {
           </div>
 
           {/* HUB */}
-          <aside style={isDesktop ? { width: rightPanelWidth, flexBasis: rightPanelWidth } : undefined}
+          <aside
+            style={isDesktop ? { width: rightPanelWidth, flexBasis: rightPanelWidth } : undefined}
             className="w-full lg:w-64 shrink-0 border-t lg:border-t-0 lg:border-l border-zinc-200 dark:border-zinc-800 p-3 flex flex-col bg-zinc-50 dark:bg-zinc-950 max-h-[50vh] lg:max-h-none overflow-y-auto lg:overflow-visible">
 
-            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0" onClick={e => e.stopPropagation()}>
-
-              {/* Menu déroulant unifié — Langue + Pays + Apparence */}
+            {/* ── HUB HEADER — menu déroulant unifié ── */}
+            <div className="flex items-center px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 shrink-0" onClick={e => e.stopPropagation()}>
               <div ref={hubMenuRef} className="relative w-full">
-                <button type="button" onClick={() => setHubMenuOpen(v => !v)}
-                  className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold hover:text-cyan-500 transition-colors w-full">
+
+                {/* Bouton déclencheur */}
+                <button
+                  type="button"
+                  onClick={() => setHubMenuOpen(v => !v)}
+                  className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-widest text-zinc-400 dark:text-zinc-500 font-bold hover:text-cyan-500 transition-colors w-full"
+                >
                   <span>{currentCountry.flag}</span>
                   <span className="truncate">{lang === "fr" ? currentCountry.label_fr : currentCountry.label_en}</span>
                   <span className="text-zinc-600 ml-auto">·</span>
@@ -894,18 +904,18 @@ export default function Home() {
                   </svg>
                 </button>
 
+                {/* Dropdown */}
                 {hubMenuOpen && (
-                  <div className="absolute left-0 top-full mt-2 w-56 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden z-[200] animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="absolute left-0 top-full mt-2 w-56 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl z-[200] animate-in fade-in slide-in-from-top-2 duration-150 overflow-hidden">
 
-                    {/* ── LANGUE ── */}
+                    {/* LANGUE */}
                     <div className="px-3 pt-3 pb-1">
                       <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-400 dark:text-zinc-600 font-bold mb-1.5">
                         {lang === "fr" ? "Langue" : "Language"}
                       </p>
                       <div className="flex gap-1.5">
                         {(["fr","en"] as const).map(l => (
-                          <button key={l} type="button"
-                            onClick={() => setLang(l)}
+                          <button key={l} type="button" onClick={() => setLang(l)}
                             className={`flex-1 py-1.5 rounded-lg text-[11px] font-mono font-bold transition-colors ${lang === l ? "bg-cyan-500/10 text-cyan-500 border border-cyan-500/30" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent"}`}>
                             {l === "fr" ? "🇫🇷 Français" : "🇬🇧 English"}
                           </button>
@@ -915,15 +925,14 @@ export default function Home() {
 
                     <div className="mx-3 my-2 h-px bg-zinc-100 dark:bg-zinc-800"/>
 
-                    {/* ── PAYS ── */}
+                    {/* PAYS */}
                     <div className="px-3 pb-1">
                       <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-400 dark:text-zinc-600 font-bold mb-1.5">
                         {lang === "fr" ? "Pays" : "Country"}
                       </p>
                       <div className="flex flex-col gap-1">
                         {COUNTRY_OPTIONS.map(opt => (
-                          <button key={opt.code} type="button"
-                            onClick={() => { setCurrency(opt.code); }}
+                          <button key={opt.code} type="button" onClick={() => setCurrency(opt.code)}
                             className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold transition-colors text-left ${currency === opt.code ? "bg-cyan-500/10 text-cyan-500 border border-cyan-500/30" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 border border-transparent"}`}>
                             <span>{opt.flag}</span>
                             <span>{lang === "fr" ? opt.label_fr : opt.label_en}</span>
@@ -935,7 +944,7 @@ export default function Home() {
 
                     <div className="mx-3 my-2 h-px bg-zinc-100 dark:bg-zinc-800"/>
 
-                    {/* ── APPARENCE ── */}
+                    {/* APPARENCE */}
                     <div className="px-3 pb-3">
                       <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-400 dark:text-zinc-600 font-bold mb-1.5">
                         {lang === "fr" ? "Apparence" : "Appearance"}
@@ -951,26 +960,27 @@ export default function Home() {
                         </button>
                       </div>
                     </div>
+
                   </div>
                 )}
               </div>
-
-
-              {tutorialStep === 2 && (
-                <div className="absolute right-4 top-16 w-72 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
-                  <button type="button" onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }}
-                    className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-white/10 dark:bg-black/10 hover:bg-red-600 hover:text-white text-white dark:text-black text-xs font-bold flex items-center justify-center transition-colors">✕</button>
-                  <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2 pr-8">
-                    🤖 {lang==="fr"?"PARAMÈTRES GLOBAUX":"GLOBAL SETTINGS"} (2/2)
-                  </h4>
-                  <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">{t.tutorial?.text2}</p>
-                  <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }}
-                    className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs transition-colors shadow-md uppercase tracking-wider">
-                    {t.tutorial?.finish}
-                  </button>
-                </div>
-              )}
             </div>
+            {/* ── FIN HUB HEADER ── */}
+
+            {tutorialStep === 2 && (
+              <div className="absolute right-4 top-16 w-72 bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.5)] border-2 border-cyan-400 dark:border-cyan-500 animate-in zoom-in-95 duration-300 z-50">
+                <button type="button" onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }}
+                  className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-white/10 dark:bg-black/10 hover:bg-red-600 hover:text-white text-white dark:text-black text-xs font-bold flex items-center justify-center transition-colors">✕</button>
+                <h4 className="font-extrabold text-xs sm:text-sm font-mono uppercase tracking-wider text-cyan-500 dark:text-cyan-600 mb-2 pr-8">
+                  🤖 {lang==="fr"?"PARAMÈTRES GLOBAUX":"GLOBAL SETTINGS"} (2/2)
+                </h4>
+                <p className="text-xs sm:text-sm text-zinc-200 dark:text-zinc-800 leading-relaxed mb-4 font-semibold">{t.tutorial?.text2}</p>
+                <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }}
+                  className="w-full py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs transition-colors shadow-md uppercase tracking-wider">
+                  {t.tutorial?.finish}
+                </button>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row lg:flex-col flex-1 overflow-y-auto lg:overflow-visible min-h-0">
 
@@ -1025,8 +1035,10 @@ export default function Home() {
                   })}
                 </div>
               </div>
+
             </div>
           </aside>
+
         </div>
       </div>
 
@@ -1048,9 +1060,7 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-200">
           <div className="bg-zinc-950 border-2 border-amber-500 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.3)] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <button type="button" onClick={() => setShowEasterModal(false)} className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors">✕</button>
-
             <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce mt-4">👑</div>
-
             <div className="text-center space-y-2 mt-3">
               <h3 className="text-sm font-black text-amber-400 tracking-wider font-mono uppercase">
                 {lang === "fr" ? "🎉✨ ACCÈS PORTAIL SECRET ✨🎉" : "🎉✨ SECRET PORTAL ACCESSED ✨🎉"}
@@ -1064,7 +1074,6 @@ export default function Home() {
                   : "The Ultra plan with 40% off, goes from $19.99 to $11.99"}
               </p>
             </div>
-
             <div className="mt-5 space-y-2.5 text-left text-xs sm:text-sm text-zinc-300 font-sans border-t border-b border-zinc-900 py-4 max-w-xs mx-auto">
               <p className="text-amber-400 font-bold font-mono tracking-wide mb-1 text-center sm:text-left">
                 {lang === "fr" ? "✨ Ultra débloque :" : "✨ Ultra unlocks:"}
@@ -1081,7 +1090,6 @@ export default function Home() {
                 <p>• {lang === "fr" ? "1 mois du 3ième meilleur plan 💎" : "1 month of the 3rd best plan 💎"}</p>
               </div>
             </div>
-
             <div className="mt-6 flex flex-col gap-2">
               <button type="button" disabled={isLoadingTreasure} onClick={handleEasterCheckout}
                 className="w-full py-3 bg-amber-600 hover:bg-amber-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-widest transition-all shadow-md text-center">
