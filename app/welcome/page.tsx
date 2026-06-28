@@ -7,6 +7,14 @@ import { useApp } from "../../context/AppContext";
 
 type Particle = { id: number; x: number; y: number; size: number; speed: number; opacity: number; color: string };
 
+// Pays/devises disponibles
+const CURRENCIES = [
+  { code: "CAD", symbol: "$", flag: "🇨🇦", label: "CA$" },
+  { code: "USD", symbol: "$", flag: "🇺🇸", label: "US$" },
+  { code: "EUR", symbol: "€", flag: "🇪🇺", label: "EUR" },
+  { code: "GBP", symbol: "£", flag: "🇬🇧", label: "GBP" },
+];
+
 export default function WelcomePage() {
   const { lang, setLang } = useApp();
   const fr = lang === "fr";
@@ -14,8 +22,11 @@ export default function WelcomePage() {
 
   const canvasRef  = useRef<HTMLCanvasElement>(null);
   const animRef    = useRef<number>(0);
-  const [showLang,  setShowLang]  = useState(false);
-  const langRef = useRef<HTMLDivElement>(null);
+  const [showLang,     setShowLang]     = useState(false);
+  const [showCurrency, setShowCurrency] = useState(false);
+  const [currency,     setCurrency]     = useState(CURRENCIES[0]);
+  const langRef     = useRef<HTMLDivElement>(null);
+  const currencyRef = useRef<HTMLDivElement>(null);
 
   const globalAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -26,10 +37,10 @@ export default function WelcomePage() {
   const [showCompanionStatus, setShowCompanionStatus] = useState(false);
   const [displayedText,       setDisplayedText]       = useState("");
 
-  // Modale locale pour l'Easter Egg
   const [showEasterModal, setShowEasterModal] = useState(false);
+  // FLAG pour savoir si easter egg a été vu — bloque la redirection stripe
+  const easterSeenRef = useRef(false);
 
-  // Refs pour cleanup garanti
   const loadingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingInterval1Ref = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingTimeout1Ref  = useRef<ReturnType<typeof setTimeout>  | null>(null);
@@ -52,7 +63,6 @@ export default function WelcomePage() {
     ? "\n\nIci commence un voyage entre Gestion, découverte, création et exploration.\nPréparez-vous à découvrir l'inattendu à mes côtés.\nJe resterai Connectée à votre parcours.\n\nVenez avec moi ------------------------------"
     : "\n\nHere begins a journey between Management, discovery, creation and exploration.\nGet ready to discover the unexpected by my side.\nI will stay Connected to your path.\n\nCome with me ------------------------------";
 
-  // ── CLEANUP UNIVERSEL ─────────────────────────────────────────────────────
   const clearAllTimers = () => {
     if (loadingIntervalRef.current) { clearInterval(loadingIntervalRef.current); loadingIntervalRef.current = null; }
     if (typingInterval1Ref.current) { clearInterval(typingInterval1Ref.current); typingInterval1Ref.current = null; }
@@ -65,6 +75,31 @@ export default function WelcomePage() {
     clearAllTimers();
     if (globalAudioRef.current) { globalAudioRef.current.pause(); globalAudioRef.current = null; }
     setEchoStep("closed");
+  };
+
+  // Fermer les dropdowns au clic extérieur
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (langRef.current     && !langRef.current.contains(e.target as Node))     setShowLang(false);
+      if (currencyRef.current && !currencyRef.current.contains(e.target as Node)) setShowCurrency(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  // Sauvegarder la devise dans localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("echo_currency");
+    if (saved) {
+      const found = CURRENCIES.find(c => c.code === saved);
+      if (found) setCurrency(found);
+    }
+  }, []);
+
+  const selectCurrency = (c: typeof CURRENCIES[0]) => {
+    setCurrency(c);
+    localStorage.setItem("echo_currency", c.code);
+    setShowCurrency(false);
   };
 
   // ── PARTICULES ────────────────────────────────────────────────────────────
@@ -107,7 +142,6 @@ export default function WelcomePage() {
     return () => { cancelAnimationFrame(animRef.current); window.removeEventListener("resize", onResize); };
   }, []);
 
-  // ── POINTS DE CHARGEMENT ─────────────────────────────────────────────────
   useEffect(() => {
     if (echoStep !== "loading") return;
     let currentDot = 0;
@@ -125,41 +159,29 @@ export default function WelcomePage() {
     return () => { if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current); };
   }, [echoStep]);
 
-  // ── MACHINE À ÉCRIRE ──────────────────────────────────────────────────────
   useEffect(() => {
     if (echoStep !== "typing") return;
-
     let currentIndex = 0;
     setDisplayedText("");
-
     typingInterval1Ref.current = setInterval(() => {
       currentIndex++;
       setDisplayedText(fullTextPart1.substring(0, currentIndex));
-
       if (currentIndex >= fullTextPart1.length) {
         clearInterval(typingInterval1Ref.current!); typingInterval1Ref.current = null;
-
         typingTimeout1Ref.current = setTimeout(() => {
           typingTimeout1Ref.current = null;
           let secondIndex = 0;
-
           typingInterval2Ref.current = setInterval(() => {
             secondIndex++;
             setDisplayedText(fullTextPart1 + fullTextPart2.substring(0, secondIndex));
-
             if (secondIndex >= fullTextPart2.length) {
               clearInterval(typingInterval2Ref.current!); typingInterval2Ref.current = null;
-
-              closeTimerRef.current = setTimeout(() => {
-                closeTimerRef.current = null;
-                closePanelNow();
-              }, 2500);
+              closeTimerRef.current = setTimeout(() => { closeTimerRef.current = null; closePanelNow(); }, 2500);
             }
           }, 12);
         }, 1000);
       }
     }, 15);
-
     return () => {
       if (typingInterval1Ref.current) { clearInterval(typingInterval1Ref.current); typingInterval1Ref.current = null; }
       if (typingTimeout1Ref.current)  { clearTimeout(typingTimeout1Ref.current);   typingTimeout1Ref.current  = null; }
@@ -168,12 +190,6 @@ export default function WelcomePage() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [echoStep, lang]);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (langRef.current && !langRef.current.contains(e.target as Node)) setShowLang(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
 
   const initSequence = (selectedLang: "fr" | "en") => {
     setLang(selectedLang);
@@ -187,7 +203,10 @@ export default function WelcomePage() {
     sciFiAudio.play().catch(o => console.error("⚠️ Lecture bloquée :", o));
   };
 
+  // FIX EASTER EGG — on nettoie le flag stripe avant toute connexion OAuth
   const handleGoogleConnectNormal = async () => {
+    localStorage.removeItem("echo-treasure-redirect"); // nettoyage easter egg
+    easterSeenRef.current = false;
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -198,6 +217,8 @@ export default function WelcomePage() {
   };
 
   const handleMicrosoftConnectNormal = async () => {
+    localStorage.removeItem("echo-treasure-redirect"); // nettoyage easter egg
+    easterSeenRef.current = false;
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "azure",
@@ -209,6 +230,7 @@ export default function WelcomePage() {
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    localStorage.removeItem("echo-treasure-redirect");
     setSignInError(null);
     if (!email.trim() || !password.trim()) { setSignInError(fr ? "Veuillez entrer vos identifiants" : "Please enter your credentials"); return; }
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -218,6 +240,7 @@ export default function WelcomePage() {
 
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    localStorage.removeItem("echo-treasure-redirect");
     setSignUpError(null); setSignUpSuccess(null);
     if (!email.trim() || !password.trim()) { setSignUpError(fr ? "Veuillez entrer un courriel et un mot de passe" : "Please enter an email and password"); return; }
     const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: `${window.location.origin}/account` } });
@@ -230,11 +253,18 @@ export default function WelcomePage() {
 
   const handleEasterEggClick = () => {
     localStorage.setItem("echo-treasure-redirect", "1");
+    easterSeenRef.current = true;
     setShowEasterModal(true);
   };
 
-  const clearInputs = () => { setEmail(""); setPassword(""); setSignInError(null); setSignUpError(null); setSignUpSuccess(null); };
+  const closeEasterModal = () => {
+    // On retire le flag stripe quand on ferme sans aller vers services
+    localStorage.removeItem("echo-treasure-redirect");
+    easterSeenRef.current = false;
+    setShowEasterModal(false);
+  };
 
+  const clearInputs = () => { setEmail(""); setPassword(""); setSignInError(null); setSignUpError(null); setSignUpSuccess(null); };
   const goToAccount = () => { if (echoStep === "closed") router.push("/account"); };
 
   return (
@@ -245,25 +275,49 @@ export default function WelcomePage() {
       <div className="absolute inset-0 z-0 pointer-events-none opacity-[0.025]"
         style={{backgroundImage:"linear-gradient(rgba(6,182,212,1) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,1) 1px, transparent 1px)", backgroundSize:"60px 60px"}}/>
 
-      {/* ── LANG DROPDOWN ── */}
-      <div ref={langRef} className="absolute top-5 right-5 z-30">
-        <button onClick={e => { e.stopPropagation(); setShowLang(v=>!v); }}
-          className="flex items-center gap-2 bg-zinc-900/90 border border-zinc-700 hover:border-cyan-500/50 rounded-xl px-3 py-2 text-xs font-mono font-bold text-zinc-300 transition-all">
-          <span>{fr ? "🇫🇷 FR" : "🇬🇧 EN"}</span>
-          <span className="text-zinc-600">{showLang ? "▲" : "▼"}</span>
-        </button>
-        {showLang && (
-          <div className="absolute right-0 mt-1.5 w-32 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50">
-            <button onClick={e => { e.stopPropagation(); setLang("fr"); setShowLang(false); }}
-              className={`w-full text-left px-3 py-2.5 text-xs font-mono flex items-center gap-2 transition-colors ${lang==="fr"?"bg-cyan-500/10 text-cyan-400":"text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`}>
-              🇫🇷 Français
-            </button>
-            <button onClick={e => { e.stopPropagation(); setLang("en"); setShowLang(false); }}
-              className={`w-full text-left px-3 py-2.5 text-xs font-mono flex items-center gap-2 transition-colors ${lang==="en"?"bg-cyan-500/10 text-cyan-400":"text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`}>
-              🇬🇧 English
-            </button>
-          </div>
-        )}
+      {/* ── CONTROLS TOP RIGHT ── */}
+      <div className="absolute top-5 right-5 z-30 flex items-center gap-2">
+
+        {/* DEVISE */}
+        <div ref={currencyRef} className="relative">
+          <button onClick={e => { e.stopPropagation(); setShowCurrency(v=>!v); }}
+            className="flex items-center gap-1.5 bg-zinc-900/90 border border-cyan-500/40 hover:border-cyan-400 rounded-xl px-3 py-2 text-xs font-mono font-bold text-cyan-400 transition-all shadow-[0_0_8px_rgba(6,182,212,0.15)]">
+            <span>{currency.flag}</span>
+            <span>{currency.label}</span>
+            <span className="text-zinc-600 text-[9px]">{showCurrency ? "▲" : "▼"}</span>
+          </button>
+          {showCurrency && (
+            <div className="absolute right-0 mt-1.5 w-28 bg-zinc-950 border border-cyan-500/30 rounded-xl shadow-xl overflow-hidden z-50">
+              {CURRENCIES.map(c => (
+                <button key={c.code} onClick={() => selectCurrency(c)}
+                  className={`w-full text-left px-3 py-2 text-xs font-mono flex items-center gap-2 transition-colors ${currency.code===c.code?"bg-cyan-500/10 text-cyan-400":"text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`}>
+                  {c.flag} {c.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* LANGUE */}
+        <div ref={langRef} className="relative">
+          <button onClick={e => { e.stopPropagation(); setShowLang(v=>!v); }}
+            className="flex items-center gap-2 bg-zinc-900/90 border border-cyan-500/40 hover:border-cyan-400 rounded-xl px-3 py-2 text-xs font-mono font-bold text-cyan-400 transition-all shadow-[0_0_8px_rgba(6,182,212,0.15)]">
+            <span>{fr ? "🇫🇷 FR" : "🇬🇧 EN"}</span>
+            <span className="text-zinc-600 text-[9px]">{showLang ? "▲" : "▼"}</span>
+          </button>
+          {showLang && (
+            <div className="absolute right-0 mt-1.5 w-32 bg-zinc-950 border border-cyan-500/30 rounded-xl shadow-xl overflow-hidden z-50">
+              <button onClick={e => { e.stopPropagation(); setLang("fr"); setShowLang(false); }}
+                className={`w-full text-left px-3 py-2.5 text-xs font-mono flex items-center gap-2 transition-colors ${lang==="fr"?"bg-cyan-500/10 text-cyan-400":"text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`}>
+                🇫🇷 Français
+              </button>
+              <button onClick={e => { e.stopPropagation(); setLang("en"); setShowLang(false); }}
+                className={`w-full text-left px-3 py-2.5 text-xs font-mono flex items-center gap-2 transition-colors ${lang==="en"?"bg-cyan-500/10 text-cyan-400":"text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"}`}>
+                🇬🇧 English
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── CONTENU PRINCIPAL ── */}
@@ -310,9 +364,7 @@ export default function WelcomePage() {
           {(echoStep === "loading" || echoStep === "typing") && (
             <div className="bg-white/[0.06] backdrop-blur-xl border-2 border-cyan-400/50 rounded-2xl p-6 relative flex flex-col justify-between min-h-[440px] shadow-[0_0_35px_rgba(6,182,212,0.2)]">
               <button onClick={closePanelNow}
-                className="absolute top-4 right-5 text-zinc-400 hover:text-cyan-300 font-mono text-xl font-bold transition-colors p-1 z-30">
-                ✕
-              </button>
+                className="absolute top-4 right-5 text-zinc-400 hover:text-cyan-300 font-mono text-xl font-bold transition-colors p-1 z-30">✕</button>
               <div className={`absolute top-4 right-14 ${echoStep === "typing" ? "animate-echo-slide-out" : "opacity-0"}`}>
                 <img src="/echo1.png" alt="Echo Icon" className="w-14 h-14 rounded-full border border-cyan-500/30 object-contain shadow-[0_0_15px_rgba(6,182,212,0.4)]"/>
               </div>
@@ -336,11 +388,8 @@ export default function WelcomePage() {
             </div>
           )}
 
-          {/* GRILLE À 6 BOUTONS GRAPHIDUES */}
           {echoStep === "closed" && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full min-h-[440px] items-center justify-center p-2">
-              
-              {/* CALENDRIER */}
               <div onClick={() => router.push("/account")}
                 className="group relative h-28 sm:h-32 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none cursor-pointer"
                 style={{background:"linear-gradient(135deg,rgba(59,130,246,0.15) 0%,rgba(37,99,235,0.05) 100%)",borderColor:"rgba(59,130,246,0.4)",boxShadow:"0 0 25px rgba(59,130,246,0.15),inset 0 1px 0 rgba(59,130,246,0.3)"}}>
@@ -354,8 +403,6 @@ export default function WelcomePage() {
                 </svg>
                 <span className="relative z-10 text-[9px] font-mono font-black tracking-widest uppercase text-blue-400">{fr?"CALENDRIER":"CALENDAR"}</span>
               </div>
-
-              {/* BUDGET */}
               <div onClick={() => router.push("/account")}
                 className="group relative h-28 sm:h-32 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none cursor-pointer"
                 style={{background:"linear-gradient(135deg,rgba(234,179,8,0.15) 0%,rgba(202,138,4,0.05) 100%)",borderColor:"rgba(234,179,8,0.4)",boxShadow:"0 0 25px rgba(234,179,8,0.15),inset 0 1px 0 rgba(234,179,8,0.3)"}}>
@@ -367,8 +414,6 @@ export default function WelcomePage() {
                 </svg>
                 <span className="relative z-10 text-[9px] font-mono font-black tracking-widest uppercase text-yellow-400">BUDGET</span>
               </div>
-
-              {/* CALORIES */}
               <div onClick={() => router.push("/account")}
                 className="group relative h-28 sm:h-32 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none cursor-pointer"
                 style={{background:"linear-gradient(135deg,rgba(34,197,94,0.15) 0%,rgba(22,163,74,0.05) 100%)",borderColor:"rgba(34,197,94,0.4)",boxShadow:"0 0 25px rgba(34,197,94,0.15),inset 0 1px 0 rgba(34,197,94,0.3)"}}>
@@ -380,8 +425,6 @@ export default function WelcomePage() {
                 </svg>
                 <span className="relative z-10 text-[9px] font-mono font-black tracking-widest uppercase text-green-400">CALORIES</span>
               </div>
-
-              {/* LIVRE */}
               <div onClick={() => router.push("/account")}
                 className="group relative h-28 sm:h-32 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none cursor-pointer"
                 style={{background:"linear-gradient(135deg,rgba(139,92,246,0.15) 0%,rgba(109,40,217,0.05) 100%)",borderColor:"rgba(139,92,246,0.4)",boxShadow:"0 0 25px rgba(139,92,246,0.15),inset 0 1px 0 rgba(139,92,246,0.3)"}}>
@@ -393,27 +436,22 @@ export default function WelcomePage() {
                 </svg>
                 <span className="relative z-10 text-[9px] font-mono font-black tracking-widest uppercase text-violet-400">{fr?"LIVRE":"BOOK"}</span>
               </div>
-
-              {/* PREMIUM CARRE */}
               <div onClick={() => router.push("/account")}
                 className="group relative h-28 sm:h-32 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none cursor-pointer"
                 style={{background:"linear-gradient(135deg,rgba(6,182,212,0.15) 0%,rgba(8,145,178,0.05) 100%)",borderColor:"rgba(6,182,212,0.45)",boxShadow:"0 0 25px rgba(6,182,212,0.2),inset 0 1px 0 rgba(6,182,212,0.3)"}}>
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(6,182,212,0.25) 0%,rgba(6,182,212,0.1) 100%)"}}/>
                 <div className="absolute top-2 left-2 w-2 h-2 border-t-2 border-l-2 border-cyan-400"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b-2 border-r-2 border-cyan-400"/>
                 <div className="relative z-10 text-2xl filter drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]">💎</div>
-                <span className="relative z-10 text-[9px] font-mono font-black tracking-widest uppercase text-cyan-400">{fr?"PREMIUM":"PREMIUM"}</span>
+                <span className="relative z-10 text-[9px] font-mono font-black tracking-widest uppercase text-cyan-400">PREMIUM</span>
               </div>
-
-              {/* EASTER EGGS CARRE */}
               <div onClick={handleEasterEggClick}
                 className="group relative h-28 sm:h-32 flex flex-col items-center justify-center gap-2 rounded-2xl border transition-all duration-300 overflow-hidden select-none cursor-pointer"
                 style={{background:"linear-gradient(135deg,rgba(245,158,11,0.18) 0%,rgba(217,119,6,0.06) 100%)",borderColor:"rgba(245,158,11,0.5)",boxShadow:"0 0 30px rgba(245,158,11,0.25),inset 0 1px 0 rgba(245,158,11,0.4)"}}>
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(245,158,11,0.3) 0%,rgba(245,158,11,0.15) 100%)"}}/>
                 <div className="absolute top-2 left-2 w-2 h-2 border-t-2 border-l-2 border-amber-400 animate-pulse"/><div className="absolute bottom-2 right-2 w-2 h-2 border-b-2 border-r-2 border-amber-400 animate-pulse"/>
                 <div className="relative z-10 text-2xl filter drop-shadow-[0_0_10px_rgba(245,158,11,0.6)] group-hover:scale-110 transition-transform duration-300">👑</div>
-                <span className="relative z-10 text-[9px] font-mono font-black tracking-widest uppercase text-amber-400 animate-pulse">{fr?"EASTER EGG":"EASTER EGG"}</span>
+                <span className="relative z-10 text-[9px] font-mono font-black tracking-widest uppercase text-amber-400 animate-pulse">EASTER EGG</span>
               </div>
-
             </div>
           )}
 
@@ -428,7 +466,7 @@ export default function WelcomePage() {
                 <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/>
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/>
                 </svg>
                 <span className="flex-1 text-center">{fr ? "Continuer avec Google" : "Continue with Google"}</span>
@@ -537,14 +575,12 @@ export default function WelcomePage() {
         </div>
       )}
 
-      {/* MODALE EASTER EGG DE LA PAGE HOME AVEC LES NOUVEAUX AVANTAGES ULTRA */}
+      {/* MODALE EASTER EGG */}
       {showEasterModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[100000] p-4 animate-in fade-in duration-200">
           <div className="bg-zinc-950 border-2 border-amber-500 rounded-3xl p-6 sm:p-8 max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.3)] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <button type="button" onClick={() => setShowEasterModal(false)} className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors">✕</button>
-            
+            <button type="button" onClick={closeEasterModal} className="absolute top-4 right-5 text-zinc-500 hover:text-white font-mono text-lg transition-colors">✕</button>
             <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce">👑</div>
-            
             <div className="text-center space-y-2 mt-3">
               <h3 className="text-sm font-black text-amber-400 tracking-wider font-mono uppercase">
                 {fr ? "🎉✨ ACCÈS PORTAIL SECRET ✨🎉" : "🎉✨ SECRET PORTAL ACCESSED ✨🎉"}
@@ -553,11 +589,9 @@ export default function WelcomePage() {
                 {fr ? "🏆 FÉLICITATIONS !" : "🏆 CONGRATULATIONS!"}
               </h4>
               <p className="text-zinc-300 font-medium text-xs sm:text-sm bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 inline-block leading-relaxed">
-                {fr ? "« Le plan Ultra à 40 %, de rabais, passe de 19,99 $ à 11,99 $ »" : "“The Ultra plan with 40% off, goes from $19.99 to $11.99”"}
+                {fr ? "« Le plan Ultra à 40 %, de rabais, passe de 19,99 $ à 11,99 $ »" : "\"The Ultra plan with 40% off, goes from $19.99 to $11.99\""}
               </p>
             </div>
-
-            {/* AVANTAGES DÉBLOQUÉS */}
             <div className="mt-5 space-y-2.5 text-left text-xs sm:text-sm text-zinc-300 font-sans border-t border-b border-zinc-900 py-4 max-w-xs mx-auto">
               <p className="text-amber-400 font-bold font-mono tracking-wide mb-1 text-center sm:text-left">
                 {fr ? "✨ Ultra débloque :" : "✨ Ultra unlocks:"}
@@ -573,16 +607,13 @@ export default function WelcomePage() {
                 <p>• {fr ? "Historique et chat illimité 💎" : "Unlimited history and chat 💎"}</p>
                 <p>• {fr ? "1 mois du 3ième meilleur plan 💎" : "1 month of the 3rd best plan 💎"}</p>
               </div>
-              
             </div>
-
-            {/* BOUTON DE REDIRECTION ET CONNEXION */}
             <div className="mt-6 flex flex-col gap-2">
-              <button onClick={() => { setShowEasterModal(false); router.push("/account"); }}
+              <button onClick={() => { setShowEasterModal(false); router.push("/services"); }}
                 className="w-full py-3 bg-amber-600 hover:bg-amber-500 font-mono text-xs font-bold rounded-xl text-white uppercase tracking-widest transition-all shadow-md text-center">
-                {fr ? "Vous devez vous connecter pour en profiter ➔" : "Connect to get it ➔"}
+                {fr ? "Voir les offres ➔" : "View offers ➔"}
               </button>
-              <button onClick={() => setShowEasterModal(false)} className="w-full py-1.5 text-zinc-600 font-mono text-[11px] hover:text-zinc-400 transition-colors">
+              <button onClick={closeEasterModal} className="w-full py-1.5 text-zinc-600 font-mono text-[11px] hover:text-zinc-400 transition-colors">
                 {fr ? "Plus tard" : "Later"}
               </button>
             </div>
