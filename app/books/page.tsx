@@ -60,6 +60,13 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     recontextConfirm:"Confirmer",
     recontextCancel:"Annuler",
     recontextDone:"Echo a relu le livre. Il est maintenant à jour.",
+    loginPopupTitle:"Atelier d'écriture Echo",
+    loginPopupBody:"Connectez-vous pour sauvegarder vos livres, retrouver votre progression et continuer sur tous vos appareils.",
+    loginPopupBtn:"Se connecter",
+    loginPopupSkip:"Continuer sans compte",
+    tutoTitle:"ECHO LIVRES",
+    tutoWelcome:"Bienvenue dans l'atelier d'écriture ! 📖\n\nÉcris, structure et donne vie à ton livre avec l'aide d'Echo.\n\nDis-lui \"injecte\" pour qu'il ajoute directement du texte dans ton chapitre.",
+    tutoStart:"C'EST PARTI 🚀",
   },
   en: {
     home:"Home", chat:"Chat", books:"Books", calendar:"Calendar",
@@ -100,6 +107,13 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     recontextConfirm:"Confirm",
     recontextCancel:"Cancel",
     recontextDone:"Echo has re-read the book and is now up to date.",
+    loginPopupTitle:"Echo Writing Studio",
+    loginPopupBody:"Sign in to save your books, pick up where you left off, and continue on any device.",
+    loginPopupBtn:"Sign in",
+    loginPopupSkip:"Continue without account",
+    tutoTitle:"ECHO BOOKS",
+    tutoWelcome:"Welcome to the writing studio! 📖\n\nWrite, structure and bring your book to life with Echo's help.\n\nTell him \"inject\" to add text directly into your chapter.",
+    tutoStart:"LET'S GO 🚀",
   },
 };
 
@@ -119,14 +133,14 @@ const Icons: Record<string, ReactNode> = {
   Abc:(<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/></svg>),
   B:  <span className="font-black text-[15px] leading-none" style={{fontFamily:"Georgia,serif"}}>B</span>,
   I:  <span className="font-semibold text-[15px] leading-none" style={{fontFamily:"Georgia,serif",fontStyle:"italic"}}>I</span>,
-  indent:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/><polyline points="2,7 4,9 2,11" fill="currentColor" stroke="none"/></svg>),
-  undo:       (<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7H10a4 4 0 0 1 0 8H6"/><polyline points="6,4 3,7 6,10"/></svg>),
-  redo:       (<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 7H6a4 4 0 0 0 0 8h4"/><polyline points="10,4 13,7 10,10"/></svg>),
-  alignL:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="10" y2="7"/><line x1="2" y1="10" x2="13" y2="10"/><line x1="2" y1="13" x2="8" y2="13"/></svg>),
-  alignC:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="4" y1="7" x2="12" y2="7"/><line x1="2" y1="10" x2="14" y2="10"/><line x1="5" y1="13" x2="11" y2="13"/></svg>),
-  alignR:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="7" x2="14" y2="7"/><line x1="3" y1="10" x2="14" y2="10"/><line x1="8" y1="13" x2="14" y2="13"/></svg>),
-  alignJ:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="2" y1="10" x2="14" y2="10"/><line x1="2" y1="13" x2="14" y2="13"/></svg>),
-  pilcrow:    (<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/></svg>),
+  indent:    (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/><polyline points="2,7 4,9 2,11" fill="currentColor" stroke="none"/></svg>),
+  undo:      (<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7H10a4 4 0 0 1 0 8H6"/><polyline points="6,4 3,7 6,10"/></svg>),
+  redo:      (<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 7H6a4 4 0 0 0 0 8h4"/><polyline points="10,4 13,7 10,10"/></svg>),
+  alignL:    (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="10" y2="7"/><line x1="2" y1="10" x2="13" y2="10"/><line x1="2" y1="13" x2="8" y2="13"/></svg>),
+  alignC:    (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="4" y1="7" x2="12" y2="7"/><line x1="2" y1="10" x2="14" y2="10"/><line x1="5" y1="13" x2="11" y2="13"/></svg>),
+  alignR:    (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="7" x2="14" y2="7"/><line x1="3" y1="10" x2="14" y2="10"/><line x1="8" y1="13" x2="14" y2="13"/></svg>),
+  alignJ:    (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="2" y1="10" x2="14" y2="10"/><line x1="2" y1="13" x2="14" y2="13"/></svg>),
+  pilcrow:   (<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/></svg>),
   pageBreak: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="5" x2="14" y2="5"/><line x1="2" y1="11" x2="14" y2="11" strokeDasharray="2 1.5"/><line x1="2" y1="8" x2="5" y2="8"/><line x1="11" y1="8" x2="14" y2="8"/><polyline points="6,6 8,8 10,6" fill="none"/><polyline points="6,10 8,8 10,10" fill="none"/></svg>),
   fontSmaller:(<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700">A</text><text x="9" y="13" fontSize="7" fontFamily="serif">−</text></svg>),
   fontLarger: (<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700">A</text><text x="9" y="13" fontSize="7" fontFamily="serif">+</text></svg>),
@@ -163,6 +177,7 @@ function applyPreset(preset: "print"|"kindle", s: {
   }
 }
 
+// ── Clé localStorage par user ─────────────────────────────────────────────────
 const LS_KEY = (uid: string | null) => uid ? `echo-books-${uid}` : "echo-books-anon";
 
 export default function BooksPage() {
@@ -185,6 +200,7 @@ export default function BooksPage() {
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
   const chapterDropRef = useRef<HTMLDivElement>(null);
 
+  // ── Inject confirm modal ──────────────────────────────────────────────────
   const [showInjectConfirm, setShowInjectConfirm] = useState(false);
   const [pendingInjectText, setPendingInjectText] = useState<string|null>(null);
 
@@ -209,12 +225,14 @@ export default function BooksPage() {
   const [memorySummary,     setMemorySummary]     = useState("");
   const [tutorialStep,      setTutorialStep]      = useState<number|null>(null);
   const [dataLoaded,        setDataLoaded]        = useState(false);
+  const [showLoginPopup,    setShowLoginPopup]    = useState(false);
 
   const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
   const getBooksSummaryKey = (uid: string|null) => uid ? `echo-books-summary-${uid}` : "echo-books-summary";
 
   useEffect(() => {
-    if (!localStorage.getItem("echo-tuto-books-done-v1")) setTutorialStep(1);
+    // Marque automatiquement le tuto comme vu — on n'affiche plus le popup blanc
+    localStorage.setItem("echo-tuto-books-done-v1", "true");
   }, []);
 
   const [pageCount,   setPageCount]   = useState(1);
@@ -231,17 +249,16 @@ export default function BooksPage() {
   useEffect(() => { const t = setTimeout(updatePageCount, 150); return () => clearTimeout(t); }, [chapters, activeChapter, view, updatePageCount]);
   useEffect(() => { window.addEventListener("resize", updatePageCount); return () => window.removeEventListener("resize", updatePageCount); }, [updatePageCount]);
 
+  // ── Refs pour éviter boucle infinie onUpdate ──────────────────────────────
   const activeChapterRef = useRef(activeChapter);
   useEffect(() => { activeChapterRef.current = activeChapter; }, [activeChapter]);
 
   const chaptersRef = useRef(chapters);
   useEffect(() => { chaptersRef.current = chapters; }, [chapters]);
 
-  const isLoadingRef = useRef(false);
-  const fontSizeRef = useRef(fontSize);
-  useEffect(() => { fontSizeRef.current = fontSize; }, [fontSize]);
+  const isLoadingRef = useRef(false); // bloque onUpdate pendant chargement
 
-  // ── Éditeur Tiptap ────────────────────────────────────────────────────────
+  // ── Éditeur Tiptap — FIX boucle infinie + hydration ──────────────────────
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -263,13 +280,38 @@ export default function BooksPage() {
     content: "",
     onSelectionUpdate: ({ editor }) => {
       if (isLoadingRef.current) return;
-      // Lit les attributs du nœud ou de la marque au curseur actuel
-      const attrs = editor.getAttributes("textStyle");
-      if (attrs.fontSize) {
-        const n = parseInt(attrs.fontSize, 10);
-        if (!isNaN(n)) { setFontSize(n); return; }
+      const { $from, empty } = editor.state.selection;
+
+      // Stratégie 1 : storedMarks (marks en attente quand le curseur est entre deux caractères)
+      const stored = editor.state.storedMarks;
+      if (stored) {
+        const m = stored.find((m: any) => m.type.name === "textStyle");
+        if (m?.attrs?.fontSize) {
+          const n = parseInt(m.attrs.fontSize, 10);
+          if (!isNaN(n)) { setFontSize(n); return; }
+        }
       }
-      // Si aucun style inline n'est présent, on affiche la taille globale définie pour ce chapitre
+
+      // Stratégie 2 : marks du caractère AVANT le curseur (position -1)
+      if ($from.pos > 0) {
+        const marksAt = $from.doc.resolve(Math.max(0, $from.pos - 1)).marks();
+        const m = marksAt.find((m: any) => m.type.name === "textStyle");
+        if (m?.attrs?.fontSize) {
+          const n = parseInt(m.attrs.fontSize, 10);
+          if (!isNaN(n)) { setFontSize(n); return; }
+        }
+      }
+
+      // Stratégie 3 : getAttributes (fonctionne bien sur sélection active)
+      if (!empty) {
+        const attrs = editor.getAttributes("textStyle");
+        if (attrs?.fontSize) {
+          const n = parseInt(attrs.fontSize, 10);
+          if (!isNaN(n)) { setFontSize(n); return; }
+        }
+      }
+
+      // Pas de fontSize local → taille globale du chapitre
       const saved = localStorage.getItem(`echo-book-base-size-${activeChapterRef.current}`);
       setFontSize(saved ? parseInt(saved, 10) : 15);
     },
@@ -279,6 +321,7 @@ export default function BooksPage() {
       const chId = activeChapterRef.current;
       setChapters(prev => {
         const existing = prev.find(c => c.id === chId);
+        // Normalise les deux pour éviter les faux positifs ProseMirror (<p></p> vs <p><br></p>)
         const normalize = (s: string) => s.replace(/<p><br\s*\/?><\/p>/g,"<p></p>").replace(/\s+/g," ").trim();
         if (normalize(existing?.content || "") === normalize(html)) return prev;
         return prev.map(c => c.id === chId ? { ...c, content: html } : c);
@@ -293,24 +336,14 @@ export default function BooksPage() {
     const cur = chaptersRef.current.find(c => c.id === activeChapter);
     const newContent = cur?.content || "<p></p>";
     if (editor.getHTML() === newContent) return;
-    isLoadingRef.current = true;
     editor.commands.setContent(newContent);
-    
-    // Récupérer la taille de police par défaut sauvegardée pour ce chapitre spécifique
-    const savedSize = localStorage.getItem(`echo-book-base-size-${activeChapter}`);
-    if (savedSize) {
-      setFontSize(parseInt(savedSize, 10));
-    } else {
-      setFontSize(15);
-    }
-    isLoadingRef.current = false;
   }, [activeChapter, view, editor]);
 
   useEffect(() => {
     if (editor) editor.commands.setFontFamily(fontFamily);
   }, [fontFamily, editor]);
 
-  // Raccourcis clavier
+  // Keyboard shortcuts Ctrl+Z / Ctrl+Y
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
@@ -327,22 +360,21 @@ export default function BooksPage() {
   const toggleBold   = () => editor?.chain().focus().toggleBold().run();
   const toggleItalic = () => editor?.chain().focus().toggleItalic().run();
 
-  // Correction de la dynamique de modification des tailles
   const changeFontSize = (delta: number) => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
-    const current = parseInt(editor.getAttributes("textStyle").fontSize) || fontSizeRef.current;
-    const next = Math.min(72, Math.max(8, current + delta));
-    
-    setFontSize(next);
-    
     if (from !== to) {
-      // Sélection de texte active : Applique la taille sur le texte surligné
-      editor.chain().focus().setMark("textStyle", { fontSize: `${next}px` }).run();
+      // Sélection active → style inline local
+      const current = parseInt(editor.getAttributes("textStyle").fontSize) || fontSize;
+      const next = Math.min(72, Math.max(8, current + delta));
+      editor.chain().focus().setMark("textStyle", { fontSize:`${next}px` }).run();
+      setFontSize(next);
     } else {
-      // Pas de sélection : Modifie globalement et applique sur le bloc courant pour éviter les ruptures au clic
+      // Pas de sélection → modifie la taille globale du document
+      const next = Math.min(72, Math.max(8, fontSize + delta));
+      setFontSize(next);
+      // Persiste la taille globale pour ce chapitre
       localStorage.setItem(`echo-book-base-size-${activeChapterRef.current}`, next.toString());
-      editor.chain().focus().setMark("textStyle", { fontSize: `${next}px` }).run();
     }
   };
 
@@ -398,21 +430,25 @@ export default function BooksPage() {
   const userIdRef = useRef<string|null>(null);
   useEffect(() => { userIdRef.current = userId; }, [userId]);
 
+  // Sanitize : retire les src base64 des images avant envoi Supabase (payload trop lourd)
   const sanitizeChapters = (chs: Chapter[]): Chapter[] =>
     chs.map(c => ({
       ...c,
       content: c.content.replace(/src="data:[^"]{100,}"/g, 'src="[image]"'),
     }));
 
+  // saveBook : localStorage IMMÉDIAT + Supabase echo_books (table dédiée)
   const saveBook = useCallback(async (currentChapters: Chapter[], currentTitle: string) => {
     const uid = userIdRef.current;
     const payload = { bookTitle: currentTitle, chapters: currentChapters, savedAt: Date.now() };
 
+    // 1. localStorage immédiat — garde le contenu complet (images comprises)
     try { localStorage.setItem(LS_KEY(uid), JSON.stringify(payload)); } catch {}
 
     if (!uid) { setSaveStatus("saved"); return; }
     setSaveStatus("saving");
 
+    // 2. Supabase — chapitres sanitizés (pas de base64 dans la DB)
     const safeChapters = sanitizeChapters(currentChapters);
 
     try {
@@ -441,6 +477,7 @@ export default function BooksPage() {
     setSaveStatus("saved");
   }, [bookDbId]);
 
+  // Auto-save : 1.5s après changement (debounce) + toutes les 10s (intervalle fixe)
   useEffect(() => {
     if (!dataLoaded) return;
     setSaveStatus("unsaved");
@@ -453,6 +490,7 @@ export default function BooksPage() {
     if (!dataLoaded) return;
     const interval = setInterval(() => saveBook(chaptersRef.current, bookTitle), 10000);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoaded, saveBook]);
 
   const manualSave = () => {
@@ -463,10 +501,12 @@ export default function BooksPage() {
   };
 
   // ── CHARGEMENT INITIAL ────────────────────────────────────────────────────
+  // Ordre de priorité : Supabase echo_books > echo_conversations > localStorage
   const loadBook = useCallback(async (uid: string | null) => {
     let loaded = false;
 
     if (uid) {
+      // 1. Essai echo_books (table dédiée)
       try {
         const { data: row } = await supabase.from("echo_books")
           .select("book_title,chapters,updated_at")
@@ -483,6 +523,7 @@ export default function BooksPage() {
         }
       } catch {}
 
+      // 2. Fallback echo_conversations
       if (!loaded) {
         try {
           const { data: rows } = await supabase.from("echo_conversations")
@@ -508,6 +549,7 @@ export default function BooksPage() {
       }
     }
 
+    // 3. localStorage (anon ou fallback)
     if (!loaded) {
       try {
         const raw = localStorage.getItem(LS_KEY(uid));
@@ -528,6 +570,10 @@ export default function BooksPage() {
     if (savedSummary) setMemorySummary(savedSummary);
     setSaveStatus("saved");
     setDataLoaded(true);
+    // Popup connexion — seulement si pas connecté et pas déjà ignoré
+    if (!uid && !localStorage.getItem("echo-books-login-dismissed")) {
+      setShowLoginPopup(true);
+    }
   }, [editor, fr]);
 
   useEffect(() => {
@@ -542,15 +588,18 @@ export default function BooksPage() {
       if (!dataLoaded) loadBook(uid);
     });
     return () => listener.subscription.unsubscribe();
-  }, [dataLoaded, loadBook]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Re-charger quand l'éditeur devient disponible (init Tiptap async)
   useEffect(() => {
     if (editor && !dataLoaded) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         loadBook(session?.user?.id || null);
       });
     }
-  }, [editor, dataLoaded, loadBook]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
 
   // ── Resize Echo panel ─────────────────────────────────────────────────────
   const [echoPanelWidth, setEchoPanelWidth] = useState(280);
@@ -573,6 +622,7 @@ export default function BooksPage() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
+  // ── File inputs ───────────────────────────────────────────────────────────
   const fontInputRef  = useRef<HTMLInputElement>(null);
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const importJsonRef = useRef<HTMLInputElement>(null);
@@ -610,6 +660,7 @@ export default function BooksPage() {
       checkQuota("vitality_actions", safeTier, true, userId);
       setTimeout(() => { quotaConsumedRef.current = false; }, 500);
     }
+    // Sélection active ou tout le texte du chapitre
     const { from, to } = editor.state.selection;
     const textToSync = from !== to
       ? editor.state.doc.textBetween(from, to, " ")
@@ -674,10 +725,12 @@ export default function BooksPage() {
       try {
         const raw = reader.result as string;
         const parsed = JSON.parse(raw);
+        // Supporte { bookTitle, chapters } ou { title, chapters } ou tableau direct
         const t = parsed.bookTitle || parsed.title || parsed.book_title || null;
         const c = parsed.chapters || parsed.content || (Array.isArray(parsed) ? parsed : null);
         if (t) setBookTitle(t);
         if (c?.length) {
+          // Normalise chaque chapitre si besoin
           const normalized: Chapter[] = c.map((ch: any, i: number) => ({
             id:      ch.id || `ch${Date.now()}-${i}`,
             title:   ch.title || `${fr?"Chapitre":"Chapter"} ${i+1}`,
@@ -713,7 +766,8 @@ export default function BooksPage() {
     if (fmt === "json") {
       downloadBlob(new Blob([JSON.stringify({bookTitle,chapters},null,2)], {type:"application/json"}), `${slug}.echo-book.json`); return;
     }
-    // Enveloppe HTML propre transmise au convertisseur de l'API externe (PDF/Docx/Epub)
+    // Enveloppe le HTML avec les styles globaux du document
+    // Le serveur d'export (docx/pdf/epub) reçoit ainsi la taille et la police réelles
     const formattedHtml = `<div style="font-size:${fontSize}px;font-family:${fontFamily};line-height:${lineHeight};">${currentHtml}</div>`;
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -730,20 +784,23 @@ export default function BooksPage() {
   // ── Echo chat ─────────────────────────────────────────────────────────────
   const [echoMode,      setEchoMode]      = useState<EchoMode|null>(null);
   const [echoMessages,  setEchoMessages]  = useState<BookMessage[]>([]);
-  const [echoInput,      setEchoInput]      = useState("");
+  const [echoInput,     setEchoInput]     = useState("");
   const [echoThinking,  setEchoThinking]  = useState(false);
-  const [isListening,    setIsListening]    = useState(false);
-  const [imageBase64,    setImageBase64]    = useState<string|null>(null);
-  const [imageName,      setImageName]      = useState<string|null>(null);
+  const [isListening,   setIsListening]   = useState(false);
+  const [imageBase64,   setImageBase64]   = useState<string|null>(null);
+  const [imageName,     setImageName]     = useState<string|null>(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const echoBottomRef = useRef<HTMLDivElement>(null);
 
+  // ── Save convo Echo (localStorage + Supabase) ────────────────────────────
   const getEchoConvoKey = (uid: string|null) => uid ? `echo-books-convo-${uid}` : "echo-books-convo-anon";
 
   const saveEchoConvo = useCallback(async (msgs: BookMessage[]) => {
     const uid = userIdRef.current;
+    // localStorage immédiat
     try { localStorage.setItem(getEchoConvoKey(uid), JSON.stringify(msgs.slice(-50))); } catch {}
+    // Supabase — on réutilise echo_conversations avec source "books_chat"
     if (!uid) return;
     try {
       const { data: existing } = await supabase.from("echo_conversations")
@@ -760,12 +817,15 @@ export default function BooksPage() {
     } catch(e) { console.error("[Books convo save]", e); }
   }, []);
 
+  // Charger convo Echo au démarrage
   useEffect(() => {
     const uid = userIdRef.current;
+    // localStorage d'abord
     try {
       const raw = localStorage.getItem(getEchoConvoKey(uid));
       if (raw) { const msgs = JSON.parse(raw); if (msgs?.length) setEchoMessages(msgs); }
     } catch {}
+    // Supabase en arrière-plan
     if (uid) {
       supabase.from("echo_conversations")
         .select("messages").eq("user_id", uid).eq("source", "books_chat").maybeSingle()
@@ -773,15 +833,19 @@ export default function BooksPage() {
           if (data?.messages?.length) setEchoMessages(data.messages as BookMessage[]);
         });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoaded]);
 
+  // Guard anti double-consume quota (React StrictMode)
   const quotaConsumedRef = useRef(false);
 
   const sendEcho = async () => {
     if ((!echoInput.trim() && !imageBase64) || echoThinking) return;
 
+    // Vérif sans consommer
     const quotaCheck = checkQuota("vitality_actions", safeTier, false, userId);
     if (!quotaCheck.allowed) { triggerQuotaPopup(fr ? "Books" : "Books"); return; }
+    // Consomme une seule fois avec guard
     if (!quotaConsumedRef.current) {
       quotaConsumedRef.current = true;
       checkQuota("vitality_actions", safeTier, true, userId);
@@ -924,6 +988,7 @@ export default function BooksPage() {
     </button>
   );
 
+  // ── PRESENT MODE ──────────────────────────────────────────────────────────
   if (view === "present") return (
     <div className="fixed inset-0 bg-black flex flex-col z-50">
       <div className="flex items-center justify-between px-8 py-3 border-b border-zinc-800">
@@ -1015,25 +1080,38 @@ export default function BooksPage() {
 
       {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
 
-      {tutorialStep === 1 && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[92vw] max-w-[460px] sm:max-w-[640px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
-          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-books-done-v1","true"); }} />
-          <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
-            <span className="text-xl">📚</span>
-            <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">{fr?"ECHO LIVRES (1/1)":"ECHO BOOKS (1/1)"}</h4>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
-            <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
-              <img src="/echo1.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
+      {/* ── POPUP CONNEXION (non connecté seulement) ──────────────────────── */}
+      {showLoginPopup && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center pb-12 sm:items-center sm:pb-0">
+          {/* Overlay transparent — bloque les clics sans flouter */}
+          <div className="absolute inset-0 pointer-events-auto" style={{background:"transparent"}} />
+          <div className="relative pointer-events-auto bg-zinc-950/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.25)] p-7 w-full max-w-md mx-4 flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {/* Header titre + menu langue */}
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📚</span>
+                <h3 className="font-black text-base font-mono uppercase tracking-widest text-cyan-400">
+                  {T.loginPopupTitle}
+                </h3>
+              </div>
+              {/* Menu FR/EN directement dans le popup */}
+              <LangDropdown />
             </div>
-            <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
-              {fr ? <>Bienvenue dans l'atelier d'écriture ! 📖</> : <>Welcome to the writing studio! 📖</>}
+            <div className="flex gap-4 items-start">
+              <div className="shrink-0 bg-zinc-900 p-1.5 rounded-full border border-zinc-800">
+                <img src="/echo1.png" alt="Echo" className="w-14 h-14 rounded-full object-cover"/>
+              </div>
+              <p className="text-zinc-300 text-sm leading-relaxed flex-1">
+                {T.loginPopupBody}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <Link href="/account"
+                className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-sm tracking-widest transition-all shadow-md uppercase">
+                {T.loginPopupBtn}
+              </Link>
             </div>
           </div>
-          <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-books-done-v1","true"); }}
-            className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase">
-            {fr?"C'EST PARTI 🚀":"LET'S GO 🚀"}
-          </button>
         </div>
       )}
 
@@ -1084,7 +1162,7 @@ export default function BooksPage() {
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.align}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon={Icons.alignL} label={T.alignLeft}    active={editor?.isActive({textAlign:"left"})}    onClick={() => { editor?.chain().focus().setTextAlign("left").run();     setIsJustified(false); setActivePreset("custom"); }}/>
+              <TB icon={Icons.alignL} label={T.alignLeft}    active={editor?.isActive({textAlign:"left"})}    onClick={() => { editor?.chain().focus().setTextAlign("left").run();    setIsJustified(false); setActivePreset("custom"); }}/>
               <TB icon={Icons.alignC} label={T.alignCenter}  active={editor?.isActive({textAlign:"center"})}  onClick={() => { editor?.chain().focus().setTextAlign("center").run();  setIsJustified(false); setActivePreset("custom"); }}/>
               <TB icon={Icons.alignR} label={T.alignRight}   active={editor?.isActive({textAlign:"right"})}   onClick={() => { editor?.chain().focus().setTextAlign("right").run();   setIsJustified(false); setActivePreset("custom"); }}/>
               <TB icon={Icons.alignJ} label={T.alignJustify} active={editor?.isActive({textAlign:"justify"})} onClick={() => { editor?.chain().focus().setTextAlign("justify").run(); setIsJustified(true);  setActivePreset("custom"); }}/>
@@ -1267,6 +1345,8 @@ export default function BooksPage() {
                   minHeight:`${pageCount * A4_H}px`,
                   paddingTop:"52px",
                   paddingBottom:"64px",
+                  // Miroir recto-verso : page 1,3,5... = marge gauche large; page 2,4,6... = marge droite large
+                  // On utilise currentPage pour alterner. Par défaut page 1 = recto (marge gauche 90, droite 60)
                   paddingLeft: mirrorMargins ? (currentPage % 2 === 1 ? "90px" : "60px") : "72px",
                   paddingRight: mirrorMargins ? (currentPage % 2 === 1 ? "60px" : "90px") : "72px",
                   ...pageBgStyle,
