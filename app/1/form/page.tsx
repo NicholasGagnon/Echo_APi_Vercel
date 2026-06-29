@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { supabase } from "../../lib/supabase";
 
 type Lang = "fr" | "en";
-
 const STEPS = 6;
 
 const TYPES_PROJET = ["SaaS", "App mobile", "Contenu", "E-commerce", "Communauté", "Outil interne", "Autre"];
@@ -49,54 +49,25 @@ const ENGAGEMENT_OPTIONS = {
   fr: ["Discussion occasionnelle.", "Quelques heures par mois.", "Quelques heures par semaine.", "Collaboration régulière.", "Partenariat long terme.", "Association potentielle."],
   en: ["Occasional discussion.", "A few hours per month.", "A few hours per week.", "Regular collaboration.", "Long-term partnership.", "Potential association."],
 };
-
-const TECH = {
-  backend:      ["Supabase","Firebase","PostgreSQL","MongoDB","Appwrite","Autre"],
-  frontend:     ["React","Next.js","Vue","Flutter","Svelte","Autre"],
-  paiement:     ["Stripe","Paddle","LemonSqueezy","Aucun","Autre"],
-  ia:           ["OpenAI","Gemini","DeepSeek","Anthropic","Local LLM","Aucun","Autre"],
-  infra:        ["Vercel","Cloudflare","Railway","Render","VPS","Docker","Autre"],
+const TECH: Record<string, string[]> = {
+  backend:       ["Supabase","Firebase","PostgreSQL","MongoDB","Appwrite","Autre"],
+  frontend:      ["React","Next.js","Vue","Flutter","Svelte","Autre"],
+  paiement:      ["Stripe","Paddle","LemonSqueezy","Aucun","Autre"],
+  ia:            ["OpenAI","Gemini","DeepSeek","Anthropic","Local LLM","Aucun","Autre"],
+  infra:         ["Vercel","Cloudflare","Railway","Render","VPS","Docker","Autre"],
   automatisation:["Webhooks","N8N","Make","Zapier","Aucun","Autre"],
 };
-
 const CONTACTS_OPTIONS = ["Email","Discord","GitHub","LinkedIn","Site web","Téléphone"];
 
 type FormData = {
-  // Étape 1
-  nom_projet: string;
-  description: string;
-  type_projet: string;
-  type_profil: string;
-  // Étape 2
-  idee: string;
-  avancement: string;
-  produit: string;
-  utilisateurs: string;
-  revenus: string;
-  // Étape 3
-  objectif_court: string;
-  objectif_moyen: string;
-  objectif_long: string;
-  // Étape 4
-  cherche: string[];
-  temps: string;
-  distance: string;
-  engagement: string;
-  // Étape 5
+  nom_projet: string; description: string; type_projet: string; type_profil: string;
+  idee: string; avancement: string; produit: string; utilisateurs: string; revenus: string;
+  objectif_court: string; objectif_moyen: string; objectif_long: string;
+  cherche: string[]; temps: string; distance: string; engagement: string;
   tech: Record<string, string[]>;
-  // Étape 6
-  nom_complet: string;
-  pays: string;
-  langue: string;
-  photo: string | null;
-  // Contacts privés
+  nom_complet: string; pays: string; langue: string; photo_url: string;
   contacts_visibles: string[];
-  email: string;
-  discord: string;
-  github: string;
-  linkedin: string;
-  site_web: string;
-  telephone: string;
+  email: string; discord: string; github: string; linkedin: string; site_web: string; telephone: string;
 };
 
 const INITIAL: FormData = {
@@ -105,28 +76,29 @@ const INITIAL: FormData = {
   objectif_court:"", objectif_moyen:"", objectif_long:"",
   cherche:[], temps:"", distance:"", engagement:"",
   tech:{ backend:[], frontend:[], paiement:[], ia:[], infra:[], automatisation:[] },
-  nom_complet:"", pays:"", langue:"", photo:null,
-  contacts_visibles:[], email:"", discord:"", github:"", linkedin:"", site_web:"", telephone:"",
+  nom_complet:"", pays:"", langue:"", photo_url:"",
+  contacts_visibles:["Email"],
+  email:"", discord:"", github:"", linkedin:"", site_web:"", telephone:"",
 };
 
-// ── COMPOSANTS UTILITAIRES ────────────────────────────────────────────────────
+// ── COMPOSANTS ────────────────────────────────────────────────────────────────
 function Radio({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex flex-col gap-2">
       {options.map(opt => (
-        <label key={opt} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer border transition-all ${value === opt ? "border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-800" : "border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
+        <div key={opt}
+          onClick={() => onChange(opt)}
+          className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer border transition-all select-none ${value === opt ? "border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-800" : "border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
           <div className={`w-4 h-4 rounded-full border-2 shrink-0 transition-all ${value === opt ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white" : "border-zinc-300 dark:border-zinc-600"}`}/>
           <span className="text-sm text-zinc-700 dark:text-zinc-300">{opt}</span>
-        </label>
+        </div>
       ))}
     </div>
   );
 }
 
 function MultiCheck({ options, values, onChange }: { options: string[]; values: string[]; onChange: (v: string[]) => void }) {
-  const toggle = (opt: string) => {
-    onChange(values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]);
-  };
+  const toggle = (opt: string) => onChange(values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]);
   return (
     <div className="flex flex-wrap gap-2">
       {options.map(opt => (
@@ -139,62 +111,144 @@ function MultiCheck({ options, values, onChange }: { options: string[]; values: 
   );
 }
 
-function Input({ label, value, onChange, placeholder, multiline }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean }) {
+function Field({ label, value, onChange, placeholder, multiline }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean }) {
   return (
     <div className="flex flex-col gap-1.5">
       <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</label>
       {multiline ? (
         <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={3}
-          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-400 resize-none transition-colors"/>
+          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-500 resize-none transition-colors"/>
       ) : (
         <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-400 transition-colors"/>
+          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-500 transition-colors"/>
       )}
     </div>
   );
 }
 
-// ── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
+// ── PAGE ──────────────────────────────────────────────────────────────────────
 export default function InscriptionPage() {
-  const [lang, setLang]   = useState<Lang>("fr");
-  const [step, setStep]   = useState(1);
-  const [form, setForm]   = useState<FormData>(INITIAL);
-  const [submitted, setSubmitted] = useState(false);
+  const [lang, setLang]       = useState<Lang>("fr");
+  const [step, setStep]       = useState(1);
+  const [form, setForm]       = useState<FormData>(INITIAL);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+  const [myKey,   setMyKey]   = useState<string | null>(null);
 
-  const set = (key: keyof FormData, value: any) => setForm(f => ({ ...f, [key]: value }));
+  const set    = (key: keyof FormData, value: any) => setForm(f => ({ ...f, [key]: value }));
   const setTech = (cat: string, vals: string[]) => setForm(f => ({ ...f, tech: { ...f.tech, [cat]: vals } }));
 
   const dict = {
     fr: {
       titre: "Créer ma fiche",
-      etapes: ["Le projet", "Avancement", "Objectifs", "Collaboration", "Technologies", "Profil & Contacts"],
+      etapes: ["Projet", "Avancement", "Objectifs", "Collaboration", "Technologies", "Profil"],
       suivant: "Suivant", precedent: "Précédent", soumettre: "Créer ma fiche",
       nav: { home:"Accueil", conv:"Conversation", fiches:"Fiches", inscription:"Inscription" },
-      confirme: { titre:"Fiche créée !", texte:"Ta fiche est en ligne. Ta clé personnelle t'a été envoyée par courriel.", btn:"Voir les fiches" },
+      confirme_titre: "Ta fiche est en ligne ! 🎉",
+      confirme_texte: "Ta clé personnelle est :",
+      confirme_note: "Garde-la précieusement — elle t'identifie sur la plateforme.",
+      voir_fiches: "Voir les fiches",
+      erreur: "Une erreur est survenue. Réessaie.",
+      chargement: "Création en cours...",
     },
     en: {
       titre: "Create my listing",
-      etapes: ["The project", "Progress", "Goals", "Collaboration", "Technologies", "Profile & Contacts"],
+      etapes: ["Project", "Progress", "Goals", "Collaboration", "Technologies", "Profile"],
       suivant: "Next", precedent: "Back", soumettre: "Create my listing",
       nav: { home:"Home", conv:"Conversation", fiches:"Listings", inscription:"Register" },
-      confirme: { titre:"Listing created!", texte:"Your listing is live. Your personal key was sent by email.", btn:"See listings" },
+      confirme_titre: "Your listing is live! 🎉",
+      confirme_texte: "Your personal key is:",
+      confirme_note: "Keep it safe — it identifies you on the platform.",
+      voir_fiches: "See listings",
+      erreur: "An error occurred. Please try again.",
+      chargement: "Creating...",
     },
   }[lang];
 
+  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
   const handleSubmit = async () => {
-    // TODO: envoyer vers Supabase + générer Key + envoyer courriel
-    console.log("Form submitted:", form);
-    setSubmitted(true);
+    setError(null);
+
+    // Validation email obligatoire
+    if (!form.contacts_visibles.includes("Email") || !form.email.trim()) {
+      setError(lang === "fr" ? "Un courriel est obligatoire pour créer une fiche." : "An email is required to create a listing.");
+      return;
+    }
+    if (!validateEmail(form.email)) {
+      setError(lang === "fr" ? "L'adresse courriel n'est pas valide." : "The email address is not valid.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Générer la Key via la fonction SQL
+      const { data: keyData, error: keyError } = await supabase.rpc("generate_fiche_key");
+      if (keyError) throw keyError;
+      const generatedKey = keyData as string;
+
+      // Récupérer l'utilisateur connecté si disponible
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id || null;
+
+      // Insérer la fiche
+      const { error: insertError } = await supabase.from("fiches").insert({
+        key:               generatedKey,
+        user_id:           userId,
+        nom_projet:        form.nom_projet,
+        description:       form.description,
+        type_projet:       form.type_projet,
+        type_profil:       form.type_profil,
+        idee:              form.idee,
+        avancement:        form.avancement,
+        produit:           form.produit,
+        utilisateurs:      form.utilisateurs,
+        revenus:           form.revenus,
+        objectif_court:    form.objectif_court,
+        objectif_moyen:    form.objectif_moyen,
+        objectif_long:     form.objectif_long,
+        cherche:           form.cherche,
+        temps:             form.temps,
+        distance:          form.distance,
+        engagement:        form.engagement,
+        tech:              form.tech,
+        nom_complet:       form.nom_complet,
+        pays:              form.pays,
+        langue:            form.langue,
+        photo_url:         form.photo_url || null,
+        contacts_visibles: form.contacts_visibles,
+        email_prive:       form.email    || null,
+        discord_prive:     form.discord  || null,
+        github_prive:      form.github   || null,
+        linkedin_prive:    form.linkedin || null,
+        site_web_prive:    form.site_web || null,
+        telephone_prive:   form.telephone || null,
+      });
+
+      if (insertError) throw insertError;
+      setMyKey(generatedKey);
+    } catch (e: any) {
+      console.error(e);
+      setError(dict.erreur);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (submitted) return (
+  // ── PAGE CONFIRMATION ──────────────────────────────────────────────────────
+  if (myKey) return (
     <main className="min-h-screen bg-white dark:bg-[#0f0f0f] flex items-center justify-center p-6">
-      <div className="text-center max-w-sm">
-        <div className="text-5xl mb-4">🎉</div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">{dict.confirme.titre}</h1>
-        <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6">{dict.confirme.texte}</p>
-        <Link href="/1/fiche" className="inline-block px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-semibold text-sm hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors">
-          {dict.confirme.btn}
+      <div className="text-center max-w-sm w-full">
+        <div className="text-5xl mb-6">🎉</div>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">{dict.confirme_titre}</h1>
+        <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-4">{dict.confirme_texte}</p>
+        <div className="bg-zinc-900 dark:bg-zinc-800 text-white rounded-2xl px-6 py-4 mb-3 font-mono text-2xl font-bold tracking-wider">
+          {myKey}
+        </div>
+        <p className="text-zinc-400 text-xs mb-8">{dict.confirme_note}</p>
+        <Link href="/1/fiche"
+          className="inline-block w-full px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-semibold text-sm hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors text-center">
+          {dict.voir_fiches}
         </Link>
       </div>
     </main>
@@ -204,10 +258,10 @@ export default function InscriptionPage() {
     <main className="min-h-screen bg-white dark:bg-[#0f0f0f] text-zinc-900 dark:text-zinc-100 font-sans">
 
       {/* NAV */}
-      <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between">
-        <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">Echo AI</span>
-        <div className="flex items-center gap-6 text-sm">
-          <Link href="/"               className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{dict.nav.home}</Link>
+      <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-10">
+        <span className="font-bold text-sm">Echo AI</span>
+        <div className="flex items-center gap-5 text-sm">
+          <Link href="/1"              className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{dict.nav.home}</Link>
           <Link href="/1/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{dict.nav.conv}</Link>
           <Link href="/1/fiche"        className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{dict.nav.fiches}</Link>
           <Link href="/1/inscription"  className="text-zinc-900 dark:text-white font-semibold">{dict.nav.inscription}</Link>
@@ -219,34 +273,38 @@ export default function InscriptionPage() {
       </nav>
 
       <div className="max-w-2xl mx-auto px-6 py-12">
+        <h1 className="text-2xl font-bold mb-8">{dict.titre}</h1>
 
-        {/* TITRE */}
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-8">{dict.titre}</h1>
-
-        {/* PROGRESS */}
-        <div className="flex items-center gap-2 mb-10">
+        {/* BARRE DE PROGRESSION */}
+        <div className="flex items-center mb-10 gap-0">
           {dict.etapes.map((label, i) => (
-            <div key={i} className="flex items-center gap-2 flex-1">
-              <div className={`flex items-center gap-2 ${i < dict.etapes.length - 1 ? "flex-1" : ""}`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
-                  i + 1 < step ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+            <div key={i} className="flex items-center flex-1">
+              <div className="flex flex-col items-center gap-1">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                  i + 1 < step  ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
                   : i + 1 === step ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 ring-4 ring-zinc-200 dark:ring-zinc-700"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
                 }`}>{i + 1 < step ? "✓" : i + 1}</div>
-                <span className={`text-xs hidden md:block ${i + 1 === step ? "text-zinc-900 dark:text-zinc-100 font-medium" : "text-zinc-400"}`}>{label}</span>
+                <span className={`text-[10px] hidden sm:block text-center ${i + 1 === step ? "text-zinc-900 dark:text-white font-semibold" : "text-zinc-400"}`}>{label}</span>
               </div>
-              {i < dict.etapes.length - 1 && <div className={`flex-1 h-px mx-1 ${i + 1 < step ? "bg-zinc-900 dark:bg-white" : "bg-zinc-200 dark:bg-zinc-700"}`}/>}
+              {i < STEPS - 1 && <div className={`flex-1 h-px mx-2 mt-[-10px] ${i + 1 < step ? "bg-zinc-900 dark:bg-white" : "bg-zinc-200 dark:bg-zinc-700"}`}/>}
             </div>
           ))}
         </div>
 
-        {/* CONTENU PAR ÉTAPE */}
+        {/* ERREUR */}
+        {error && (
+          <div className="mb-6 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        )}
+
+        {/* ÉTAPES */}
         <div className="flex flex-col gap-6">
 
-          {/* ── ÉTAPE 1 — Le projet ── */}
           {step === 1 && <>
-            <Input label={lang==="fr"?"Nom du projet":"Project name"} value={form.nom_projet} onChange={v => set("nom_projet", v)} placeholder={lang==="fr"?"Ex: EcoAI, NutriTrack...":"Ex: EcoAI, NutriTrack..."} />
-            <Input label={lang==="fr"?"Description":"Description"} value={form.description} onChange={v => set("description", v)} placeholder={lang==="fr"?"Explique ton projet comme si tu l'expliquais à un ami.":"Explain your project as if talking to a friend."} multiline />
+            <Field label={lang==="fr"?"Nom du projet *":"Project name *"} value={form.nom_projet} onChange={v => set("nom_projet", v)} placeholder="Ex: EcoAI, NutriTrack..." />
+            <Field label={lang==="fr"?"Description *":"Description *"} value={form.description} onChange={v => set("description", v)} placeholder={lang==="fr"?"Explique ton projet comme si tu l'expliquais à un ami.":"Explain your project as if talking to a friend."} multiline />
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Type de projet":"Project type"}</label>
               <div className="flex flex-wrap gap-2">
@@ -264,7 +322,6 @@ export default function InscriptionPage() {
             </div>
           </>}
 
-          {/* ── ÉTAPE 2 — Avancement ── */}
           {step === 2 && <>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"L'idée globale est :":"The overall idea is:"}</label>
@@ -288,14 +345,12 @@ export default function InscriptionPage() {
             </div>
           </>}
 
-          {/* ── ÉTAPE 3 — Objectifs ── */}
           {step === 3 && <>
-            <Input label={lang==="fr"?"Court terme (1 à 3 mois)":"Short term (1 to 3 months)"} value={form.objectif_court} onChange={v => set("objectif_court", v)} placeholder={lang==="fr"?"Finir le prototype. Trouver un collaborateur...":"Finish the prototype. Find a collaborator..."} multiline />
-            <Input label={lang==="fr"?"Moyen terme (6 à 12 mois)":"Medium term (6 to 12 months)"} value={form.objectif_moyen} onChange={v => set("objectif_moyen", v)} placeholder="" multiline />
-            <Input label={lang==="fr"?"Long terme":"Long term"} value={form.objectif_long} onChange={v => set("objectif_long", v)} placeholder="" multiline />
+            <Field label={lang==="fr"?"Court terme (1 à 3 mois)":"Short term (1 to 3 months)"} value={form.objectif_court} onChange={v => set("objectif_court", v)} placeholder={lang==="fr"?"Finir le prototype, trouver un collaborateur...":"Finish the prototype, find a collaborator..."} multiline />
+            <Field label={lang==="fr"?"Moyen terme (6 à 12 mois)":"Medium term (6 to 12 months)"} value={form.objectif_moyen} onChange={v => set("objectif_moyen", v)} placeholder="" multiline />
+            <Field label={lang==="fr"?"Long terme":"Long term"} value={form.objectif_long} onChange={v => set("objectif_long", v)} placeholder="" multiline />
           </>}
 
-          {/* ── ÉTAPE 4 — Collaboration ── */}
           {step === 4 && <>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Qu'est-ce que tu recherches ?":"What are you looking for?"}</label>
@@ -315,7 +370,6 @@ export default function InscriptionPage() {
             </div>
           </>}
 
-          {/* ── ÉTAPE 5 — Technologies ── */}
           {step === 5 && <>
             {Object.entries(TECH).map(([cat, opts]) => (
               <div key={cat} className="flex flex-col gap-1.5">
@@ -325,24 +379,66 @@ export default function InscriptionPage() {
             ))}
           </>}
 
-          {/* ── ÉTAPE 6 — Profil & Contacts ── */}
           {step === 6 && <>
-            <Input label={lang==="fr"?"Nom complet":"Full name"} value={form.nom_complet} onChange={v => set("nom_complet", v)} />
-            <Input label={lang==="fr"?"Pays":"Country"} value={form.pays} onChange={v => set("pays", v)} />
-            <Input label={lang==="fr"?"Langue principale":"Primary language"} value={form.langue} onChange={v => set("langue", v)} />
+            <Field label={lang==="fr"?"Nom complet":"Full name"} value={form.nom_complet} onChange={v => set("nom_complet", v)} />
+            <Field label={lang==="fr"?"Pays":"Country"} value={form.pays} onChange={v => set("pays", v)} />
+            <Field label={lang==="fr"?"Langue principale":"Primary language"} value={form.langue} onChange={v => set("langue", v)} />
+            <Field label={lang==="fr"?"URL de ta photo ou logo (optionnel)":"Photo or logo URL (optional)"} value={form.photo_url} onChange={v => set("photo_url", v)} placeholder="https://..." />
 
-            <div className="h-px bg-zinc-100 dark:bg-zinc-800"/>
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">🔒 {lang==="fr"?"Contacts privés — visibles après achat":"Private contacts — visible after purchase"}</p>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Que veux-tu rendre visible ?":"What do you want to make visible?"}</label>
-              <MultiCheck options={CONTACTS_OPTIONS} values={form.contacts_visibles} onChange={v => set("contacts_visibles", v)} />
+            <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2"/>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-1">🔒 {lang==="fr"?"Contacts privés":"Private contacts"}</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">{lang==="fr"?"Visibles uniquement après achat de ta fiche. Tu choisis ce que tu rends disponible.":"Visible only after someone purchases your listing. You choose what to share."}</p>
+              <div className="flex flex-col gap-1.5 mb-4">
+                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Que veux-tu rendre visible ?":"What do you want to make visible?"}</label>
+                <p className="text-xs text-zinc-400">{lang==="fr"?"Le courriel est obligatoire.":"Email is required."}</p>
+                <div className="flex flex-wrap gap-2">
+                  {CONTACTS_OPTIONS.map(opt => {
+                    const isEmail    = opt === "Email";
+                    const isSelected = form.contacts_visibles.includes(opt);
+                    return (
+                      <button key={opt} type="button"
+                        onClick={() => {
+                          if (isEmail) return; // Email non décoché
+                          set("contacts_visibles", isSelected
+                            ? form.contacts_visibles.filter(v => v !== opt)
+                            : [...form.contacts_visibles, opt]);
+                        }}
+                        className={`px-3 py-2 rounded-xl text-sm border transition-all ${
+                          isSelected
+                            ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-medium"
+                            : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"
+                        } ${isEmail ? "cursor-default" : ""}`}>
+                        {opt}{isEmail ? " *" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                {form.contacts_visibles.includes("Email") && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email *</label>
+                    <input type="email" value={form.email} onChange={e => set("email", e.target.value)}
+                      placeholder="toi@exemple.com"
+                      className={`bg-white dark:bg-zinc-900 border rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none transition-colors ${
+                        form.email && !validateEmail(form.email)
+                          ? "border-red-400 focus:border-red-500"
+                          : "border-zinc-200 dark:border-zinc-700 focus:border-zinc-500"
+                      }`}/>
+                    {form.email && !validateEmail(form.email) && (
+                      <p className="text-xs text-red-400">{lang==="fr"?"Adresse courriel invalide.":"Invalid email address."}</p>
+                    )}
+                  </div>
+                )}
+                {form.contacts_visibles.includes("Discord")   && <Field label="Discord"  value={form.discord}  onChange={v => set("discord", v)}  placeholder="username" />}
+                {form.contacts_visibles.includes("GitHub")    && <Field label="GitHub"   value={form.github}   onChange={v => set("github", v)}   placeholder="github.com/toi" />}
+                {form.contacts_visibles.includes("LinkedIn")  && <Field label="LinkedIn" value={form.linkedin} onChange={v => set("linkedin", v)} placeholder="linkedin.com/in/toi" />}
+                {form.contacts_visibles.includes("Site web")  && <Field label={lang==="fr"?"Site web":"Website"} value={form.site_web} onChange={v => set("site_web", v)} placeholder="https://monsite.com" />}
+                {form.contacts_visibles.includes("Téléphone") && <Field label={lang==="fr"?"Téléphone (optionnel)":"Phone (optional)"} value={form.telephone} onChange={v => set("telephone", v)} placeholder="+1 555 000 0000" />}
+              </div>
             </div>
-            {form.contacts_visibles.includes("Email")     && <Input label="Email"    value={form.email}    onChange={v => set("email", v)}    placeholder="toi@exemple.com" />}
-            {form.contacts_visibles.includes("Discord")   && <Input label="Discord"  value={form.discord}  onChange={v => set("discord", v)}  placeholder="username#0000" />}
-            {form.contacts_visibles.includes("GitHub")    && <Input label="GitHub"   value={form.github}   onChange={v => set("github", v)}   placeholder="github.com/toi" />}
-            {form.contacts_visibles.includes("LinkedIn")  && <Input label="LinkedIn" value={form.linkedin} onChange={v => set("linkedin", v)} placeholder="linkedin.com/in/toi" />}
-            {form.contacts_visibles.includes("Site web")  && <Input label={lang==="fr"?"Site web":"Website"} value={form.site_web} onChange={v => set("site_web", v)} placeholder="https://monsite.com" />}
-            {form.contacts_visibles.includes("Téléphone") && <Input label={lang==="fr"?"Téléphone (optionnel)":"Phone (optional)"} value={form.telephone} onChange={v => set("telephone", v)} placeholder="+1 555 000 0000" />}
           </>}
 
         </div>
@@ -357,14 +453,14 @@ export default function InscriptionPage() {
           ) : <div/>}
 
           {step < STEPS ? (
-            <button onClick={() => setStep(s => s + 1)}
-              className="px-6 py-2.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm">
+            <button onClick={() => setStep(s => s + 1)} disabled={step === 1 && !form.nom_projet.trim()}
+              className="px-6 py-2.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
               {dict.suivant} →
             </button>
           ) : (
-            <button onClick={handleSubmit}
-              className="px-6 py-2.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm">
-              {dict.soumettre} ✓
+            <button onClick={handleSubmit} disabled={loading}
+              className="px-6 py-2.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm disabled:opacity-60">
+              {loading ? dict.chargement : `${dict.soumettre} ✓`}
             </button>
           )}
         </div>
