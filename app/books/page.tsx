@@ -47,6 +47,19 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     presetPrint:"Impression", presetKindle:"Kindle", presetCustom:"Personnalise",
     importFont:"Importer police", pageOf:"sur",
     chapterSelect:"Selectionner chapitre", inject:"Injecter",
+    undo:"Annuler", redo:"Refaire",
+    injectConfirmTitle:"Injection de texte",
+    injectConfirmBody:"Vous allez injecter du texte dans votre livre.",
+    injectConfirmWarning:"Assurez-vous de placer votre curseur sur la ligne souhaitée avant de confirmer.",
+    injectOk:"OK — Injecter",
+    injectCancel:"Annuler",
+    injectUndo:"⬅️ Annuler (Ctrl+Z)",
+    injectRedo:"➡️ Refaire (Ctrl+Y)",
+    recontextBtn:"📖 Remettre en contexte",
+    recontextWarning:"Echo va lire l'extrait actuel du livre pour se remettre en contexte. Cela consommera 1 crédit.",
+    recontextConfirm:"Confirmer",
+    recontextCancel:"Annuler",
+    recontextDone:"Echo a relu le livre. Il est maintenant à jour.",
   },
   en: {
     home:"Home", chat:"Chat", books:"Books", calendar:"Calendar",
@@ -74,41 +87,26 @@ const I: Record<"fr"|"en", Record<string,string>> = {
     presetPrint:"Print", presetKindle:"Kindle", presetCustom:"Custom",
     importFont:"Import Font", pageOf:"of",
     chapterSelect:"Select chapter", inject:"Inject",
+    undo:"Undo", redo:"Redo",
+    injectConfirmTitle:"Text Injection",
+    injectConfirmBody:"You are about to inject text into your book.",
+    injectConfirmWarning:"Make sure to place your cursor on the desired line before confirming.",
+    injectOk:"OK — Inject",
+    injectCancel:"Cancel",
+    injectUndo:"⬅️ Undo (Ctrl+Z)",
+    injectRedo:"➡️ Redo (Ctrl+Y)",
+    recontextBtn:"📖 Reload context",
+    recontextWarning:"Echo will read the current book excerpt to get back in context. This will use 1 credit.",
+    recontextConfirm:"Confirm",
+    recontextCancel:"Cancel",
+    recontextDone:"Echo has re-read the book and is now up to date.",
   },
 };
 
 const ECHO_MODES: { id: EchoMode; key: "creative"|"ideas"|"critical"; icon: ReactNode }[] = [
-  {
-    id: "creative", key: "creative",
-    icon: (
-      <svg viewBox="0 0 18 18" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 15l2-5L13 2a2 2 0 0 1 3 3L8 13z"/>
-        <line x1="11" y1="4" x2="14" y2="7"/>
-        <line x1="3" y1="15" x2="5" y2="10"/>
-      </svg>
-    ),
-  },
-  {
-    id: "ideas", key: "ideas",
-    icon: (
-      <svg viewBox="0 0 18 18" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="9" cy="7" r="4"/>
-        <line x1="9" y1="11" x2="9" y2="13"/>
-        <line x1="7" y1="15" x2="11" y2="15"/>
-        <line x1="6" y1="13" x2="12" y2="13"/>
-      </svg>
-    ),
-  },
-  {
-    id: "critical", key: "critical",
-    icon: (
-      <svg viewBox="0 0 18 18" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="9" cy="9" r="7"/>
-        <line x1="9" y1="5" x2="9" y2="9"/>
-        <circle cx="9" cy="12" r="0.8" fill="currentColor" stroke="none"/>
-      </svg>
-    ),
-  },
+  { id:"creative", key:"creative", icon:(<svg viewBox="0 0 18 18" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 15l2-5L13 2a2 2 0 0 1 3 3L8 13z"/><line x1="11" y1="4" x2="14" y2="7"/><line x1="3" y1="15" x2="5" y2="10"/></svg>) },
+  { id:"ideas",    key:"ideas",    icon:(<svg viewBox="0 0 18 18" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="7" r="4"/><line x1="9" y1="11" x2="9" y2="13"/><line x1="7" y1="15" x2="11" y2="15"/><line x1="6" y1="13" x2="12" y2="13"/></svg>) },
+  { id:"critical", key:"critical", icon:(<svg viewBox="0 0 18 18" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="9" r="7"/><line x1="9" y1="5" x2="9" y2="9"/><circle cx="9" cy="12" r="0.8" fill="currentColor" stroke="none"/></svg>) },
 ];
 
 const A4_W = 860;
@@ -118,24 +116,27 @@ const Icons: Record<string, ReactNode> = {
   T1: <span className="font-black text-[12px] leading-none" style={{fontFamily:"Georgia,serif"}}>T<sup className="text-[8px]">1</sup></span>,
   T2: <span className="font-black text-[12px] leading-none" style={{fontFamily:"Georgia,serif"}}>T<sup className="text-[8px]">2</sup></span>,
   T3: <span className="font-bold  text-[12px] leading-none" style={{fontFamily:"Georgia,serif"}}>T<sup className="text-[8px]">3</sup></span>,
-  Abc: (<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/></svg>),
-  B: <span className="font-black text-[15px] leading-none" style={{fontFamily:"Georgia,serif"}}>B</span>,
-  I: <span className="font-semibold text-[15px] leading-none" style={{fontFamily:"Georgia,serif", fontStyle:"italic"}}>I</span>,
-  indent: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/><polyline points="2,7 4,9 2,11" fill="currentColor" stroke="none"/></svg>),
-  alignL: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="10" y2="7"/><line x1="2" y1="10" x2="13" y2="10"/><line x1="2" y1="13" x2="8" y2="13"/></svg>),
-  alignC: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="4" y1="7" x2="12" y2="7"/><line x1="2" y1="10" x2="14" y2="10"/><line x1="5" y1="13" x2="11" y2="13"/></svg>),
-  alignR: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="7" x2="14" y2="7"/><line x1="3" y1="10" x2="14" y2="10"/><line x1="8" y1="13" x2="14" y2="13"/></svg>),
-  alignJ: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="2" y1="10" x2="14" y2="10"/><line x1="2" y1="13" x2="14" y2="13"/></svg>),
-  pilcrow: (<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/></svg>),
+  Abc:(<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/></svg>),
+  B:  <span className="font-black text-[15px] leading-none" style={{fontFamily:"Georgia,serif"}}>B</span>,
+  I:  <span className="font-semibold text-[15px] leading-none" style={{fontFamily:"Georgia,serif",fontStyle:"italic"}}>I</span>,
+  indent:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/><polyline points="2,7 4,9 2,11" fill="currentColor" stroke="none"/></svg>),
+  undo:       (<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7H10a4 4 0 0 1 0 8H6"/><polyline points="6,4 3,7 6,10"/></svg>),
+  redo:       (<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 7H6a4 4 0 0 0 0 8h4"/><polyline points="10,4 13,7 10,10"/></svg>),
+  alignL:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="10" y2="7"/><line x1="2" y1="10" x2="13" y2="10"/><line x1="2" y1="13" x2="8" y2="13"/></svg>),
+  alignC:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="4" y1="7" x2="12" y2="7"/><line x1="2" y1="10" x2="14" y2="10"/><line x1="5" y1="13" x2="11" y2="13"/></svg>),
+  alignR:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="7" x2="14" y2="7"/><line x1="3" y1="10" x2="14" y2="10"/><line x1="8" y1="13" x2="14" y2="13"/></svg>),
+  alignJ:     (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="2" y1="10" x2="14" y2="10"/><line x1="2" y1="13" x2="14" y2="13"/></svg>),
+  pilcrow:    (<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><path d="M8 2h4v1.2h-1.2V14H9.6V3.2H8a2.8 2.8 0 0 0 0 5.6h.8V10H8a4 4 0 0 1 0-8z"/></svg>),
   pageBreak: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><line x1="2" y1="5" x2="14" y2="5"/><line x1="2" y1="11" x2="14" y2="11" strokeDasharray="2 1.5"/><line x1="2" y1="8" x2="5" y2="8"/><line x1="11" y1="8" x2="14" y2="8"/><polyline points="6,6 8,8 10,6" fill="none"/><polyline points="6,10 8,8 10,10" fill="none"/></svg>),
-  fontSmaller: (<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700">A</text><text x="9" y="13" fontSize="7" fontFamily="serif">−</text></svg>),
+  fontSmaller:(<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700">A</text><text x="9" y="13" fontSize="7" fontFamily="serif">−</text></svg>),
   fontLarger: (<svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor"><text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700">A</text><text x="9" y="13" fontSize="7" fontFamily="serif">+</text></svg>),
   importTxt: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6z"/><polyline points="9,2 9,6 13,6"/><line x1="8" y1="7" x2="8" y2="11"/><polyline points="6,9 8,7 10,9"/></svg>),
-  openBook: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h4a2 2 0 0 1 2 2v8a1.5 1.5 0 0 0-2-1.5H2z"/><path d="M14 3h-4a2 2 0 0 0-2 2v8a1.5 1.5 0 0 1 2-1.5h4z"/></svg>),
-  importFont: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700" fontStyle="italic" fill="currentColor" stroke="none">A</text><line x1="11" y1="8" x2="11" y2="14"/><line x1="8.5" y1="11" x2="13.5" y2="11"/></svg>),
-  settings: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>),
-  addChapter: (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>),
-  presetPrint: (<svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="10" height="6" rx="1"/><path d="M4 5V3h6v2"/><rect x="4" y="8" width="6" height="1.5" rx="0.5" fill="currentColor" stroke="none"/></svg>),
+  openBook:  (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h4a2 2 0 0 1 2 2v8a1.5 1.5 0 0 0-2-1.5H2z"/><path d="M14 3h-4a2 2 0 0 0-2 2v8a1.5 1.5 0 0 1 2-1.5h4z"/></svg>),
+  importFont:(<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><text x="1" y="12" fontSize="11" fontFamily="serif" fontWeight="700" fontStyle="italic" fill="currentColor" stroke="none">A</text><line x1="11" y1="8" x2="11" y2="14"/><line x1="8.5" y1="11" x2="13.5" y2="11"/></svg>),
+  insertImg:(<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="5.5" cy="6.5" r="1"/><polyline points="2,12 5,8 8,11 10,9 14,12"/></svg>),
+  settings:  (<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>),
+  addChapter:(<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>),
+  presetPrint:  (<svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="10" height="6" rx="1"/><path d="M4 5V3h6v2"/><rect x="4" y="8" width="6" height="1.5" rx="0.5" fill="currentColor" stroke="none"/></svg>),
   presetKindle: (<svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="1" width="10" height="12" rx="1.5"/><line x1="4" y1="4" x2="10" y2="4"/><line x1="4" y1="6" x2="10" y2="6"/><line x1="4" y1="8" x2="8" y2="8"/><circle cx="7" cy="11" r="0.8" fill="currentColor" stroke="none"/></svg>),
   presetCustom: (<svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"><circle cx="7" cy="7" r="2.2"/><path d="M7 1.5v1.5M7 11v1.5M1.5 7H3M11 7h1.5M3.2 3.2l1 1M9.8 9.8l1 1M3.2 10.8l1-1M9.8 4.2l1-1"/></svg>),
 };
@@ -162,6 +163,8 @@ function applyPreset(preset: "print"|"kindle", s: {
   }
 }
 
+const LS_KEY = (uid: string | null) => uid ? `echo-books-${uid}` : "echo-books-anon";
+
 export default function BooksPage() {
   const { lang, theme, toggleTheme, userTier } = useApp();
   const fr = lang === "fr";
@@ -174,7 +177,7 @@ export default function BooksPage() {
   const [chapters, setChapters] = useState<Chapter[]>([{ id:"ch1", title:fr?"Chapitre 1":"Chapter 1", content:"" }]);
   const [activeChapter, setActiveChapter] = useState("ch1");
   const [bookTitle, setBookTitle] = useState(fr?"Mon Premier Livre":"My First Book");
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingTitle, setIsEditingTitle]         = useState(false);
   const [isEditingChapterTitle, setIsEditingChapterTitle] = useState(false);
   const [view, setView] = useState<BookView>("edit");
   const titleInputRef        = useRef<HTMLInputElement>(null);
@@ -182,23 +185,30 @@ export default function BooksPage() {
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
   const chapterDropRef = useRef<HTMLDivElement>(null);
 
-  const [mirrorMargins, setMirrorMargins]           = useState(false);
-  const [showPageNumbers, setShowPageNumbers]       = useState(true);
-  const [showHeader, setShowHeader]                 = useState(false);
-  const [fontSize, setFontSize]                     = useState(14);
-  const [fontFamily, setFontFamily]                 = useState("Georgia, serif");
-  const [customFonts, setCustomFonts]               = useState<string[]>([]);
-  const [lineHeight, setLineHeight]                 = useState(1.8);
-  const [isJustified, setIsJustified]               = useState(true);
-  const [activePreset, setActivePreset]             = useState<"print"|"kindle"|"custom"|null>(null);
-  const [pageOpacity, setPageOpacity]               = useState(95);
-  const [showInvisibleChars, setShowInvisibleChars] = useState(false);
-  const [showSettings, setShowSettings]             = useState(true);
-  const [showSaveConfirm, setShowSaveConfirm]       = useState(false);
-  const [showQuotaPopup,  setShowQuotaPopup]        = useState(false);
-  const [quotaPopupLabel, setQuotaPopupLabel]       = useState("");
-  const [memorySummary, setMemorySummary]           = useState("");
-  const [tutorialStep, setTutorialStep]             = useState<number|null>(null);
+  const [showInjectConfirm, setShowInjectConfirm] = useState(false);
+  const [pendingInjectText, setPendingInjectText] = useState<string|null>(null);
+
+  const [mirrorMargins,     setMirrorMargins]     = useState(false);
+  const [showPageNumbers,   setShowPageNumbers]   = useState(true);
+  const [showHeader,        setShowHeader]        = useState(false);
+  const [headerText,        setHeaderText]        = useState("");
+  const [isEditingHeader,   setIsEditingHeader]   = useState(false);
+  const headerInputRef = useRef<HTMLInputElement>(null);
+  const [fontSize,          setFontSize]          = useState(15);
+  const [fontFamily,        setFontFamily]        = useState("Georgia, serif");
+  const [customFonts,       setCustomFonts]       = useState<string[]>([]);
+  const [lineHeight,        setLineHeight]        = useState(1.8);
+  const [isJustified,       setIsJustified]       = useState(true);
+  const [activePreset,      setActivePreset]      = useState<"print"|"kindle"|"custom"|null>(null);
+  const [pageOpacity,       setPageOpacity]       = useState(95);
+  const [showInvisibleChars,setShowInvisibleChars]= useState(false);
+  const [showSettings,      setShowSettings]      = useState(true);
+  const [showSaveConfirm,   setShowSaveConfirm]   = useState(false);
+  const [showQuotaPopup,    setShowQuotaPopup]    = useState(false);
+  const [quotaPopupLabel,   setQuotaPopupLabel]   = useState("");
+  const [memorySummary,     setMemorySummary]     = useState("");
+  const [tutorialStep,      setTutorialStep]      = useState<number|null>(null);
+  const [dataLoaded,        setDataLoaded]        = useState(false);
 
   const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
   const getBooksSummaryKey = (uid: string|null) => uid ? `echo-books-summary-${uid}` : "echo-books-summary";
@@ -207,59 +217,132 @@ export default function BooksPage() {
     if (!localStorage.getItem("echo-tuto-books-done-v1")) setTutorialStep(1);
   }, []);
 
-  const [pageCount, setPageCount] = useState(1);
+  const [pageCount,   setPageCount]   = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const updatePageCount = useCallback(() => {
-    if (containerRef.current)
-      setPageCount(Math.max(1, Math.ceil(containerRef.current.scrollHeight / A4_H)));
+    if (!containerRef.current) return;
+    const pmEl = containerRef.current.querySelector('.ProseMirror') as HTMLElement | null;
+    const h = pmEl ? pmEl.scrollHeight + 52 + 64 : containerRef.current.scrollHeight;
+    setPageCount(Math.max(1, Math.ceil(h / A4_H)));
   }, []);
 
   useEffect(() => { const t = setTimeout(updatePageCount, 150); return () => clearTimeout(t); }, [chapters, activeChapter, view, updatePageCount]);
   useEffect(() => { window.addEventListener("resize", updatePageCount); return () => window.removeEventListener("resize", updatePageCount); }, [updatePageCount]);
 
+  const activeChapterRef = useRef(activeChapter);
+  useEffect(() => { activeChapterRef.current = activeChapter; }, [activeChapter]);
+
+  const chaptersRef = useRef(chapters);
+  useEffect(() => { chaptersRef.current = chapters; }, [chapters]);
+
+  const isLoadingRef = useRef(false);
+  const fontSizeRef = useRef(fontSize);
+  useEffect(() => { fontSizeRef.current = fontSize; }, [fontSize]);
+
+  // ── Éditeur Tiptap ────────────────────────────────────────────────────────
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({ heading: { levels: [1,2,3] } }),
       FontFamily,
       TextAlign.configure({ types: ["heading","paragraph"] }),
       TextStyle.extend({
         addAttributes() {
-          return { fontSize: { default: null, parseHTML: el => el.style.fontSize || null, renderHTML: attrs => attrs.fontSize ? { style:`font-size:${attrs.fontSize}` } : {} } };
+          return {
+            fontSize: {
+              default: null,
+              parseHTML: el => el.style.fontSize || null,
+              renderHTML: attrs => attrs.fontSize ? { style:`font-size:${attrs.fontSize}` } : {},
+            },
+          };
         },
       }),
     ],
     content: "",
+    onSelectionUpdate: ({ editor }) => {
+      if (isLoadingRef.current) return;
+      // Lit les attributs du nœud ou de la marque au curseur actuel
+      const attrs = editor.getAttributes("textStyle");
+      if (attrs.fontSize) {
+        const n = parseInt(attrs.fontSize, 10);
+        if (!isNaN(n)) { setFontSize(n); return; }
+      }
+      // Si aucun style inline n'est présent, on affiche la taille globale définie pour ce chapitre
+      const saved = localStorage.getItem(`echo-book-base-size-${activeChapterRef.current}`);
+      setFontSize(saved ? parseInt(saved, 10) : 15);
+    },
     onUpdate: ({ editor }) => {
+      if (isLoadingRef.current) return;
       const html = editor.getHTML();
-      setChapters(prev => prev.map(c => c.id===activeChapter ? {...c, content:html} : c));
+      const chId = activeChapterRef.current;
+      setChapters(prev => {
+        const existing = prev.find(c => c.id === chId);
+        const normalize = (s: string) => s.replace(/<p><br\s*\/?><\/p>/g,"<p></p>").replace(/\s+/g," ").trim();
+        if (normalize(existing?.content || "") === normalize(html)) return prev;
+        return prev.map(c => c.id === chId ? { ...c, content: html } : c);
+      });
       setTimeout(updatePageCount, 50);
     },
   });
 
+  // Charger contenu dans l'éditeur quand chapitre change
   useEffect(() => {
     if (!editor || view !== "edit") return;
-    const cur = chapters.find(c => c.id === activeChapter);
+    const cur = chaptersRef.current.find(c => c.id === activeChapter);
     const newContent = cur?.content || "<p></p>";
-    if (editor.getHTML() !== newContent) editor.commands.setContent(newContent);
-  }, [activeChapter, view]);
+    if (editor.getHTML() === newContent) return;
+    isLoadingRef.current = true;
+    editor.commands.setContent(newContent);
+    
+    // Récupérer la taille de police par défaut sauvegardée pour ce chapitre spécifique
+    const savedSize = localStorage.getItem(`echo-book-base-size-${activeChapter}`);
+    if (savedSize) {
+      setFontSize(parseInt(savedSize, 10));
+    } else {
+      setFontSize(15);
+    }
+    isLoadingRef.current = false;
+  }, [activeChapter, view, editor]);
 
-  useEffect(() => { if (editor) editor.commands.setFontFamily(fontFamily); }, [fontFamily, editor]);
+  useEffect(() => {
+    if (editor) editor.commands.setFontFamily(fontFamily);
+  }, [fontFamily, editor]);
+
+  // Raccourcis clavier
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault(); editor?.commands.undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault(); editor?.commands.redo();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [editor]);
 
   const toggleBold   = () => editor?.chain().focus().toggleBold().run();
   const toggleItalic = () => editor?.chain().focus().toggleItalic().run();
 
+  // Correction de la dynamique de modification des tailles
   const changeFontSize = (delta: number) => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
+    const current = parseInt(editor.getAttributes("textStyle").fontSize) || fontSizeRef.current;
+    const next = Math.min(72, Math.max(8, current + delta));
+    
+    setFontSize(next);
+    
     if (from !== to) {
-      const current = parseInt(editor.getAttributes("textStyle").fontSize) || fontSize;
-      const next = Math.min(72, Math.max(8, current + delta));
-      editor.chain().focus().setMark("textStyle", { fontSize:`${next}px` }).run();
+      // Sélection de texte active : Applique la taille sur le texte surligné
+      editor.chain().focus().setMark("textStyle", { fontSize: `${next}px` }).run();
     } else {
-      const next = Math.min(72, Math.max(8, fontSize + delta));
-      setFontSize(next);
-      editor.chain().focus().setMark("textStyle", { fontSize:`${next}px` }).run();
+      // Pas de sélection : Modifie globalement et applique sur le bloc courant pour éviter les ruptures au clic
+      localStorage.setItem(`echo-book-base-size-${activeChapterRef.current}`, next.toString());
+      editor.chain().focus().setMark("textStyle", { fontSize: `${next}px` }).run();
     }
   };
 
@@ -270,10 +353,28 @@ export default function BooksPage() {
     );
   };
 
-  const injectTextAtEnd = (text: string) => {
+  // ── Inject helpers ────────────────────────────────────────────────────────
+  const injectTextAtEnd = useCallback((text: string) => {
     if (!editor) return;
     const { doc } = editor.state;
     editor.chain().focus().setTextSelection(doc.content.size - 1).insertContent(`<p>${text}</p>`).run();
+  }, [editor]);
+
+  const requestInject = (text: string) => {
+    setPendingInjectText(text);
+    setShowInjectConfirm(true);
+  };
+
+  const confirmInject = () => {
+    if (!pendingInjectText) return;
+    injectTextAtEnd(pendingInjectText);
+    const updatedChapters = chaptersRef.current.map(c =>
+      c.id === activeChapterRef.current ? { ...c, content: editor?.getHTML() || c.content } : c
+    );
+    saveBook(updatedChapters, bookTitle);
+    setEchoMessages(prev => [...prev, { role:"echo", text: fr?"Texte injecte dans le chapitre.":"Text injected into chapter." }]);
+    setShowInjectConfirm(false);
+    setPendingInjectText(null);
   };
 
   const addChapter = () => {
@@ -284,81 +385,174 @@ export default function BooksPage() {
   };
 
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (chapterDropRef.current && !chapterDropRef.current.contains(e.target as Node)) setShowChapterDropdown(false); };
-    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+    const h = (e: MouseEvent) => {
+      if (chapterDropRef.current && !chapterDropRef.current.contains(e.target as Node)) setShowChapterDropdown(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
+  // ── SAVE ──────────────────────────────────────────────────────────────────
   const [saveStatus, setSaveStatus] = useState<"saved"|"saving"|"unsaved">("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
+  const userIdRef = useRef<string|null>(null);
+  useEffect(() => { userIdRef.current = userId; }, [userId]);
 
-  const saveToSupabase = useCallback(async (currentChapters: Chapter[], currentTitle: string) => {
-    const payload = { bookTitle: currentTitle, chapters: currentChapters };
-    localStorage.setItem("echo-books-manuscript", JSON.stringify(payload));
-    if (!userId) { setSaveStatus("saved"); return; }
+  const sanitizeChapters = (chs: Chapter[]): Chapter[] =>
+    chs.map(c => ({
+      ...c,
+      content: c.content.replace(/src="data:[^"]{100,}"/g, 'src="[image]"'),
+    }));
+
+  const saveBook = useCallback(async (currentChapters: Chapter[], currentTitle: string) => {
+    const uid = userIdRef.current;
+    const payload = { bookTitle: currentTitle, chapters: currentChapters, savedAt: Date.now() };
+
+    try { localStorage.setItem(LS_KEY(uid), JSON.stringify(payload)); } catch {}
+
+    if (!uid) { setSaveStatus("saved"); return; }
     setSaveStatus("saving");
+
+    const safeChapters = sanitizeChapters(currentChapters);
+
     try {
-      if (bookDbId) {
-        await supabase.from("echo_conversations").update({ messages: [payload], updated_at: new Date().toISOString() }).eq("id", bookDbId).eq("user_id", userId);
-      } else {
-        const { data } = await supabase.from("echo_conversations").insert({ user_id:userId, source:"books", messages:[payload], updated_at:new Date().toISOString() }).select("id").single();
-        if (data?.id) setBookDbId(data.id);
+      const { error } = await supabase.from("echo_books").upsert({
+        user_id:    uid,
+        book_title: currentTitle,
+        chapters:   safeChapters,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+
+      if (error) {
+        console.warn("[Books] echo_books upsert failed, fallback echo_conversations:", error.message);
+        const safePayload = { ...payload, chapters: safeChapters };
+        if (bookDbId) {
+          await supabase.from("echo_conversations")
+            .update({ messages:[safePayload], updated_at:new Date().toISOString() })
+            .eq("id", bookDbId).eq("user_id", uid);
+        } else {
+          const { data } = await supabase.from("echo_conversations")
+            .insert({ user_id:uid, source:"books", messages:[safePayload], updated_at:new Date().toISOString() })
+            .select("id").single();
+          if (data?.id) setBookDbId(data.id);
+        }
       }
     } catch (e) { console.error("[Books] save:", e); }
     setSaveStatus("saved");
-  }, [userId, bookDbId]);
+  }, [bookDbId]);
 
   useEffect(() => {
+    if (!dataLoaded) return;
     setSaveStatus("unsaved");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => saveToSupabase(chapters, bookTitle), 1500);
+    saveTimer.current = setTimeout(() => saveBook(chapters, bookTitle), 1500);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [chapters, bookTitle]);
+  }, [chapters, bookTitle, saveBook, dataLoaded]);
+
+  useEffect(() => {
+    if (!dataLoaded) return;
+    const interval = setInterval(() => saveBook(chaptersRef.current, bookTitle), 10000);
+    return () => clearInterval(interval);
+  }, [dataLoaded, saveBook]);
 
   const manualSave = () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveToSupabase(chapters, bookTitle);
+    saveBook(chapters, bookTitle);
     setShowSaveConfirm(true);
     setTimeout(() => setShowSaveConfirm(false), 2000);
   };
 
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const uid = session?.user?.id || null;
-      setUserId(uid);
-      if (uid) {
-        const { data: rows } = await supabase.from("echo_conversations").select("id,messages").eq("user_id", uid).eq("source", "books").order("updated_at", { ascending: false }).limit(1);
-        if (rows?.[0]) {
-          setBookDbId(rows[0].id);
-          try {
+  // ── CHARGEMENT INITIAL ────────────────────────────────────────────────────
+  const loadBook = useCallback(async (uid: string | null) => {
+    let loaded = false;
+
+    if (uid) {
+      try {
+        const { data: row } = await supabase.from("echo_books")
+          .select("book_title,chapters,updated_at")
+          .eq("user_id", uid)
+          .maybeSingle();
+        if (row?.chapters?.length) {
+          const chs: Chapter[] = row.chapters as Chapter[];
+          setBookTitle(row.book_title || (fr?"Mon Premier Livre":"My First Book"));
+          setChapters(chs);
+          setActiveChapter(chs[0].id);
+          isLoadingRef.current = true;
+          setTimeout(() => { editor?.commands.setContent(chs[0].content || "<p></p>"); isLoadingRef.current = false; }, 150);
+          loaded = true;
+        }
+      } catch {}
+
+      if (!loaded) {
+        try {
+          const { data: rows } = await supabase.from("echo_conversations")
+            .select("id,messages")
+            .eq("user_id", uid)
+            .eq("source", "books")
+            .order("updated_at", { ascending: false })
+            .limit(1);
+          if (rows?.[0]) {
+            setBookDbId(rows[0].id);
             const raw = rows[0].messages?.[0];
             const p = typeof raw === "string" ? JSON.parse(raw) : raw;
-            if (p?.bookTitle) setBookTitle(p.bookTitle);
             if (p?.chapters?.length) {
-              setChapters(p.chapters); setActiveChapter(p.chapters[0].id);
-              setTimeout(() => { if (editor) editor.commands.setContent(p.chapters[0].content || "<p></p>"); }, 100);
+              const chs: Chapter[] = p.chapters;
+              if (p.bookTitle) setBookTitle(p.bookTitle);
+              setChapters(chs);
+              setActiveChapter(chs[0].id);
+              setTimeout(() => { isLoadingRef.current = true; editor?.commands.setContent(chs[0].content || "<p></p>"); isLoadingRef.current = false; }, 150);
+              loaded = true;
             }
-            const savedSummary = localStorage.getItem(getBooksSummaryKey(uid));
-            if (savedSummary) setMemorySummary(savedSummary);
-            setSaveStatus("saved"); return;
-          } catch (e) { console.error("[Books]", e); }
-        }
-      }
-      const raw = localStorage.getItem("echo-books-manuscript");
-      if (raw) {
-        try {
-          const { bookTitle: t, chapters: c } = JSON.parse(raw);
-          if (t) setBookTitle(t);
-          if (c?.length) { setChapters(c); setActiveChapter(c[0].id); setTimeout(() => { if (editor) editor.commands.setContent(c[0].content || "<p></p>"); }, 100); }
+          }
         } catch {}
       }
-      const savedSummary = localStorage.getItem(getBooksSummaryKey(uid));
-      if (savedSummary) setMemorySummary(savedSummary);
-      setSaveStatus("saved");
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_, s) => setUserId(s?.user?.id || null));
-    return () => listener.subscription.unsubscribe();
-  }, []);
+    }
 
+    if (!loaded) {
+      try {
+        const raw = localStorage.getItem(LS_KEY(uid));
+        if (raw) {
+          const p = JSON.parse(raw);
+          if (p?.chapters?.length) {
+            if (p.bookTitle) setBookTitle(p.bookTitle);
+            setChapters(p.chapters);
+            setActiveChapter(p.chapters[0].id);
+            setTimeout(() => { isLoadingRef.current = true; editor?.commands.setContent(p.chapters[0].content || "<p></p>"); isLoadingRef.current = false; }, 150);
+            loaded = true;
+          }
+        }
+      } catch {}
+    }
+
+    const savedSummary = localStorage.getItem(getBooksSummaryKey(uid));
+    if (savedSummary) setMemorySummary(savedSummary);
+    setSaveStatus("saved");
+    setDataLoaded(true);
+  }, [editor, fr]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const uid = session?.user?.id || null;
+      setUserId(uid);
+      loadBook(uid);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_, s) => {
+      const uid = s?.user?.id || null;
+      setUserId(uid);
+      if (!dataLoaded) loadBook(uid);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, [dataLoaded, loadBook]);
+
+  useEffect(() => {
+    if (editor && !dataLoaded) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        loadBook(session?.user?.id || null);
+      });
+    }
+  }, [editor, dataLoaded, loadBook]);
+
+  // ── Resize Echo panel ─────────────────────────────────────────────────────
   const [echoPanelWidth, setEchoPanelWidth] = useState(280);
   const [isDesktop, setIsDesktop] = useState(false);
   const resizingRef = useRef(false);
@@ -382,6 +576,69 @@ export default function BooksPage() {
   const fontInputRef  = useRef<HTMLInputElement>(null);
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const importJsonRef = useRef<HTMLInputElement>(null);
+  const insertImgRef  = useRef<HTMLInputElement>(null);
+
+  const [showRecontextModal, setShowRecontextModal] = useState(false);
+
+  const handleInsertImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = "";
+    if (!file || !editor) return;
+    const uid = userIdRef.current;
+    if (!uid) {
+      alert(fr ? "Connectez-vous pour insérer des images (stockage permanent requis)." : "Please log in to insert images (permanent storage required).");
+      return;
+    }
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${uid}/${Date.now()}.${ext}`;
+      const { data, error } = await supabase.storage.from("book-media").upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from("book-media").getPublicUrl(data.path);
+      editor.chain().focus().insertContent(`<img src="${publicUrl}" style="max-width:100%;height:auto;border-radius:4px;margin:0.5em 0;" />`).run();
+    } catch (err) {
+      console.error("[Storage Upload Error]:", err);
+      alert(fr ? "Erreur lors de l'enregistrement de l'image." : "Error uploading image.");
+    }
+  };
+
+  const handleRecontext = async () => {
+    if (!editor) return;
+    const quotaCheck = checkQuota("vitality_actions", safeTier, false, userId);
+    if (!quotaCheck.allowed) { triggerQuotaPopup("Books"); return; }
+    if (!quotaConsumedRef.current) {
+      quotaConsumedRef.current = true;
+      checkQuota("vitality_actions", safeTier, true, userId);
+      setTimeout(() => { quotaConsumedRef.current = false; }, 500);
+    }
+    const { from, to } = editor.state.selection;
+    const textToSync = from !== to
+      ? editor.state.doc.textBetween(from, to, " ")
+      : editor.getText();
+    if (!textToSync.trim()) return;
+    setEchoMessages(prev => [...prev, { role:"user" as const, text: fr?"📖 Synchronisation du contexte...":"📖 Syncing context..." }]);
+    setEchoThinking(true);
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const res = await fetch(`${API_URL}/memory-summary`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          summary: memorySummary,
+          messages: [{ role:"user", text:`Met à jour ton contexte immédiat avec cet extrait : ${textToSync.slice(0,4000)}` }],
+          userTier: safeTier,
+        }),
+      });
+      const data = await res.json();
+      if (data.summary) {
+        setMemorySummary(data.summary);
+        localStorage.setItem(getBooksSummaryKey(userId), data.summary);
+      }
+      setEchoMessages(prev => { const u = [...prev, {role:"echo" as const, text:T.recontextDone}]; saveEchoConvo(u); return u; });
+    } catch {
+      setEchoMessages(prev => [...prev, {role:"echo" as const, text:T.serverErr}]);
+    } finally {
+      setEchoThinking(false);
+    }
+  };
 
   const handleFontImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; e.target.value = "";
@@ -391,7 +648,8 @@ export default function BooksPage() {
     const face = new FontFace(name, `url(${url})`);
     face.load().then(loaded => {
       document.fonts.add(loaded); setCustomFonts(prev => [...prev, name]);
-      setFontFamily(`"${name}", serif`); if (editor) editor.commands.setFontFamily(`"${name}", serif`);
+      setFontFamily(`"${name}", serif`);
+      if (editor) editor.commands.setFontFamily(`"${name}", serif`);
     }).catch(err => console.error("[Font]", err));
   };
 
@@ -414,13 +672,29 @@ export default function BooksPage() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const { bookTitle: t, chapters: c } = JSON.parse(reader.result as string);
-        if (t) setBookTitle(t); if (c?.length) { setChapters(c); setActiveChapter(c[0].id); }
-      } catch { alert(fr?"Fichier invalide.":"Invalid file."); }
+        const raw = reader.result as string;
+        const parsed = JSON.parse(raw);
+        const t = parsed.bookTitle || parsed.title || parsed.book_title || null;
+        const c = parsed.chapters || parsed.content || (Array.isArray(parsed) ? parsed : null);
+        if (t) setBookTitle(t);
+        if (c?.length) {
+          const normalized: Chapter[] = c.map((ch: any, i: number) => ({
+            id:      ch.id || `ch${Date.now()}-${i}`,
+            title:   ch.title || `${fr?"Chapitre":"Chapter"} ${i+1}`,
+            content: ch.content || ch.text || "",
+          }));
+          setChapters(normalized);
+          setActiveChapter(normalized[0].id);
+          setTimeout(() => editor?.commands.setContent(normalized[0].content || "<p></p>"), 150);
+        } else {
+          alert(fr?"Aucun chapitre trouvé dans ce fichier.":"No chapters found in this file.");
+        }
+      } catch { alert(fr?"Fichier invalide ou corrompu.":"Invalid or corrupted file."); }
     };
     reader.readAsText(file);
   };
 
+  // ── Export ────────────────────────────────────────────────────────────────
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -436,48 +710,93 @@ export default function BooksPage() {
       const txt = chapters.map(c => `=== ${c.title} ===\n\n${c.content.replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ")}`).join("\n\n\n");
       downloadBlob(new Blob([txt], {type:"text/plain"}), `${slug}.txt`); return;
     }
-    if (fmt === "json") { downloadBlob(new Blob([JSON.stringify({bookTitle,chapters},null,2)], {type:"application/json"}), `${slug}.echo-book.json`); return; }
+    if (fmt === "json") {
+      downloadBlob(new Blob([JSON.stringify({bookTitle,chapters},null,2)], {type:"application/json"}), `${slug}.echo-book.json`); return;
+    }
+    // Enveloppe HTML propre transmise au convertisseur de l'API externe (PDF/Docx/Epub)
+    const formattedHtml = `<div style="font-size:${fontSize}px;font-family:${fontFamily};line-height:${lineHeight};">${currentHtml}</div>`;
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const res = await fetch(`${API_URL}/export`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({format:fmt, title:bookTitle, html:currentHtml}) });
+      const res = await fetch(`${API_URL}/export`, {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ format:fmt, title:bookTitle, html:formattedHtml })
+      });
       if (!res.ok) { const err = await res.json(); alert(`Export error: ${err.error}`); return; }
       const blob = await res.blob();
       downloadBlob(blob, `${slug}${fmt==="pdf"?".pdf":fmt==="docx"?".docx":".epub"}`);
     } catch(e) { alert(`Cannot reach export server: ${e}`); }
   };
 
-  const [echoMode, setEchoMode]         = useState<EchoMode|null>(null);
-  const [echoMessages, setEchoMessages] = useState<BookMessage[]>([]);
-  const [echoInput, setEchoInput]       = useState("");
-  const [echoThinking, setEchoThinking] = useState(false);
-  const [isListening, setIsListening]   = useState(false);
-  const [imageBase64, setImageBase64]   = useState<string|null>(null);
-  const [imageName, setImageName]       = useState<string|null>(null);
+  // ── Echo chat ─────────────────────────────────────────────────────────────
+  const [echoMode,      setEchoMode]      = useState<EchoMode|null>(null);
+  const [echoMessages,  setEchoMessages]  = useState<BookMessage[]>([]);
+  const [echoInput,      setEchoInput]      = useState("");
+  const [echoThinking,  setEchoThinking]  = useState(false);
+  const [isListening,    setIsListening]    = useState(false);
+  const [imageBase64,    setImageBase64]    = useState<string|null>(null);
+  const [imageName,      setImageName]      = useState<string|null>(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const echoBottomRef = useRef<HTMLDivElement>(null);
 
+  const getEchoConvoKey = (uid: string|null) => uid ? `echo-books-convo-${uid}` : "echo-books-convo-anon";
+
+  const saveEchoConvo = useCallback(async (msgs: BookMessage[]) => {
+    const uid = userIdRef.current;
+    try { localStorage.setItem(getEchoConvoKey(uid), JSON.stringify(msgs.slice(-50))); } catch {}
+    if (!uid) return;
+    try {
+      const { data: existing } = await supabase.from("echo_conversations")
+        .select("id").eq("user_id", uid).eq("source", "books_chat").maybeSingle();
+      const payload = msgs.slice(-50).map(m => ({ role: m.role, text: m.text }));
+      if (existing?.id) {
+        await supabase.from("echo_conversations")
+          .update({ messages: payload, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+      } else {
+        await supabase.from("echo_conversations")
+          .insert({ user_id: uid, source: "books_chat", messages: payload, updated_at: new Date().toISOString() });
+      }
+    } catch(e) { console.error("[Books convo save]", e); }
+  }, []);
+
+  useEffect(() => {
+    const uid = userIdRef.current;
+    try {
+      const raw = localStorage.getItem(getEchoConvoKey(uid));
+      if (raw) { const msgs = JSON.parse(raw); if (msgs?.length) setEchoMessages(msgs); }
+    } catch {}
+    if (uid) {
+      supabase.from("echo_conversations")
+        .select("messages").eq("user_id", uid).eq("source", "books_chat").maybeSingle()
+        .then(({ data }) => {
+          if (data?.messages?.length) setEchoMessages(data.messages as BookMessage[]);
+        });
+    }
+  }, [dataLoaded]);
+
+  const quotaConsumedRef = useRef(false);
+
   const sendEcho = async () => {
     if ((!echoInput.trim() && !imageBase64) || echoThinking) return;
 
-    // ── Quota books ───────────────────────────────────────────────────────
-    const quotaStatus = checkQuota("vitality_actions", safeTier, true, userId);
-    if (!quotaStatus.allowed) {
-      triggerQuotaPopup(fr ? "Books" : "Books");
-      return;
+    const quotaCheck = checkQuota("vitality_actions", safeTier, false, userId);
+    if (!quotaCheck.allowed) { triggerQuotaPopup(fr ? "Books" : "Books"); return; }
+    if (!quotaConsumedRef.current) {
+      quotaConsumedRef.current = true;
+      checkQuota("vitality_actions", safeTier, true, userId);
+      setTimeout(() => { quotaConsumedRef.current = false; }, 500);
     }
 
-    // ── Cron memory ───────────────────────────────────────────────────────
     let currentSummary = memorySummary;
     if (echoMessages.length > 10) {
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
         const memRes = await fetch(`${API_URL}/memory-summary`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
             summary:  memorySummary,
-            messages: echoMessages.map(m => `${m.role === "user" ? "You" : "Echo"}: ${m.text}`).slice(0, 500),
+            messages: echoMessages.map(m => `${m.role==="user"?"You":"Echo"}: ${m.text}`).slice(0,500),
             userTier: safeTier,
           }),
         });
@@ -485,24 +804,23 @@ export default function BooksPage() {
         currentSummary = memData.summary || memorySummary;
         setMemorySummary(currentSummary);
         localStorage.setItem(getBooksSummaryKey(userId), currentSummary);
-        console.log("[MEMORY Books] Résumé mis à jour");
       } catch(e) { console.error("[MEMORY Books]", e); }
     }
 
-    const msg = echoInput.trim() || (fr ? "Analyse cette image." : "Analyze this image.");
+    const msg = echoInput.trim() || (fr?"Analyse cette image.":"Analyze this image.");
     const currentImage = imageBase64;
     setEchoInput(""); setImageBase64(null); setImageName(null);
     setEchoMessages(prev => [...prev, {role:"user", text:msg, imageB64: currentImage ?? undefined}]);
     setEchoThinking(true);
     const history = echoMessages.map(m => m.role==="user" ? `You: ${m.text}` : `Echo: ${m.text}`);
-    const excerpt = editor?.getText()?.slice(0, 300) || "";
+    const excerpt = editor?.getText()?.slice(0,300) || "";
+
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
       const res = await fetch(`${API_URL}/books`, {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-          message: `[Livre: "${bookTitle}" | Extrait: "${excerpt}"]\n\n${msg}`,
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          message:`[Livre: "${bookTitle}" | Extrait: "${excerpt}"]\n\n${msg}`,
           image:   currentImage ?? null,
           history,
           selectedButtons: echoMode ? [echoMode] : [],
@@ -515,16 +833,21 @@ export default function BooksPage() {
       const data = await res.json();
       const reply = data.response || "...";
       if (data.inject && (data.inject_text || data.injected_text)) {
-        const injected = data.inject_text || data.injected_text;
-        injectTextAtEnd(injected);
-        const updatedChapters = chapters.map(c => c.id === activeChapter ? {...c, content: editor?.getHTML() || c.content} : c);
-        saveToSupabase(updatedChapters, bookTitle);
-        setEchoMessages(prev => [...prev, {role:"echo", text:`${reply}\n\n${fr?"Texte injecte dans le chapitre.":"Text injected into chapter."}`}]);
+        requestInject(data.inject_text || data.injected_text);
+        setEchoMessages(prev => {
+          const updated = [...prev, {role:"echo" as const, text:reply}];
+          saveEchoConvo(updated);
+          return updated;
+        });
       } else {
-        setEchoMessages(prev => [...prev, {role:"echo", text:reply}]);
+        setEchoMessages(prev => {
+          const updated = [...prev, {role:"echo" as const, text:reply}];
+          saveEchoConvo(updated);
+          return updated;
+        });
       }
     } catch {
-      setEchoMessages(prev => [...prev, {role:"echo", text:T.serverErr}]);
+      setEchoMessages(prev => [...prev, {role:"echo" as const, text:T.serverErr}]);
     } finally {
       setEchoThinking(false);
     }
@@ -533,10 +856,7 @@ export default function BooksPage() {
   const handleManualInject = () => {
     const lastEcho = [...echoMessages].reverse().find(m => m.role==="echo");
     if (!lastEcho) return;
-    injectTextAtEnd(lastEcho.text);
-    const updatedChapters = chapters.map(c => c.id === activeChapter ? {...c, content: editor?.getHTML() || c.content} : c);
-    saveToSupabase(updatedChapters, bookTitle);
-    setEchoMessages(prev => [...prev, {role:"echo", text:fr?"Texte injecte a la fin du chapitre.":"Text injected at end of chapter."}]);
+    requestInject(lastEcho.text);
   };
 
   useEffect(() => { echoBottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [echoMessages, echoThinking]);
@@ -604,7 +924,6 @@ export default function BooksPage() {
     </button>
   );
 
-  // ── PRESENT MODE ──────────────────────────────────────────────────────────
   if (view === "present") return (
     <div className="fixed inset-0 bg-black flex flex-col z-50">
       <div className="flex items-center justify-between px-8 py-3 border-b border-zinc-800">
@@ -635,10 +954,67 @@ export default function BooksPage() {
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
 
-      {/* POPUP QUOTA */}
+      {/* ── MODAL REMISE EN CONTEXTE ──────────────────────────── */}
+      {showRecontextModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4">
+            <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
+              <span className="text-lg">📖</span>
+              <h3 className="font-black text-sm font-mono uppercase tracking-widest text-zinc-200">{T.recontextBtn}</h3>
+            </div>
+            <p className="text-zinc-300 text-sm leading-relaxed">{T.recontextWarning}</p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setShowRecontextModal(false)}
+                className="flex-1 py-2 rounded-xl border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-800 transition-all">
+                {T.recontextCancel}
+              </button>
+              <button onClick={handleRecontext}
+                className="flex-1 py-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 font-bold text-sm hover:bg-cyan-500/20 transition-all">
+                {T.recontextConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL INJECTION ───────────────────────────────────────── */}
+      {showInjectConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4 flex flex-col gap-4">
+            <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
+              <span className="text-lg">📝</span>
+              <h3 className="font-black text-sm font-mono uppercase tracking-widest text-zinc-200">{T.injectConfirmTitle}</h3>
+            </div>
+            <p className="text-zinc-300 text-sm leading-relaxed">{T.injectConfirmBody}</p>
+            <p className="text-red-400 text-xs font-semibold border border-red-500/30 bg-red-500/10 rounded-lg px-3 py-2 leading-relaxed">
+              ⚠️ {T.injectConfirmWarning}
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => { setShowInjectConfirm(false); setPendingInjectText(null); }}
+                className="flex-1 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-bold text-sm hover:bg-emerald-500/20 transition-all">
+                {T.injectCancel}
+              </button>
+              <button onClick={confirmInject}
+                className="flex-1 py-2 rounded-xl border border-red-500/40 bg-red-500/10 text-red-400 font-bold text-sm hover:bg-red-500/20 transition-all">
+                {T.injectOk}
+              </button>
+            </div>
+            <div className="flex gap-2 border-t border-zinc-800 pt-3">
+              <button onClick={() => editor?.commands.undo()}
+                className="flex-1 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 text-xs hover:border-zinc-500 hover:text-zinc-200 transition-all">
+                {T.injectUndo}
+              </button>
+              <button onClick={() => editor?.commands.redo()}
+                className="flex-1 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 text-xs hover:border-zinc-500 hover:text-zinc-200 transition-all">
+                {T.injectRedo}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
 
-      {/* TUTORIAL */}
       {tutorialStep === 1 && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[92vw] max-w-[460px] sm:max-w-[640px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
           <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-books-done-v1","true"); }} />
@@ -651,7 +1027,7 @@ export default function BooksPage() {
               <img src="/echo1.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
             </div>
             <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
-              {fr ? <>Bienvenue dans l'atelier d'écriture ! 📖{"\n"}Texte de présentation à remplacer.</> : <>Welcome to the writing studio! 📖{"\n"}Placeholder presentation text to replace.</>}
+              {fr ? <>Bienvenue dans l'atelier d'écriture ! 📖</> : <>Welcome to the writing studio! 📖</>}
             </div>
           </div>
           <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-books-done-v1","true"); }}
@@ -663,7 +1039,7 @@ export default function BooksPage() {
 
       <PremiumRequiredModal open={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
 
-      {/* NAV SIDEBAR */}
+      {/* NAV */}
       <aside className="w-44 shrink-0 border-r border-zinc-200 dark:border-zinc-800 px-5 py-6 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
         <div className="space-y-20">
           <h2 className="font-bold"><Link href="/" className="text-cyan-600 dark:text-cyan-400">🏢{T.home}</Link></h2>
@@ -691,10 +1067,10 @@ export default function BooksPage() {
           <div className="px-2 pb-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.struct}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon={Icons.T1}  label={T.t1}     active={editor?.isActive("heading",{level:1})} onClick={() => { editor?.chain().focus().toggleHeading({level:1}).run(); setTimeout(manualSave,500); }}/>
-              <TB icon={Icons.T2}  label={T.t2}     active={editor?.isActive("heading",{level:2})} onClick={() => { editor?.chain().focus().toggleHeading({level:2}).run(); setTimeout(manualSave,500); }}/>
-              <TB icon={Icons.T3}  label={T.t3}     active={editor?.isActive("heading",{level:3})} onClick={() => { editor?.chain().focus().toggleHeading({level:3}).run(); setTimeout(manualSave,500); }}/>
-              <TB icon={Icons.Abc} label={T.normal} active={editor?.isActive("paragraph")}         onClick={() => { editor?.chain().focus().setParagraph().run(); setTimeout(manualSave,500); }}/>
+              <TB icon={Icons.T1}  label={T.t1}     active={editor?.isActive("heading",{level:1})} onClick={() => editor?.chain().focus().toggleHeading({level:1}).run()}/>
+              <TB icon={Icons.T2}  label={T.t2}     active={editor?.isActive("heading",{level:2})} onClick={() => editor?.chain().focus().toggleHeading({level:2}).run()}/>
+              <TB icon={Icons.T3}  label={T.t3}     active={editor?.isActive("heading",{level:3})} onClick={() => editor?.chain().focus().toggleHeading({level:3}).run()}/>
+              <TB icon={Icons.Abc} label={T.normal} active={editor?.isActive("paragraph")}         onClick={() => editor?.chain().focus().setParagraph().run()}/>
             </div>
           </div>
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
@@ -708,7 +1084,7 @@ export default function BooksPage() {
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.align}</div>
             <div className="grid grid-cols-2 gap-0.5">
-              <TB icon={Icons.alignL} label={T.alignLeft}    active={editor?.isActive({textAlign:"left"})}    onClick={() => { editor?.chain().focus().setTextAlign("left").run();    setIsJustified(false); setActivePreset("custom"); }}/>
+              <TB icon={Icons.alignL} label={T.alignLeft}    active={editor?.isActive({textAlign:"left"})}    onClick={() => { editor?.chain().focus().setTextAlign("left").run();     setIsJustified(false); setActivePreset("custom"); }}/>
               <TB icon={Icons.alignC} label={T.alignCenter}  active={editor?.isActive({textAlign:"center"})}  onClick={() => { editor?.chain().focus().setTextAlign("center").run();  setIsJustified(false); setActivePreset("custom"); }}/>
               <TB icon={Icons.alignR} label={T.alignRight}   active={editor?.isActive({textAlign:"right"})}   onClick={() => { editor?.chain().focus().setTextAlign("right").run();   setIsJustified(false); setActivePreset("custom"); }}/>
               <TB icon={Icons.alignJ} label={T.alignJustify} active={editor?.isActive({textAlign:"justify"})} onClick={() => { editor?.chain().focus().setTextAlign("justify").run(); setIsJustified(true);  setActivePreset("custom"); }}/>
@@ -719,6 +1095,11 @@ export default function BooksPage() {
             <div className="grid grid-cols-2 gap-0.5">
               <TB icon={Icons.pilcrow}   label={T.showMarks}               active={showInvisibleChars} onClick={() => setShowInvisibleChars(v=>!v)}/>
               <TB icon={Icons.pageBreak} label={fr?"Saut de page":"Page break"}                        onClick={insertPageBreak}/>
+            </div>
+            <div className="mt-1.5 flex items-center justify-between px-1">
+              <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest">p.</span>
+              <span className="text-[11px] font-black font-mono text-cyan-400">{currentPage}</span>
+              <span className="text-[8px] font-mono text-zinc-600">/ {pageCount}</span>
             </div>
           </div>
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
@@ -733,8 +1114,10 @@ export default function BooksPage() {
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.media}</div>
             <div className="grid grid-cols-2 gap-0.5">
               <TB icon={Icons.importTxt}  label={T.importTxt}  onClick={() => fileInputRef.current?.click()}/>
-              <TB icon={Icons.openBook}   label={T.openBook}   onClick={() => importJsonRef.current?.click()}/>
+              <TB icon={Icons.insertImg}  label={fr?"Insérer image":"Insert image"} onClick={() => insertImgRef.current?.click()}/>
               <TB icon={Icons.importFont} label={T.importFont} onClick={() => fontInputRef.current?.click()}/>
+              <TB icon={Icons.undo} label={`${T.undo} (Ctrl+Z)`} onClick={() => editor?.commands.undo()}/>
+              <TB icon={Icons.redo} label={`${T.redo} (Ctrl+Y)`} onClick={() => editor?.commands.redo()}/>
             </div>
           </div>
           <div className="px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
@@ -876,9 +1259,21 @@ export default function BooksPage() {
             style={{backgroundImage:"url('/eauplante2.png')", backgroundSize:"cover", backgroundPosition:"center"}}>
             <div className="absolute inset-0 bg-black/55 pointer-events-none z-0"/>
             <div className="absolute inset-0 overflow-y-auto z-[2] py-8 flex flex-col items-center gap-6"
-              style={{scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent"}}>
+              style={{scrollbarWidth:"thin", scrollbarColor:"rgba(6,182,212,0.2) transparent"}}
+              onScroll={(e) => { const st = e.currentTarget.scrollTop; setCurrentPage(Math.min(pageCount, Math.max(1, Math.floor(Math.max(0, st - 32) / A4_H) + 1))); }}>
               <div ref={containerRef} className={`relative shadow-2xl ${showInvisibleChars?"echo-editor-show-symbols":""}`}
-                style={{width:`${A4_W}px`, minHeight:`${A4_H}px`, paddingTop:"52px", paddingBottom:"64px", paddingLeft:mirrorMargins?"90px":"72px", paddingRight:"72px", ...pageBgStyle, border:"1px solid rgba(255,255,255,0.08)", borderRadius:"2px", boxShadow:"0 4px 40px rgba(0,0,0,0.5)"}}>
+                style={{
+                  width:`${A4_W}px`,
+                  minHeight:`${pageCount * A4_H}px`,
+                  paddingTop:"52px",
+                  paddingBottom:"64px",
+                  paddingLeft: mirrorMargins ? (currentPage % 2 === 1 ? "90px" : "60px") : "72px",
+                  paddingRight: mirrorMargins ? (currentPage % 2 === 1 ? "60px" : "90px") : "72px",
+                  ...pageBgStyle,
+                  border:"1px solid rgba(255,255,255,0.08)",
+                  borderRadius:"2px",
+                  boxShadow:"0 4px 40px rgba(0,0,0,0.5)"
+                }}>
                 <div className="mb-6 pb-5 border-b border-zinc-700/20">
                   {isEditingTitle ? (
                     <input ref={titleInputRef} value={bookTitle} onChange={e => setBookTitle(e.target.value)} onBlur={() => setIsEditingTitle(false)} onKeyDown={e => { if (e.key==="Enter") setIsEditingTitle(false); }} className="w-full text-3xl font-bold bg-transparent border-b-2 border-cyan-500 outline-none text-black dark:text-zinc-100 pb-1" style={{fontFamily}} autoFocus/>
@@ -898,13 +1293,37 @@ export default function BooksPage() {
                   </div>
                 )}
                 {Array.from({length: Math.max(0, pageCount - 1)}).map((_,i) => (
-                  <div key={i} className="absolute left-0 right-0 pointer-events-none" style={{top:`${(i+1)*A4_H}px`, borderTop:"1px dashed rgba(6,182,212,0.12)", zIndex:10}}>
-                    <span style={{position:"absolute",right:"8px",top:"-10px",fontSize:"8px",color:"rgba(6,182,212,0.3)",fontFamily:"monospace"}}>p.{i+2}</span>
+                  <div key={i} className="absolute left-0 right-0 pointer-events-none select-none" style={{top:`${(i+1)*A4_H}px`, zIndex:10}}>
+                    <div style={{borderTop:"2px dashed rgba(6,182,212,0.25)"}}/>
+                    <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{...pageBgStyle}}>
+                      <span style={{fontSize:"9px",color:"rgba(6,182,212,0.55)",fontFamily:"monospace",textTransform:"uppercase",letterSpacing:"0.12em"}}>Page {i+2}</span>
+                      <span style={{fontSize:"8px",color:"rgba(113,113,122,0.5)",fontFamily:"monospace"}}>{bookTitle}</span>
+                    </div>
+                    <div style={{borderBottom:"1px solid rgba(6,182,212,0.08)"}}/>
                   </div>
                 ))}
                 {showHeader && (
                   <div className="absolute top-0 left-0 right-0 h-10 border-b border-zinc-700/30 flex items-center px-4">
-                    <span className="text-[9px] font-mono tracking-widest uppercase text-zinc-400">{bookTitle}</span>
+                    {isEditingHeader ? (
+                      <input
+                        ref={headerInputRef}
+                        value={headerText}
+                        onChange={e => setHeaderText(e.target.value)}
+                        onBlur={() => setIsEditingHeader(false)}
+                        onKeyDown={e => { if (e.key==="Enter"||e.key==="Escape") setIsEditingHeader(false); }}
+                        className="w-full text-[9px] font-mono tracking-widest uppercase bg-transparent border-b border-cyan-500/60 outline-none text-cyan-400"
+                        autoFocus
+                      />
+                    ) : (
+                      <span
+                        onDoubleClick={() => { setIsEditingHeader(true); setTimeout(() => headerInputRef.current?.focus(), 50); }}
+                        title={T.titleHint}
+                        className="text-[9px] font-mono tracking-widest uppercase text-zinc-400 cursor-text hover:text-cyan-400 transition-colors select-none w-full"
+                      >
+                        {headerText || bookTitle}
+                        <span className="ml-2 text-zinc-600 text-[8px] normal-case tracking-normal">(double-clic)</span>
+                      </span>
+                    )}
                   </div>
                 )}
                 <EditorContent editor={editor} className={`outline-none text-black dark:text-zinc-100 caret-cyan-400 books-editor-tiptap ${isJustified?"text-justify":""}`} style={{fontSize:`${fontSize}px`, lineHeight, fontFamily}}/>
@@ -928,7 +1347,12 @@ export default function BooksPage() {
           <div className="h-10 shrink-0 border-b border-zinc-200 dark:border-zinc-800 flex items-center px-3 gap-2">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0"/>
             <span className="text-[11px] font-bold font-mono uppercase tracking-wider text-zinc-300 flex-1">Echo</span>
-            <button onClick={handleManualInject} title={T.inject} className="px-2 py-1 text-[10px] rounded-lg border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-400 transition-all font-mono shrink-0">
+            <button onClick={handleRecontext} disabled={echoThinking} title={T.recontextWarning}
+              className="px-2 py-1 text-[10px] rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-400 transition-all font-mono shrink-0 flex items-center gap-1 disabled:opacity-30">
+              🧠 {fr?"Recadrer":"Context"}
+            </button>
+            <button onClick={handleManualInject} title={T.inject}
+              className="px-2 py-1 text-[10px] rounded-lg border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-400 transition-all font-mono shrink-0">
               {fr?"Injecter":"Inject"}
             </button>
           </div>
@@ -962,11 +1386,11 @@ export default function BooksPage() {
             )}
             <div ref={echoBottomRef}/>
           </div>
-          <input ref={imageFileInputRef} type="file" accept="image/*" onChange={handleEchoImageChange} className="hidden" />
+          <input ref={imageFileInputRef} type="file" accept="image/*" onChange={handleEchoImageChange} className="hidden"/>
           {imageBase64 && (
             <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 mx-2 mb-1.5 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-400 shrink-0">
               <div className="flex items-center gap-2 truncate min-w-0">
-                <img src={imageBase64} alt="preview" className="w-8 h-8 rounded object-cover border border-emerald-500/30 shrink-0" />
+                <img src={imageBase64} alt="preview" className="w-8 h-8 rounded object-cover border border-emerald-500/30 shrink-0"/>
                 <span className="truncate font-medium">{imageName || (fr?"Image prête":"Image ready")}</span>
               </div>
               <button onClick={() => { setImageBase64(null); setImageName(null); }} className="text-zinc-500 hover:text-red-400 font-bold ml-2 shrink-0">✕</button>
@@ -984,16 +1408,16 @@ export default function BooksPage() {
               <span>{isListening?"Stop":(fr?"Parler":"Speak")}</span>
             </button>
           </div>
-          <div className="p-2 border-t border-zinc-200 dark:border-zinc-800 flex gap-1.5 shrink-0">
-            <textarea value={echoInput} onChange={e => setEchoInput(e.target.value)} onKeyDown={e => { if (e.key==="Enter"&&!e.shiftKey) { e.preventDefault(); sendEcho(); } }} rows={3} placeholder={T.echoInput} className="flex-1 resize-none bg-zinc-900 border border-zinc-800 text-zinc-200 text-[13px] rounded-lg px-2 py-1.5 placeholder-zinc-600 outline-none focus:border-cyan-700/40 leading-relaxed"/>
-            <button onClick={sendEcho} disabled={echoThinking} className="w-8 self-end bg-cyan-600/15 border border-cyan-500/25 hover:bg-cyan-600/25 disabled:opacity-30 text-cyan-400 rounded-lg text-sm flex items-center justify-center transition-all h-8 shrink-0">OK</button>
+          <div className="p-2 border-t border-zinc-200 dark:border-zinc-800 flex flex-col gap-1.5 shrink-0">
+            <textarea value={echoInput} onChange={e => setEchoInput(e.target.value)} onKeyDown={e => { if (e.key==="Enter"&&!e.shiftKey) { e.preventDefault(); sendEcho(); } }} rows={3} placeholder={T.echoInput} className="w-full resize-none bg-zinc-900 border border-zinc-800 text-zinc-200 text-[13px] rounded-lg px-2 py-1.5 placeholder-zinc-600 outline-none focus:border-cyan-700/40 leading-relaxed"/>
+            <button onClick={sendEcho} disabled={echoThinking} className="w-full bg-cyan-600/15 border border-cyan-500/25 hover:bg-cyan-600/25 disabled:opacity-30 text-cyan-400 rounded-lg text-sm flex items-center justify-center transition-all h-8 font-bold">OK</button>
           </div>
         </aside>
       </div>
 
       <input ref={fileInputRef}  type="file" accept=".txt,.md,.markdown"      onChange={handleImportTxt}  className="hidden"/>
-      <input ref={importJsonRef} type="file" accept=".json"                   onChange={handleImportJson} className="hidden"/>
       <input ref={fontInputRef}  type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontImport} className="hidden"/>
+      <input ref={insertImgRef}  type="file" accept="image/*"                 onChange={handleInsertImage} className="hidden"/>
 
       <style>{`
         .books-editor-tiptap .ProseMirror { min-height:${A4_H - 200}px; outline:none; color:inherit; }
