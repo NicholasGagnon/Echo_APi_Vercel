@@ -16,31 +16,24 @@ export async function POST(req: Request) {
       );
     }
 
-    // Extraction de l'origine pour les redirections success/cancel
-    const origin = req.headers.get("origin") ?? "http://localhost:3000";
+    const priceId = process.env.STRIPE_FICHE_PRICE_ID!;
+    const origin  = req.headers.get("origin") ?? "http://localhost:3000";
 
-    // ── CONFIGURATION DE LA SESSION DE PAIEMENT UNIQUE À 9,99$ ──
+    // ── CONFIGURATION DE LA SESSION DE PAIEMENT UNIQUE — 1,50$ ──
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      mode: "payment", // Mode ponctuel (achat unique obligatoire pour ton coupon)
-      allow_promotion_codes: true, // Active la case code promo/coupon sur l'interface
+      mode: "payment", // Paiement ponctuel
+      allow_promotion_codes: true,
       customer_email: acheteurEmail || undefined,
-      
+
       line_items: [
         {
-          price_data: {
-            currency: "cad", // Ajuste en "usd" ou "eur" selon la devise de tes tests
-            product_data: {
-              name: `Déblocage Coordonnées — Fiche #${ficheId}`,
-              description: "Accès définitif et illimité aux informations de contact du projet.",
-            },
-            unit_amount: 999, // 9,99$ (999 centimes) -> Permet le coupon à 99% !
-          },
+          price: priceId, // Produit Stripe existant — STRIPE_FICHE_PRICE_ID
           quantity: 1,
         },
       ],
 
-      // 🎯 Métadonnées capitales pour ton webhook site 2
+      // Métadonnées lues par le webhook site2 pour ouvrir le tunnel
       metadata: {
         type: "unlock_fiche",
         fiche_id: ficheId,

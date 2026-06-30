@@ -29,6 +29,13 @@ type Fiche = {
   likes: number;
   interets: number;
   created_at: string;
+  contacts_visibles: string[] | null;
+  email_prive: string | null;
+  discord_prive: string | null;
+  github_prive: string | null;
+  linkedin_prive: string | null;
+  site_web_prive: string | null;
+  telephone_prive: string | null;
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -48,6 +55,11 @@ export default function FichePage() {
       setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
     });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserId(session?.user?.id || null);
+      setUserEmail(session?.user?.email || null);
+    });
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   const [lang, setLang]         = useState<"fr"|"en">("fr");
@@ -62,7 +74,7 @@ export default function FichePage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("fiches")
-        .select("id, key, nom_projet, type_projet, type_profil, description, tech, cherche, engagement, temps, distance, avancement, idee, produit, utilisateurs, revenus, objectif_court, objectif_moyen, objectif_long, photo_urls, langue, pays, likes, interets, created_at")
+        .select("id, key, nom_projet, type_projet, type_profil, description, tech, cherche, engagement, temps, distance, avancement, idee, produit, utilisateurs, revenus, objectif_court, objectif_moyen, objectif_long, photo_urls, langue, pays, likes, interets, created_at, contacts_visibles, email_prive, discord_prive, github_prive, linkedin_prive, site_web_prive, telephone_prive")
         .order("created_at", { ascending: false });
       if (!error && data) setFiches(data as Fiche[]);
       setLoading(false);
@@ -156,6 +168,25 @@ export default function FichePage() {
         body: JSON.stringify({ fiche_id: id, sender_key: "Visiteur", type: "tres_interesse" }),
       });
     } catch (e) { console.error("Notif interet:", e); }
+  };
+
+  // ── SAISIE KEY POUR RÉVÉLER LES CONTACTS ─────────────────────────────────
+  const [keyInputs, setKeyInputs]   = useState<Record<string, string>>({});
+  const [keyErrors, setKeyErrors]   = useState<Record<string, string>>({});
+  const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
+
+  const handleVerifyKey = (fiche: Fiche) => {
+    const entered = (keyInputs[fiche.id] || "").trim();
+    if (!entered) {
+      setKeyErrors(prev => ({ ...prev, [fiche.id]: lang==="fr" ? "Entre une clé." : "Enter a key." }));
+      return;
+    }
+    if (entered.toLowerCase() !== fiche.key.toLowerCase()) {
+      setKeyErrors(prev => ({ ...prev, [fiche.id]: lang==="fr" ? "Clé incorrecte." : "Incorrect key." }));
+      return;
+    }
+    setKeyErrors(prev => { const n = { ...prev }; delete n[fiche.id]; return n; });
+    setRevealedIds(prev => new Set([...prev, fiche.id]));
   };
 
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -412,17 +443,56 @@ export default function FichePage() {
 
               {/* Section lock — dynamique selon l'état débloqué */}
               {unlockedIds.has(fiche.id) ? (
-                <div className="flex flex-col gap-2 px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🔓</span>
-                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                      {lang==="fr"?"Débloqué — contacts disponibles":"Unlocked — contacts available"}
-                    </span>
+                revealedIds.has(fiche.id) ? (
+                  <div className="flex flex-col gap-2 px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-base">🔓</span>
+                      <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                        {lang==="fr"?"Coordonnées":"Contact info"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      {fiche.contacts_visibles?.includes("Email") && fiche.email_prive && (
+                        <p className="text-sm text-zinc-700 dark:text-zinc-300"><span className="text-zinc-400 text-xs">Email :</span> {fiche.email_prive}</p>
+                      )}
+                      {fiche.contacts_visibles?.includes("Discord") && fiche.discord_prive && (
+                        <p className="text-sm text-zinc-700 dark:text-zinc-300"><span className="text-zinc-400 text-xs">Discord :</span> {fiche.discord_prive}</p>
+                      )}
+                      {fiche.contacts_visibles?.includes("GitHub") && fiche.github_prive && (
+                        <p className="text-sm text-zinc-700 dark:text-zinc-300"><span className="text-zinc-400 text-xs">GitHub :</span> {fiche.github_prive}</p>
+                      )}
+                      {fiche.contacts_visibles?.includes("LinkedIn") && fiche.linkedin_prive && (
+                        <p className="text-sm text-zinc-700 dark:text-zinc-300"><span className="text-zinc-400 text-xs">LinkedIn :</span> {fiche.linkedin_prive}</p>
+                      )}
+                      {fiche.contacts_visibles?.includes("Site web") && fiche.site_web_prive && (
+                        <p className="text-sm text-zinc-700 dark:text-zinc-300"><span className="text-zinc-400 text-xs">{lang==="fr"?"Site web":"Website"} :</span> {fiche.site_web_prive}</p>
+                      )}
+                      {fiche.contacts_visibles?.includes("Téléphone") && fiche.telephone_prive && (
+                        <p className="text-sm text-zinc-700 dark:text-zinc-300"><span className="text-zinc-400 text-xs">{lang==="fr"?"Téléphone":"Phone"} :</span> {fiche.telephone_prive}</p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-emerald-600/70 dark:text-emerald-500/70">
-                    {lang==="fr"?"Entre la Key du créateur pour accéder aux coordonnées.":"Enter the creator's Key to access contact info."}
-                  </p>
-                </div>
+                ) : (
+                  <div className="flex flex-col gap-2 px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🔓</span>
+                      <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                        {lang==="fr"?"Débloqué — entre la Key pour voir les contacts":"Unlocked — enter the Key to see contacts"}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <input type="text" value={keyInputs[fiche.id] || ""} placeholder="Key_A1"
+                        onChange={e => setKeyInputs(prev => ({ ...prev, [fiche.id]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === "Enter") handleVerifyKey(fiche); }}
+                        className="flex-1 bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800/60 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-400"/>
+                      <button onClick={() => handleVerifyKey(fiche)}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition-colors">
+                        {lang==="fr"?"Voir":"Show"}
+                      </button>
+                    </div>
+                    {keyErrors[fiche.id] && <p className="text-xs text-red-500">{keyErrors[fiche.id]}</p>}
+                  </div>
+                )
               ) : (
                 <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/30">
                   <span className="text-base">🔒</span>
