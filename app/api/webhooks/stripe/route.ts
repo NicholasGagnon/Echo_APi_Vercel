@@ -25,14 +25,8 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
 
   try {
-    // 🔒 Extraction sécurisée via tes variables d'environnement live/test
-    const webhookSecret = "whsec_1U3vFgBHw5LMtvb0HSkCF7kdfOtJZLkl";
-
-    event = stripe.webhooks.constructEvent(
-      payload,
-      signature,
-      webhookSecret
-    );
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+    event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
   } catch (err: any) {
     console.error(`Échec validation Webhook Stripe: ${err.message}`);
     return NextResponse.json({ error: `Erreur de signature: ${err.message}` }, { status: 400 });
@@ -58,12 +52,52 @@ export async function POST(req: Request) {
     }
   }
 
-  // ── CAS 1 : STRIPE CHECKOUT COMPLET (Cartes, Bancontact, etc.) ───────────────
+  // ── CAS 1 : STRIPE CHECKOUT COMPLET ───────────────────────────────────────────
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
+    const metadata = session.metadata || {};
 
-    const userId = session.metadata?.userId;
-    const planName = session.metadata?.planName;
+    // ── BRANCHE A : Déblocage de fiche (site2 — paiement unique 1,50$) ─────────
+    if (metadata.type === "unlock_fiche") {
+      const ficheId    = metadata.fiche_id;
+      const acheteurId = metadata.acheteur_id;
+
+      if (!ficheId || !acheteurId) {
+        console.error("[FICHE] fiche_id ou acheteur_id manquant dans les métadonnées");
+        return NextResponse.json({ error: "Métadonnées fiche manquantes" }, { status: 400 });
+      }
+
+      try {
+        // Récupérer le propriétaire de la fiche
+        const { data: ficheRow, error: ficheError } = await supabaseAdmin
+          .from("fiches")
+          .select("user_id")
+          .eq("id", ficheId)
+          .maybeSingle();
+
+        if (ficheError) throw ficheError;
+
+        const inscritId = ficheRow?.user_id || null;
+
+        // Créer le tunnel — débloque la fiche pour cet acheteur
+        const { error: tunnelError } = await supabaseAdmin
+          .from("tunnels")
+          .insert({ fiche_id: ficheId, acheteur_id: acheteurId, inscrit_id: inscritId });
+
+        if (tunnelError) throw tunnelError;
+
+        console.log(`[FICHE] Tunnel ouvert — fiche ${ficheId} débloquée pour ${acheteurId}`);
+      } catch (dbError: any) {
+        console.error(`[FICHE] Échec ouverture tunnel: ${dbError.message}`);
+        return NextResponse.json({ error: "Échec déblocage fiche" }, { status: 500 });
+      }
+
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
+    // ── BRANCHE B : Abonnement Echo (existant, inchangé) ──────────────────────
+    const userId = metadata.userId;
+    const planName = metadata.planName;
     const subscriptionId = session.subscription as string;
 
     if (!userId || !planName) {
@@ -74,7 +108,6 @@ export async function POST(req: Request) {
     const formattedPlan = planName.trim().toLowerCase();
     console.log(`Activation en cours... Utilisateur: ${userId} | Plan: ${formattedPlan}`);
 
-    // ── 🏴‍☠️ INTERCEPTION DU COFFRE CACHÉ : CONFIGURATION DE L'AUTO-DESTRUCTION ──
     if (formattedPlan === "treasure" && subscriptionId) {
       try {
         await stripe.subscriptions.update(subscriptionId, {
@@ -86,7 +119,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Attribution du forfait selon le sillage d'Echo
     const tierToAssign = formattedPlan === "treasure" ? "ultra" : formattedPlan;
 
     try {
@@ -106,13 +138,12 @@ export async function POST(req: Request) {
 
   // ── CAS 2 : VALIDATION FINALE DE FACTURE AVEC NOTIFICATION DIFFÉRÉE (SEPA) ───
   if (event.type === "invoice.payment_succeeded") {
-    const invoice = event.data.object as any; // 👈 Le "as any" ici neutralise définitivement la crise de TypeScript sur cet objet
-    
-    // Récupération de l'ID de l'abonnement de manière ultra-sécurisée
-    const subscriptionId = typeof invoice.subscription === "object" 
-      ? invoice.subscription?.id 
+    const invoice = event.data.object as any;
+
+    const subscriptionId = typeof invoice.subscription === "object"
+      ? invoice.subscription?.id
       : (invoice.subscription as string);
-    
+
     if (subscriptionId) {
       try {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);

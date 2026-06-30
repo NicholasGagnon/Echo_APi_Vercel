@@ -39,6 +39,15 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function FichePage() {
+  const [userId, setUserId]       = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id || null);
+      setUserEmail(session?.user?.email || null);
+    });
+  }, []);
+
   const [lang, setLang]         = useState<"fr"|"en">("fr");
   const [fiches, setFiches]     = useState<Fiche[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -134,9 +143,23 @@ export default function FichePage() {
     } catch (e) { console.error("Notif interet:", e); }
   };
 
-  const handleAcheter = (id: string) => {
-    // TODO: rediriger vers Stripe
-    console.log("Stripe checkout pour fiche", id);
+  const handleAcheter = async (id: string) => {
+    if (!userId) {
+      alert(lang==="fr" ? "Connecte-toi pour acheter une fiche." : "Log in to purchase a listing.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/checkout-fiche", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ficheId: id, acheteurId: userId, acheteurEmail: userEmail }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+      else alert(data.message || (lang==="fr"?"Erreur lors du paiement.":"Payment error."));
+    } catch (e) {
+      console.error("Checkout fiche:", e);
+    }
   };
 
   // ── SUPPRESSION FICHE PAR KEY ────────────────────────────────────────────
