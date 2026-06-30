@@ -61,6 +61,7 @@ export default function VitalityPage() {
   const [echoState, setEchoState] = useState("idle");
 
   // ── QUOTA POPUP ───────────────────────────────────────────────────────────
+  const [showLoginPopup,  setShowLoginPopup]  = useState(false);
   const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
   const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
   const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
@@ -170,7 +171,7 @@ export default function VitalityPage() {
           setModalWeight(p.weight||""); setModalHeight(p.height||"");
         }
 
-        if (!localStorage.getItem("echo-tuto-vitality-done-v1")) setTutorialStep(1);
+        setShowLoginPopup(true);
       } catch(e) { console.error("Init error", e); }
       setIsLoaded(true);
     });
@@ -477,8 +478,39 @@ export default function VitalityPage() {
     <main className="vitality-page h-screen w-full bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans relative transition-colors duration-200 selection:bg-cyan-500/30">
 
       {/* POPUP QUOTA */}
+            {/* ── POPUP CONNEXION PERSISTANT (calqué sur la page books) ──────────── */}
+      {showLoginPopup && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center pb-12 sm:items-center sm:pb-0">
+          <div className="absolute inset-0 pointer-events-auto" style={{background:"transparent"}} />
+          <div className="relative pointer-events-auto bg-zinc-950/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.25)] p-7 w-full max-w-md mx-4 flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📈</span>
+                <h3 className="font-black text-base font-mono uppercase tracking-widest text-cyan-400">
+                  {lang === "fr" ? "CONTRÔLEUR VITALITÉ" : "VITALITY CONTROLLER"}
+                </h3>
+              </div>
+            </div>
+            <div className="flex gap-4 items-start">
+              <div className="shrink-0 bg-zinc-900 p-1.5 rounded-full border border-zinc-800">
+                <img src="/echo1.png" alt="Echo" className="w-14 h-14 rounded-full object-cover"/>
+              </div>
+              <p className="text-zinc-300 text-sm leading-relaxed flex-1 whitespace-pre-line">
+                {lang === "fr"
+                  ? <>✨ Connecte-toi pour sauvegarder ton budget, tes calories et tes estimations budgétaires. ✨{"\n"}😊</>
+                  : <>✨ Log in to save your budget, calories and budget estimates. ✨{"\n"}😊</>}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <a href="https://echosai.ca/account"
+                className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-sm tracking-widest transition-all shadow-md uppercase block">
+                {lang === "fr" ? "SE CONNECTER" : "SIGN IN"}
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
       {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
-
       {tutorialStep===1 && (
         <div className="absolute top-44 left-6 sm:left-72 w-80 sm:w-[460px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in duration-300 z-50">
           <TutorialHeaderControls onClose={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} />
@@ -499,23 +531,7 @@ export default function VitalityPage() {
         </div>
       )}
 
-      {tutorialStep===2 && (
-        <div className="absolute top-64 left-6 sm:left-[450px] w-80 sm:w-[460px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 shadow-[0_0_30px_rgba(16,185,129,0.5)] border-2 border-emerald-400 dark:border-emerald-500 animate-in fade-in duration-300 z-50">
-          <TutorialHeaderControls onClose={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} />
-          <div className="flex items-center gap-2.5 mb-3 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
-            <span>🔥</span>
-            <h4 className="font-black text-xs font-mono uppercase tracking-widest text-emerald-400 dark:text-emerald-600">ECHO CALORIES (2/2)</h4>
-          </div>
-          <div className="text-xs text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold mb-4">
-            {lang==="fr"
-              ? <p>Salut! 😋 Chaque repas devient une donnee utile. Parle-moi de ce que tu manges et je calcule tout automatiquement. ✨✨✨✨✨✨✨</p>
-              : <p>Hi! 😋 Every meal is useful data. Tell me what you ate and I will calculate everything automatically. ✨✨✨✨✨✨✨</p>}
-          </div>
-          <button onClick={()=>{setTutorialStep(null);localStorage.setItem("echo-tuto-vitality-done-v1","true");}} className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs tracking-widest uppercase transition-all shadow-md">
-            {lang==="fr"?"C'EST PARTI !":"LET'S LOG !"}
-          </button>
-        </div>
-      )}
+
 
       <div className="flex flex-1 overflow-hidden min-h-0 w-full">
 

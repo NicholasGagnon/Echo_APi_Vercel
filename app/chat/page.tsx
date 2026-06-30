@@ -86,8 +86,9 @@ export default function ChatPage() {
   const [selectedImage,     setSelectedImage]     = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
   const [echoState,   setEchoState]   = useState("idle");
-  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
 
+
+  const [showLoginPopup,  setShowLoginPopup]  = useState(false);
   const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
   const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
   const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
@@ -123,9 +124,6 @@ export default function ChatPage() {
 
   // ── Pays / Devise — partagé via localStorage ──────────────────────────────
   const [currency, setCurrencyState] = useState<Currency>("CAD");
-  const [showCountryPicker, setShowCountryPicker] = useState(false);
-  const countryPickerRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const saved = localStorage.getItem("echo-currency") as Currency | null;
     setCurrencyState(saved || detectCurrency());
@@ -147,14 +145,14 @@ export default function ChatPage() {
 
   const currentCountry = COUNTRY_OPTIONS.find(c => c.code === currency) || COUNTRY_OPTIONS[0];
 
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (countryPickerRef.current && !countryPickerRef.current.contains(e.target as Node))
-        setShowCountryPicker(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
+
+
+
+
+
+
+
+
 
   // ── Warmup ling ───────────────────────────────────────────────────────────
   const [warmupIntent, setWarmupIntent] = useState<string|null>(null);
@@ -343,8 +341,8 @@ export default function ChatPage() {
           const { data: profile } = await supabase.from("profiles").select("user_tier").eq("id", uid).single();
           if (profile?.user_tier) setUserTier(normalizeTier(profile.user_tier));
         }
-        if (!localStorage.getItem("echo-tuto-chat-done-v1")) setTutorialStep(1);
-      } catch(e) { console.error("Bootstrap:", e); }
+        if (!uid) setShowLoginPopup(true);
+              } catch(e) { console.error("Bootstrap:", e); }
       setIsLoaded(true);
     });
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -679,57 +677,35 @@ export default function ChatPage() {
         </div>
       )}
 
-      {tutorialStep === 1 && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 w-[92vw] max-w-[460px] sm:max-w-[640px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
-          <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1","true"); }} />
-          <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
-            <span className="text-xl">💬</span>
-            <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">
-              {lang === "fr" ? "CHAPITRE 2 : L'ESPACE IMMERSIF" : "CHAPTER 2: IMMERSIVE SPACE"}
-            </h4>
-          </div>
-
-          {/* Bouton pays dans le tutorial */}
-          <div className="flex justify-end mb-3" ref={countryPickerRef}>
-            <div className="relative">
-              <button type="button" onClick={() => setShowCountryPicker(v => !v)}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-cyan-500/60 hover:text-cyan-400 transition-all text-[11px] font-mono font-bold">
-                <span>{currentCountry.flag}</span>
-                <span>{lang === "fr" ? currentCountry.label_fr : currentCountry.label_en}</span>
-                <svg className={`w-2.5 h-2.5 transition-transform ${showCountryPicker?"rotate-180":""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25 12 15.75 4.5 8.25"/>
-                </svg>
-              </button>
-              {showCountryPicker && (
-                <div className="absolute right-0 top-full mt-1.5 w-44 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl overflow-hidden z-50">
-                  {COUNTRY_OPTIONS.map(opt => (
-                    <button key={opt.code} type="button"
-                      onClick={() => { setCurrency(opt.code); setShowCountryPicker(false); }}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-[11px] font-mono font-semibold transition-colors text-left ${currency === opt.code ? "bg-cyan-500/10 text-cyan-400" : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"}`}>
-                      <span>{opt.flag}</span>
-                      <span>{lang === "fr" ? opt.label_fr : opt.label_en}</span>
-                      {currency === opt.code && <span className="ml-auto text-cyan-400">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
+      {showLoginPopup && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center pb-12 sm:items-center sm:pb-0">
+          <div className="absolute inset-0 pointer-events-auto" style={{background:"transparent"}} />
+          <div className="relative pointer-events-auto bg-zinc-950/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.25)] p-7 w-full max-w-md mx-4 flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">💬</span>
+                <h3 className="font-black text-base font-mono uppercase tracking-widest text-cyan-400">
+                  {lang === "fr" ? "CANAL DIRECT" : "DIRECT CHANNEL"}
+                </h3>
+              </div>
+            </div>
+            <div className="flex gap-4 items-start">
+              <div className="shrink-0 bg-zinc-900 p-1.5 rounded-full border border-zinc-800">
+                <img src="/echo3.png" alt="Echo" className="w-14 h-14 rounded-full object-cover"/>
+              </div>
+              <p className="text-zinc-300 text-sm leading-relaxed flex-1 whitespace-pre-line">
+                {lang === "fr"
+                  ? <>Rebonjour ! 👋{"\n"}Vous venez d'ouvrir le canal le plus direct vers moi.{"\n"}Ici, les conversations iront beaucoup plus loin. 😮{"\n"}Je ne m'ennuie jamais. 💀{"\n"}✨✨✨✨✨✨{"\n"}Connecte-toi pour que tes conversations soient sauvegardées.{"\n"}✨✨✨✨✨✨</>
+                  : <>Welcome back! 👋{"\n"}You've just opened the most direct channel to me.{"\n"}This is where conversations can go much further. 😮{"\n"}I never get bored. 💀{"\n"}✨✨✨✨✨✨{"\n"}Log in to save your conversations.{"\n"}✨✨✨✨✨✨</>}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <a href="https://echosai.ca/account"
+                className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-sm tracking-widest transition-all shadow-md uppercase block">
+                {lang === "fr" ? "SE CONNECTER" : "SIGN IN"}
+              </a>
             </div>
           </div>
-
-          <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start mb-5">
-            <div className="shrink-0 bg-zinc-900 dark:bg-zinc-100 p-1.5 rounded-full border border-zinc-800 dark:border-zinc-200">
-              <img src="/echo3.png" alt="Echo Mini" className="w-16 h-16 rounded-full object-cover" />
-            </div>
-            <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line flex-1">
-              {lang === "fr"
-                ? <>Rebonjour ! 👋{"\n"}Vous venez d'ouvrir le canal le plus direct vers moi.{"\n"}Ici, les conversations iront beaucoup plus loin. 😮{"\n"}Je ne m'ennuie jamais. 💀{"\n"}✨✨✨✨✨✨</>
-                : <>Welcome back! 👋{"\n"}You've just opened the most direct channel to me.{"\n"}This is where conversations can go much further. 😮{"\n"}I never get bored. 💀{"\n"}✨✨✨✨✨✨</>}
-            </div>
-          </div>
-          <button onClick={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-chat-done-v1","true"); }}
-            className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase">
-            {lang === "fr" ? "OUVRIR LE CANAL 🚀" : "OPEN CHANNEL 🚀"}
-          </button>
         </div>
       )}
 
@@ -841,11 +817,6 @@ export default function ChatPage() {
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 bg-white dark:bg-black">
               {messages.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center gap-4">
-                  {!tutorialStep && (
-                    <div className="w-16 h-16 shrink-0 border border-zinc-200 dark:border-zinc-900 rounded-full shadow-md overflow-hidden bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center echo-idle">
-                      <img src="/echo3.png" alt="Echo Avatar" className="w-full h-full object-cover" />
-                    </div>
-                  )}
                   <p className="text-zinc-400 dark:text-zinc-700 text-sm italic">
                     {lang==="fr"?"Commence une conversation avec Echo...":"Start a conversation with Echo..."}
                   </p>
