@@ -60,7 +60,7 @@ export default function VitalityPage() {
   const bottomRef  = useRef<HTMLDivElement>(null);
   const [echoState, setEchoState] = useState("idle");
 
-  // ── QUOTA POPUP ───────────────────────────────────────────────────────────
+  // ── POPUP QUOTA ───────────────────────────────────────────────────────────
   const [showLoginPopup,  setShowLoginPopup]  = useState(false);
   const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
   const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
@@ -87,7 +87,7 @@ export default function VitalityPage() {
   const [calorieGoal,     setCalorieGoal]     = useState(2300);
   const [isEditingBudget,   setIsEditingBudget]   = useState(false);
   const [isEditingCalories, setIsEditingCalories] = useState(false);
-  const [inputBudgetGoal,  setInputBudgetGoal]  = useState("3000");
+  const [inputBudgetGoal,   setInputBudgetGoal]  = useState("3000");
   const [inputCalorieGoal, setInputCalorieGoal] = useState("2300");
   const [userWeight, setUserWeight] = useState("");
   const [userHeight, setUserHeight] = useState("");
@@ -171,7 +171,7 @@ export default function VitalityPage() {
           setModalWeight(p.weight||""); setModalHeight(p.height||"");
         }
 
-        setShowLoginPopup(true);
+        setShowLoginPopup(!uid);
       } catch(e) { console.error("Init error", e); }
       setIsLoaded(true);
     });
@@ -182,8 +182,9 @@ export default function VitalityPage() {
       }
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         const uid = session.user.id; setUserId(uid);
+        setShowLoginPopup(false);
         const { data: expRows } = await supabase.from("echo_expenses").select("*").eq("user_id", uid).order("date", { ascending: false });
-        setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"US$"|"€", date: r.date })));
+        setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"€", date: r.date })));
         const { data: calRows } = await supabase.from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
         setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
         const convo   = localStorage.getItem(getVitalityConvoKey(uid));
@@ -385,7 +386,6 @@ export default function VitalityPage() {
         const { type, payload } = data.action;
 
         if (type==="ADD_BUDGET_EXPENSE") {
-          // Utilise le vrai nom du produit/service demandé
           const rawTitle    = payload.title || payload.name || payload.item || textToSubmit || "Achat";
           const finalTitle  = rawTitle.length > 60 ? rawTitle.slice(0, 60) : rawTitle;
           const finalAmount = parseFloat(payload.amount ?? payload.spent ?? payload.price) || 0;
@@ -402,7 +402,6 @@ export default function VitalityPage() {
         if (type==="DELETE_BUDGET_EXPENSE" && payload.id) await deleteExpense(payload.id);
 
         if (type==="ADD_CALORIE_LOG") {
-          // Utilise le vrai nom de l'aliment demandé
           const rawFoodName  = payload.foodName || payload.food_name || payload.meal || payload.title || payload.name || textToSubmit || "Aliment";
           const finalFood    = rawFoodName.length > 60 ? rawFoodName.slice(0, 60) : rawFoodName;
           const finalCalories = parseInt(payload.calories ?? payload.kcal) || 0;
@@ -477,8 +476,7 @@ export default function VitalityPage() {
   return (
     <main className="vitality-page h-screen w-full bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans relative transition-colors duration-200 selection:bg-cyan-500/30">
 
-      {/* POPUP QUOTA */}
-            {/* ── POPUP CONNEXION PERSISTANT (calqué sur la page books) ──────────── */}
+      {/* ── POPUP CONNEXION PERSISTANT ──────────── */}
       {showLoginPopup && (
         <div className="fixed inset-0 z-[200] flex items-end justify-center pb-12 sm:items-center sm:pb-0">
           <div className="absolute inset-0 pointer-events-auto" style={{background:"transparent"}} />
@@ -531,10 +529,7 @@ export default function VitalityPage() {
         </div>
       )}
 
-
-
       <div className="flex flex-1 overflow-hidden min-h-0 w-full">
-
         <aside className="w-56 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
           <div className="space-y-20">
             <h2 className="font-bold text-lg">
@@ -558,7 +553,6 @@ export default function VitalityPage() {
         </aside>
 
         <div className="flex-1 grid grid-cols-1 xl:grid-cols-[1.1fr_1.1fr_2.8fr] overflow-hidden bg-white dark:bg-black h-full w-full">
-
           {/* FINANCES */}
           <section className="min-w-0 xl:border-r border-b xl:border-b-0 border-zinc-200 dark:border-zinc-900 bg-zinc-50/10 dark:bg-zinc-950/5 p-4 flex flex-col h-full overflow-hidden">
             <div className="bg-zinc-100 dark:bg-zinc-900/60 border border-zinc-200 dark:border-transparent rounded-2xl p-3 flex flex-col items-center shrink-0 h-40 justify-center mb-3 shadow-sm">
