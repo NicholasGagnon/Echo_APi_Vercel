@@ -41,6 +41,8 @@ const TYPE_COLORS: Record<string, string> = {
 export default function FichePage() {
   const [userId, setUserId]       = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
@@ -67,6 +69,19 @@ export default function FichePage() {
     };
     load();
   }, []);
+
+  // ── Vérifier quelles fiches sont déjà débloquées pour cet utilisateur ──────
+  useEffect(() => {
+    if (!userId) { setUnlockedIds(new Set()); return; }
+    const checkUnlocks = async () => {
+      const { data } = await supabase
+        .from("tunnels")
+        .select("fiche_id")
+        .eq("acheteur_id", userId);
+      if (data) setUnlockedIds(new Set(data.map((t: any) => t.fiche_id)));
+    };
+    checkUnlocks();
+  }, [userId]);
 
   const getOutils = (fiche: Fiche) => {
     if (!fiche.tech) return [];
@@ -395,11 +410,25 @@ export default function FichePage() {
 
               <div className="h-px bg-zinc-100 dark:bg-zinc-800/60"/>
 
-              {/* Section lock */}
-              <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/30">
-                <span className="text-base">🔒</span>
-                <span className="text-sm text-zinc-400 dark:text-zinc-500">{dict.lock}</span>
-              </div>
+              {/* Section lock — dynamique selon l'état débloqué */}
+              {unlockedIds.has(fiche.id) ? (
+                <div className="flex flex-col gap-2 px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/40">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🔓</span>
+                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                      {lang==="fr"?"Débloqué — contacts disponibles":"Unlocked — contacts available"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-600/70 dark:text-emerald-500/70">
+                    {lang==="fr"?"Entre la Key du créateur pour accéder aux coordonnées.":"Enter the creator's Key to access contact info."}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/30">
+                  <span className="text-base">🔒</span>
+                  <span className="text-sm text-zinc-400 dark:text-zinc-500">{dict.lock}</span>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex items-center gap-2 pt-1">
@@ -427,11 +456,18 @@ export default function FichePage() {
 
                 <div className="flex-1"/>
 
-                <button onClick={() => handleAcheter(fiche.id)}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm">
-                  <span>🔓</span>
-                  <span>{dict.acheter} — 1,50$</span>
-                </button>
+                {unlockedIds.has(fiche.id) ? (
+                  <span className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-emerald-600 text-white shadow-sm">
+                    <span>✓</span>
+                    <span>{lang==="fr"?"Débloqué":"Unlocked"}</span>
+                  </span>
+                ) : (
+                  <button onClick={() => handleAcheter(fiche.id)}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm">
+                    <span>🔒</span>
+                    <span>{dict.acheter} — 1,50$</span>
+                  </button>
+                )}
               </div>
 
               {/* Gérer ma fiche — visible pour tous, protégé par Key + email */}

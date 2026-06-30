@@ -185,6 +185,40 @@ export default function ServicesPage() {
       setIsLoadingTreasure(false);
     }
   };
+  const handleTestFichePurchase = async () => {
+  if (!user) {
+    alert("Connecte-toi d'abord.");
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/stripe/create-checkout-site2", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ficheId: "TEST_FICHE_SERVICES",
+        acheteurId: user.id,
+        acheteurEmail: user.email,
+        currency,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Erreur Stripe");
+    }
+
+    if (data.url) {
+      window.location.href = data.url;
+    }
+  } catch (err: any) {
+    console.error(err);
+    alert(err.message);
+  }
+};
 
   const handleSupportClick = () => {
     if (userTier === "connected_free") { setShowSupportLocked(true); setTimeout(() => setShowSupportLocked(false), 3500); return; }
@@ -376,7 +410,12 @@ export default function ServicesPage() {
             <div>© {new Date().getFullYear()} Echo Ecosystem. All rights reserved.</div>
 
             <div className="flex gap-2 flex-wrap justify-start sm:justify-end w-full sm:w-auto items-center relative">
-
+<button
+  onClick={handleTestFichePurchase}
+  className="border border-red-500 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-xl text-[11px] transition-all"
+>
+  🧪 TEST FICHE 1.50$
+</button>
               {/* SÉLECTEUR PAYS / DEVISE */}
               <div className="relative">
                 <button

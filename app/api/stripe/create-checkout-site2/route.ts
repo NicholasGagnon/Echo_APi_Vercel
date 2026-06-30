@@ -1,64 +1,61 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2023-10-16" as any,
+});
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { ficheId, acheteurId, acheteurEmail, currency = "CAD" } = body;
+    const { ficheId, acheteurId, acheteurEmail } = await req.json();
 
-    // --- SÉCURITÉ #1 : Validation des données reçues ---
-    if (!ficheId) {
-      return NextResponse.json({ message: "ficheId manquant" }, { status: 400 });
-    }
-    if (!acheteurId || !acheteurEmail) {
-      return NextResponse.json({ message: "User authentication missing" }, { status: 401 });
+    if (!ficheId || !acheteurId) {
+      return NextResponse.json(
+        { message: "ficheId et acheteurId requis" },
+        { status: 400 }
+      );
     }
 
-    const priceId = process.env.STRIPE_FICHE_PRICE_ID!;
-    const origin  = req.headers.get("origin") ?? "http://localhost:3000";
+    // Extraction de l'origine pour les redirections success/cancel
+    const origin = req.headers.get("origin") ?? "http://localhost:3000";
 
-    // --- CONFIGURATION DYNAMIQUE DES MOYENS DE PAIEMENT — même logique que les abonnements ---
-    let paymentMethodTypes: string[] = ["card"];
-    if (currency.toUpperCase() === "EUR") {
-      paymentMethodTypes = ["card", "sepa_debit", "bancontact"]; // Active les banques d'Europe
-    } else if (currency.toUpperCase() === "USD") {
-      paymentMethodTypes = ["card", "link"]; // Active Link pour les USA
-    }
-
-    // --- CRÉATION DE LA SESSION CHECKOUT — paiement unique, pas abonnement ---
+    // ── CONFIGURATION DE LA SESSION DE PAIEMENT UNIQUE À 9,99$ ──
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: paymentMethodTypes as any,
-      mode: "payment",
-      allow_promotion_codes: true,
-      customer_email: acheteurEmail,
+      payment_method_types: ["card"],
+      mode: "payment", // Mode ponctuel (achat unique obligatoire pour ton coupon)
+      allow_promotion_codes: true, // Active la case code promo/coupon sur l'interface
+      customer_email: acheteurEmail || undefined,
+      
       line_items: [
         {
-          price: priceId,
+          price_data: {
+            currency: "cad", // Ajuste en "usd" ou "eur" selon la devise de tes tests
+            product_data: {
+              name: `Déblocage Coordonnées — Fiche #${ficheId}`,
+              description: "Accès définitif et illimité aux informations de contact du projet.",
+            },
+            unit_amount: 999, // 9,99$ (999 centimes) -> Permet le coupon à 99% !
+          },
           quantity: 1,
         },
       ],
 
-      // Force Stripe à lire la bonne ligne de devise sur le produit
-      currency: currency.toLowerCase(),
-
-      success_url: `${origin}/1/fiche?unlocked=true&fiche_id=${ficheId}`,
-      cancel_url: `${origin}/1/fiche?canceled=true`,
-
+      // 🎯 Métadonnées capitales pour ton webhook site 2
       metadata: {
         type: "unlock_fiche",
         fiche_id: ficheId,
         acheteur_id: acheteurId,
       },
+
+      success_url: `${origin}/1/fiche?success=true&fiche_id=${ficheId}`,
+      cancel_url: `${origin}/1/fiche?canceled=true`,
     });
 
     return NextResponse.json({ url: session.url });
-
   } catch (error: any) {
-    console.error("Stripe checkout fiche error:", error);
+    console.error("Erreur lors de la création de la session Checkout Site 2:", error);
     return NextResponse.json(
-      { message: error.message || "Internal Server Error" },
+      { message: "Erreur interne du serveur", error: error.message },
       { status: 500 }
     );
   }

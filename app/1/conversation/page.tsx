@@ -33,43 +33,9 @@ const isDefaultTitle = (t: string) => t === "Nouvelle conversation" || t === "Ne
 
 // ── AGENTIC FEED ─────────────────────────────────────────────────────────────
 function AgenticFeed({ userId, lang }: { userId: string | null; lang: string }) {
-  const [items, setItems] = useState<{ type: string; label: string; value: string; date: string }[]>([]);
-
-  useEffect(() => {
-    if (!userId) return;
-    const load = async () => {
-      const results: { type: string; label: string; value: string; date: string }[] = [];
-      try {
-        const { data: cal } = await supabase.from("echo_calories").select("food_name,calories,date").eq("user_id", userId).order("date", { ascending: false }).limit(3);
-        if (cal) cal.forEach((r: any) => results.push({ type: "cal", label: r.food_name, value: `${r.calories} kcal`, date: r.date }));
-      } catch {}
-      try {
-        const { data: exp } = await supabase.from("echo_expenses").select("title,amount,date").eq("user_id", userId).order("date", { ascending: false }).limit(3);
-        if (exp) exp.forEach((r: any) => results.push({ type: "exp", label: r.title, value: `$${r.amount}`, date: r.date }));
-      } catch {}
-      results.sort((a, b) => b.date.localeCompare(a.date));
-      setItems(results.slice(0, 5));
-    };
-    load();
-  }, [userId]);
-
+  // Emplacement réservé — contenu à définir (lié au futur Dashboard / Fiches)
   if (!userId) return <p className="text-[11px] text-zinc-400 dark:text-zinc-600 italic">{lang==="fr"?"Connecte-toi pour voir l'activité":"Log in to see activity"}</p>;
-  if (items.length === 0) return <p className="text-[11px] text-zinc-400 dark:text-zinc-600 italic">{lang==="fr"?"Aucune action récente":"No recent actions"}</p>;
-
-  return (
-    <div className="flex flex-col gap-2">
-      {items.map((item, i) => (
-        <div key={i} className="flex items-start gap-2 p-2 rounded-lg border border-cyan-500/20 bg-cyan-500/5">
-          <span className="text-[13px] shrink-0 mt-0.5">{item.type==="cal"?"🥗":"💳"}</span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-zinc-600 dark:text-zinc-300 font-medium truncate">{item.label}</p>
-            <p className="text-[10px] text-cyan-500 font-mono">{item.value}</p>
-            <p className="text-[10px] text-zinc-400 dark:text-zinc-600">{item.date}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <p className="text-[11px] text-zinc-400 dark:text-zinc-600 italic">{lang==="fr"?"À venir":"Coming soon"}</p>;
 }
 
 export default function ConversationPage() {
@@ -199,26 +165,6 @@ export default function ConversationPage() {
       messages: finalMessages, summary: finalSummary,
       summary_updated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }).eq("id", convId).eq("user_id", uid);
-  };
-
-  const pushEchoEventToGoogle = async (uid: string, dateKey: string, title: string, startTime: string, endTime: string, notes: string): Promise<string|null> => {
-    let token = localStorage.getItem(`echo-google-token-${uid}`);
-    if (!token) {
-      try { const { data: row } = await supabase.from("user_tokens").select("google_access_token").eq("id", uid).maybeSingle(); token = (row as any)?.google_access_token || null; } catch {}
-    }
-    if (!token) return null;
-    try {
-      const hasTime = !!(startTime || endTime);
-      const startObj = hasTime ? { dateTime: new Date(`${dateKey}T${startTime || "00:00"}:00`).toISOString() } : { date: dateKey };
-      const endObj   = hasTime ? { dateTime: new Date(`${dateKey}T${endTime   || "23:59"}:00`).toISOString() } : { date: dateKey };
-      const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
-        method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" },
-        body: JSON.stringify({ summary: title, description: notes, start: startObj, end: endObj }),
-      });
-      if (!res.ok) return null;
-      const d = await res.json();
-      return d.id ?? null;
-    } catch { return null; }
   };
 
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
@@ -352,52 +298,14 @@ export default function ConversationPage() {
       const data = await response.json();
       setEchoState("speaking");
 
-      let isActionBlocked = false;
-      if (data.action) {
-        const { type } = data.action;
-        const qCat: "vitality_actions"|"calendar" = (type==="ADD_BUDGET_EXPENSE"||type==="ADD_CALORIE_LOG"||type==="SET_CALORIE_GOAL"||type==="UPDATE_CALORIE_GOAL") ? "vitality_actions" : "calendar";
-        const status = checkQuota(qCat, userTier, true, userId);
-        if (!status.allowed) { triggerQuotaPopup(qCat==="calendar"?(lang==="fr"?"Calendrier":"Calendar"):(lang==="fr"?"Vitalité":"Vitality")); isActionBlocked = true; }
-      }
-
-      const actionNotice  = isActionBlocked ? `\n\n[🔒 ${lang==="fr"?"Action bloquée":"Action blocked"}]` : "";
-      const generatedMsgs = [...baseMessages, { raw: `Echo: ${data.response || ""}${actionNotice}` }];
+      const actionNotice  = "";
+      const generatedMsgs = [...baseMessages, { raw: `Echo: ${data.response || ""}` }];
       setMessages(generatedMsgs);
       setConversations(prev => prev.map(c =>
         c.id === activeConvoId
           ? { ...c, messages: serializeMsgs(generatedMsgs), updatedAt: Date.now(), title: isDefaultTitle(c.title) ? deriveTitle(serializeMsgs(generatedMsgs), lang) : c.title }
           : c
       ));
-
-      if (data.action && !isActionBlocked && userId) {
-        const { type, payload } = data.action;
-        if (type==="ADD_BUDGET_EXPENSE") {
-          await supabase.from("echo_expenses").insert({ user_id: userId, title: payload.title||"Purchase", amount: parseFloat(payload.amount??payload.spent)||0, date: payload.paymentDate||payload.paidAt||payload.date||new Date().toLocaleDateString("fr-CA") });
-        }
-        if (type==="ADD_CALORIE_LOG") {
-          await supabase.from("echo_calories").insert({ user_id: userId, food_name: payload.foodName||payload.food_name||payload.meal||payload.title||"Food", calories: parseInt(payload.calories)||0, date: new Date().toLocaleDateString("fr-CA") });
-        }
-        if (type==="SET_CALORIE_GOAL"||type==="UPDATE_CALORIE_GOAL") {
-          const nextGoal = parseInt(payload.goal??payload.calorieGoal??payload.calories);
-          if (Number.isFinite(nextGoal) && nextGoal > 0) localStorage.setItem("echo-calorie-goal", nextGoal.toString());
-        }
-        if (type==="ADD_CALENDAR_EVENT") {
-          const { title, start, end, notes="" } = payload;
-          let dateKey="", startTime="", endTime="";
-          if (start) { if (start.includes("T")) { dateKey=start.split("T")[0]; startTime=start.split("T")[1]?.slice(0,5)||""; } else { dateKey=start; } }
-          if (!dateKey) dateKey = new Date().toLocaleDateString("fr-CA");
-          if (end?.includes("T")) endTime = end.split("T")[1]?.slice(0,5)||"";
-          if (dateKey && userId) {
-            const googleEventId = await pushEchoEventToGoogle(userId, dateKey, title||"Event", startTime, endTime, notes);
-            const evtPayload: any = { user_id: userId, title: title||"Event", start_date: dateKey, end_date: dateKey, notes, is_from_echo: true };
-            if (startTime) evtPayload.start_time = startTime;
-            if (endTime)   evtPayload.end_time   = endTime;
-            if (googleEventId) evtPayload.google_event_id = googleEventId;
-            await supabase.from("echo_calendar").insert(evtPayload);
-            if (googleEventId && typeof triggerToast==="function") triggerToast("info", lang==="fr"?"Rendez-vous ajouté dans Google Calendar ✓":"Event added to Google Calendar ✓");
-          }
-        }
-      }
 
       if (userId && activeConvoId && !activeConvoId.startsWith("local-") && activeConvoId !== "new") {
         if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
@@ -458,14 +366,12 @@ export default function ConversationPage() {
           </div>
           <nav className="space-y-0.5 mb-5">
             {[
-              { href:"/",           label: lang==="fr"?"Accueil":"Home"         },
-              { href:"/1/conversation", label: lang==="fr"?"Conversation":"Conversation", active:true },
-              { href:"/books",      label: lang==="fr"?"Livres":"Books"          },
-              { href:"/calendar",   label: lang==="fr"?"Calendrier":"Calendar"   },
-              { href:"/vitality",   label: lang==="fr"?"Vitalité":"Vitality"     },
-              { href:"/services",   label: "Services"                             },
-              { href:"/account",    label: lang==="fr"?"Compte":"Account"        },
-              { href:"/horizonweb", label: "HorizonWeb"                           },
+              { href:"/1",               label: lang==="fr"?"Hall":"Hall"               },
+              { href:"/1/dashboard",     label: lang==="fr"?"Dashboard":"Dashboard"     },
+              { href:"/1/conversation",  label: lang==="fr"?"Conversation":"Conversation", active:true },
+              { href:"/1/form",          label: lang==="fr"?"Formulaire":"Form"         },
+              { href:"/1/fiche",         label: lang==="fr"?"Fiches":"Listings"         },
+              { href:"/1/account",       label: lang==="fr"?"Compte":"Account"          },
             ].map(item => (
               <Link key={item.href} href={item.href}
                 className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -643,7 +549,7 @@ export default function ConversationPage() {
         <aside className="w-52 shrink-0 border-l border-zinc-100 dark:border-zinc-800/60 flex flex-col bg-zinc-50/50 dark:bg-zinc-950/50 overflow-hidden">
           <div className="flex-1 overflow-y-auto p-4 min-h-0">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-600 mb-3">
-              {lang==="fr"?"Agentic récent":"Recent Agentic"}
+              {lang==="fr"?"Upcoming":"Upcoming"}
             </p>
             <AgenticFeed userId={userId} lang={lang} />
           </div>

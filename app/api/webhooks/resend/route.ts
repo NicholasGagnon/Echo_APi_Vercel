@@ -1,69 +1,150 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
+const resend = new Resend(process.env.RESEND_API_KEY);
+
 export async function POST(req: Request) {
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
     const body = await req.json();
+
+    console.log("📩 Webhook reçu :", JSON.stringify(body, null, 2));
 
     const emailData = body.data || {};
     const emailId = emailData.email_id;
 
     if (!emailId) {
-      return NextResponse.json({ success: false, error: "No email ID" });
+      console.error("❌ Aucun email_id reçu");
+      return NextResponse.json(
+        { success: false, error: "No email ID" },
+        { status: 400 }
+      );
     }
 
-    const from        = emailData.from    || "Inconnu";
-    const subject     = emailData.subject || "Sans objet";
-    const toArray     = Array.isArray(emailData.to) ? emailData.to : [emailData.to || ""];
+    const from = emailData.from || "Inconnu";
+    const subject = emailData.subject || "Sans objet";
+
+    const toArray = Array.isArray(emailData.to)
+      ? emailData.to
+      : [emailData.to || ""];
+
     const toFormatted = toArray.join(", ");
 
     let prefix = "[EMAIL]";
-    const toLower = toFormatted.toLowerCase();
-    if (toLower.includes("support@echosai.ca")) prefix = "[SUPPORT]";
-    if (toLower.includes("contact@echosai.ca")) prefix = "[CONTACT]";
+    const lowerTo = toFormatted.toLowerCase();
+
+    if (lowerTo.includes("support@echosai.ca")) {
+      prefix = "[SUPPORT]";
+    }
+
+    if (lowerTo.includes("contact@echosai.ca")) {
+      prefix = "[CONTACT]";
+    }
 
     let messageContent = "[Message vide]";
 
-    // --- STRATÉGIE 1 : Le SDK avec la bonne méthode inbound ---
+    // ======================================================
+    // MÉTHODE SDK
+    // ======================================================
     try {
-      const received = await (resend.emails as any).receiving.get(emailId);
-      const emailContent = received?.data || received || {};
-      messageContent = emailContent.text || emailContent.html || "[Message vide]";
-    } catch (err: any) {
-      console.error("receiving.get failed:", err?.message);
+      console.log("🔍 Tentative SDK receiving.get()", emailId);
 
-      // --- STRATÉGIE 2 (FALLBACK) : Appel HTTP Direct sur l'endpoint Inbound correct ---
+      const received = await (resend.emails as any).receiving.get(emailId);
+
+      console.log(
+        "✅ SDK Response:",
+        JSON.stringify(received, null, 2)
+      );
+
+      const emailContent = received?.data || received || {};
+
+      messageContent =
+        emailContent.text ||
+        emailContent.html ||
+        "[Message vide via SDK]";
+    } catch (sdkError: any) {
+      console.error(
+        "❌ receiving.get() failed:",
+        sdkError?.message
+      );
+
+      // ======================================================
+      // FALLBACK HTTP
+      // ======================================================
       try {
-        const res = await fetch(`https://api.resend.com/inbound/emails/${emailId}`, {
-          headers: { 
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-            "Content-Type": "application/json"
-          },
-        });
-        if (res.ok) {
-          const result = await res.json();
+        console.log("🔍 Tentative HTTP fallback");
+
+        const response = await fetch(
+          `https://api.resend.com/inbound/emails/${emailId}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        console.log("HTTP Status:", response.status);
+
+        if (response.ok) {
+          const result = await response.json();
+
+          console.log(
+            "✅ HTTP Response:",
+            JSON.stringify(result, null, 2)
+          );
+
           const data = result.data || result;
-          messageContent = data.text || data.html || "[Message vide]";
+
+          messageContent =
+            data.text ||
+            data.html ||
+            "[Message vide via HTTP]";
         } else {
-          console.error("HTTP Fallback status error:", res.status);
+          const errorText = await response.text();
+          console.error("❌ HTTP Error:", errorText);
         }
-      } catch (err2: any) {
-        console.error("HTTP fallback failed:", err2?.message);
+      } catch (httpError: any) {
+        console.error(
+          "❌ HTTP fallback failed:",
+          httpError?.message
+        );
       }
     }
 
-    // Envoi de l'email retransféré
-    await resend.emails.send({
+    console.log("📨 Message récupéré :", messageContent);
+
+    const sendResult = await resend.emails.send({
       from: "support@echosai.ca",
-      to: "lafailleestouverte@gmail.com",
+      to: ["lafailleestouverte@gmail.com"],
       subject: `${prefix} ${subject}`,
-      text: `De: ${from}\nPour: ${toFormatted}\n\nMessage:\n${messageContent}`,
+      text: `
+De: ${from}
+Pour: ${toFormatted}
+
+Message:
+${messageContent}
+      `,
     });
 
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Erreur Webhook:", error);
-    return NextResponse.json({ success: false }, { status: 500 });
+    console.log(
+      "✅ Email retransféré :",
+      JSON.stringify(sendResult, null, 2)
+    );
+
+    return NextResponse.json({
+      success: true,
+      emailId,
+    });
+  } catch (error: any) {
+    console.error("🔥 Erreur webhook :", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: error?.message || "Unknown error",
+      },
+      { status: 500 }
+    );
   }
 }
