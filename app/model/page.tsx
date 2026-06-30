@@ -47,7 +47,11 @@ export default function ModelChatPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message: userText }),
+        body: JSON.stringify({
+          message: userText,
+          // Ajout du modèle spécifié dans le corps de la requête
+          model: "minimax-m3",
+        }),
       });
 
       if (!res.ok) throw new Error("Erreur serveur API");
@@ -85,7 +89,8 @@ export default function ModelChatPage() {
             </span>
           </div>
           <div className="text-xs text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700">
-            Mode : Clavardage Direct
+            {/* Affichage du modèle actuel */}
+            Modèle actuel : gpt-4o-mini
           </div>
         </div>
       </header>

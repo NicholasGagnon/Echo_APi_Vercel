@@ -1,54 +1,133 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
 type Lang = "fr" | "en";
 const STEPS = 6;
 
-const TYPES_PROJET = ["SaaS", "App mobile", "Contenu", "E-commerce", "Communauté", "Outil interne", "Autre"];
+// ── DICTIONNAIRE COMPLET ──────────────────────────────────────────────────────
+const D = {
+  nav: {
+    fr: { home:"Accueil", conv:"Conversation", fiches:"Fiches", inscription:"Inscription" },
+    en: { home:"Home",    conv:"Conversation", fiches:"Listings", inscription:"Register"  },
+  },
+  titre:    { fr:"Créer ma fiche",   en:"Create my listing"   },
+  suivant:  { fr:"Suivant",          en:"Next"                 },
+  precedent:{ fr:"Précédent",        en:"Back"                 },
+  soumettre:{ fr:"Créer ma fiche",   en:"Create my listing"   },
+  chargement:{ fr:"Création...",     en:"Creating..."          },
+  erreur:   { fr:"Une erreur est survenue. Réessaie.", en:"An error occurred. Please try again." },
 
-const PROFIL_OPTIONS = {
-  fr: ["Je fais tout moi-même et je suis seul.", "Je fais tout moi-même mais je suis déjà accompagné.", "Nous sommes deux sur le projet.", "Nous sommes plusieurs sur le projet.", "Autre."],
-  en: ["I do everything myself and I'm alone.", "I do everything myself but I already have someone.", "We are two on the project.", "We are several on the project.", "Other."],
+  etapes: {
+    fr: ["Projet","Avancement","Objectifs","Collaboration","Technologies","Profil"],
+    en: ["Project","Progress","Goals","Collaboration","Technologies","Profile"],
+  },
+
+  // Étape 1
+  nom_projet:   { fr:"Nom du projet *",    en:"Project name *"      },
+  description:  { fr:"Description *",      en:"Description *"       },
+  desc_hint:    { fr:"Explique ton projet comme si tu l'expliquais à un ami.", en:"Explain your project as if talking to a friend." },
+  type_projet:  { fr:"Type de projet",     en:"Project type"        },
+  type_profil:  { fr:"Type de profil",     en:"Profile type"        },
+
+  types_projet: {
+    fr: ["SaaS","App mobile","Contenu","E-commerce","Communauté","Outil interne","Autre"],
+    en: ["SaaS","Mobile app","Content","E-commerce","Community","Internal tool","Other"],
+  },
+  profil_options: {
+    fr: ["Je fais tout moi-même et je suis seul.","Je fais tout moi-même mais je suis déjà accompagné.","Nous sommes deux sur le projet.","Nous sommes plusieurs sur le projet.","Autre."],
+    en: ["I do everything myself and I'm alone.","I do everything myself but I already have someone.","We are two on the project.","We are several on the project.","Other."],
+  },
+
+  // Étape 2
+  idee_label:   { fr:"L'idée globale est :",      en:"The overall idea is:"    },
+  avanc_label:  { fr:"Le projet est :",           en:"The project is:"         },
+  produit_label:{ fr:"Produit fonctionnel :",     en:"Functional product:"     },
+  users_label:  { fr:"Nombre d'utilisateurs :",   en:"Number of users:"        },
+  revenus_label:{ fr:"Revenus mensuels :",        en:"Monthly revenue:"        },
+
+  idee_options: {
+    fr: ["Je découvre encore mon idée.","J'ai une idée assez claire.","Mon idée est bien définie.","Autre."],
+    en: ["I'm still exploring my idea.","I have a fairly clear idea.","My idea is well defined.","Other."],
+  },
+  avancement_options: {
+    fr: ["Encore sur papier.","En cours de construction.","Partiellement fonctionnel.","Utilisable par certaines personnes.","Accessible au public.","Autre."],
+    en: ["Still on paper.","Under construction.","Partially functional.","Usable by some people.","Publicly accessible.","Other."],
+  },
+  produit_options: {
+    fr: ["Non.","Partiellement.","Oui.","Autre."],
+    en: ["No.","Partially.","Yes.","Other."],
+  },
+  utilisateurs_options: {
+    fr: ["Aucun pour le moment.","Quelques utilisateurs.","Quelques dizaines.","Quelques centaines.","Plus de 1000.","Je préfère ne pas répondre."],
+    en: ["None yet.","A few users.","A few dozen.","A few hundred.","More than 1000.","I'd rather not say."],
+  },
+  revenus_options: {
+    fr: ["Aucun.","Quelques dollars.","Quelques centaines.","Quelques milliers.","Plus.","Je préfère ne pas répondre."],
+    en: ["None.","A few dollars.","A few hundred.","A few thousand.","More.","I'd rather not say."],
+  },
+
+  // Étape 3
+  court_label:  { fr:"Court terme (1 à 3 mois)",   en:"Short term (1 to 3 months)"   },
+  moyen_label:  { fr:"Moyen terme (6 à 12 mois)",  en:"Medium term (6 to 12 months)" },
+  long_label:   { fr:"Long terme",                  en:"Long term"                    },
+  court_hint:   { fr:"Finir le prototype, trouver un collaborateur...", en:"Finish the prototype, find a collaborator..." },
+
+  // Étape 4
+  cherche_label:   { fr:"Qu'est-ce que tu recherches ?", en:"What are you looking for?"    },
+  temps_label:     { fr:"Temps disponible par semaine :", en:"Time available per week:"     },
+  distance_label:  { fr:"Collaboration recherchée :",    en:"Preferred collaboration:"      },
+  engagement_label:{ fr:"Niveau d'engagement :",        en:"Engagement level:"             },
+
+  cherche_options: {
+    fr: ["Échange d'audience","Partenariat commercial","Motivation mutuelle","Accountability partner","Brainstorming","Partage d'expérience","Co-développement","Intégration entre projets","Autre"],
+    en: ["Audience exchange","Commercial partnership","Mutual motivation","Accountability partner","Brainstorming","Experience sharing","Co-development","Project integration","Other"],
+  },
+  temps_options: {
+    fr: ["Quelques heures.","Quelques soirées.","Une dizaine d'heures.","Temps partiel important.","Temps plein.","Variable."],
+    en: ["A few hours.","A few evenings.","About ten hours.","Significant part-time.","Full-time.","Variable."],
+  },
+  distance_options: {
+    fr: ["À distance uniquement.","Locale uniquement.","Les deux.","Peu importe."],
+    en: ["Remote only.","Local only.","Both.","Doesn't matter."],
+  },
+  engagement_options: {
+    fr: ["Discussion occasionnelle.","Quelques heures par mois.","Quelques heures par semaine.","Collaboration régulière.","Partenariat long terme.","Association potentielle."],
+    en: ["Occasional discussion.","A few hours per month.","A few hours per week.","Regular collaboration.","Long-term partnership.","Potential association."],
+  },
+
+  // Étape 5
+  tech_labels: {
+    fr: { backend:"Backend", frontend:"Frontend", paiement:"Paiement", ia:"IA", infra:"Infrastructure", automatisation:"Automatisation" },
+    en: { backend:"Backend", frontend:"Frontend", paiement:"Payment",  ia:"AI", infra:"Infrastructure", automatisation:"Automation"     },
+  },
+
+  // Étape 6
+  nom_complet_label:  { fr:"Nom complet",         en:"Full name"          },
+  pays_label:         { fr:"Pays",                en:"Country"            },
+  langue_label:       { fr:"Langue principale",   en:"Primary language"   },
+  photo_label:        { fr:"Photo du projet",     en:"Project photo"      },
+  photo_hint:         { fr:"Panorama de ta fiche — photo du projet, de toi, ce que tu veux.", en:"Your listing banner — project screenshot, your photo, anything you want." },
+  photo_btn:          { fr:"Importer une photo",  en:"Import a photo"     },
+  photo_change:       { fr:"Changer la photo",    en:"Change photo"       },
+  contacts_titre:     { fr:"Contacts privés",     en:"Private contacts"   },
+  contacts_hint:      { fr:"Visibles uniquement après achat. Tu choisis ce que tu rends disponible.", en:"Visible only after purchase. You choose what to share." },
+  contacts_label:     { fr:"Que veux-tu rendre visible ?", en:"What do you want to make visible?" },
+  email_required:     { fr:"Le courriel est obligatoire.", en:"Email is required."                 },
+  email_invalid:      { fr:"Adresse courriel invalide.",   en:"Invalid email address."             },
+  email_missing:      { fr:"Un courriel est obligatoire pour créer une fiche.", en:"An email is required to create a listing." },
+
+  // Confirmation
+  confirme_titre: { fr:"Ta fiche est en ligne ! 🎉", en:"Your listing is live! 🎉"             },
+  confirme_texte: { fr:"Ta clé personnelle est :",   en:"Your personal key is:"                 },
+  confirme_note:  { fr:"Garde-la précieusement — elle t'identifie sur la plateforme.", en:"Keep it safe — it identifies you on the platform." },
+  voir_fiches:    { fr:"Voir les fiches",            en:"See listings"                          },
 };
-const IDEE_OPTIONS = {
-  fr: ["Je découvre encore mon idée.", "J'ai une idée assez claire.", "Mon idée est bien définie.", "Autre."],
-  en: ["I'm still exploring my idea.", "I have a fairly clear idea.", "My idea is well defined.", "Other."],
-};
-const AVANCEMENT_OPTIONS = {
-  fr: ["Encore sur papier.", "En cours de construction.", "Partiellement fonctionnel.", "Utilisable par certaines personnes.", "Accessible au public.", "Autre."],
-  en: ["Still on paper.", "Under construction.", "Partially functional.", "Usable by some people.", "Publicly accessible.", "Other."],
-};
-const PRODUIT_OPTIONS = {
-  fr: ["Non.", "Partiellement.", "Oui.", "Autre."],
-  en: ["No.", "Partially.", "Yes.", "Other."],
-};
-const UTILISATEURS_OPTIONS = {
-  fr: ["Aucun pour le moment.", "Quelques utilisateurs.", "Quelques dizaines.", "Quelques centaines.", "Plus de 1000.", "Je préfère ne pas répondre."],
-  en: ["None yet.", "A few users.", "A few dozen.", "A few hundred.", "More than 1000.", "I'd rather not say."],
-};
-const REVENUS_OPTIONS = {
-  fr: ["Aucun.", "Quelques dollars.", "Quelques centaines.", "Quelques milliers.", "Plus.", "Je préfère ne pas répondre."],
-  en: ["None.", "A few dollars.", "A few hundred.", "A few thousand.", "More.", "I'd rather not say."],
-};
-const CHERCHE_OPTIONS = {
-  fr: ["Échange d'audience", "Partenariat commercial", "Motivation mutuelle", "Accountability partner", "Brainstorming", "Partage d'expérience", "Co-développement", "Intégration entre projets", "Autre"],
-  en: ["Audience exchange", "Commercial partnership", "Mutual motivation", "Accountability partner", "Brainstorming", "Experience sharing", "Co-development", "Project integration", "Other"],
-};
-const TEMPS_OPTIONS = {
-  fr: ["Quelques heures.", "Quelques soirées.", "Une dizaine d'heures.", "Temps partiel important.", "Temps plein.", "Variable."],
-  en: ["A few hours.", "A few evenings.", "About ten hours.", "Significant part-time.", "Full-time.", "Variable."],
-};
-const DISTANCE_OPTIONS = {
-  fr: ["À distance uniquement.", "Locale uniquement.", "Les deux.", "Peu importe."],
-  en: ["Remote only.", "Local only.", "Both.", "Doesn't matter."],
-};
-const ENGAGEMENT_OPTIONS = {
-  fr: ["Discussion occasionnelle.", "Quelques heures par mois.", "Quelques heures par semaine.", "Collaboration régulière.", "Partenariat long terme.", "Association potentielle."],
-  en: ["Occasional discussion.", "A few hours per month.", "A few hours per week.", "Regular collaboration.", "Long-term partnership.", "Potential association."],
-};
+
+const t = (key: keyof typeof D, lang: Lang): any => (D[key] as any)[lang];
+
 const TECH: Record<string, string[]> = {
   backend:       ["Supabase","Firebase","PostgreSQL","MongoDB","Appwrite","Autre"],
   frontend:      ["React","Next.js","Vue","Flutter","Svelte","Autre"],
@@ -65,7 +144,8 @@ type FormData = {
   objectif_court: string; objectif_moyen: string; objectif_long: string;
   cherche: string[]; temps: string; distance: string; engagement: string;
   tech: Record<string, string[]>;
-  nom_complet: string; pays: string; langue: string; photo_url: string;
+  nom_complet: string; pays: string; langue: string;
+  photo_url: string;
   contacts_visibles: string[];
   email: string; discord: string; github: string; linkedin: string; site_web: string; telephone: string;
 };
@@ -86,8 +166,7 @@ function Radio({ options, value, onChange }: { options: string[]; value: string;
   return (
     <div className="flex flex-col gap-2">
       {options.map(opt => (
-        <div key={opt}
-          onClick={() => onChange(opt)}
+        <div key={opt} onClick={() => onChange(opt)}
           className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer border transition-all select-none ${value === opt ? "border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-800" : "border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
           <div className={`w-4 h-4 rounded-full border-2 shrink-0 transition-all ${value === opt ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white" : "border-zinc-300 dark:border-zinc-600"}`}/>
           <span className="text-sm text-zinc-700 dark:text-zinc-300">{opt}</span>
@@ -111,7 +190,7 @@ function MultiCheck({ options, values, onChange }: { options: string[]; values: 
   );
 }
 
-function Field({ label, value, onChange, placeholder, multiline }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean }) {
+function Field({ label, value, onChange, placeholder, multiline, type="text" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean; type?: string }) {
   return (
     <div className="flex flex-col gap-1.5">
       <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</label>
@@ -119,7 +198,7 @@ function Field({ label, value, onChange, placeholder, multiline }: { label: stri
         <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={3}
           className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-500 resize-none transition-colors"/>
       ) : (
-        <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
           className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-500 transition-colors"/>
       )}
     </div>
@@ -132,127 +211,123 @@ export default function InscriptionPage() {
   const [step, setStep]       = useState(1);
   const [form, setForm]       = useState<FormData>(INITIAL);
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState<string | null>(null);
-  const [myKey,   setMyKey]   = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
+  const [myKey, setMyKey]     = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
-  const set    = (key: keyof FormData, value: any) => setForm(f => ({ ...f, [key]: value }));
-  const setTech = (cat: string, vals: string[]) => setForm(f => ({ ...f, tech: { ...f.tech, [cat]: vals } }));
-
-  const dict = {
-    fr: {
-      titre: "Créer ma fiche",
-      etapes: ["Projet", "Avancement", "Objectifs", "Collaboration", "Technologies", "Profil"],
-      suivant: "Suivant", precedent: "Précédent", soumettre: "Créer ma fiche",
-      nav: { home:"Accueil", conv:"Conversation", fiches:"Fiches", inscription:"Inscription" },
-      confirme_titre: "Ta fiche est en ligne ! 🎉",
-      confirme_texte: "Ta clé personnelle est :",
-      confirme_note: "Garde-la précieusement — elle t'identifie sur la plateforme.",
-      voir_fiches: "Voir les fiches",
-      erreur: "Une erreur est survenue. Réessaie.",
-      chargement: "Création en cours...",
-    },
-    en: {
-      titre: "Create my listing",
-      etapes: ["Project", "Progress", "Goals", "Collaboration", "Technologies", "Profile"],
-      suivant: "Next", precedent: "Back", soumettre: "Create my listing",
-      nav: { home:"Home", conv:"Conversation", fiches:"Listings", inscription:"Register" },
-      confirme_titre: "Your listing is live! 🎉",
-      confirme_texte: "Your personal key is:",
-      confirme_note: "Keep it safe — it identifies you on the platform.",
-      voir_fiches: "See listings",
-      erreur: "An error occurred. Please try again.",
-      chargement: "Creating...",
-    },
-  }[lang];
+  const set     = (key: keyof FormData, value: any) => setForm(f => ({ ...f, [key]: value }));
+  const setTech = (cat: string, vals: string[])     => setForm(f => ({ ...f, tech: { ...f.tech, [cat]: vals } }));
 
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+  // ── UPLOAD PHOTO ──────────────────────────────────────────────────────────
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const ext      = file.name.split(".").pop();
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { data, error } = await supabase.storage
+        .from("fiche-photos")
+        .upload(filename, file, { contentType: file.type, upsert: false });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("fiche-photos").getPublicUrl(data.path);
+      set("photo_url", urlData.publicUrl);
+    } catch (e) {
+      console.error("Upload photo:", e);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ── SUBMIT ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     setError(null);
-
-    // Validation email obligatoire
     if (!form.contacts_visibles.includes("Email") || !form.email.trim()) {
-      setError(lang === "fr" ? "Un courriel est obligatoire pour créer une fiche." : "An email is required to create a listing.");
-      return;
+      setError(t("email_missing", lang)); return;
     }
     if (!validateEmail(form.email)) {
-      setError(lang === "fr" ? "L'adresse courriel n'est pas valide." : "The email address is not valid.");
+      setError(t("email_invalid", lang)); return;
+    }
+
+    // Vérifier que l'email n'est pas déjà utilisé
+    const { data: existing } = await supabase
+      .from("fiches")
+      .select("id")
+      .eq("email_prive", form.email.trim())
+      .maybeSingle();
+    if (existing) {
+      setError(lang === "fr" ? "Ce courriel a déjà une fiche associée." : "This email already has a listing.");
       return;
     }
 
     setLoading(true);
     try {
-      // Générer la Key via la fonction SQL
       const { data: keyData, error: keyError } = await supabase.rpc("generate_fiche_key");
       if (keyError) throw keyError;
       const generatedKey = keyData as string;
-
-      // Récupérer l'utilisateur connecté si disponible
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || null;
 
-      // Insérer la fiche
       const { error: insertError } = await supabase.from("fiches").insert({
-        key:               generatedKey,
-        user_id:           userId,
-        nom_projet:        form.nom_projet,
-        description:       form.description,
-        type_projet:       form.type_projet,
-        type_profil:       form.type_profil,
-        idee:              form.idee,
-        avancement:        form.avancement,
-        produit:           form.produit,
-        utilisateurs:      form.utilisateurs,
-        revenus:           form.revenus,
-        objectif_court:    form.objectif_court,
-        objectif_moyen:    form.objectif_moyen,
-        objectif_long:     form.objectif_long,
-        cherche:           form.cherche,
-        temps:             form.temps,
-        distance:          form.distance,
-        engagement:        form.engagement,
-        tech:              form.tech,
-        nom_complet:       form.nom_complet,
-        pays:              form.pays,
-        langue:            form.langue,
-        photo_url:         form.photo_url || null,
+        key: generatedKey, user_id: userId,
+        nom_projet: form.nom_projet, description: form.description,
+        type_projet: form.type_projet, type_profil: form.type_profil,
+        idee: form.idee, avancement: form.avancement, produit: form.produit,
+        utilisateurs: form.utilisateurs, revenus: form.revenus,
+        objectif_court: form.objectif_court, objectif_moyen: form.objectif_moyen, objectif_long: form.objectif_long,
+        cherche: form.cherche, temps: form.temps, distance: form.distance, engagement: form.engagement,
+        tech: form.tech,
+        nom_complet: form.nom_complet, pays: form.pays, langue: form.langue,
+        photo_urls: form.photo_url ? [form.photo_url] : [],
         contacts_visibles: form.contacts_visibles,
-        email_prive:       form.email    || null,
-        discord_prive:     form.discord  || null,
-        github_prive:      form.github   || null,
-        linkedin_prive:    form.linkedin || null,
-        site_web_prive:    form.site_web || null,
-        telephone_prive:   form.telephone || null,
+        email_prive: form.email || null, discord_prive: form.discord || null,
+        github_prive: form.github || null, linkedin_prive: form.linkedin || null,
+        site_web_prive: form.site_web || null, telephone_prive: form.telephone || null,
       });
-
       if (insertError) throw insertError;
+
+      // Envoyer la Key par courriel via Resend
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+        await fetch(`${API_URL}/1/envoyer-cle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: form.email, key: generatedKey }),
+        });
+      } catch (e) {
+        console.error("Envoi courriel échoué:", e);
+      }
+
       setMyKey(generatedKey);
     } catch (e: any) {
       console.error(e);
-      setError(dict.erreur);
+      setError(t("erreur", lang));
     } finally {
       setLoading(false);
     }
   };
 
-  // ── PAGE CONFIRMATION ──────────────────────────────────────────────────────
+  // ── CONFIRMATION ─────────────────────────────────────────────────────────
   if (myKey) return (
     <main className="min-h-screen bg-white dark:bg-[#0f0f0f] flex items-center justify-center p-6">
       <div className="text-center max-w-sm w-full">
         <div className="text-5xl mb-6">🎉</div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">{dict.confirme_titre}</h1>
-        <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-4">{dict.confirme_texte}</p>
-        <div className="bg-zinc-900 dark:bg-zinc-800 text-white rounded-2xl px-6 py-4 mb-3 font-mono text-2xl font-bold tracking-wider">
-          {myKey}
-        </div>
-        <p className="text-zinc-400 text-xs mb-8">{dict.confirme_note}</p>
-        <Link href="/1/fiche"
-          className="inline-block w-full px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-semibold text-sm hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors text-center">
-          {dict.voir_fiches}
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">{t("confirme_titre", lang)}</h1>
+        <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-4">{t("confirme_texte", lang)}</p>
+        <div className="bg-zinc-900 dark:bg-zinc-800 text-white rounded-2xl px-6 py-4 mb-3 font-mono text-2xl font-bold tracking-wider">{myKey}</div>
+        <p className="text-zinc-400 text-xs mb-8">{t("confirme_note", lang)}</p>
+        <Link href="/1/fiche" className="inline-block w-full px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-semibold text-sm hover:bg-zinc-700 transition-colors text-center">
+          {t("voir_fiches", lang)}
         </Link>
       </div>
     </main>
   );
+
+  const etapes = t("etapes", lang) as string[];
 
   return (
     <main className="min-h-screen bg-white dark:bg-[#0f0f0f] text-zinc-900 dark:text-zinc-100 font-sans">
@@ -261,10 +336,10 @@ export default function InscriptionPage() {
       <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-10">
         <span className="font-bold text-sm">Echo AI</span>
         <div className="flex items-center gap-5 text-sm">
-          <Link href="/1"              className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{dict.nav.home}</Link>
-          <Link href="/1/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{dict.nav.conv}</Link>
-          <Link href="/1/fiche"        className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{dict.nav.fiches}</Link>
-          <Link href="/1/inscription"  className="text-zinc-900 dark:text-white font-semibold">{dict.nav.inscription}</Link>
+          <Link href="/1"               className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).home}</Link>
+          <Link href="/1/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).conv}</Link>
+          <Link href="/1/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).fiches}</Link>
+          <Link href="/1/inscription"   className="text-zinc-900 dark:text-white font-semibold">{t("nav",lang).inscription}</Link>
           <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")}
             className="text-xs text-zinc-400 border border-zinc-200 dark:border-zinc-800 px-2 py-1 rounded-lg hover:border-zinc-400 transition-colors">
             {lang === "fr" ? "EN" : "FR"}
@@ -273,15 +348,15 @@ export default function InscriptionPage() {
       </nav>
 
       <div className="max-w-2xl mx-auto px-6 py-12">
-        <h1 className="text-2xl font-bold mb-8">{dict.titre}</h1>
+        <h1 className="text-2xl font-bold mb-8">{t("titre", lang)}</h1>
 
-        {/* BARRE DE PROGRESSION */}
+        {/* PROGRESS */}
         <div className="flex items-center mb-10 gap-0">
-          {dict.etapes.map((label, i) => (
+          {etapes.map((label, i) => (
             <div key={i} className="flex items-center flex-1">
               <div className="flex flex-col items-center gap-1">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  i + 1 < step  ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+                  i + 1 < step ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
                   : i + 1 === step ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 ring-4 ring-zinc-200 dark:ring-zinc-700"
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
                 }`}>{i + 1 < step ? "✓" : i + 1}</div>
@@ -292,107 +367,141 @@ export default function InscriptionPage() {
           ))}
         </div>
 
-        {/* ERREUR */}
         {error && (
-          <div className="mb-6 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">
-            {error}
-          </div>
+          <div className="mb-6 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400">{error}</div>
         )}
 
-        {/* ÉTAPES */}
         <div className="flex flex-col gap-6">
 
+          {/* ÉTAPE 1 */}
           {step === 1 && <>
-            <Field label={lang==="fr"?"Nom du projet *":"Project name *"} value={form.nom_projet} onChange={v => set("nom_projet", v)} placeholder="Ex: EcoAI, NutriTrack..." />
-            <Field label={lang==="fr"?"Description *":"Description *"} value={form.description} onChange={v => set("description", v)} placeholder={lang==="fr"?"Explique ton projet comme si tu l'expliquais à un ami.":"Explain your project as if talking to a friend."} multiline />
+            <Field label={t("nom_projet",lang)} value={form.nom_projet} onChange={v => set("nom_projet",v)} placeholder="Ex: EcoAI, NutriTrack..." />
+            <Field label={t("description",lang)} value={form.description} onChange={v => set("description",v)} placeholder={t("desc_hint",lang)} multiline />
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Type de projet":"Project type"}</label>
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("type_projet",lang)}</label>
               <div className="flex flex-wrap gap-2">
-                {TYPES_PROJET.map(t => (
-                  <button key={t} type="button" onClick={() => set("type_projet", t)}
-                    className={`px-3 py-2 rounded-xl text-sm border transition-all ${form.type_projet === t ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-medium" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"}`}>
-                    {t}
+                {t("types_projet",lang).map((tp: string) => (
+                  <button key={tp} type="button" onClick={() => set("type_projet",tp)}
+                    className={`px-3 py-2 rounded-xl text-sm border transition-all ${form.type_projet===tp ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-medium" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"}`}>
+                    {tp}
                   </button>
                 ))}
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Type de profil":"Profile type"}</label>
-              <Radio options={PROFIL_OPTIONS[lang]} value={form.type_profil} onChange={v => set("type_profil", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("type_profil",lang)}</label>
+              <Radio options={t("profil_options",lang)} value={form.type_profil} onChange={v => set("type_profil",v)} />
             </div>
           </>}
 
+          {/* ÉTAPE 2 */}
           {step === 2 && <>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"L'idée globale est :":"The overall idea is:"}</label>
-              <Radio options={IDEE_OPTIONS[lang]} value={form.idee} onChange={v => set("idee", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("idee_label",lang)}</label>
+              <Radio options={t("idee_options",lang)} value={form.idee} onChange={v => set("idee",v)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Le projet est :":"The project is:"}</label>
-              <Radio options={AVANCEMENT_OPTIONS[lang]} value={form.avancement} onChange={v => set("avancement", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("avanc_label",lang)}</label>
+              <Radio options={t("avancement_options",lang)} value={form.avancement} onChange={v => set("avancement",v)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Produit fonctionnel :":"Functional product:"}</label>
-              <Radio options={PRODUIT_OPTIONS[lang]} value={form.produit} onChange={v => set("produit", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("produit_label",lang)}</label>
+              <Radio options={t("produit_options",lang)} value={form.produit} onChange={v => set("produit",v)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Nombre d'utilisateurs :":"Number of users:"}</label>
-              <Radio options={UTILISATEURS_OPTIONS[lang]} value={form.utilisateurs} onChange={v => set("utilisateurs", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("users_label",lang)}</label>
+              <Radio options={t("utilisateurs_options",lang)} value={form.utilisateurs} onChange={v => set("utilisateurs",v)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Revenus mensuels :":"Monthly revenue:"}</label>
-              <Radio options={REVENUS_OPTIONS[lang]} value={form.revenus} onChange={v => set("revenus", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("revenus_label",lang)}</label>
+              <Radio options={t("revenus_options",lang)} value={form.revenus} onChange={v => set("revenus",v)} />
             </div>
           </>}
 
+          {/* ÉTAPE 3 */}
           {step === 3 && <>
-            <Field label={lang==="fr"?"Court terme (1 à 3 mois)":"Short term (1 to 3 months)"} value={form.objectif_court} onChange={v => set("objectif_court", v)} placeholder={lang==="fr"?"Finir le prototype, trouver un collaborateur...":"Finish the prototype, find a collaborator..."} multiline />
-            <Field label={lang==="fr"?"Moyen terme (6 à 12 mois)":"Medium term (6 to 12 months)"} value={form.objectif_moyen} onChange={v => set("objectif_moyen", v)} placeholder="" multiline />
-            <Field label={lang==="fr"?"Long terme":"Long term"} value={form.objectif_long} onChange={v => set("objectif_long", v)} placeholder="" multiline />
+            <Field label={t("court_label",lang)} value={form.objectif_court} onChange={v => set("objectif_court",v)} placeholder={t("court_hint",lang)} multiline />
+            <Field label={t("moyen_label",lang)} value={form.objectif_moyen} onChange={v => set("objectif_moyen",v)} placeholder="" multiline />
+            <Field label={t("long_label",lang)}  value={form.objectif_long}  onChange={v => set("objectif_long",v)}  placeholder="" multiline />
           </>}
 
+          {/* ÉTAPE 4 */}
           {step === 4 && <>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Qu'est-ce que tu recherches ?":"What are you looking for?"}</label>
-              <MultiCheck options={CHERCHE_OPTIONS[lang]} values={form.cherche} onChange={v => set("cherche", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("cherche_label",lang)}</label>
+              <MultiCheck options={t("cherche_options",lang)} values={form.cherche} onChange={v => set("cherche",v)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Temps disponible par semaine :":"Time available per week:"}</label>
-              <Radio options={TEMPS_OPTIONS[lang]} value={form.temps} onChange={v => set("temps", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("temps_label",lang)}</label>
+              <Radio options={t("temps_options",lang)} value={form.temps} onChange={v => set("temps",v)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Collaboration recherchée :":"Preferred collaboration:"}</label>
-              <Radio options={DISTANCE_OPTIONS[lang]} value={form.distance} onChange={v => set("distance", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("distance_label",lang)}</label>
+              <Radio options={t("distance_options",lang)} value={form.distance} onChange={v => set("distance",v)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Niveau d'engagement recherché :":"Desired engagement level:"}</label>
-              <Radio options={ENGAGEMENT_OPTIONS[lang]} value={form.engagement} onChange={v => set("engagement", v)} />
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("engagement_label",lang)}</label>
+              <Radio options={t("engagement_options",lang)} value={form.engagement} onChange={v => set("engagement",v)} />
             </div>
           </>}
 
+          {/* ÉTAPE 5 */}
           {step === 5 && <>
             {Object.entries(TECH).map(([cat, opts]) => (
               <div key={cat} className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300 capitalize">{cat}</label>
-                <MultiCheck options={opts} values={form.tech[cat] || []} onChange={v => setTech(cat, v)} />
+                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{(t("tech_labels",lang) as any)[cat] || cat}</label>
+                <MultiCheck options={opts} values={form.tech[cat]||[]} onChange={v => setTech(cat,v)} />
               </div>
             ))}
           </>}
 
+          {/* ÉTAPE 6 */}
           {step === 6 && <>
-            <Field label={lang==="fr"?"Nom complet":"Full name"} value={form.nom_complet} onChange={v => set("nom_complet", v)} />
-            <Field label={lang==="fr"?"Pays":"Country"} value={form.pays} onChange={v => set("pays", v)} />
-            <Field label={lang==="fr"?"Langue principale":"Primary language"} value={form.langue} onChange={v => set("langue", v)} />
-            <Field label={lang==="fr"?"URL de ta photo ou logo (optionnel)":"Photo or logo URL (optional)"} value={form.photo_url} onChange={v => set("photo_url", v)} placeholder="https://..." />
+            <Field label={t("nom_complet_label",lang)} value={form.nom_complet} onChange={v => set("nom_complet",v)} />
+            <Field label={t("pays_label",lang)}        value={form.pays}        onChange={v => set("pays",v)}        />
+            <Field label={t("langue_label",lang)}      value={form.langue}      onChange={v => set("langue",v)}      />
+
+            {/* UPLOAD PHOTO */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("photo_label",lang)}</label>
+              <p className="text-xs text-zinc-400">{t("photo_hint",lang)}</p>
+
+              <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+
+              {form.photo_url ? (
+                <div className="relative w-full h-44 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
+                  <img src={form.photo_url} alt="preview" className="w-full h-full object-cover"/>
+                  <button type="button" onClick={() => photoInputRef.current?.click()}
+                    className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/60 hover:bg-black/80 text-white text-xs font-medium rounded-xl backdrop-blur-sm transition-colors">
+                    {uploading ? "..." : t("photo_change",lang)}
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => photoInputRef.current?.click()}
+                  disabled={uploading}
+                  className="w-full h-44 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+                  {uploading ? (
+                    <span className="text-sm">Chargement...</span>
+                  ) : (
+                    <>
+                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
+                      <span className="text-sm font-medium">{t("photo_btn",lang)}</span>
+                      <span className="text-xs">JPG, PNG, WEBP</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
             <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2"/>
 
+            {/* CONTACTS PRIVÉS */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-1">🔒 {lang==="fr"?"Contacts privés":"Private contacts"}</p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">{lang==="fr"?"Visibles uniquement après achat de ta fiche. Tu choisis ce que tu rends disponible.":"Visible only after someone purchases your listing. You choose what to share."}</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-1">🔒 {t("contacts_titre",lang)}</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">{t("contacts_hint",lang)}</p>
               <div className="flex flex-col gap-1.5 mb-4">
-                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr"?"Que veux-tu rendre visible ?":"What do you want to make visible?"}</label>
-                <p className="text-xs text-zinc-400">{lang==="fr"?"Le courriel est obligatoire.":"Email is required."}</p>
+                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("contacts_label",lang)}</label>
+                <p className="text-xs text-zinc-400">{t("email_required",lang)}</p>
                 <div className="flex flex-wrap gap-2">
                   {CONTACTS_OPTIONS.map(opt => {
                     const isEmail    = opt === "Email";
@@ -400,17 +509,13 @@ export default function InscriptionPage() {
                     return (
                       <button key={opt} type="button"
                         onClick={() => {
-                          if (isEmail) return; // Email non décoché
+                          if (isEmail) return;
                           set("contacts_visibles", isSelected
                             ? form.contacts_visibles.filter(v => v !== opt)
                             : [...form.contacts_visibles, opt]);
                         }}
-                        className={`px-3 py-2 rounded-xl text-sm border transition-all ${
-                          isSelected
-                            ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-medium"
-                            : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"
-                        } ${isEmail ? "cursor-default" : ""}`}>
-                        {opt}{isEmail ? " *" : ""}
+                        className={`px-3 py-2 rounded-xl text-sm border transition-all ${isSelected ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-medium" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"} ${isEmail?"cursor-default":""}`}>
+                        {opt}{isEmail?" *":""}
                       </button>
                     );
                   })}
@@ -420,23 +525,16 @@ export default function InscriptionPage() {
                 {form.contacts_visibles.includes("Email") && (
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email *</label>
-                    <input type="email" value={form.email} onChange={e => set("email", e.target.value)}
-                      placeholder="toi@exemple.com"
-                      className={`bg-white dark:bg-zinc-900 border rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none transition-colors ${
-                        form.email && !validateEmail(form.email)
-                          ? "border-red-400 focus:border-red-500"
-                          : "border-zinc-200 dark:border-zinc-700 focus:border-zinc-500"
-                      }`}/>
-                    {form.email && !validateEmail(form.email) && (
-                      <p className="text-xs text-red-400">{lang==="fr"?"Adresse courriel invalide.":"Invalid email address."}</p>
-                    )}
+                    <input type="email" value={form.email} onChange={e => set("email",e.target.value)} placeholder="toi@exemple.com"
+                      className={`bg-white dark:bg-zinc-900 border rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none transition-colors ${form.email && !validateEmail(form.email) ? "border-red-400" : "border-zinc-200 dark:border-zinc-700"}`}/>
+                    {form.email && !validateEmail(form.email) && <p className="text-xs text-red-400">{t("email_invalid",lang)}</p>}
                   </div>
                 )}
-                {form.contacts_visibles.includes("Discord")   && <Field label="Discord"  value={form.discord}  onChange={v => set("discord", v)}  placeholder="username" />}
-                {form.contacts_visibles.includes("GitHub")    && <Field label="GitHub"   value={form.github}   onChange={v => set("github", v)}   placeholder="github.com/toi" />}
-                {form.contacts_visibles.includes("LinkedIn")  && <Field label="LinkedIn" value={form.linkedin} onChange={v => set("linkedin", v)} placeholder="linkedin.com/in/toi" />}
-                {form.contacts_visibles.includes("Site web")  && <Field label={lang==="fr"?"Site web":"Website"} value={form.site_web} onChange={v => set("site_web", v)} placeholder="https://monsite.com" />}
-                {form.contacts_visibles.includes("Téléphone") && <Field label={lang==="fr"?"Téléphone (optionnel)":"Phone (optional)"} value={form.telephone} onChange={v => set("telephone", v)} placeholder="+1 555 000 0000" />}
+                {form.contacts_visibles.includes("Discord")   && <Field label="Discord"  value={form.discord}  onChange={v=>set("discord",v)}  placeholder="username"           />}
+                {form.contacts_visibles.includes("GitHub")    && <Field label="GitHub"   value={form.github}   onChange={v=>set("github",v)}   placeholder="github.com/toi"     />}
+                {form.contacts_visibles.includes("LinkedIn")  && <Field label="LinkedIn" value={form.linkedin} onChange={v=>set("linkedin",v)} placeholder="linkedin.com/in/toi"/>}
+                {form.contacts_visibles.includes("Site web")  && <Field label={lang==="fr"?"Site web":"Website"} value={form.site_web} onChange={v=>set("site_web",v)} placeholder="https://monsite.com"/>}
+                {form.contacts_visibles.includes("Téléphone") && <Field label={lang==="fr"?"Téléphone (optionnel)":"Phone (optional)"} value={form.telephone} onChange={v=>set("telephone",v)} placeholder="+1 555 000 0000"/>}
               </div>
             </div>
           </>}
@@ -446,21 +544,21 @@ export default function InscriptionPage() {
         {/* NAVIGATION */}
         <div className="flex items-center justify-between mt-10 pt-6 border-t border-zinc-100 dark:border-zinc-800">
           {step > 1 ? (
-            <button onClick={() => setStep(s => s - 1)}
+            <button onClick={() => setStep(s => s-1)}
               className="px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 transition-colors">
-              ← {dict.precedent}
+              ← {t("precedent",lang)}
             </button>
           ) : <div/>}
 
           {step < STEPS ? (
-            <button onClick={() => setStep(s => s + 1)} disabled={step === 1 && !form.nom_projet.trim()}
+            <button onClick={() => setStep(s => s+1)} disabled={step===1 && !form.nom_projet.trim()}
               className="px-6 py-2.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed">
-              {dict.suivant} →
+              {t("suivant",lang)} →
             </button>
           ) : (
             <button onClick={handleSubmit} disabled={loading}
               className="px-6 py-2.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm disabled:opacity-60">
-              {loading ? dict.chargement : `${dict.soumettre} ✓`}
+              {loading ? t("chargement",lang) : `${t("soumettre",lang)} ✓`}
             </button>
           )}
         </div>

@@ -109,11 +109,13 @@ export default function ConversationPage() {
   const [isSurpriseActive,       setIsSurpriseActive]       = useState(false);
 
   const [warmupIntent, setWarmupIntent] = useState<string|null>(null);
+  const [isWarmingUp, setIsWarmingUp]   = useState(false);
   const warmupRef = useRef<ReturnType<typeof setTimeout>|null>(null);
   const triggerWarmup = useCallback((text: string) => {
     if (warmupRef.current) clearTimeout(warmupRef.current);
-    if (text.length < 3) { setWarmupIntent(null); return; }
+    if (text.length < 3) { setWarmupIntent(null); setIsWarmingUp(false); return; }
     warmupRef.current = setTimeout(async () => {
+      setIsWarmingUp(true);
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
         const res  = await fetch(`${API_URL}/horizon-warmup`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ partial: text }) });
@@ -121,7 +123,9 @@ export default function ConversationPage() {
         if (data.intent?.response) {
           try { setWarmupIntent(JSON.parse(data.intent.response)?.intent || null); } catch {}
         }
-      } catch {}
+      } catch {} finally {
+        setIsWarmingUp(false);
+      }
     }, 400);
   }, []);
   useEffect(() => () => { if (warmupRef.current) clearTimeout(warmupRef.current); }, []);
@@ -341,7 +345,7 @@ export default function ConversationPage() {
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const response = await fetch(`${API_URL}/chat`, {
+      const response = await fetch(`${API_URL}/1/conversation`, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ message: userMessage, image: imageToSend, history: serializeMsgs(baseMessages), userTier, calendarEvents:{}, selectedButtons, summary: activeConv?.summary || "" }),
       });
@@ -590,9 +594,17 @@ export default function ConversationPage() {
                   <button onClick={() => { setSelectedImage(null); setSelectedImageName(""); }} className="text-zinc-400 hover:text-red-400 text-xs">✕</button>
                 </div>
               )}
-              {warmupIntent && warmupIntent !== "autre" && (
+              {isWarmingUp && (
                 <div className="flex items-center gap-1.5 mb-1.5 px-1">
-                  <span className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse"/>
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-ping" style={{ animationDuration: "0.8s" }}/>
+                  <span className="text-[10px] text-cyan-500/60 font-mono uppercase tracking-widest">
+                    {lang==="fr"?"analyse...":"scanning..."}
+                  </span>
+                </div>
+              )}
+              {!isWarmingUp && warmupIntent && warmupIntent !== "autre" && (
+                <div className="flex items-center gap-1.5 mb-1.5 px-1">
+                  <span className="w-1 h-1 rounded-full bg-cyan-400"/>
                   <span className="text-[10px] text-zinc-400 font-mono">
                     {({recherche_locale:"📍",prix:"💰",comparaison:"⚖️",definition:"📖",actualite:"📰"} as any)[warmupIntent]||"🔍"} {warmupIntent}
                   </span>
