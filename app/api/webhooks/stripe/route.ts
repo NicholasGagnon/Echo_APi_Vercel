@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
 
   try {
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+    const webhookSecret = "whsec_1U3vFgBHw5LMtvb0HSkCF7kdfOtJZLkl";
     event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
   } catch (err: any) {
     console.error(`Échec validation Webhook Stripe: ${err.message}`);

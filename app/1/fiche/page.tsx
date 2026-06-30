@@ -143,22 +143,31 @@ export default function FichePage() {
     } catch (e) { console.error("Notif interet:", e); }
   };
 
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
   const handleAcheter = async (id: string) => {
     if (!userId) {
-      alert(lang==="fr" ? "Connecte-toi pour acheter une fiche." : "Log in to purchase a listing.");
+      setShowLoginModal(true);
       return;
     }
     try {
-      const res = await fetch("/api/checkout-fiche", {
+      const res = await fetch("/api/stripe/create-checkout-site2", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ficheId: id, acheteurId: userId, acheteurEmail: userEmail }),
       });
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        console.error("Reponse non-JSON du serveur (route checkout-fiche introuvable ?)");
+        alert(lang==="fr" ? "Erreur de configuration du paiement. Reessaie plus tard." : "Payment configuration error. Try again later.");
+        return;
+      }
       const data = await res.json();
       if (data.url) window.location.href = data.url;
       else alert(data.message || (lang==="fr"?"Erreur lors du paiement.":"Payment error."));
     } catch (e) {
       console.error("Checkout fiche:", e);
+      alert(lang==="fr" ? "Erreur reseau." : "Network error.");
     }
   };
 
@@ -435,6 +444,43 @@ export default function FichePage() {
           </div>
         ))}
       </div>
+
+      {/* ── MODAL CONNEXION REQUISE ── */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowLoginModal(false)}>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative" onClick={e => e.stopPropagation()}>
+
+            {/* Header — logo + langue + fermer */}
+            <div className="flex items-center justify-between mb-5">
+              <img src="/echo1.png" alt="Echo" className="w-8 h-8 rounded-full object-cover" />
+              <div className="flex items-center gap-2">
+                <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")}
+                  className="text-xs text-zinc-400 border border-zinc-200 dark:border-zinc-700 px-2 py-1 rounded-lg hover:border-zinc-400 transition-colors">
+                  {lang === "fr" ? "EN" : "FR"}
+                </button>
+                <button onClick={() => setShowLoginModal(false)}
+                  className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors text-lg leading-none w-6 h-6 flex items-center justify-center">
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2 text-center">
+              {lang==="fr" ? "Connexion requise" : "Login required"}
+            </h3>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center mb-6">
+              {lang==="fr"
+                ? "Connecte-toi à ton compte pour débloquer cette fiche et accéder aux informations de contact."
+                : "Log in to your account to unlock this listing and access contact information."}
+            </p>
+
+            <Link href="/1/account"
+              className="block w-full text-center py-3 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-semibold text-sm hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors">
+              {lang==="fr" ? "Se connecter" : "Log in"}
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* ── MODAL SUPPRESSION ── */}
       {deleteModalId && (
