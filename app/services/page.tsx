@@ -410,12 +410,7 @@ export default function ServicesPage() {
             <div>© {new Date().getFullYear()} Echo Ecosystem. All rights reserved.</div>
 
             <div className="flex gap-2 flex-wrap justify-start sm:justify-end w-full sm:w-auto items-center relative">
-<button
-  onClick={handleTestFichePurchase}
-  className="border border-red-500 text-red-500 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-xl text-[11px] transition-all"
->
-  🧪 TEST FICHE 1.50$
-</button>
+
               {/* SÉLECTEUR PAYS / DEVISE */}
               <div className="relative">
                 <button
