@@ -59,9 +59,8 @@ export default function HistoryPage() {
       const { data: profile } = await supabase.from("profiles").select("user_tier").eq("id", uid).single();
       const tier = normalizeTier(profile?.user_tier);
       setUserTier(tier);
-      setIsPageBlocked(tier === "connected_free" || tier === "basic");
+      setIsPageBlocked(false);
 
-      if (tier !== "connected_free" && tier !== "basic") {
         const { data: histRows } = await supabase
           .from("echo_conversations")
           .select("id, messages, updated_at")
@@ -91,7 +90,6 @@ export default function HistoryPage() {
           setChatMessages(chatRows[0].messages || []);
           setMemorySummary(chatRows[0].summary || "");
         }
-      }
 
       setIsLoaded(true);
     });
@@ -107,7 +105,7 @@ export default function HistoryPage() {
       const { data: profile } = await supabase.from("profiles").select("user_tier").eq("id", uid).single();
       const tier = normalizeTier(profile?.user_tier);
       setUserTier(tier);
-      setIsPageBlocked(tier === "connected_free" || tier === "basic");
+      setIsPageBlocked(false);
     });
 
     return () => listener.subscription.unsubscribe();

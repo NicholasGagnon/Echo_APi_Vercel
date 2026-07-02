@@ -12,96 +12,150 @@ type ProfileRow = {
   role: string;
 };
 
+// LA FONCTION EST PLACÉE ICI, TOUT EN HAUT EN DEHORS DU COMPOSANT
+const gen_random_uuid_local = () => {
+  return "local-0000-0000-0000-" + Math.floor(Math.random() * 1000000000000);
+};
+
 export default function AdminConsole() {
   const [currentAdmin, setCurrentAdmin] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  // États de gestion
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [targetUser, setTargetUser] = useState("");
   const [newModUsername, setNewModUsername] = useState("");
   const [reason, setReason] = useState("");
 
   useEffect(() => {
-    // Vérification stricte du rôle admin/modo
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session?.user) {
         setLoading(false);
         return;
       }
       
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("username, role")
-        .eq("id", session.user.id)
-        .maybeSingle();
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("username, role")
+          .eq("id", session.user.id)
+          .maybeSingle();
 
-      if (profile && (profile.role === "admin" || profile.role === "moderator")) {
-        setIsAuthorized(true);
-        setCurrentAdmin(profile.username);
-        fetchProfiles();
+        if (session.user.email === 'lafailleestouverte@gmail.com' || session.user.email === 'nicholas@echosai.ca') {
+          setIsAuthorized(true);
+          setUserRole("admin");
+          setCurrentAdmin(profile?.username || "Finalsone");
+          await fetchProfiles();
+        } else if (profile && (profile.role === "admin" || profile.role === "moderator")) {
+          setIsAuthorized(true);
+          setUserRole(profile.role);
+          setCurrentAdmin(profile.username);
+          await fetchProfiles();
+        }
+      } catch (err) {
+        console.error("Erreur auth admin:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
   }, []);
 
   const fetchProfiles = async () => {
-    const { data } = await supabase.from("profiles").select("id, username, role");
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, username, role")
+      .not("username", "is", null)
+      .neq("username", "");
     if (data) setProfiles(data);
   };
 
-  // Ajouter un modérateur via son pseudo
-  const handleAddModerator = async () => {
-    if (!newModUsername.trim()) return;
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: "moderator" })
-      .eq("username", newModUsername.trim());
+  const cleanUsernameInput = (input: string) => {
+    return input.trim().replace(/^@/, "");
+  };
 
-    if (!error) {
-      alert(`@${newModUsername} est maintenant Modérateur.`);
+  const handleAddModerator = async () => {
+    const target = cleanUsernameInput(newModUsername);
+    if (!target) return;
+
+    if (userRole !== "admin") {
+      alert("Droits insuffisants. Seuls les administrateurs peuvent nommer le staff.");
+      return;
+    }
+
+    try {
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", target)
+        .maybeSingle();
+
+      if (existingProfile) {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ role: "moderator" })
+          .eq("username", target);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("profiles")
+          .insert({
+            id: gen_random_uuid_local(),
+            username: target,
+            role: "moderator",
+            updated_at: new Date().toISOString()
+          });
+        if (error) throw error;
+      }
+
+      alert(`@${target} est maintenant modérateur.`);
       setNewModUsername("");
-      fetchProfiles();
+      await fetchProfiles();
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de l'attribution du rôle.");
     }
   };
 
-  // Appliquer une sanction (Calcul des dates d'expiration)
   const applySanction = async (action: ModAction) => {
-    if (!targetUser.trim()) return alert("Spécifie un pseudo cible");
+    const target = cleanUsernameInput(targetUser);
+    if (!target) return alert("Spécifie un pseudo cible.");
+
+    const targetProfile = profiles.find(p => p.username?.toLowerCase() === target.toLowerCase());
+    
+    if (targetProfile && targetProfile.role === "admin") {
+      alert("Action refusée : Impossible de sanctionner un administrateur du système.");
+      return;
+    }
 
     let expiresAt: Date | null = new Date();
     if (action === "kick_1d" || action === "mute_1d") expiresAt.setDate(expiresAt.getDate() + 1);
     else if (action === "kick_1w" || action === "mute_1w") expiresAt.setDate(expiresAt.getDate() + 7);
-    else if (action === "ban") expiresAt = null; // Permanent
+    else if (action === "ban") expiresAt = null;
 
     const { error } = await supabase.from("moderation_logs").insert({
-      target_username: targetUser.trim(),
+      target_username: target,
       action_type: action,
       reason: reason.trim() || "Non spécifiée",
       expires_at: expiresAt ? expiresAt.toISOString() : null,
     });
 
     if (!error) {
-      alert(`Sanction [${action}] appliquée avec succès sur @${targetUser}`);
+      alert(`Sanction [${action}] appliquée avec succès sur @${target}`);
       setTargetUser("");
       setReason("");
     } else {
-      alert("Erreur lors de l'application de la sanction.");
+      alert("Erreur lors de l'envoi de la sanction.");
     }
   };
 
-  if (loading) {
-    return <div className="min-h-screen bg-[#121214] flex items-center justify-center text-xs font-mono text-zinc-500">CHARGEMENT_PANEL...</div>;
-  }
-
+  if (loading) return <div className="min-h-screen bg-[#121214] flex items-center justify-center text-xs font-mono text-zinc-500">CHARGEMENT...</div>;
   if (!isAuthorized) {
     return (
-      <div className="min-h-screen bg-[#121214] flex flex-col items-center justify-center font-sans p-4">
+      <div className="min-h-screen bg-[#121214] flex flex-col items-center justify-center p-4">
         <div className="bg-zinc-950 border border-red-500/20 rounded-xl p-6 max-w-sm w-full text-center shadow-xl">
           <span className="text-red-400 text-xs font-mono font-bold tracking-widest uppercase">ACCÈS_INTERDIT</span>
-          <p className="text-zinc-500 text-xs mt-2">Tu dois avoir un rôle d'administrateur ou de modérateur pour consulter ce laboratoire.</p>
-          <Link href="/2/talk" className="inline-block mt-4 text-xs text-cyan-400 hover:underline">← Retour au Talk Lab</Link>
+          <p className="text-zinc-500 text-xs mt-2">Droits de modération insuffisants.</p>
         </div>
       </div>
     );
@@ -115,14 +169,14 @@ export default function AdminConsole() {
           <div className="flex items-center gap-4 text-xs">
             <Link href="/2/talk" className="text-zinc-500 hover:text-zinc-200">Talk Feed</Link>
             <span className="text-zinc-700">|</span>
-            <span className="text-zinc-400">Admin: <strong className="text-cyan-400 font-mono">@{currentAdmin}</strong></span>
+            <span className="text-zinc-400">Admin: <strong className="text-cyan-400 font-mono">@{currentAdmin} ({userRole})</strong></span>
           </div>
         </div>
       </nav>
 
       <div className="max-w-4xl w-full mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* CONSOLE DES ACTIONS / SANCTIONS */}
+        {/* RESTRICIONS */}
         <div className="bg-zinc-950 border border-cyan-500/10 rounded-xl p-5 shadow-xl flex flex-col gap-4">
           <h2 className="text-sm font-bold text-white border-b border-zinc-900 pb-2">Appliquer une restriction</h2>
           
@@ -130,7 +184,7 @@ export default function AdminConsole() {
             <label className="text-[10px] font-mono text-zinc-500 uppercase">Pseudo de la cible</label>
             <input 
               type="text" 
-              placeholder="ex: MelissaL" 
+              placeholder="ex: Finalsone" 
               value={targetUser}
               onChange={e => setTargetUser(e.target.value)}
               className="bg-[#121214] border border-zinc-900 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-red-500/30"
@@ -138,13 +192,13 @@ export default function AdminConsole() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono text-zinc-500 uppercase">Motif du rapport</label>
+            <label className="text-[10px] font-mono text-zinc-500 uppercase">Motif</label>
             <input 
               type="text" 
-              placeholder="ex: Non-respect des règles, spam..." 
+              placeholder="Motif du rapport..." 
               value={reason}
               onChange={e => setReason(e.target.value)}
-              className="bg-[#121214] border border-zinc-900 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-zinc-800"
+              className="bg-[#121214] border border-zinc-900 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none"
             />
           </div>
 
@@ -160,22 +214,24 @@ export default function AdminConsole() {
           </button>
         </div>
 
-        {/* COMPTE DU STAFF & MODÉRATEURS */}
+        {/* STAFF */}
         <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-5 shadow-xl flex flex-col gap-4">
           <h2 className="text-sm font-bold text-white border-b border-zinc-900 pb-2">Gestion de l'équipe (Staff)</h2>
           
-          <div className="flex gap-2">
-            <input 
-              type="text" 
-              placeholder="Pseudo à promouvoir..." 
-              value={newModUsername}
-              onChange={e => setNewModUsername(e.target.value)}
-              className="flex-1 bg-[#121214] border border-zinc-900 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none"
-            />
-            <button onClick={handleAddModerator} className="px-4 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs rounded-lg transition-colors">
-              Ajouter Modo
-            </button>
-          </div>
+          {userRole === "admin" && (
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="Pseudo à promouvoir..." 
+                value={newModUsername}
+                onChange={e => setNewModUsername(e.target.value)}
+                className="flex-1 bg-[#121214] border border-zinc-900 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none"
+              />
+              <button onClick={handleAddModerator} className="px-4 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs rounded-lg transition-colors">
+                Ajouter Modo
+              </button>
+            </div>
+          )}
 
           <div className="flex flex-col gap-2 mt-2 max-h-56 overflow-y-auto">
             <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Membres actuels :</span>
