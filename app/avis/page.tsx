@@ -181,14 +181,14 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-sm font-bold tracking-tight text-zinc-100">Anti-Bullshit</h1>
-              <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Review Engine v3.5</p>
+              <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Review Engine v4.0</p>
             </div>
           </div>
           
           <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/80 space-y-2">
             <p className="text-xs font-semibold text-zinc-300">🎯 Notre Mission</p>
             <p className="text-[11px] text-zinc-400 leading-relaxed">
-              Nous scannons la page web que vous donnez via l'API Jina, nettoyons le bruit marketing, et extrayons la vérité absolue grâce à DeepSeek v4.
+              Nous utilisons Perplexity Sonar pour rechercher les vrais avis clients en temps réel, puis extrayons la vérité absolue sans bullshit.
             </p>
           </div>
         </div>
@@ -258,8 +258,8 @@ export default function App() {
               <div className="flex flex-col items-center justify-center space-y-4">
                 <div className="w-10 h-10 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
                 <div className="text-center space-y-1">
-                  <p className="text-xs font-semibold text-zinc-300">Jina Reader extrait le contenu brut...</p>
-                  <p className="text-[10px] text-zinc-500">DeepSeek v4 prépare ensuite l'analyse anti-bullshit</p>
+                  <p className="text-xs font-semibold text-zinc-300">Perplexity Sonar recherche les avis en temps réel...</p>
+                  <p className="text-[10px] text-zinc-500">Analyse et extraction des vrais points forts et défauts...</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-30 pointer-events-none">
