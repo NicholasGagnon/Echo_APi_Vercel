@@ -51,7 +51,7 @@ export default function HistoryPage() {
   // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { setIsPageBlocked(true); setIsLoaded(true); return; }
+      if (!data.user) { setIsPageBlocked(false); setIsLoaded(true); return; }
 
       const uid = data.user.id;
       setUser(data.user);
@@ -96,7 +96,7 @@ export default function HistoryPage() {
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!session?.user) {
-        setUser(null); setUserTier("connected_free"); setIsPageBlocked(true);
+        setUser(null); setUserTier("connected_free"); setIsPageBlocked(false);
         setChatMessages([]); setHistory([]); setActiveChatId(null); setMemorySummary("");
         return;
       }
@@ -201,13 +201,15 @@ export default function HistoryPage() {
   // ── SEND MESSAGE ──────────────────────────────────────────────────────────
   const sendMessage = async (forcedText?: string) => {
     const textToSubmit = forcedText ?? input;
-    if (!textToSubmit.trim() || !user || isPageBlocked) return;
+    if (!textToSubmit.trim() || isPageBlocked) return;
 
     // Quota chat_ia
-    const quotaStatus = checkQuota("chat_ia", userTier, true, user.id);
-    if (!quotaStatus.allowed) {
-      triggerQuotaPopup(lang === "fr" ? "Chat IA" : "AI Chat");
-      return;
+    if (user) {
+      const quotaStatus = checkQuota("chat_ia", userTier, true, user.id);
+      if (!quotaStatus.allowed) {
+        triggerQuotaPopup(lang === "fr" ? "Chat IA" : "AI Chat");
+        return;
+      }
     }
 
     const baseMessages = [...chatMessages, `You: ${textToSubmit}`];

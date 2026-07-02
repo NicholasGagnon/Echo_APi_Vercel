@@ -78,6 +78,7 @@ export default function Home() {
   const [showPremiumModal,  setShowPremiumModal]   = useState(false);
   const [showQuotaPopup,    setShowQuotaPopup]     = useState(false);
   const [quotaPopupLabel,   setQuotaPopupLabel]    = useState("");
+  const [showWelcomePopup,  setShowWelcomePopup]   = useState(false);
   const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
 
   const [chatFontSize, setChatFontSize] = useState(15);
@@ -342,7 +343,7 @@ export default function Home() {
             if (saved) setMessages(deserializeMsgs(JSON.parse(saved)));
           }
         }
-        if (!localStorage.getItem("echo-tuto-done-v1")) setTutorialStep(1);
+        if (!localStorage.getItem("echo-welcome-seen")) setShowWelcomePopup(true);
       } catch(e) { console.error("Bootstrap error", e); }
       setIsLoaded(true);
     });
@@ -1113,6 +1114,35 @@ export default function Home() {
       )}
 
       <PremiumRequiredModal open={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
+
+      {showWelcomePopup && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center pb-12 sm:items-center sm:pb-0">
+          <div className="absolute inset-0 pointer-events-auto" style={{background:"transparent"}} />
+          <div className="relative pointer-events-auto bg-zinc-950/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.25)] p-7 w-full max-w-md mx-4 flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-start justify-between border-b border-zinc-800 pb-4">
+              <h3 className="font-black text-base font-mono uppercase tracking-widest text-cyan-400">{lang === "fr" ? "BIENVENUE" : "WELCOME"}</h3>
+              <button type="button" onClick={() => { setShowWelcomePopup(false); localStorage.setItem("echo-welcome-seen","true"); }}
+                className="text-zinc-500 hover:text-white font-bold text-sm p-1 transition-colors">✕</button>
+            </div>
+            <div className="flex gap-4 items-start">
+              <div className="shrink-0 bg-zinc-900 p-1.5 rounded-full border border-zinc-800">
+                <img src="/echo1.png" alt="Echo" className="w-14 h-14 rounded-full object-cover"/>
+              </div>
+              <p className="text-zinc-300 text-sm leading-relaxed flex-1 whitespace-pre-line">
+                {lang === "fr"
+                  ? <>Hey bienvenue ! 👋 Je suis Echo. Je traîne un peu partout sur ce site. Les boutons là-haut influencent ma façon de voir les choses. Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux, espiègle et légèrement chaotique. 😄 Et si tu actives le Double Regard, tu combines deux perspectives. 👀 Ça devient souvent intéressant. 💀 Adiooo ! ✨</>
+                  : <>Hey welcome! 👋 I'm Echo. I hang around all over this site. The buttons up there influence how I see things. If you select nothing, you meet me in my natural state: curious, mischievous and slightly chaotic. 😄 And if you activate Double Vision, you combine two perspectives. 👀 Things often get interesting. 💀 Adiooo ! ✨</>}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 pt-1">
+              <Link href="/account" onClick={() => localStorage.setItem("echo-welcome-seen","true")}
+                className="w-full text-center block py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-sm tracking-widest transition-all shadow-md uppercase">
+                {lang === "fr" ? "SE CONNECTER" : "SIGN IN"}
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
