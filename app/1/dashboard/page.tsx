@@ -7,373 +7,274 @@ import { supabase } from "../../lib/supabase";
 type Lang = "fr" | "en";
 
 const NAV_ITEMS = [
-  { href: "/1",              key: "hall"   },
-  { href: "/1/dashboard",    key: "dash",   active: true },
-  { href: "/1/conversation", key: "conv"   },
-  { href: "/1/form",         key: "form"   },
-  { href: "/1/fiche",        key: "fiches" },
+  { href: "/1",              key: "hall"    },
+  { href: "/1/dashboard",    key: "dash", active: true },
+  { href: "/1/conversation", key: "conv"    },
+  { href: "/1/form",         key: "form"    },
+  { href: "/1/fiche",        key: "fiches"  },
   { href: "/1/account",      key: "account" },
 ];
-
 const LABELS: Record<string, { fr: string; en: string }> = {
-  hall:    { fr: "Hall",          en: "Hall" },
-  dash:    { fr: "Dashboard",     en: "Dashboard" },
-  conv:    { fr: "Conversation",  en: "Conversation" },
-  form:    { fr: "Formulaire",    en: "Form" },
-  fiches:  { fr: "Fiches",        en: "Listings" },
-  account: { fr: "Compte",        en: "Account" },
+  hall:    { fr: "Hall",         en: "Hall"         },
+  dash:    { fr: "Dashboard",    en: "Dashboard"    },
+  conv:    { fr: "Conversation", en: "Conversation" },
+  form:    { fr: "Formulaire",   en: "Form"         },
+  fiches:  { fr: "Fiches",       en: "Listings"     },
+  account: { fr: "Compte",       en: "Account"      },
 };
 
-type MyFiche = {
-  id: string;
-  key: string;
-  nom_projet: string;
-  type_projet: string;
-  likes: number;
-  interets: number;
-  created_at: string;
+const REGLES = {
+  fr: [
+    { id: 1,  text: "Les informations fournies doivent être vraies et vérifiables." },
+    { id: 2,  text: "Il est interdit d'utiliser l'identité ou le projet d'une autre personne." },
+    { id: 3,  text: "Les faux profils et les projets fictifs sont interdits." },
+    { id: 4,  text: "Les messages de harcèlement, menaces ou insultes sont interdits." },
+    { id: 5,  text: "Le spam, la publicité abusive ou les envois non sollicités sont interdits." },
+    { id: 6,  text: "Une seule clé personnelle est autorisée par utilisateur." },
+    { id: 7,  text: "Il est interdit de partager ou de revendre sa clé d'accès." },
+    { id: 8,  text: "Les données obtenues via les fiches débloquées doivent rester confidentielles." },
+    { id: 9,  text: "Il est interdit de contourner les limitations ou protections du système." },
+    { id: 10, text: "Les tentatives de fraude ou d'arnaque entraînent une exclusion immédiate." },
+    { id: 11, text: "Les contenus illégaux, haineux ou offensants sont interdits." },
+    { id: 12, text: "L'équipe peut suspendre ou supprimer un compte en cas d'abus." },
+  ],
+  en: [
+    { id: 1,  text: "All information provided must be true and verifiable." },
+    { id: 2,  text: "Using another person's identity or project is prohibited." },
+    { id: 3,  text: "Fake profiles and fictitious projects are prohibited." },
+    { id: 4,  text: "Harassment, threats or insults are prohibited." },
+    { id: 5,  text: "Spam, aggressive advertising or unsolicited bulk messages are prohibited." },
+    { id: 6,  text: "Only one personal key is allowed per user." },
+    { id: 7,  text: "Sharing or reselling your access key is prohibited." },
+    { id: 8,  text: "Data obtained through unlocked listings must remain confidential." },
+    { id: 9,  text: "Circumventing system limitations or protections is prohibited." },
+    { id: 10, text: "Fraud or scam attempts result in immediate exclusion." },
+    { id: 11, text: "Illegal, hateful or offensive content is prohibited." },
+    { id: 12, text: "The team may suspend or delete accounts in case of abuse." },
+  ],
 };
 
-type Interet = {
-  id: string;
-  type: string;
-  sender_key: string;
-  created_at: string;
-  nom_projet: string;
+// Événements statiques créés par les admins de la plateforme
+const EVENTS = {
+  fr: [
+    { date: "2026-07-15", title: "Lancement officiel de la plateforme", desc: "Ouverture publique — les fiches seront visibles par tous les visiteurs." },
+    { date: "2026-08-01", title: "Fonctionnalité Bureau v2", desc: "Nouvelles sections dans le bureau : historique complet et statistiques étendues." },
+    { date: "2026-09-01", title: "Programme de vérification", desc: "Les comptes vérifiés recevront un badge de confiance sur leurs fiches." },
+  ],
+  en: [
+    { date: "2026-07-15", title: "Official platform launch", desc: "Public opening — listings will be visible to all visitors." },
+    { date: "2026-08-01", title: "Desk v2 feature", desc: "New sections in the desk: full history and extended statistics." },
+    { date: "2026-09-01", title: "Verification program", desc: "Verified accounts will receive a trust badge on their listings." },
+  ],
 };
+
+type Stats = { fiches: number; tunnels: number; interets: number };
 
 export default function DashboardPage() {
   const [lang, setLang] = useState<Lang>("fr");
   const [time, setTime] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  const [myFiches, setMyFiches]   = useState<MyFiche[]>([]);
-  const [interets, setInterets]   = useState<Interet[]>([]);
-  const [unlockedCount, setUnlockedCount] = useState(0);
-  const [loading, setLoading]     = useState(true);
+  const [stats, setStats] = useState<Stats>({ fiches: 0, tunnels: 0, interets: 0 });
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [activeSection, setActiveSection] = useState<"stats"|"events"|"regles">("stats");
 
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setTime(now.toLocaleTimeString(lang === "fr" ? "fr-CA" : "en-CA", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, [lang]);
+    const tick = () => setTime(new Date().toLocaleTimeString(lang==="fr"?"fr-CA":"en-CA", { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false }));
+    tick(); const id = setInterval(tick,1000); return ()=>clearInterval(id);
+  },[lang]);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUserId(session?.user?.id || null);
-      setUserEmail(session?.user?.email || null);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUserId(session?.user?.id || null);
-      setUserEmail(session?.user?.email || null);
-    });
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!userId) { setMyFiches([]); setInterets([]); setUnlockedCount(0); setLoading(false); return; }
-    const load = async () => {
-      setLoading(true);
-
-      // Mes fiches
-      const { data: fichesData } = await supabase
-        .from("fiches")
-        .select("id, key, nom_projet, type_projet, likes, interets, created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-      const fiches = (fichesData || []) as MyFiche[];
-      setMyFiches(fiches);
-
-      // Intérêts reçus sur mes fiches
-      if (fiches.length > 0) {
-        const ficheIds = fiches.map(f => f.id);
-        const { data: interetsData } = await supabase
-          .from("fiche_interets")
-          .select("id, type, sender_key, created_at, fiche_id")
-          .in("fiche_id", ficheIds)
-          .order("created_at", { ascending: false })
-          .limit(8);
-        const enriched = (interetsData || []).map((it: any) => ({
-          ...it,
-          nom_projet: fiches.find(f => f.id === it.fiche_id)?.nom_projet || "—",
-        }));
-        setInterets(enriched);
-      }
-
-      // Fiches débloquées par moi (achats)
-      const { data: tunnelsData } = await supabase
-        .from("tunnels")
-        .select("id")
-        .eq("acheteur_id", userId);
-      setUnlockedCount((tunnelsData || []).length);
-
-      setLoading(false);
+  useEffect(()=>{
+    const load = async()=>{
+      setLoadingStats(true);
+      const [{ count: f }, { count: t }, { count: i }] = await Promise.all([
+        supabase.from("fiches").select("*", { count:"exact", head:true }),
+        supabase.from("tunnels").select("*", { count:"exact", head:true }),
+        supabase.from("fiche_interets").select("*", { count:"exact", head:true }),
+      ]);
+      setStats({ fiches: f||0, tunnels: t||0, interets: i||0 });
+      setLoadingStats(false);
     };
     load();
-  }, [userId]);
+  },[]);
 
   const dict = {
     fr: {
-      arch: "TABLEAU DE BORD",
+      area: "TABLEAU DE BORD",
       title: "DASHBOARD",
-      subtitle: "Construire seul ne veut pas dire grandir seul",
-      deskTitle: "POSTE DE CONTRÔLE",
-      terminal: "Terminal principal",
-      myListings: "MES FICHES",
-      noListings: "Aucune fiche créée.",
-      createOne: "Créer ma fiche →",
-      receptionist: "ECHO_IA_RECEPTIONIST_v2",
-      welcome: userEmail
-        ? `Connecté en tant que ${userEmail}. Structures synchronisées et stables.`
-        : "Connecte-toi pour synchroniser tes données.",
-      status: userId ? "CONNECTÉ" : "DÉCONNECTÉ",
-      explainTitle: "GUIDE RAPIDE",
-      explainForm: "La page Formulaire te permet de créer ta fiche projet officielle.",
-      explainFiche: "La page Fiches te permet de parcourir les projets et trouver un allié stratégique.",
-      explainFuture: "D'autres outils arriveront bientôt ici.",
-      recentActivity: "ACTIVITÉ RÉCENTE",
-      noActivity: "Aucune activité récente.",
-      core: "STATISTIQUES",
-      foundation: "Vue d'ensemble du compte",
-      seating: "DONNÉES SUPABASE • TEMPS RÉEL",
-      stats: { fiches: "Fiches créées", unlocked: "Fiches débloquées", interets: "Intérêts reçus" },
-      like: "intérêt", tresInteresse: "très intéressé",
-      loginPrompt: "Connecte-toi pour voir ton dashboard.",
-      login: "Se connecter",
+      subtitle: "Ce qui se passe sur la plateforme, en temps réel.",
+      tabs: { stats:"Statistiques", events:"Événements", regles:"Règlement" },
+      statsDesc: ["Fiches actives", "Contacts débloqués", "Intérêts envoyés"],
+      statsNote: "Données en temps réel depuis Supabase.",
+      eventsTitle: "Événements à venir",
+      eventsEmpty: "Aucun événement planifié pour l'instant.",
+      reglesTitle: "Règlement de la plateforme",
+      reglesNote: "Ce règlement s'applique à tous les membres dès leur inscription.",
+      reglesWarn: "Toute fausse déclaration concernant votre identité, votre entreprise ou votre projet peut entraîner la suppression immédiate de votre compte sans préavis. Votre clé personnelle est liée à votre identité sur la plateforme. Toute tentative d'usurpation, de partage ou de duplication de clé peut entraîner la révocation définitive de votre accès.",
     },
     en: {
-      arch: "DASHBOARD",
+      area: "CONTROL PANEL",
       title: "DASHBOARD",
-      subtitle: "Built alone doesn't mean growing alone",
-      deskTitle: "CONTROL DESK",
-      terminal: "Main terminal",
-      myListings: "MY LISTINGS",
-      noListings: "No listing created yet.",
-      createOne: "Create my listing →",
-      receptionist: "ECHO_IA_RECEPTIONIST_v2",
-      welcome: userEmail
-        ? `Logged in as ${userEmail}. Structures synced and stable.`
-        : "Log in to sync your data.",
-      status: userId ? "CONNECTED" : "DISCONNECTED",
-      explainTitle: "QUICK GUIDE",
-      explainForm: "The Form page lets you create your official project listing.",
-      explainFiche: "The Listings page lets you browse projects and find a strategic ally.",
-      explainFuture: "More tools coming soon.",
-      recentActivity: "RECENT ACTIVITY",
-      noActivity: "No recent activity.",
-      core: "STATISTICS",
-      foundation: "Account overview",
-      seating: "SUPABASE DATA • REAL TIME",
-      stats: { fiches: "Listings created", unlocked: "Listings unlocked", interets: "Interests received" },
-      like: "interest", tresInteresse: "very interested",
-      loginPrompt: "Log in to see your dashboard.",
-      login: "Log in",
+      subtitle: "What's happening on the platform, in real time.",
+      tabs: { stats:"Statistics", events:"Events", regles:"Rules" },
+      statsDesc: ["Active listings", "Contacts unlocked", "Interests sent"],
+      statsNote: "Real-time data from Supabase.",
+      eventsTitle: "Upcoming events",
+      eventsEmpty: "No events scheduled yet.",
+      reglesTitle: "Platform rules",
+      reglesNote: "These rules apply to all members from the moment they register.",
+      reglesWarn: "Any false statement regarding your identity, company or project may result in immediate account deletion without notice. Your personal key is linked to your identity on the platform. Any attempt to impersonate, share or duplicate a key may result in permanent access revocation.",
     },
   }[lang];
 
   return (
-    <div className="w-full min-h-screen bg-[#030304] text-zinc-300 flex flex-col font-sans">
+    <div className="w-full min-h-screen bg-[#08070a] text-zinc-300 flex flex-col font-sans relative overflow-hidden">
+
+      {/* LUMIÈRE */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120%] h-[500px]"
+          style={{background:"radial-gradient(ellipse 50% 80% at 50% 0%, rgba(6,182,212,0.06) 0%, transparent 70%)"}}/>
+      </div>
+
+      {/* 3 COLONNES CHAQUE CÔTÉ */}
+      {["left","right"].map(side=>(
+        <div key={side} className={`pointer-events-none fixed inset-y-0 ${side==="left"?"left-0":"right-0"} z-0 hidden lg:flex gap-10 px-6 items-stretch`}>
+          {[0,1,2].map(i=>(
+            <div key={i} className="relative w-3 flex flex-col items-center">
+              <div className="absolute inset-y-0 w-full bg-gradient-to-b from-zinc-800/20 via-zinc-700/40 to-zinc-800/20 rounded-full border-x border-zinc-600/10"/>
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-gradient-to-b from-transparent via-cyan-400/15 to-transparent"/>
+              <div className="absolute top-10 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan-400/40 shadow-[0_0_8px_2px_rgba(6,182,212,0.2)]"/>
+              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan-400/40 shadow-[0_0_8px_2px_rgba(6,182,212,0.2)]"/>
+            </div>
+          ))}
+        </div>
+      ))}
 
       {/* NAV */}
-      <nav className="border-b border-zinc-900/60 px-6 py-4 flex items-center justify-between shrink-0 bg-black/40">
-        <span className="font-bold text-sm text-white">Echo AI</span>
+      <nav className="relative z-20 border-b border-zinc-900/60 px-6 py-4 flex items-center justify-between shrink-0 bg-black/50 backdrop-blur-sm">
+        <span className="font-bold text-sm text-white tracking-wide">Echo AI</span>
         <div className="flex items-center gap-5 text-sm">
-          {NAV_ITEMS.map(item => (
+          {NAV_ITEMS.map(item=>(
             <Link key={item.href} href={item.href}
-              className={(item as any).active ? "text-cyan-400 font-semibold" : "text-zinc-500 hover:text-zinc-200 transition-colors"}>
+              className={(item as any).active?"text-cyan-400 font-semibold":"text-zinc-500 hover:text-zinc-200 transition-colors"}>
               {LABELS[item.key][lang]}
             </Link>
           ))}
-          <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")}
-            className="text-xs text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg hover:border-zinc-600 transition-colors">
-            {lang === "fr" ? "EN" : "FR"}
+          <button onClick={()=>setLang(l=>l==="fr"?"en":"fr")} className="text-xs text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg hover:border-zinc-600 transition-colors">
+            {lang==="fr"?"EN":"FR"}
           </button>
         </div>
       </nav>
 
-      {/* GRILLE PRINCIPALE */}
-      <div className="flex-1 w-full grid grid-cols-12 min-h-0">
+      <div className="relative z-10 flex-1 px-4 lg:px-32 py-12">
 
-        {/* ================= ZONE GAUCHE : NAV INFO & DESK ================= */}
-        <div className="col-span-12 lg:col-span-2 border-r border-zinc-900/50 flex flex-col justify-between p-6 bg-black/40">
-          <div className="space-y-8">
-            <div className="space-y-1">
-              <p className="text-[10px] font-mono tracking-[0.4em] text-cyan-500 font-bold">{dict.arch}</p>
-              <h1 className="text-2xl font-light tracking-tight text-white uppercase">{dict.title}</h1>
-              <p className="text-[10px] text-zinc-500 italic">{dict.subtitle}</p>
-            </div>
-
-            <div className="bg-[#09090b] border border-zinc-900 p-4 rounded-xl space-y-2">
-              <p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">{dict.deskTitle}</p>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-sm inline-block border ${userId ? "bg-cyan-500 border-cyan-400" : "bg-zinc-700 border-zinc-600"}`} />
-                  <span className="text-xs font-mono text-zinc-400">{dict.terminal}</span>
-                </div>
-                <span className={`w-1.5 h-1.5 rounded-full ${userId ? "bg-cyan-400 shadow-[0_0_6px_#06b6d4]" : "bg-zinc-600"}`} />
-              </div>
-            </div>
-          </div>
-
-          <div className="text-[10px] font-mono text-zinc-500 border-t border-zinc-900/60 pt-3 space-y-1">
-            <p>STATUS: <span className={userId ? "text-cyan-400 font-bold" : "text-zinc-500 font-bold"}>{dict.status}</span></p>
-            <p>TIME: <span className="text-zinc-300 font-bold">{time}</span></p>
-          </div>
+        {/* EN-TÊTE */}
+        <div className="text-center mb-12">
+          <p className="text-[10px] font-mono tracking-[0.5em] text-cyan-500 font-bold mb-3">{dict.area}</p>
+          <h1 className="text-4xl sm:text-5xl font-extralight tracking-[0.15em] text-white uppercase mb-3"
+            style={{textShadow:"0 0 40px rgba(6,182,212,0.2)"}}>
+            {dict.title}
+          </h1>
+          <div className="w-16 h-px mx-auto bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent mb-3"/>
+          <p className="text-sm text-zinc-500 italic">{dict.subtitle}</p>
         </div>
 
-        {/* ================= ZONE CENTRALE : STATS ================= */}
-        <div className="col-span-12 lg:col-span-4 flex flex-col items-center justify-center relative bg-black/10 px-6 py-10 lg:py-0 border-r border-zinc-900/30">
-
-          <div className="absolute inset-y-0 w-[85%] border-x border-zinc-900/60 bg-gradient-to-b from-zinc-950/20 via-[#060608]/40 to-zinc-950/20 pointer-events-none hidden lg:block">
-            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-gradient-to-b from-cyan-500/30 via-cyan-400 to-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]" />
-          </div>
-
-          <div className="w-full flex flex-col items-center relative z-10">
-            <div className="w-full bg-gradient-to-b from-[#08080a] via-[#101014] to-[#0a0a0c] border border-zinc-800/80 shadow-[0_0_80px_rgba(0,0,0,0.9)] relative flex flex-col justify-between py-8 px-6 rounded-t-md">
-              <div className="text-center z-20 mb-4">
-                <span className="text-[11px] font-mono tracking-[0.6em] text-zinc-400 font-bold block bg-black/60 py-1 uppercase">{dict.core}</span>
-              </div>
-
-              {!userId ? (
-                <div className="text-center py-8 space-y-3">
-                  <p className="text-sm text-zinc-500">{dict.loginPrompt}</p>
-                  <Link href="/1/account" className="inline-block px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl transition-colors">
-                    {dict.login}
-                  </Link>
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-3 py-2">
-                  <div className="text-center">
-                    <p className="text-3xl font-black text-cyan-400">{myFiches.length}</p>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wide mt-1">{dict.stats.fiches}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-3xl font-black text-emerald-400">{unlockedCount}</p>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wide mt-1">{dict.stats.unlocked}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-3xl font-black text-amber-400">{interets.length}</p>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wide mt-1">{dict.stats.interets}</p>
-                  </div>
-                </div>
-              )}
-
-              <p className="text-xs text-center font-mono text-cyan-400 tracking-widest font-medium z-20 mt-4">
-                {dict.foundation}
-              </p>
-            </div>
-
-            <div className="w-[104%] h-12 bg-gradient-to-r from-zinc-800 via-zinc-600 to-zinc-800 border border-zinc-600/40 shadow-[0_20px_40px_rgba(0,0,0,0.8)] rounded-b-xl p-0.5 relative z-20">
-              <div className="w-full h-full bg-zinc-950 rounded-b-lg flex items-center justify-center border border-zinc-900">
-                <span className="text-[10px] font-mono text-zinc-400 tracking-[0.4em] font-black uppercase">{dict.seating}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* MES FICHES */}
-          {userId && (
-            <div className="w-full mt-6 bg-[#070709] border border-zinc-900/80 rounded-xl p-4 space-y-2">
-              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest font-bold mb-2">{dict.myListings}</p>
-              {loading ? (
-                <p className="text-xs text-zinc-600 italic">...</p>
-              ) : myFiches.length === 0 ? (
-                <Link href="/1/form" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">{dict.createOne}</Link>
-              ) : (
-                <div className="space-y-1.5">
-                  {myFiches.map(f => (
-                    <div key={f.id} className="flex items-center justify-between text-xs bg-black/30 rounded-lg px-3 py-2">
-                      <span className="text-zinc-300 truncate">{f.nom_projet}</span>
-                      <span className="text-zinc-600 font-mono text-[10px] shrink-0 ml-2">{f.key}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+        {/* ONGLETS */}
+        <div className="flex justify-center gap-2 mb-10">
+          {(["stats","events","regles"] as const).map(tab=>(
+            <button key={tab} onClick={()=>setActiveSection(tab)}
+              className={`px-5 py-2 rounded-xl text-xs font-mono uppercase tracking-widest font-bold transition-all border ${
+                activeSection===tab
+                  ? "border-cyan-500/50 bg-cyan-950/40 text-cyan-400"
+                  : "border-zinc-800 bg-black/20 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+              }`}>
+              {dict.tabs[tab]}
+            </button>
+          ))}
         </div>
 
-        {/* ================= ZONE DROITE : GUIDE ================= */}
-        <div className="col-span-12 lg:col-span-3 border-r border-zinc-900/50 flex flex-col justify-start p-6 bg-black/40 gap-6">
-          <div className="bg-[#070709] border border-zinc-900/80 p-5 rounded-xl space-y-5 shadow-lg">
-            <p className="text-[11px] font-mono text-zinc-400 tracking-[0.15em] uppercase border-b border-zinc-900 pb-3 font-bold">
-              📋 {dict.explainTitle}
-            </p>
-            <div className="space-y-4 text-xs font-light leading-relaxed text-zinc-400">
-              <div>
-                <span className="text-cyan-400 font-mono font-bold block mb-1">{lang==="fr"?"Formulaire :":"Form:"}</span>
-                <p className="pl-2 border-l border-zinc-900">{dict.explainForm}</p>
-              </div>
-              <div>
-                <span className="text-white font-mono font-bold block mb-1">{lang==="fr"?"Fiches :":"Listings:"}</span>
-                <p className="pl-2 border-l border-zinc-900">{dict.explainFiche}</p>
-              </div>
-              <div className="pt-3 border-t border-zinc-900/60 text-zinc-600 font-mono italic text-[11px]">
-                {dict.explainFuture}
-              </div>
-            </div>
-          </div>
-        </div>
+        <div className="max-w-4xl mx-auto">
 
-        {/* ================= ZONE EXTÉRIEURE DROITE : IA & ACTIVITÉ ================= */}
-        <div className="col-span-12 lg:col-span-3 flex flex-col justify-between p-6 bg-black gap-4">
-
-          <div className="flex-1 flex flex-col justify-start space-y-4 min-h-0">
-            <div className="flex justify-between items-center border-b border-zinc-900 pb-2">
-              <div>
-                <p className="text-[9px] font-mono text-zinc-600 tracking-wider">SECURITY STATUS</p>
-                <span className={`text-[10px] font-mono font-bold ${userId ? "text-cyan-400" : "text-zinc-600"}`}>
-                  {userId ? "SECURE_ECHO_CONNECTED" : "AWAITING_CONNECTION"}
-                </span>
-              </div>
-              <span className="text-xs font-mono text-zinc-500">{time}</span>
-            </div>
-
-            <div className="border border-zinc-800/80 bg-[#050507] rounded-xl p-4 space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-zinc-900 pb-2">
-                <span className="text-[10px] font-mono text-zinc-400 font-bold tracking-wider">{dict.receptionist}</span>
-                <span className={`w-2 h-2 rounded-full ${userId ? "bg-cyan-400 shadow-[0_0_8px_#06b6d4]" : "bg-zinc-700"}`} />
-              </div>
-              <p className="text-xs text-zinc-400 italic leading-relaxed font-light">
-                "{dict.welcome}"
-              </p>
-            </div>
-          </div>
-
-          {/* ACTIVITÉ RÉCENTE — réelle */}
-          <div className="border border-zinc-900 bg-[#040405] p-4 rounded-xl space-y-3">
-            <p className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-bold">⏱️ {dict.recentActivity}</p>
-            {!userId || interets.length === 0 ? (
-              <div className="h-20 flex items-center justify-center border border-zinc-900/80 rounded-lg bg-black/40">
-                <span className="text-[10px] font-mono text-zinc-600 italic tracking-wide">{dict.noActivity}</span>
-              </div>
-            ) : (
-              <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                {interets.map(it => (
-                  <div key={it.id} className="flex items-center gap-2 text-[11px] bg-black/30 rounded-lg px-2.5 py-1.5">
-                    <span>{it.type === "tres_interesse" ? "🔥" : "💌"}</span>
-                    <span className="text-zinc-400 truncate flex-1">
-                      <span className="text-cyan-400 font-mono">{it.sender_key}</span> — {it.nom_projet}
-                    </span>
+          {/* ── STATISTIQUES ── */}
+          {activeSection==="stats" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { value: stats.fiches,   label: dict.statsDesc[0], color:"text-cyan-400"    },
+                  { value: stats.tunnels,  label: dict.statsDesc[1], color:"text-emerald-400" },
+                  { value: stats.interets, label: dict.statsDesc[2], color:"text-amber-400"   },
+                ].map((s,i)=>(
+                  <div key={i} className="border border-zinc-800/80 bg-[#0a0a0d] rounded-2xl p-8 text-center shadow-lg relative overflow-hidden">
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent"/>
+                    <p className={`text-5xl font-black mb-2 ${s.color} ${loadingStats?"opacity-30":""}` }
+                      style={{textShadow: loadingStats?"none":"0 0 20px currentColor"}}>
+                      {loadingStats?"—":s.value}
+                    </p>
+                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{s.label}</p>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        </div>
+              <p className="text-[10px] text-zinc-600 font-mono text-center">{dict.statsNote}</p>
+            </div>
+          )}
 
+          {/* ── ÉVÉNEMENTS ── */}
+          {activeSection==="events" && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-6">{dict.eventsTitle}</p>
+              {EVENTS[lang].length===0 ? (
+                <p className="text-sm text-zinc-600 italic text-center py-10">{dict.eventsEmpty}</p>
+              ) : (
+                EVENTS[lang].map((ev,i)=>(
+                  <div key={i} className="border border-zinc-800/80 bg-[#0a0a0d] rounded-2xl p-5 flex gap-5 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-cyan-500/50 to-transparent rounded-l-2xl"/>
+                    <div className="shrink-0 text-center w-16">
+                      <p className="text-[10px] font-mono text-zinc-600">{ev.date.split("-")[0]}</p>
+                      <p className="text-lg font-black text-white">{ev.date.split("-")[2]}</p>
+                      <p className="text-[10px] font-mono text-cyan-400 uppercase">
+                        {new Date(ev.date).toLocaleString(lang==="fr"?"fr-CA":"en-CA",{month:"short"})}
+                      </p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white mb-1">{ev.title}</p>
+                      <p className="text-xs text-zinc-500 leading-relaxed">{ev.desc}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* ── RÈGLEMENT ── */}
+          {activeSection==="regles" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="border border-amber-800/40 bg-amber-900/10 rounded-2xl p-5">
+                <p className="text-[10px] font-mono text-amber-400 uppercase tracking-widest mb-2">⚠️ {lang==="fr"?"Avertissement important":"Important notice"}</p>
+                <p className="text-xs text-amber-200/80 leading-relaxed">{dict.reglesWarn}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">{dict.reglesTitle}</p>
+                <div className="flex flex-col gap-2">
+                  {REGLES[lang].map(r=>(
+                    <div key={r.id} className="flex items-start gap-4 border border-zinc-900 bg-black/20 rounded-xl px-4 py-3">
+                      <span className="text-[10px] font-mono text-zinc-600 font-bold shrink-0 mt-0.5 w-5 text-right">{String(r.id).padStart(2,"0")}</span>
+                      <p className="text-sm text-zinc-400 leading-relaxed">{r.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <p className="text-[10px] text-zinc-600 font-mono text-center italic">{dict.reglesNote}</p>
+            </div>
+          )}
+
+        </div>
       </div>
 
-      {/* FOOTER */}
-      <footer className="h-8 border-t border-zinc-950 bg-black px-6 flex items-center justify-between text-[10px] font-mono text-zinc-600 tracking-wider shrink-0">
-        <p>INFRASTRUCTURE: <span className="text-zinc-500 font-bold">SITE_2_ACTIVE</span></p>
-        <p>© 2026 ECHOSAI.CA — ALL RIGHTS RESERVED</p>
+      <footer className="relative z-20 h-8 border-t border-zinc-950 bg-black/60 px-6 flex items-center justify-between text-[10px] font-mono text-zinc-600 shrink-0">
+        <p>DASHBOARD — <span className="text-zinc-500">SITE_2</span></p>
+        <p>{time}</p>
+        <p>© 2026 ECHOSAI.CA</p>
       </footer>
-
     </div>
   );
 }
