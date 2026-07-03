@@ -8,7 +8,7 @@ type Lang = "fr" | "en";
 
 const T = {
   fr: {
-    tagline: "Des avis, pas du marketing",
+    tagline: "Ne vous faites pas avoir. Achetez intelligemment.",
     sub1: "Le vrai visage d'un produit, en quelques secondes.",
     sub2: "Collez un lien Web et découvrez ce qu'il vaut vraiment.",
     placeholder: "https://www.amazon.ca/... ou walmart.ca/...",
@@ -49,7 +49,7 @@ const T = {
     errPrefix: "Erreur",
   },
   en: {
-    tagline: "Reviews, not marketing",
+    tagline: "Don't Be Fooled. Buy Smart.",
     sub1: "The real face of a product, in seconds.",
     sub2: "Paste a web link and discover what it's really worth.",
     placeholder: "https://www.amazon.ca/... or walmart.ca/...",
