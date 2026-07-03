@@ -426,6 +426,12 @@ export default function FastBillingPage() {
             <img src="/affinity.jpg" alt="Affinity Hall" style={{ width: "100%", display: "block", objectFit: "cover", maxHeight: 70 }} />
             <div style={{ background: surf2, color: muted, textAlign: "center", fontSize: 9, fontWeight: 600, padding: "4px 0" }}>AFFINITY HALL →</div>
           </a>
+
+          <a href="https://echosai.ca/2/talk" target="_blank" rel="noopener noreferrer"
+            style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}` }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = ".9")} onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
+            <img src="/commun.png" alt="Commun" style={{ width: "100%", display: "block", objectFit: "cover" }} />
+          </a>
         </aside>
 
         {/* ── CENTRE ────────────────────────────────────────────────────────── */}
@@ -450,6 +456,10 @@ export default function FastBillingPage() {
               <div style={{ background: "#18181b", color: "#fff", textAlign: "center", fontSize: 9, fontWeight: 800, padding: "4px 0" }}>ECHO AI →</div>
             </a>
           </div>
+          <a href="https://echosai.ca/2/talk" target="_blank" rel="noopener noreferrer"
+            style={{ display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none", marginBottom: 10 }}>
+            <img src="/commun.png" alt="Commun" style={{ width: "100%", display: "block", objectFit: "cover", maxHeight: 60 }} />
+          </a>
 
           {/* Formulaire */}
           <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>

@@ -283,6 +283,20 @@ export default function AvisPage() {
               AFFINITY HALL →
             </div>
           </a>
+
+          <a href="https://echosai.ca/welcome" target="_blank" rel="noopener noreferrer"
+            style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}` }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = ".9")}
+            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
+            <img src="/facture.png" alt="Facture Rapide" style={{ width: "100%", display: "block", objectFit: "cover" }} />
+          </a>
+
+          <a href="https://echosai.ca/2/talk" target="_blank" rel="noopener noreferrer"
+            style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}` }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = ".9")}
+            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
+            <img src="/commun.png" alt="Commun" style={{ width: "100%", display: "block", objectFit: "cover" }} />
+          </a>
         </aside>
 
         {/* ── CENTRE ──────────────────────────────────────────────────────────── */}
@@ -295,7 +309,16 @@ export default function AvisPage() {
             <form onSubmit={handleSearch} style={{ display: "flex", gap: 8 }}>
               <input type="url" required value={url} onChange={e => setUrl(e.target.value)} placeholder={t.placeholder}
                 style={{ flex: 1, background: surf, border: `1.5px solid ${bord}`, borderRadius: 11, padding: "9px 13px", fontSize: 12, color: txt, outline: "none", fontFamily: "monospace" }}
-                onFocus={e => (e.target.style.borderColor = acc)} onBlur={e => (e.target.style.borderColor = bord)} />
+                onFocus={async e => {
+                  e.target.style.borderColor = acc;
+                  if (!url) {
+                    try {
+                      const text = await navigator.clipboard.readText();
+                      if (text.startsWith("http")) setUrl(text);
+                    } catch {}
+                  }
+                }}
+                onBlur={e => (e.target.style.borderColor = bord)} />
               <button type="submit" disabled={loading}
                 style={{ background: loading ? muted : acc, color: "#fff", border: "none", borderRadius: 11, padding: "9px 18px", fontWeight: 700, fontSize: 12, cursor: loading ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
                 {loading ? t.analysing : t.analyse}
@@ -321,6 +344,18 @@ export default function AvisPage() {
               </div>
             </a>
           </div>
+
+          {/* Pubs pleine largeur mobile */}
+          <a href="https://echosai.ca/welcome" target="_blank" rel="noopener noreferrer"
+            className="mobile-pubs-full"
+            style={{ display: "none", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none", marginBottom: 6 }}>
+            <img src="/facture.png" alt="Facture Rapide" style={{ width: "100%", display: "block", objectFit: "cover", maxHeight: 60 }} />
+          </a>
+          <a href="https://echosai.ca/2/talk" target="_blank" rel="noopener noreferrer"
+            className="mobile-pubs-full"
+            style={{ display: "none", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none", marginBottom: 10 }}>
+            <img src="/commun.png" alt="Commun" style={{ width: "100%", display: "block", objectFit: "cover", maxHeight: 60 }} />
+          </a>
 
           {/* Loader */}
           {loading && (
@@ -482,10 +517,10 @@ export default function AvisPage() {
           {/* DON */}
           <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, overflow: "hidden" }}>
             <div style={{ padding: "10px 12px 8px" }}>
-              <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 3 }}>☕ {t.donTitle}</div>
-              <div style={{ fontSize: 10, color: muted, lineHeight: 1.4, marginBottom: 8 }}>{t.donDesc}</div>
+              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>☕ {t.donTitle}</div>
+              <div style={{ fontSize: 11, color: muted, lineHeight: 1.5, marginBottom: 10 }}>{t.donDesc}</div>
               <button onClick={() => setDonOpen(d => !d)}
-                style={{ width: "100%", background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "7px 0", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>
+                style={{ width: "100%", background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "10px 0", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
                 {donOpen ? t.donClose : t.donBtn}
               </button>
             </div>
@@ -496,10 +531,10 @@ export default function AvisPage() {
                     style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 7, padding: "6px 9px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", opacity: donLoading === d.plan ? .6 : 1, color: txt }}
                     onMouseEnter={e => (e.currentTarget.style.borderColor = acc)} onMouseLeave={e => (e.currentTarget.style.borderColor = bord)}>
                     <div style={{ textAlign: "left" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div>
-                      <div style={{ fontSize: 9, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div>
+                      <div style={{ fontSize: 10, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div>
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: acc }}>{d.amount}</div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: acc }}>{d.amount}</div>
                   </button>
                 ))}
                 <div style={{ fontSize: 9, color: muted, textAlign: "center" }}>🔒 Stripe</div>
@@ -658,6 +693,7 @@ export default function AvisPage() {
         }
         @media (max-width: 768px) {
           .mobile-pubs { display: flex !important; }
+          .mobile-pubs-full { display: block !important; }
         }
 
         .mobile-bar {
