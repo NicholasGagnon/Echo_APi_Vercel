@@ -295,16 +295,7 @@ export default function AvisPage() {
             <form onSubmit={handleSearch} style={{ display: "flex", gap: 8 }}>
               <input type="url" required value={url} onChange={e => setUrl(e.target.value)} placeholder={t.placeholder}
                 style={{ flex: 1, background: surf, border: `1.5px solid ${bord}`, borderRadius: 11, padding: "9px 13px", fontSize: 12, color: txt, outline: "none", fontFamily: "monospace" }}
-                onFocus={async e => {
-                  e.target.style.borderColor = acc;
-                  if (!url) {
-                    try {
-                      const text = await navigator.clipboard.readText();
-                      if (text.startsWith("http")) setUrl(text);
-                    } catch {}
-                  }
-                }}
-                onBlur={e => (e.target.style.borderColor = bord)} />
+                onFocus={e => (e.target.style.borderColor = acc)} onBlur={e => (e.target.style.borderColor = bord)} />
               <button type="submit" disabled={loading}
                 style={{ background: loading ? muted : acc, color: "#fff", border: "none", borderRadius: 11, padding: "9px 18px", fontWeight: 700, fontSize: 12, cursor: loading ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
                 {loading ? t.analysing : t.analyse}
