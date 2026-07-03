@@ -304,6 +304,24 @@ export default function AvisPage() {
             {error && <div style={{ marginTop: 7, padding: "7px 11px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 9, fontSize: 11, color: "#b91c1c" }}>⚠️ {error}</div>}
           </div>
 
+          {/* ── PUBS MOBILE — visibles seulement sur mobile ──────────────────── */}
+          <div className="mobile-pubs" style={{ display: "none", gap: 8, marginBottom: 10 }}>
+            <a href="https://echosai.ca/welcome" target="_blank" rel="noopener noreferrer"
+              style={{ flex: 1, display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none" }}>
+              <img src="/pub.jpg" alt="Echo AI" style={{ width: "100%", display: "block", maxHeight: 80, objectFit: "cover", objectPosition: "top" }} />
+              <div style={{ background: acc, color: "#fff", textAlign: "center", fontSize: 9, fontWeight: 800, padding: "4px 0", letterSpacing: 1 }}>
+                ESSAYER ECHO AI →
+              </div>
+            </a>
+            <a href="https://echosai.ca/1/hall" target="_blank" rel="noopener noreferrer"
+              style={{ flex: 1, display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none" }}>
+              <img src="/affinity.jpg" alt="Affinity Hall" style={{ width: "100%", display: "block", maxHeight: 80, objectFit: "cover" }} />
+              <div style={{ background: surf2, color: muted, textAlign: "center", fontSize: 9, fontWeight: 600, padding: "4px 0" }}>
+                AFFINITY HALL →
+              </div>
+            </a>
+          </div>
+
           {/* Loader */}
           {loading && (
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 0", color: muted, fontSize: 12 }}>
@@ -637,6 +655,9 @@ export default function AvisPage() {
         }
         @media (min-width: 769px) {
           .mobile-bar { display: none !important; }
+        }
+        @media (max-width: 768px) {
+          .mobile-pubs { display: flex !important; }
         }
 
         .mobile-bar {
