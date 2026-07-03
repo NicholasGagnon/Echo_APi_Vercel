@@ -8,7 +8,7 @@ type Lang = "fr" | "en";
 
 const T = {
   fr: {
-    tagline: "Ne vous faites pas avoir. Achetez intelligemment.",
+    tagline: "Des avis, pas du marketing",
     sub1: "Le vrai visage d'un produit, en quelques secondes.",
     sub2: "Collez un lien Web et découvrez ce qu'il vaut vraiment.",
     placeholder: "https://www.amazon.ca/... ou walmart.ca/...",
@@ -49,7 +49,7 @@ const T = {
     errPrefix: "Erreur",
   },
   en: {
-    tagline: "Don't Be Fooled. Buy Smart.",
+    tagline: "Reviews, not marketing",
     sub1: "The real face of a product, in seconds.",
     sub2: "Paste a web link and discover what it's really worth.",
     placeholder: "https://www.amazon.ca/... or walmart.ca/...",
@@ -260,10 +260,10 @@ export default function AvisPage() {
     <div style={{ background: bg, color: txt, minHeight: "100dvh", fontFamily: "'Inter', system-ui, sans-serif", transition: "background .3s, color .3s" }}>
 
       {/* ══ LAYOUT 3 COLONNES ══════════════════════════════════════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: "190px 1fr 190px", maxWidth: 1240, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
+      <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "190px 1fr 190px", maxWidth: 1240, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
 
         {/* ── COL GAUCHE : les deux pubs ──────────────────────────────────────── */}
-        <aside style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 10, paddingRight: 10 }}>
+        <aside className="col-left" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 10, paddingRight: 10 }}>
           <a href="https://echosai.ca/welcome" target="_blank" rel="noopener noreferrer"
             style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}`, flexShrink: 0 }}
             onMouseEnter={e => (e.currentTarget.style.opacity = ".9")}
@@ -286,7 +286,7 @@ export default function AvisPage() {
         </aside>
 
         {/* ── CENTRE ──────────────────────────────────────────────────────────── */}
-        <div style={{ display: "flex", flexDirection: "column", padding: "14px 14px 10px" }}>
+        <div className="col-centre" style={{ display: "flex", flexDirection: "column", padding: "14px 14px 10px" }}>
 
           {/* Accroche + barre */}
           <div style={{ marginBottom: 12 }}>
@@ -407,7 +407,7 @@ export default function AvisPage() {
         </div>
 
         {/* ── COL DROITE : contrôles + don + connexion ─────────────────────── */}
-        <aside style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 8, paddingLeft: 10 }}>
+        <aside className="col-right" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 8, paddingLeft: 10 }}>
 
           {/* Rangée dark + langue */}
           <div style={{ display: "flex", gap: 6 }}>
@@ -514,6 +514,82 @@ export default function AvisPage() {
         </aside>
       </div>
 
+      {/* ── BARRE MOBILE FIXÉE EN BAS ──────────────────────────────────────── */}
+      <div className="mobile-bar" style={{ "--surf": dark ? "#242220" : "#fffdf9", "--bord": dark ? "#3a3835" : "#e2ddd5" } as React.CSSProperties}>
+        {/* Dark toggle */}
+        <button onClick={() => setDark(d => !d)}
+          style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 13, color: muted, fontWeight: 700, cursor: "pointer" }}>
+          {dark ? t.light : t.dark}
+        </button>
+
+        {/* Lang */}
+        <div style={{ position: "relative" }}>
+          <button onClick={() => setShowLang(v => !v)}
+            style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 11, color: txt, fontWeight: 700, cursor: "pointer" }}>
+            {lang === "fr" ? "🇫🇷 FR" : "🇬🇧 EN"} {showLang ? "▲" : "▼"}
+          </button>
+          {showLang && (
+            <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 200, boxShadow: "0 -4px 16px rgba(0,0,0,.12)", minWidth: 130 }}>
+              {(["fr", "en"] as Lang[]).map(l => (
+                <button key={l} onClick={() => { setLang(l); setShowLang(false); }}
+                  style={{ width: "100%", padding: "9px 13px", fontSize: 12, background: lang === l ? surf2 : "transparent", color: lang === l ? acc : txt, border: "none", cursor: "pointer", fontWeight: lang === l ? 700 : 500, textAlign: "left", display: "flex", gap: 8 }}>
+                  {l === "fr" ? "🇫🇷 Français" : "🇬🇧 English"}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Don rapide */}
+        <button onClick={() => setDonOpen(d => !d)}
+          style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+          ☕
+        </button>
+
+        {/* Don dropdown mobile */}
+        {donOpen && (
+          <div style={{ position: "fixed", bottom: 60, left: 14, right: 14, background: surf, border: `1px solid ${bord}`, borderRadius: 12, padding: "12px", zIndex: 300, boxShadow: "0 -4px 24px rgba(0,0,0,.15)" }}>
+            <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, display: "flex", justifyContent: "space-between" }}>
+              ☕ {t.donTitle}
+              <button onClick={() => setDonOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 14 }}>✕</button>
+            </div>
+            {DONATION_PLANS.map(d => (
+              <button key={d.plan} onClick={() => handleDon(d.plan)} disabled={donLoading === d.plan}
+                style={{ width: "100%", background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, color: txt, opacity: donLoading === d.plan ? .6 : 1 }}>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div>
+                  <div style={{ fontSize: 10, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: acc }}>{d.amount}</div>
+              </button>
+            ))}
+            <div style={{ fontSize: 10, color: muted, textAlign: "center" }}>🔒 Stripe</div>
+          </div>
+        )}
+
+        {/* Connexion / compte */}
+        {user ? (
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setShowUserMenu(v => !v)}
+              style={{ background: "#16a34a", border: "none", borderRadius: 8, padding: "7px 11px", fontSize: 11, color: "#fff", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#86efac", display: "inline-block" }} />
+              {t.connected}
+            </button>
+            {showUserMenu && (
+              <div style={{ position: "absolute", bottom: "calc(100% + 6px)", right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 200, minWidth: 150, boxShadow: "0 -4px 16px rgba(0,0,0,.12)" }}>
+                <a href="/account" style={{ display: "block", padding: "9px 13px", fontSize: 12, color: txt, textDecoration: "none", fontWeight: 600, borderBottom: `1px solid ${bord}` }}>👤 {t.myAccount}</a>
+                <button onClick={handleLogout} style={{ width: "100%", padding: "9px 13px", fontSize: 12, color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontWeight: 600, textAlign: "left" }}>↩ {t.logout}</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }}
+            style={{ background: "#0ea5e9", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+            {t.signin}
+          </button>
+        )}
+      </div>
+
       {/* ── MODAL EMAIL ─────────────────────────────────────────────────────── */}
       {showEmailModal && (
         <div onClick={() => setShowEmailModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(4px)" }}>
@@ -546,9 +622,33 @@ export default function AvisPage() {
         @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: #c4bfb8; border-radius: 3px; }
+
+        /* ── MOBILE ──────────────────────────────────────────────────────── */
         @media (max-width: 768px) {
-          div[style*="gridTemplateColumns: 190px"] { grid-template-columns: 1fr !important; }
-          aside { display: none !important; }
+          .layout-grid { grid-template-columns: 1fr !important; }
+          .col-left  { display: none !important; }
+          .col-right { display: none !important; }
+          .col-centre { padding: 12px 14px 80px !important; }
+
+          /* Barre de contrôles mobile fixée en bas */
+          .mobile-bar {
+            display: flex !important;
+          }
+        }
+        @media (min-width: 769px) {
+          .mobile-bar { display: none !important; }
+        }
+
+        .mobile-bar {
+          position: fixed; bottom: 0; left: 0; right: 0;
+          display: none;
+          background: var(--surf, #fffdf9);
+          border-top: 1px solid var(--bord, #e2ddd5);
+          padding: 8px 14px 12px;
+          gap: 8px;
+          z-index: 50;
+          align-items: center;
+          justify-content: space-between;
         }
       `}</style>
     </div>
