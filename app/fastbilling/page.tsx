@@ -207,14 +207,18 @@ export default function FastBillingPage() {
 
     // Restaurer dernière facture depuis Supabase (par session_id)
     const restoreInvoice = async () => {
-      const { data } = await supabase
-        .from("invoices")
-        .select("data")
-        .eq("session_id", sid)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .single();
-      if (data?.data) setInvoice(data.data as InvoiceData);
+      try {
+        const { data, error } = await supabase
+          .from("invoices")
+          .select("data")
+          .eq("session_id", sid)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && data?.data) setInvoice(data.data as InvoiceData);
+      } catch (e) {
+        console.log("[FastBilling] Pas de facture à restaurer");
+      }
     };
     restoreInvoice();
 
@@ -263,13 +267,17 @@ export default function FastBillingPage() {
       };
       setInvoice(inv);
       // Sauvegarde automatique dans Supabase
-      await supabase.from("invoices").upsert({
-        id: inv.numero,
-        user_id: user?.id || null,
-        session_id: sessionId || localStorage.getItem("fb_session_id"),
-        data: inv,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "id" });
+      try {
+        await supabase.from("invoices").upsert({
+          id: inv.numero,
+          user_id: user?.id || null,
+          session_id: sessionId || localStorage.getItem("fb_session_id"),
+          data: inv,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id" });
+      } catch (e) {
+        console.log("[FastBilling] Sauvegarde Supabase échouée:", e);
+      }
     } catch {
       setInvoice(null);
     } finally { setLoading(false); }
