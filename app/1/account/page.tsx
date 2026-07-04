@@ -38,21 +38,23 @@ const UserPlusIcon = () => (
 type Lang = "fr" | "en";
 
 const NAV_ITEMS = [
-  { href: "/1",              key: "hall"   },
-  { href: "/1/dashboard",    key: "dash"   },
-  { href: "/1/conversation", key: "conv"   },
-  { href: "/1/form",         key: "form"   },
-  { href: "/1/fiche",        key: "fiches" },
+  { href: "/1/hall",         key: "hall"    },
+  { href: "/1/dashboard",    key: "dash"    },
+  { href: "/1/conversation", key: "conv"    },
+  { href: "/1/form",         key: "form"    },
+  { href: "/1/fiche",        key: "fiches"  },
+  { href: "/1/desktop",      key: "bureau"  },
   { href: "/1/account",      key: "account", active: true },
 ];
 
 const LABELS: Record<string, { fr: string; en: string }> = {
-  hall:    { fr: "Hall",          en: "Hall" },
-  dash:    { fr: "Dashboard",     en: "Dashboard" },
+  hall:    { fr: "Hall",          en: "Hall"         },
+  dash:    { fr: "Dashboard",     en: "Dashboard"    },
   conv:    { fr: "Conversation",  en: "Conversation" },
-  form:    { fr: "Formulaire",    en: "Form" },
-  fiches:  { fr: "Fiches",        en: "Listings" },
-  account: { fr: "Compte",        en: "Account" },
+  form:    { fr: "Formulaire",    en: "Form"         },
+  fiches:  { fr: "Fiches",        en: "Listings"     },
+  bureau:  { fr: "Bureau",        en: "Desk"         },
+  account: { fr: "Compte",        en: "Account"      },
 };
 
 export default function AccountPage() {

@@ -657,75 +657,11 @@ export default function Home() {
 
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
 
-          {/* MAIN CHAT */}
+          {/* MAIN DASHBOARD */}
           <section className="flex-1 flex flex-col p-4 min-w-0 overflow-hidden relative">
 
-            <div className="relative w-full shrink-0 flex items-center justify-center gap-3 xl:gap-5 py-3">
-
-              {tutorialStep === 1 && (
-                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-4 w-[92vw] max-w-[460px] sm:max-w-[700px] max-h-[85vh] overflow-y-auto bg-zinc-950 text-white dark:bg-white dark:text-black rounded-2xl p-5 sm:p-6 shadow-[0_0_35px_rgba(6,182,212,0.6)] border-2 border-cyan-400 dark:border-cyan-500 animate-in fade-in slide-in-from-top-4 duration-300 z-50">
-                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 bg-zinc-950 dark:bg-white rotate-45 border-l-2 border-t-2 border-cyan-400 dark:border-cyan-500" />
-                  <TutorialHeaderControls onClose={() => { setTutorialStep(null); localStorage.setItem("echo-tuto-done-v1","true"); }} />
-                  <div className="flex items-center gap-3 mb-4 border-b border-zinc-800 dark:border-zinc-200 pb-2 pr-16">
-                    <span className="text-xl">✨</span>
-                    <h4 className="font-black text-sm sm:text-base font-mono uppercase tracking-widest text-cyan-400 dark:text-cyan-600">ECHO AI (1/2)</h4>
-                  </div>
-                  <div className="grid grid-cols-[72px_1fr] sm:grid-cols-[96px_1fr] gap-4 sm:gap-5 mb-5 items-start">
-                    <div className="relative w-[72px] h-[72px] sm:w-[96px] sm:h-[96px] shrink-0 bg-zinc-900 dark:bg-zinc-100 rounded-full border border-zinc-800 dark:border-zinc-200 shadow-inner overflow-hidden isolate">
-                      <img src="/echo1.png" alt="Echo Avatar" className="block w-full h-full object-cover" />
-                    </div>
-                    <div className="text-xs sm:text-[13.5px] text-zinc-200 dark:text-zinc-800 leading-relaxed font-semibold space-y-3 whitespace-pre-line min-w-0">
-                      {lang === "fr" ? (
-                        <>Hey bienvenue ! 👋{"\n"}Je suis Echo. Je traîne un peu partout sur ce site.{"\n"}Les boutons là-haut influencent ma façon de voir les choses.{"\n"}Si tu ne sélectionnes rien, tu me rencontres dans mon état naturel : curieux, espiègle et légèrement chaotique. 😄{"\n"}Et si tu actives le Double Regard, tu combines deux perspectives. 👀{"\n"}Ça devient souvent intéressant. 💀{"\n"}Adiooo ! ✨</>
-                      ) : (
-                        <>Hey, welcome! 👋{"\n"}I'm Echo. I tend to wander all over this site.{"\n"}The buttons up there influence the way I see things.{"\n"}If you don't select anything, you'll meet me in my natural state: curious, playful, and slightly chaotic. 😄{"\n"}And if you activate Double Vision, you'll combine two perspectives. 👀{"\n"}That's usually where things get interesting. 💀{"\n"}Adiooo ! ✨</>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2.5 items-center border-t border-zinc-800 dark:border-zinc-200 pt-4">
-                    <button onClick={() => setTutorialStep(2)}
-                      className="w-full text-center px-8 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-xs tracking-widest transition-all shadow-md uppercase">
-                      {lang === "fr" ? "SUIVANT ➔" : "NEXT ➔"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* GAUCHE */}
-              <div className="flex gap-3 shrink-0">
-                <Link href="/calendar" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                  style={{background:"linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(37,99,235,0.05) 100%)",borderColor:"rgba(59,130,246,0.35)",boxShadow:"0 0 20px rgba(59,130,246,0.1),inset 0 1px 0 rgba(59,130,246,0.2)"}}>
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(59,130,246,0.2) 0%,rgba(59,130,246,0.08) 100%)"}}/>
-                  <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-blue-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-blue-400/50"/>
-                  <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
-                    <rect x="6" y="10" width="52" height="48" rx="8" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.6)" strokeWidth="2"/>
-                    <rect x="6" y="10" width="52" height="20" rx="8" fill="rgba(59,130,246,0.4)"/>
-                    <rect x="6" y="22" width="52" height="8" fill="rgba(59,130,246,0.4)"/>
-                    <circle cx="20" cy="8" r="4" fill="rgba(59,130,246,0.8)"/><circle cx="44" cy="8" r="4" fill="rgba(59,130,246,0.8)"/>
-                    <rect x="14" y="36" width="8" height="7" rx="2" fill="rgba(59,130,246,0.7)"/>
-                    <rect x="28" y="36" width="8" height="7" rx="2" fill="rgba(59,130,246,0.5)"/>
-                    <rect x="42" y="36" width="8" height="7" rx="2" fill="rgba(59,130,246,0.5)"/>
-                    <rect x="14" y="47" width="8" height="5" rx="2" fill="rgba(59,130,246,0.3)"/>
-                    <rect x="28" y="47" width="8" height="5" rx="2" fill="rgba(59,130,246,0.3)"/>
-                  </svg>
-                  <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-blue-400">{lang==="fr"?"CALENDRIER":"CALENDAR"}</span>
-                </Link>
-                <Link href="/vitality" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                  style={{background:"linear-gradient(135deg,rgba(234,179,8,0.12) 0%,rgba(202,138,4,0.05) 100%)",borderColor:"rgba(234,179,8,0.35)",boxShadow:"0 0 20px rgba(234,179,8,0.1),inset 0 1px 0 rgba(234,179,8,0.2)"}}>
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(234,179,8,0.2) 0%,rgba(234,179,8,0.08) 100%)"}}/>
-                  <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-yellow-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-yellow-400/50"/>
-                  <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
-                    <circle cx="32" cy="36" r="22" fill="rgba(234,179,8,0.15)" stroke="rgba(234,179,8,0.6)" strokeWidth="2"/>
-                    <circle cx="32" cy="36" r="15" fill="rgba(234,179,8,0.25)"/>
-                    <text x="32" y="43" textAnchor="middle" fontSize="20" fontWeight="bold" fill="rgba(234,179,8,0.9)">$</text>
-                    <rect x="24" y="8" width="16" height="12" rx="4" fill="rgba(234,179,8,0.5)" stroke="rgba(234,179,8,0.7)" strokeWidth="1.5"/>
-                    <path d="M28 8 Q32 4 36 8" stroke="rgba(234,179,8,0.7)" strokeWidth="1.5" fill="none"/>
-                  </svg>
-                  <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-yellow-400">BUDGET</span>
-                </Link>
-              </div>
-
-              {/* CENTRE — Echo */}
+            {/* ECHO SEUL — centre de l'écosystème */}
+            <div className="flex flex-col items-center justify-center py-4 shrink-0">
               <div className={`relative shrink-0 flex flex-col items-center ${echoState==="idle"?"echo-idle":echoState==="thinking"?"echo-thinking":"echo-speaking"}`}>
                 <div className="relative w-24 h-24 flex items-center justify-center">
                   <div className="absolute inset-0 rounded-full" style={{background:"conic-gradient(from 0deg, transparent 50%, rgba(6,182,212,0.3) 80%, #06b6d4 100%)", animation:"spinDash 4s linear infinite"}}/>
@@ -735,148 +671,192 @@ export default function Home() {
                 </div>
                 <span className="text-zinc-600 text-[8px] mt-1 tracking-widest uppercase font-mono">{echoState}</span>
               </div>
-
-              {/* DROITE */}
-              <div className="flex gap-3 shrink-0">
-                <Link href="/vitality" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                  style={{background:"linear-gradient(135deg,rgba(34,197,94,0.12) 0%,rgba(22,163,74,0.05) 100%)",borderColor:"rgba(34,197,94,0.35)",boxShadow:"0 0 20px rgba(34,197,94,0.1),inset 0 1px 0 rgba(34,197,94,0.2)"}}>
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(34,197,94,0.2) 0%,rgba(34,197,94,0.08) 100%)"}}/>
-                  <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-green-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-green-400/50"/>
-                  <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
-                    <ellipse cx="32" cy="38" rx="18" ry="16" fill="rgba(34,197,94,0.2)" stroke="rgba(34,197,94,0.6)" strokeWidth="2"/>
-                    <ellipse cx="32" cy="38" rx="12" ry="10" fill="rgba(34,197,94,0.35)"/>
-                    <path d="M32 22 Q36 14 44 12 Q38 18 32 22Z" fill="rgba(34,197,94,0.8)"/>
-                    <path d="M32 22 Q28 14 20 12 Q26 18 32 22Z" fill="rgba(34,197,94,0.6)"/>
-                    <path d="M32 22 L32 30" stroke="rgba(34,197,94,0.7)" strokeWidth="2"/>
-                  </svg>
-                  <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-green-400">CALORIES</span>
-                </Link>
-                <Link href="/books" className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none"
-                  style={{background:"linear-gradient(135deg,rgba(139,92,246,0.12) 0%,rgba(109,40,217,0.05) 100%)",borderColor:"rgba(139,92,246,0.35)",boxShadow:"0 0 20px rgba(139,92,246,0.1),inset 0 1px 0 rgba(139,92,246,0.2)"}}>
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:"linear-gradient(135deg,rgba(139,92,246,0.2) 0%,rgba(139,92,246,0.08) 100%)"}}/>
-                  <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-violet-400/50"/><div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-violet-400/50"/>
-                  <svg className="relative z-10 w-9 h-9" viewBox="0 0 64 64" fill="none">
-                    <rect x="8"  y="12" width="20" height="40" rx="3" fill="rgba(139,92,246,0.5)" stroke="rgba(139,92,246,0.7)" strokeWidth="1.5"/>
-                    <rect x="10" y="14" width="16" height="36" rx="2" fill="rgba(139,92,246,0.2)"/>
-                    <rect x="30" y="10" width="20" height="42" rx="3" fill="rgba(168,85,247,0.5)" stroke="rgba(168,85,247,0.7)" strokeWidth="1.5"/>
-                    <rect x="32" y="12" width="16" height="38" rx="2" fill="rgba(168,85,247,0.2)"/>
-                  </svg>
-                  <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-violet-400">{lang==="fr"?"LIVRE":"BOOK"}</span>
-                </Link>
-              </div>
             </div>
             <style>{`@keyframes spinDash { 100% { transform: rotate(360deg); } }`}</style>
 
-            {/* MESSAGES */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 mt-2 px-2">
-              {messages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center" />
-              ) : (
-                <div className="max-w-4xl mx-auto py-4 flex flex-col gap-10 min-w-0">
-                  {messages.map((msg, index) => {
-                    const isEcho      = /^Echo\s*:/i.test(msg.raw);
-                    const isUser      = /^(You|Toi)\s*:/i.test(msg.raw);
-                    const isLastEcho  = isEcho && index === lastEchoIndex;
-                    const cleanText   = msg.raw.replace(/^(Echo|You|Toi)\s*:\s*/i,"");
-                    const isDefaultImg = cleanText === "Analyse cette image." || cleanText === "Analyze this image.";
+            {/* GRILLE D'OUTILS */}
+            <div className="flex-1 overflow-y-auto min-h-0 pb-6">
+              <div className="max-w-2xl mx-auto space-y-6 px-2">
 
-                    if (isEcho) return (
-                      <div key={index} className="flex flex-col gap-4 animate-in fade-in duration-300 min-w-0">
-                        <div className="flex items-center gap-4">
-                          <img src="/echo1.png" alt="Echo"
-                            className={`w-14 h-14 rounded-full object-cover shrink-0 border border-zinc-300 dark:border-zinc-800 shadow-md ${isLastEcho ? echoState==="thinking"?"echo-thinking":echoState==="speaking"?"echo-speaking":"echo-idle":"echo-idle"}`} />
-                          <div className="flex flex-col">
-                            <span className="text-zinc-500 dark:text-zinc-400 text-xs font-mono uppercase tracking-widest font-bold">Echo</span>
-                            <span className="text-zinc-400 dark:text-zinc-600 text-[10px] font-mono">Core Frequency</span>
-                          </div>
-                        </div>
-                        <div className="tracking-wide selection:bg-cyan-500/30 flex flex-col gap-5 pl-2 sm:pl-18 break-words min-w-0" style={{ fontSize: chatFontSize, lineHeight: "1.8" }}>
-                          {cleanText.split(/\n\n+/).map((block, i) => <p key={i} className="whitespace-pre-wrap break-words font-normal text-zinc-800 dark:text-zinc-200">{block}</p>)}
-                        </div>
-                      </div>
-                    );
-
-                    if (isUser) return (
-                      <div key={index} className="flex flex-col items-end animate-in fade-in duration-200 min-w-0">
-                        {msg.imageB64 && <img src={msg.imageB64} alt="image envoyée" className="max-w-[180px] max-h-[140px] rounded-xl border border-zinc-300 dark:border-zinc-700 object-cover shadow-md mb-1" />}
-                        {!(msg.imageB64 && isDefaultImg) && (
-                          <div className="max-w-xl text-right">
-                            <p className="text-zinc-700 dark:text-zinc-300 leading-7 tracking-wide bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-3 inline-block text-left whitespace-pre-wrap break-words selection:bg-cyan-500/30" style={{ fontSize: chatFontSize - 1 }}>{cleanText}</p>
-                          </div>
-                        )}
-                        {msg.imageB64 && isDefaultImg && <span className="text-zinc-500 dark:text-zinc-600 text-[10px] italic mt-0.5">{lang==="fr"?"Analyse cette image.":"Analyze this image."}</span>}
-                      </div>
-                    );
-
-                    return <div key={index} className="p-2 break-words text-xs italic text-zinc-400">{msg.raw}</div>;
-                  })}
-                  <div ref={bottomRef} />
-                </div>
-              )}
-            </div>
-
-            {/* INPUT */}
-            <div className="flex flex-col gap-2 mt-4 shrink-0 px-2 min-w-0">
-              <div className="max-w-4xl w-full mx-auto flex flex-col gap-2 min-w-0">
-                {selectedImage && (
-                  <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-600 dark:text-emerald-400 max-w-full">
-                    <div className="flex items-center gap-2 truncate min-w-0">
-                      <img src={selectedImage} alt="preview" className="w-8 h-8 rounded object-cover border border-emerald-500/30 shrink-0" />
-                      <span className="truncate font-medium">{selectedImageName || (lang==="fr"?"Image prête":"Image ready")}</span>
-                    </div>
-                    <button onClick={() => { setSelectedImage(null); setSelectedImageName(""); }} className="text-zinc-400 hover:text-red-500 font-bold ml-2 shrink-0">✕</button>
+                {/* Compagnons d'analyse */}
+                <div>
+                  <div className="text-[9px] font-mono font-black tracking-[4px] uppercase mb-3 text-center" style={{color:"rgba(0,200,255,0.5)"}}>
+                    {lang==="fr" ? "🧠 Compagnons d'analyse" : "🧠 Analysis Companions"}
                   </div>
-                )}
-
-                {warmupIntent && warmupIntent !== "autre" && (
-                  <div className="flex items-center gap-1.5 px-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"/>
-                    <span className="text-[10px] font-mono text-cyan-500/60 uppercase tracking-widest">
-                      {{recherche_locale:"📍",prix:"💰",comparaison:"⚖️",definition:"📖",actualite:"📰"}[warmupIntent] || "🔍"} {warmupIntent}
-                    </span>
-                  </div>
-                )}
-
-                <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl shadow-inner focus-within:border-cyan-500/40 transition-colors overflow-hidden">
-                  <textarea ref={textareaRef}
-                    className="w-full bg-transparent text-black dark:text-white placeholder-zinc-400 dark:placeholder-zinc-700 text-sm leading-relaxed resize-y min-h-[48px] max-h-[300px] p-4 focus:outline-none break-words whitespace-pre-wrap"
-                    style={{ height: inputHeight }}
-                    maxLength={getMessageMaxLength(userTier)}
-                    value={message}
-                    onChange={e => { setMessage(e.target.value); triggerLingWarmup(e.target.value); }}
-                    onPaste={handlePaste}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
-                    placeholder={t.chat.placeholder}
-                  />
-                  <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-zinc-200 dark:border-zinc-900">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <button type="button" onClick={shrinkInput} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">➖</button>
-                      <button type="button" onClick={resetInput}  className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-xs">↺</button>
-                      <button type="button" onClick={decreaseFontSize} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-[10px] font-bold">A-</button>
-                      <button type="button" onClick={increaseFontSize} className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors flex items-center justify-center text-[13px] font-bold">A+</button>
-                      <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-800 mx-0.5 shrink-0" />
-                      <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageSelection} className="hidden" />
-                      <button type="button" onClick={() => isImageButtonLocked ? setShowPremiumModal(true) : imageInputRef.current?.click()}
-                        className={`h-8 px-4 rounded-lg font-bold text-[11px] flex items-center gap-2 border transition-all shrink-0 ${
-                          isImageButtonLocked
-                            ? "cursor-not-allowed bg-zinc-200 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-500"
-                            : selectedImage
-                              ? "bg-emerald-600/15 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-                              : "bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-600 dark:text-violet-400"}`}>
-                        <span>{isImageButtonLocked?"🔒":selectedImage?"✓":"🖼️"}</span>
-                        <span className="truncate hidden sm:inline">{isImageButtonLocked?(lang==="fr"?"Image":"Image"):selectedImage?(lang==="fr"?"Image prête":"Image Ready"):(lang==="fr"?"Analyse d'image":"Image Analysis")}</span>
-                      </button>
-                      <button onClick={lancerDictation}
-                        className={`h-8 px-3 rounded-lg font-bold text-[11px] flex items-center gap-1.5 border transition-all shrink-0 ${isListening?"bg-red-600 border-red-500 animate-pulse text-white":"bg-cyan-600/10 border-cyan-500/30 hover:bg-cyan-600/20 text-cyan-600 dark:text-cyan-400"}`}>
-                        <span>{isListening?"🔴":"🎤"}</span>
-                        <span className="hidden sm:inline">{isListening?"Stop":(lang==="fr"?"Parler":"Speak")}</span>
-                      </button>
-                    </div>
-                    <button onClick={envoyer} className="h-8 px-5 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold text-[11px] text-white transition-all shadow-md uppercase tracking-wider shrink-0">
-                      {t.chat.send}
-                    </button>
+                  <div className="flex gap-2 justify-center flex-wrap">
+                      <a href="/vitality"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(234,179,8,0.12) 0%,rgba(234,179,8,0.05) 100%)`,borderColor:`rgba(234,179,8,0.35)`,boxShadow:`0 0 20px rgba(234,179,8,0.1),inset 0 1px 0 rgba(234,179,8,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(234,179,8,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(234,179,8,0.1),inset 0 1px 0 rgba(234,179,8,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(234,179,8,0.2) 0%,rgba(234,179,8,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(234,179,8,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(234,179,8,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">💰</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-yellow-400">BUDGET</span>
+                      </a>
+                      <a href="/vitality"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(34,197,94,0.12) 0%,rgba(34,197,94,0.05) 100%)`,borderColor:`rgba(34,197,94,0.35)`,boxShadow:`0 0 20px rgba(34,197,94,0.1),inset 0 1px 0 rgba(34,197,94,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(34,197,94,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(34,197,94,0.1),inset 0 1px 0 rgba(34,197,94,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(34,197,94,0.2) 0%,rgba(34,197,94,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(34,197,94,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(34,197,94,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">🔥</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-green-400">CALORIES</span>
+                      </a>
+                      <a href="/books"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(139,92,246,0.12) 0%,rgba(139,92,246,0.05) 100%)`,borderColor:`rgba(139,92,246,0.35)`,boxShadow:`0 0 20px rgba(139,92,246,0.1),inset 0 1px 0 rgba(139,92,246,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(139,92,246,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(139,92,246,0.1),inset 0 1px 0 rgba(139,92,246,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(139,92,246,0.2) 0%,rgba(139,92,246,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(139,92,246,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(139,92,246,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">📚</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-violet-400">{lang==="fr"?"LIVRES":"BOOKS"}</span>
+                      </a>
+                      <a href="/calendar"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(59,130,246,0.12) 0%,rgba(59,130,246,0.05) 100%)`,borderColor:`rgba(59,130,246,0.35)`,boxShadow:`0 0 20px rgba(59,130,246,0.1),inset 0 1px 0 rgba(59,130,246,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(59,130,246,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(59,130,246,0.1),inset 0 1px 0 rgba(59,130,246,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(59,130,246,0.2) 0%,rgba(59,130,246,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(59,130,246,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(59,130,246,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">📅</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-blue-400">{lang==="fr"?"CALENDRIER":"CALENDAR"}</span>
+                      </a>
+                      <a href="/chat"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(6,182,212,0.12) 0%,rgba(6,182,212,0.05) 100%)`,borderColor:`rgba(6,182,212,0.35)`,boxShadow:`0 0 20px rgba(6,182,212,0.1),inset 0 1px 0 rgba(6,182,212,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(6,182,212,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(6,182,212,0.1),inset 0 1px 0 rgba(6,182,212,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(6,182,212,0.2) 0%,rgba(6,182,212,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(6,182,212,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(6,182,212,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">💬</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-cyan-400">CHAT</span>
+                      </a>
                   </div>
                 </div>
+
+                {/* Espaces métier */}
+                <div>
+                  <div className="text-[9px] font-mono font-black tracking-[4px] uppercase mb-3 text-center" style={{color:"rgba(201,168,76,0.5)"}}>
+                    {lang==="fr" ? "🏗 Espaces métier" : "🏗 Business Spaces"}
+                  </div>
+                  <div className="flex gap-2 justify-center flex-wrap">
+                      <a href="/fastbilling"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(234,179,8,0.12) 0%,rgba(234,179,8,0.05) 100%)`,borderColor:`rgba(234,179,8,0.35)`,boxShadow:`0 0 20px rgba(234,179,8,0.1),inset 0 1px 0 rgba(234,179,8,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(234,179,8,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(234,179,8,0.1),inset 0 1px 0 rgba(234,179,8,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(234,179,8,0.2) 0%,rgba(234,179,8,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(234,179,8,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(234,179,8,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">🧾</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-yellow-400">FASTBILLING</span>
+                      </a>
+                      <a href="/1/hall"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(0,200,255,0.12) 0%,rgba(0,200,255,0.05) 100%)`,borderColor:`rgba(0,200,255,0.35)`,boxShadow:`0 0 20px rgba(0,200,255,0.1),inset 0 1px 0 rgba(0,200,255,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(0,200,255,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(0,200,255,0.1),inset 0 1px 0 rgba(0,200,255,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(0,200,255,0.2) 0%,rgba(0,200,255,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(0,200,255,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(0,200,255,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">🏛</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-cyan-400">{lang==="fr"?"AFFINITÉ":"AFFINITY"}</span>
+                      </a>
+                      <a href="/2/talk"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(139,92,246,0.12) 0%,rgba(139,92,246,0.05) 100%)`,borderColor:`rgba(139,92,246,0.35)`,boxShadow:`0 0 20px rgba(139,92,246,0.1),inset 0 1px 0 rgba(139,92,246,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(139,92,246,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(139,92,246,0.1),inset 0 1px 0 rgba(139,92,246,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(139,92,246,0.2) 0%,rgba(139,92,246,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(139,92,246,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(139,92,246,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">💬</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-violet-400">TALK</span>
+                      </a>
+                  </div>
+                </div>
+
+                {/* Mon espace */}
+                <div>
+                  <div className="text-[9px] font-mono font-black tracking-[4px] uppercase mb-3 text-center" style={{color:"rgba(52,211,153,0.5)"}}>
+                    {lang==="fr" ? "🔐 Mon espace" : "🔐 My Space"}
+                  </div>
+                  <div className="flex gap-2 justify-center flex-wrap">
+                      <a href="/1/fiche"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(52,211,153,0.12) 0%,rgba(52,211,153,0.05) 100%)`,borderColor:`rgba(52,211,153,0.35)`,boxShadow:`0 0 20px rgba(52,211,153,0.1),inset 0 1px 0 rgba(52,211,153,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(52,211,153,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(52,211,153,0.1),inset 0 1px 0 rgba(52,211,153,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(52,211,153,0.2) 0%,rgba(52,211,153,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">👤</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-emerald-400">{lang==="fr"?"FICHE":"PROFILE"}</span>
+                      </a>
+                      <a href="/1/form"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(52,211,153,0.12) 0%,rgba(52,211,153,0.05) 100%)`,borderColor:`rgba(52,211,153,0.35)`,boxShadow:`0 0 20px rgba(52,211,153,0.1),inset 0 1px 0 rgba(52,211,153,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(52,211,153,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(52,211,153,0.1),inset 0 1px 0 rgba(52,211,153,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(52,211,153,0.2) 0%,rgba(52,211,153,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">📝</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-emerald-400">{lang==="fr"?"FORMULAIRE":"FORM"}</span>
+                      </a>
+                      <a href="/1/desktop"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(52,211,153,0.12) 0%,rgba(52,211,153,0.05) 100%)`,borderColor:`rgba(52,211,153,0.35)`,boxShadow:`0 0 20px rgba(52,211,153,0.1),inset 0 1px 0 rgba(52,211,153,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(52,211,153,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(52,211,153,0.1),inset 0 1px 0 rgba(52,211,153,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(52,211,153,0.2) 0%,rgba(52,211,153,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">🗄</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-emerald-400">BUREAU</span>
+                      </a>
+                  </div>
+                </div>
+
+                {/* Recherche augmentée */}
+                <div>
+                  <div className="text-[9px] font-mono font-black tracking-[4px] uppercase mb-3 text-center" style={{color:"rgba(167,139,250,0.5)"}}>
+                    {lang==="fr" ? "🔎 Recherche augmentée" : "🔎 Augmented Research"}
+                  </div>
+                  <div className="flex gap-2 justify-center flex-wrap">
+                      <a href="/avis"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(167,139,250,0.12) 0%,rgba(167,139,250,0.05) 100%)`,borderColor:`rgba(167,139,250,0.35)`,boxShadow:`0 0 20px rgba(167,139,250,0.1),inset 0 1px 0 rgba(167,139,250,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(167,139,250,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(167,139,250,0.1),inset 0 1px 0 rgba(167,139,250,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(167,139,250,0.2) 0%,rgba(167,139,250,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(167,139,250,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(167,139,250,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">🧠</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-violet-400">AVIS</span>
+                      </a>
+                      <a href="/horizonweb"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(6,182,212,0.12) 0%,rgba(6,182,212,0.05) 100%)`,borderColor:`rgba(6,182,212,0.35)`,boxShadow:`0 0 20px rgba(6,182,212,0.1),inset 0 1px 0 rgba(6,182,212,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(6,182,212,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(6,182,212,0.1),inset 0 1px 0 rgba(6,182,212,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(6,182,212,0.2) 0%,rgba(6,182,212,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(6,182,212,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(6,182,212,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">🌐</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-cyan-400">HORIZON</span>
+                      </a>
+                  </div>
+                </div>
+
               </div>
             </div>
           </section>

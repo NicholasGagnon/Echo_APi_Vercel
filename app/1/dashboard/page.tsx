@@ -7,12 +7,12 @@ import { supabase } from "../../lib/supabase";
 type Lang = "fr" | "en";
 
 const NAV_ITEMS = [
-  { href: "/1",              key: "hall"    },
-  { href: "/1/dashboard",    key: "dash", active: true },
-  { href: "/1/conversation", key: "conv"    },
-  { href: "/1/form",         key: "form"    },
-  { href: "/1/fiche",        key: "fiches"  },
-  { href: "/1/account",      key: "account" },
+  { href: "/1/hall",       key: "hall"    },
+  { href: "/1/dashboard",  key: "dash", active: true },
+  { href: "/1/conversation", key: "conv" },
+  { href: "/1/form",       key: "form"    },
+  { href: "/1/fiche",      key: "fiches"  },
+  { href: "/1/account",    key: "account" },
 ];
 const LABELS: Record<string, { fr: string; en: string }> = {
   hall:    { fr: "Hall",         en: "Hall"         },
@@ -54,7 +54,6 @@ const REGLES = {
   ],
 };
 
-// Événements statiques créés par les admins de la plateforme
 const EVENTS = {
   fr: [
     { date: "2026-07-15", title: "Lancement officiel de la plateforme", desc: "Ouverture publique — les fiches seront visibles par tous les visiteurs." },
@@ -68,22 +67,58 @@ const EVENTS = {
   ],
 };
 
+// ── TUILES ─────────────────────────────────────────────────────────────────
+const ROWS = [
+  {
+    labelFr: "🏛 Affinité de Projets",
+    labelEn: "🏛 Project Affinity",
+    color: "rgba(0,200,255,",
+    tools: [
+      { icon:"🏠", nameFr:"Hall",         nameEn:"Hall",         href:"/1/hall",         textClass:"text-cyan-400" },
+      { icon:"📋", nameFr:"Fiches",       nameEn:"Listings",     href:"/1/fiche",        textClass:"text-cyan-400" },
+      { icon:"📝", nameFr:"Formulaire",   nameEn:"Form",         href:"/1/form",         textClass:"text-cyan-400" },
+      { icon:"🗄", nameFr:"Bureau",       nameEn:"Desk",         href:"/1/desktop",      textClass:"text-cyan-400" },
+      { icon:"💬", nameFr:"Conversation", nameEn:"Conversation", href:"/1/conversation", textClass:"text-cyan-400" },
+    ],
+  },
+  {
+    labelFr: "🏗 Espaces métier",
+    labelEn: "🏗 Business Spaces",
+    color: "rgba(201,168,76,",
+    tools: [
+      { icon:"🧾", nameFr:"FastBilling", nameEn:"FastBilling", href:"/fastbilling", textClass:"text-yellow-400" },
+      { icon:"💬", nameFr:"Talk",        nameEn:"Talk",        href:"/2/talk",      textClass:"text-violet-400" },
+    ],
+  },
+  {
+    labelFr: "🔎 Recherche · Compagnons",
+    labelEn: "🔎 Research · Companions",
+    color: "rgba(167,139,250,",
+    tools: [
+      { icon:"🧠", nameFr:"Avis Achat",  nameEn:"Reviews",    href:"/avis",       textClass:"text-violet-400" },
+      { icon:"🌐", nameFr:"Horizon",     nameEn:"Horizon",    href:"/horizonweb", textClass:"text-cyan-400"   },
+      { icon:"💬", nameFr:"Chat",        nameEn:"Chat",       href:"/chat",       textClass:"text-cyan-400"   },
+      { icon:"📚", nameFr:"Livres",      nameEn:"Books",      href:"/books",      textClass:"text-violet-400" },
+    ],
+  },
+];
+
 type Stats = { fiches: number; tunnels: number; interets: number };
 
 export default function DashboardPage() {
-  const [lang, setLang] = useState<Lang>("fr");
-  const [time, setTime] = useState("");
-  const [stats, setStats] = useState<Stats>({ fiches: 0, tunnels: 0, interets: 0 });
+  const [lang, setLang]               = useState<Lang>("fr");
+  const [time, setTime]               = useState("");
+  const [stats, setStats]             = useState<Stats>({ fiches: 0, tunnels: 0, interets: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
-  const [activeSection, setActiveSection] = useState<"stats"|"events"|"regles">("stats");
+  const [activeSection, setActiveSection] = useState<"outils"|"events"|"regles">("outils");
 
   useEffect(() => {
     const tick = () => setTime(new Date().toLocaleTimeString(lang==="fr"?"fr-CA":"en-CA", { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false }));
-    tick(); const id = setInterval(tick,1000); return ()=>clearInterval(id);
-  },[lang]);
+    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
+  }, [lang]);
 
-  useEffect(()=>{
-    const load = async()=>{
+  useEffect(() => {
+    const load = async () => {
       setLoadingStats(true);
       const [{ count: f }, { count: t }, { count: i }] = await Promise.all([
         supabase.from("fiches").select("*", { count:"exact", head:true }),
@@ -94,34 +129,30 @@ export default function DashboardPage() {
       setLoadingStats(false);
     };
     load();
-  },[]);
+  }, []);
 
   const dict = {
     fr: {
       area: "TABLEAU DE BORD",
       title: "DASHBOARD",
-      subtitle: "Ce qui se passe sur la plateforme, en temps réel.",
-      tabs: { stats:"Statistiques", events:"Événements", regles:"Règlement" },
-      statsDesc: ["Fiches actives", "Contacts débloqués", "Intérêts envoyés"],
-      statsNote: "Données en temps réel depuis Supabase.",
+      subtitle: "Tous vos outils, un seul espace.",
+      tabs: { outils:"Outils", events:"Événements", regles:"Règlement" },
       eventsTitle: "Événements à venir",
       eventsEmpty: "Aucun événement planifié pour l'instant.",
       reglesTitle: "Règlement de la plateforme",
       reglesNote: "Ce règlement s'applique à tous les membres dès leur inscription.",
-      reglesWarn: "Toute fausse déclaration concernant votre identité, votre entreprise ou votre projet peut entraîner la suppression immédiate de votre compte sans préavis. Votre clé personnelle est liée à votre identité sur la plateforme. Toute tentative d'usurpation, de partage ou de duplication de clé peut entraîner la révocation définitive de votre accès.",
+      reglesWarn: "Toute fausse déclaration concernant votre identité, votre entreprise ou votre projet peut entraîner la suppression immédiate de votre compte sans préavis.",
     },
     en: {
       area: "CONTROL PANEL",
       title: "DASHBOARD",
-      subtitle: "What's happening on the platform, in real time.",
-      tabs: { stats:"Statistics", events:"Events", regles:"Rules" },
-      statsDesc: ["Active listings", "Contacts unlocked", "Interests sent"],
-      statsNote: "Real-time data from Supabase.",
+      subtitle: "All your tools, one space.",
+      tabs: { outils:"Tools", events:"Events", regles:"Rules" },
       eventsTitle: "Upcoming events",
       eventsEmpty: "No events scheduled yet.",
       reglesTitle: "Platform rules",
       reglesNote: "These rules apply to all members from the moment they register.",
-      reglesWarn: "Any false statement regarding your identity, company or project may result in immediate account deletion without notice. Your personal key is linked to your identity on the platform. Any attempt to impersonate, share or duplicate a key may result in permanent access revocation.",
+      reglesWarn: "Any false statement regarding your identity, company or project may result in immediate account deletion without notice.",
     },
   }[lang];
 
@@ -179,7 +210,7 @@ export default function DashboardPage() {
 
         {/* ONGLETS */}
         <div className="flex justify-center gap-2 mb-10">
-          {(["stats","events","regles"] as const).map(tab=>(
+          {(["outils","events","regles"] as const).map(tab=>(
             <button key={tab} onClick={()=>setActiveSection(tab)}
               className={`px-5 py-2 rounded-xl text-xs font-mono uppercase tracking-widest font-bold transition-all border ${
                 activeSection===tab
@@ -191,28 +222,53 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-2xl mx-auto">
 
-          {/* ── STATISTIQUES ── */}
-          {activeSection==="stats" && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  { value: stats.fiches,   label: dict.statsDesc[0], color:"text-cyan-400"    },
-                  { value: stats.tunnels,  label: dict.statsDesc[1], color:"text-emerald-400" },
-                  { value: stats.interets, label: dict.statsDesc[2], color:"text-amber-400"   },
-                ].map((s,i)=>(
-                  <div key={i} className="border border-zinc-800/80 bg-[#0a0a0d] rounded-2xl p-8 text-center shadow-lg relative overflow-hidden">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent"/>
-                    <p className={`text-5xl font-black mb-2 ${s.color} ${loadingStats?"opacity-30":""}` }
-                      style={{textShadow: loadingStats?"none":"0 0 20px currentColor"}}>
-                      {loadingStats?"—":s.value}
-                    </p>
-                    <p className="text-[11px] font-mono text-zinc-500 uppercase tracking-widest">{s.label}</p>
+          {/* ── OUTILS — grille tuiles graphiques ── */}
+          {activeSection==="outils" && (
+            <div className="space-y-8 animate-in fade-in duration-200">
+              {ROWS.map((row, ri) => (
+                <div key={ri}>
+                  <p className="text-[9px] font-mono font-black tracking-[4px] uppercase mb-4 text-center"
+                    style={{color:`${row.color}0.5)`}}>
+                    {lang==="fr" ? row.labelFr : row.labelEn}
+                  </p>
+                  <div className="flex gap-3 justify-center flex-wrap">
+                    {row.tools.map((tool, ti) => (
+                      <a key={ti} href={tool.href}
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{
+                          background: `linear-gradient(135deg,${row.color}0.12) 0%,${row.color}0.05) 100%)`,
+                          borderColor: `${row.color}0.35)`,
+                          boxShadow:   `0 0 20px ${row.color}0.1),inset 0 1px 0 ${row.color}0.2)`,
+                        }}
+                        onMouseEnter={e=>{
+                          const el = e.currentTarget as HTMLElement;
+                          el.style.boxShadow = `0 0 35px ${row.color}0.4)`;
+                          el.style.transform = "translateY(-3px)";
+                          el.style.borderColor = `${row.color}0.7)`;
+                        }}
+                        onMouseLeave={e=>{
+                          const el = e.currentTarget as HTMLElement;
+                          el.style.boxShadow = `0 0 20px ${row.color}0.1),inset 0 1px 0 ${row.color}0.2)`;
+                          el.style.transform = "translateY(0)";
+                          el.style.borderColor = `${row.color}0.35)`;
+                        }}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl"
+                          style={{background:`linear-gradient(135deg,${row.color}0.18) 0%,${row.color}0.06) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l opacity-40"
+                          style={{borderColor:`${row.color}1)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r opacity-40"
+                          style={{borderColor:`${row.color}1)`}}/>
+                        <span className="relative z-10 text-3xl">{tool.icon}</span>
+                        <span className={`relative z-10 text-[8px] font-mono font-black tracking-widest uppercase ${tool.textClass}`}>
+                          {lang==="fr" ? tool.nameFr : tool.nameEn}
+                        </span>
+                      </a>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <p className="text-[10px] text-zinc-600 font-mono text-center">{dict.statsNote}</p>
+                </div>
+              ))}
             </div>
           )}
 
@@ -250,7 +306,6 @@ export default function DashboardPage() {
                 <p className="text-[10px] font-mono text-amber-400 uppercase tracking-widest mb-2">⚠️ {lang==="fr"?"Avertissement important":"Important notice"}</p>
                 <p className="text-xs text-amber-200/80 leading-relaxed">{dict.reglesWarn}</p>
               </div>
-
               <div>
                 <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-4">{dict.reglesTitle}</p>
                 <div className="flex flex-col gap-2">
@@ -262,7 +317,6 @@ export default function DashboardPage() {
                   ))}
                 </div>
               </div>
-
               <p className="text-[10px] text-zinc-600 font-mono text-center italic">{dict.reglesNote}</p>
             </div>
           )}

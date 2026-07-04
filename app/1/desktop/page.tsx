@@ -7,11 +7,12 @@ import { supabase } from "../../lib/supabase";
 type Lang = "fr" | "en";
 
 const NAV_ITEMS = [
-  { href: "/1",              key: "hall"    },
+  { href: "/1/hall",         key: "hall"    },
   { href: "/1/dashboard",    key: "dash"    },
   { href: "/1/conversation", key: "conv"    },
   { href: "/1/form",         key: "form"    },
   { href: "/1/fiche",        key: "fiches"  },
+  { href: "/1/desktop",      key: "bureau"  },
   { href: "/1/account",      key: "account" },
 ];
 const LABELS: Record<string, { fr: string; en: string }> = {
@@ -20,6 +21,7 @@ const LABELS: Record<string, { fr: string; en: string }> = {
   conv:    { fr: "Conversation", en: "Conversation" },
   form:    { fr: "Formulaire",   en: "Form"         },
   fiches:  { fr: "Fiches",       en: "Listings"     },
+  bureau:  { fr: "Bureau",        en: "Desk"         },
   account: { fr: "Compte",       en: "Account"      },
 };
 
@@ -91,6 +93,8 @@ export default function BureauPage() {
   const [receivedInterets, setReceivedInterets] = useState<Interet[]>([]);
   const [loading, setLoading] = useState(true);
   const [openPanel, setOpenPanel] = useState<PanelId|null>(null);
+  const [globalStats, setGlobalStats] = useState({ fiches: 0, tunnels: 0, interets: 0 });
+  const [loadingStats, setLoadingStats] = useState(true);
   const [keyRevealed, setKeyRevealed] = useState(false);
   const [time, setTime] = useState("");
 
@@ -134,6 +138,20 @@ export default function BureauPage() {
     };
     load();
   },[userId]);
+
+  useEffect(()=>{
+    const loadGlobal = async()=>{
+      setLoadingStats(true);
+      const [{ count: f }, { count: t }, { count: i }] = await Promise.all([
+        supabase.from("fiches").select("*", { count:"exact", head:true }),
+        supabase.from("tunnels").select("*", { count:"exact", head:true }),
+        supabase.from("fiche_interets").select("*", { count:"exact", head:true }),
+      ]);
+      setGlobalStats({ fiches: f||0, tunnels: t||0, interets: i||0 });
+      setLoadingStats(false);
+    };
+    loadGlobal();
+  },[]);
 
   const panels: { id:PanelId; label:{fr:string;en:string}; icon: React.FC<{glow?:boolean}>; count?:number }[] = [
     { id:"key",      label:{fr:"Ma Clé",       en:"My Key"    }, icon:IconKey,      count:undefined },
@@ -210,6 +228,24 @@ export default function BureauPage() {
           </div>
         ) : (
           <div className="w-full max-w-5xl">
+
+            {/* ── STATS PLATEFORME ── */}
+            <div className="grid grid-cols-3 gap-3 mb-8">
+              {[
+                { value: globalStats.fiches,   label: lang==="fr"?"Fiches actives":"Active listings",    color:"text-cyan-400",    shadow:"rgba(6,182,212," },
+                { value: globalStats.tunnels,  label: lang==="fr"?"Contacts débloqués":"Contacts unlocked", color:"text-emerald-400", shadow:"rgba(52,211,153," },
+                { value: globalStats.interets, label: lang==="fr"?"Intérêts envoyés":"Interests sent",   color:"text-amber-400",   shadow:"rgba(251,191,36," },
+              ].map((s,i)=>(
+                <div key={i} className="border border-zinc-800/80 bg-[#0a0a0d] rounded-2xl p-5 text-center relative overflow-hidden">
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent"/>
+                  <p className={`text-4xl font-black mb-1.5 ${s.color} ${loadingStats?"opacity-20":""}`}
+                    style={{textShadow: loadingStats?"none":`0 0 20px ${s.shadow}0.5)`}}>
+                    {loadingStats?"—":s.value}
+                  </p>
+                  <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">{s.label}</p>
+                </div>
+              ))}
+            </div>
 
             {/* ── 5 PLAQUES ── */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">

@@ -1,328 +1,297 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 
 type Lang = "fr" | "en";
 
-const NAV_ITEMS = [
-  { href: "/1",              key: "hall", active: true },
-  { href: "/1/dashboard",    key: "dash"   },
-  { href: "/1/conversation", key: "conv"   },
-  { href: "/1/form",         key: "form"   },
-  { href: "/1/fiche",        key: "fiches" },
-  { href: "/1/account",      key: "account" },
-];
-const LABELS: Record<string, { fr: string; en: string }> = {
-  hall:    { fr: "Hall",         en: "Hall"         },
-  dash:    { fr: "Dashboard",    en: "Dashboard"    },
-  conv:    { fr: "Conversation", en: "Conversation" },
-  form:    { fr: "Formulaire",   en: "Form"         },
-  fiches:  { fr: "Fiches",       en: "Listings"     },
-  account: { fr: "Compte",       en: "Account"      },
+const T = {
+  fr: {
+    nav: ["Hall", "Dashboard", "Conversation", "Formulaire", "Fiches", "Compte"],
+    navHref: ["/1/hall", "/1/dashboard", "/1/conversation", "/1/formulaire", "/1/fiches", "/account"],
+    welcome: "BIENVENUE",
+    title: "AFFINITÉ\nDE PROJETS",
+    tagline: "Votre projet n'a pas besoin de tout faire seul.",
+    sub: "Bienvenue dans Affinité de Projets, cet espace existe pour aider les fondateurs de projets à trouver quelqu'un avec qui s'associer.",
+    btn1: "Explorer les projets",
+    btn1sub: "Parcourir les fiches compatibles",
+    btn2: "Mon Bureau",
+    btn2sub: "Votre espace privé",
+    btn3: "Dashboard",
+    btn3sub: "Tous vos outils réunis",
+    howTitle: "Comment fonctionne Affinité de Projets ?",
+    steps: [
+      { n: "01", title: "Créez votre fiches", desc: "Décrivez votre projet en quelques lignes. Votre fiche devient votre identité sur la plateforme." },
+      { n: "02", title: "Décrivez votre projet", desc: "Secteur, compétences recherchées, stade d'avancement. Soyez précis pour attirer les bons profils." },
+      { n: "03", title: "Découvrez les projets compatibles", desc: "Explorez les fiches d'autres fondateurs. Filtrez par affinité, secteur ou besoin." },
+      { n: "04", title: "Débloquez les coordonnées", desc: "Si une connexion vous intéresse, un paiement ponctuel déverrouille le contact. Pas d'abonnement." },
+    ],
+    footer: "© 2026 Echo AI · Affinité de Projets",
+  },
+  en: {
+    nav: ["Hall", "Dashboard", "Conversation", "Form", "Profiles", "Account"],
+    navHref: ["/1/hall", "/1/dashboard", "/1/conversation", "/1/formulaire", "/1/fiche", "/account"],
+    welcome: "WELCOME",
+    title: "PROJECT\nAFFINITY",
+    tagline: "Your project doesn't need to do everything alone.",
+    sub: "Welcome to Project Affinity, a space designed to help project founders find someone to collaborate with.",
+    btn1: "Explore Projects",
+    btn1sub: "Browse compatible profiles",
+    btn2: "My Desk",
+    btn2sub: "Your private workspace",
+    btn3: "Dashboard",
+    btn3sub: "All your tools in one place",
+    howTitle: "How does Project Affinity work?",
+    steps: [
+      { n: "01", title: "Create your profile", desc: "Describe your project in a few lines. Your profile becomes your identity on the platform." },
+      { n: "02", title: "Describe your project", desc: "Sector, skills needed, stage. Be specific to attract the right people." },
+      { n: "03", title: "Discover compatible projects", desc: "Browse other founders' profiles. Filter by affinity, sector or need." },
+      { n: "04", title: "Unlock contact details", desc: "If a connection interests you, a one-time payment unlocks the contact. No subscription." },
+    ],
+    footer: "© 2026 Echo AI · Project Affinity",
+  },
 };
 
-type PortalId = "formulaire" | "fiches" | "dashboard" | "bureau" | "ia" | "compte";
-
-const PORTALS: { id: PortalId; icon: string; label: { fr: string; en: string }; content: { fr: string; en: string } }[] = [
-  {
-    id: "formulaire", icon: "📝",
-    label: { fr: "Le Formulaire", en: "The Form" },
-    content: {
-      fr: "Tout commence ici. En 6 étapes, tu construis ta fiche projet : ton idée, ton avancement, tes objectifs à court, moyen et long terme, les technologies que tu utilises, et ce que tu cherches comme synergie. Tu choisis aussi quelles informations de contact rendre visibles après déblocage. À la fin, tu reçois ta clé personnelle par courriel.",
-      en: "Everything starts here. In 6 steps, you build your project listing: your idea, your progress, your short, medium and long-term goals, your tech stack, and what kind of synergy you're looking for. You also choose which contact info to reveal after unlock. At the end, you receive your personal key by email.",
-    },
-  },
-  {
-    id: "fiches", icon: "🗂️",
-    label: { fr: "Les Fiches", en: "The Listings" },
-    content: {
-      fr: "Les fiches sont le cœur du réseau. Chaque fondateur qui s'est inscrit a une fiche publique avec son projet, ses outils, ses objectifs et ce qu'il cherche. Tu peux envoyer un intérêt discret (♥) ou marquer un intérêt fort (★) — le créateur reçoit une notification par courriel. Pour voir ses coordonnées réelles (courriel, Discord, GitHub, etc.), tu débloques sa fiche pour 1,50$. C'est permanent et confidentiel.",
-      en: "Listings are the heart of the network. Each registered founder has a public listing with their project, tools, goals and what they're looking for. You can send a soft interest (♥) or a strong interest (★) — the creator gets an email notification. To see their real contact info (email, Discord, GitHub, etc.), you unlock their listing for $1.50. It's permanent and confidential.",
-    },
-  },
-  {
-    id: "dashboard", icon: "📊",
-    label: { fr: "Le Dashboard", en: "The Dashboard" },
-    content: {
-      fr: "Le Dashboard est une vue globale de la plateforme, accessible à tous sans connexion. Tu y trouves les statistiques en temps réel (fiches actives, contacts débloqués, intérêts envoyés), les événements à venir annoncés par l'équipe, et le règlement complet de la plateforme. Aucune IA, aucune donnée personnelle — uniquement des informations vérifiables.",
-      en: "The Dashboard is a global view of the platform, accessible to everyone without logging in. You'll find real-time stats (active listings, unlocked contacts, interests sent), upcoming events from the team, and the full platform rules. No AI, no personal data — only verifiable information.",
-    },
-  },
-  {
-    id: "bureau", icon: "🗝️",
-    label: { fr: "Ton Bureau", en: "Your Desk" },
-    content: {
-      fr: "Le Bureau est ton espace privé, accessible uniquement après connexion. Il contient 5 éléments : ta clé personnelle (cachée jusqu'à ce que tu décides de la révéler), tes propres fiches et leur activité, les contacts que tu as débloqués, les intérêts que tu as envoyés, et les intérêts reçus sur tes fiches. Chaque élément est une plaque interactive — tu cliques pour ouvrir.",
-      en: "The Desk is your private space, accessible only after logging in. It contains 5 elements: your personal key (hidden until you choose to reveal it), your own listings and their activity, the contacts you've unlocked, the interests you've sent, and the interests received on your listings. Each element is an interactive panel — click to open.",
-    },
-  },
-  {
-    id: "ia", icon: "🤖",
-    label: { fr: "L'IA du Hall", en: "The Hall AI" },
-    content: {
-      fr: "Je suis la réceptionniste de ce Hall. Je connais toutes les fiches disponibles sur la plateforme et je peux te suggérer un projet qui correspond à ce que tu cherches. Je connais aussi toutes les pages du site et je peux t'expliquer comment tout fonctionne. Je ne parle que de ce site — pour une IA généraliste, la page Conversation est faite pour ça. Pose-moi une question dans le panneau à droite.",
-      en: "I am the receptionist of this Hall. I know all the listings available on the platform and can suggest a project that matches what you're looking for. I also know every page of the site and can explain how everything works. I only talk about this site — for a general AI, the Conversation page is made for that. Ask me a question in the panel on the right.",
-    },
-  },
-  {
-    id: "compte", icon: "👤",
-    label: { fr: "Ton Compte", en: "Your Account" },
-    content: {
-      fr: "La connexion est obligatoire pour créer une fiche, accéder au Bureau, et acheter des contacts. Tu peux te connecter via Google, Microsoft ou courriel/mot de passe. La connexion garantit qu'une seule clé personnelle existe par compte et que tes fiches et contacts débloqués sont conservés de manière sécurisée entre tes visites.",
-      en: "Logging in is required to create a listing, access the Desk, and purchase contacts. You can log in via Google, Microsoft or email/password. Login ensures that only one personal key exists per account and that your listings and unlocked contacts are securely preserved between visits.",
-    },
-  },
-];
-
-type ChatMsg = { role: "user" | "assistant"; content: string };
-
 export default function HallPage() {
-  const [lang, setLang]         = useState<Lang>("fr");
-  const [openPortal, setOpenPortal] = useState<PortalId | null>(null);
-  const [chatInput, setChatInput]   = useState("");
-  const [chatHistory, setChatHistory] = useState<ChatMsg[]>([]);
-  const [chatLoading, setChatLoading] = useState(false);
-  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const [lang, setLang] = useState<Lang>("fr");
+  const [scrolled, setScrolled] = useState(false);
+  const t = T[lang];
 
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
-  const sendToReception = async () => {
-    const msg = chatInput.trim();
-    if (!msg || chatLoading) return;
-    setChatInput("");
-    const newHistory: ChatMsg[] = [...chatHistory, { role: "user", content: msg }];
-    setChatHistory(newHistory);
-    setChatLoading(true);
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const res  = await fetch(`${API_URL}/1/hall-reception`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, history: newHistory }),
-      });
-      const data = await res.json();
-      setChatHistory(h => [...h, { role: "assistant", content: data.response || "…" }]);
-    } catch {
-      setChatHistory(h => [...h, { role: "assistant", content: lang === "fr" ? "Indisponible momentanément." : "Temporarily unavailable." }]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  const dict = {
-    fr: {
-      welcome_label: "BIENVENUE",
-      title: "THE GRAND HALL",
-      welcome_msg: "Vous entrez dans un espace pensé pour les fondateurs solos qui construisent en silence mais qui ne veulent plus grandir seuls.",
-      about_title: "Ce que vous trouverez ici",
-      about_msg: "Une plateforme de mise en relation entre créateurs de projets. Chaque membre possède une fiche, une clé personnelle et un bureau privé. Les contacts sont protégés et ne se débloquent qu'après un paiement ponctuel. Pas de réseaux sociaux. Pas de bruit. Du concret.",
-      portals_title: "EXPLORER",
-      reception_title: "RÉCEPTIONNISTE",
-      reception_sub: "Posez-moi toutes vos questions sur cette plateforme.",
-      reception_placeholder: "Comment créer une fiche ? Quel projet me correspond ?",
-      send: "Envoyer",
-      online: "EN LIGNE",
-      close: "Fermer",
-    },
-    en: {
-      welcome_label: "WELCOME",
-      title: "THE GRAND HALL",
-      welcome_msg: "You are entering a space designed for solo founders who build in silence but no longer want to grow alone.",
-      about_title: "What you'll find here",
-      about_msg: "A connection platform for project creators. Each member has a listing, a personal key, and a private desk. Contacts are protected and only unlocked after a one-time payment. No social media. No noise. Just substance.",
-      portals_title: "EXPLORE",
-      reception_title: "RECEPTIONIST",
-      reception_sub: "Ask me anything about this platform.",
-      reception_placeholder: "How do I create a listing? Which project suits me?",
-      send: "Send",
-      online: "ONLINE",
-      close: "Close",
-    },
-  }[lang];
+  const accent = "#00c8ff";
+  const gold   = "#c9a84c";
 
   return (
-    <div className="w-full min-h-screen bg-[#08070a] text-zinc-300 flex flex-col font-sans relative overflow-hidden">
+    <div style={{ background: "#050505", color: "#e8e8e8", minHeight: "100vh", fontFamily: "'Inter', system-ui, sans-serif", overflowX: "hidden" }}>
 
-      {/* LUMIÈRE AMBIANTE */}
-      <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[140%] h-[600px]"
-          style={{ background: "radial-gradient(ellipse 50% 100% at 50% 0%, rgba(6,182,212,0.09) 0%, transparent 65%)" }} />
-      </div>
-
-      {/* 3 COLONNES CHAQUE CÔTÉ — pleine hauteur */}
-      {["left", "right"].map(side => (
-        <div key={side} className={`pointer-events-none fixed inset-y-0 ${side === "left" ? "left-0" : "right-0"} z-0 hidden lg:flex gap-10 px-6 items-stretch`}>
-          {[0, 1, 2].map(i => (
-            <div key={i} className="relative w-3 flex flex-col items-center">
-              <div className="absolute inset-y-0 w-full bg-gradient-to-b from-zinc-800/25 via-zinc-700/45 to-zinc-800/25 rounded-full border-x border-zinc-600/10" />
-              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-gradient-to-b from-transparent via-cyan-400/25 to-transparent" />
-              <div className="absolute top-12 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan-400/60 shadow-[0_0_10px_3px_rgba(6,182,212,0.3)]" />
-              <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-cyan-400/60 shadow-[0_0_10px_3px_rgba(6,182,212,0.3)]" />
-            </div>
-          ))}
-        </div>
-      ))}
-
-      {/* NAV */}
-      <nav className="relative z-20 border-b border-zinc-900/60 px-6 py-4 flex items-center justify-between shrink-0 bg-black/50 backdrop-blur-sm">
-        <span className="font-bold text-sm text-white tracking-wide">Echo AI</span>
-        <div className="flex items-center gap-5 text-sm">
-          {NAV_ITEMS.map(item => (
-            <Link key={item.href} href={item.href}
-              className={(item as any).active ? "text-cyan-400 font-semibold" : "text-zinc-500 hover:text-zinc-200 transition-colors"}>
-              {LABELS[item.key][lang]}
+      {/* ── NAV ──────────────────────────────────────────────────────────────── */}
+      <nav style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+        background: scrolled ? "rgba(5,5,5,.95)" : "transparent",
+        backdropFilter: scrolled ? "blur(12px)" : "none",
+        borderBottom: scrolled ? "1px solid rgba(255,255,255,.06)" : "none",
+        transition: "all .3s",
+        padding: "0 40px", height: 60,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: 1, color: "#fff" }}>Echo AI</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+          {t.nav.map((label, i) => (
+            <Link key={i} href={t.navHref[i]}
+              style={{ fontSize: 13, color: i === 0 ? accent : "rgba(255,255,255,.55)", textDecoration: "none", fontWeight: i === 0 ? 700 : 400, letterSpacing: .5, transition: "color .2s" }}
+              onMouseEnter={e => { if (i !== 0) (e.target as HTMLElement).style.color = "#fff"; }}
+              onMouseLeave={e => { if (i !== 0) (e.target as HTMLElement).style.color = "rgba(255,255,255,.55)"; }}>
+              {label}
             </Link>
           ))}
           <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")}
-            className="text-xs text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg hover:border-zinc-600 transition-colors">
+            style={{ background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: "rgba(255,255,255,.6)", cursor: "pointer", fontWeight: 600 }}>
             {lang === "fr" ? "EN" : "FR"}
           </button>
         </div>
       </nav>
 
-      {/* CORPS — 2/3 contenu + 1/3 IA */}
-      <div className="relative z-10 flex-1 flex overflow-hidden min-h-0">
+      {/* ── HERO ─────────────────────────────────────────────────────────────── */}
+      <section style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: "60px 1fr 60px", padding: "100px 0 60px", position: "relative" }}>
+        {/* Colonne gauche décorative */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 120, gap: 24 }}>
+          <div style={{ width: 1, flex: 1, background: "linear-gradient(to bottom, transparent, rgba(0,200,255,.15), transparent)" }} />
+          <div style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(0,200,255,.3)" }} />
+          <div style={{ width: 1, flex: 1, background: "linear-gradient(to bottom, transparent, rgba(0,200,255,.08), transparent)" }} />
+        </div>
+        {/* Centre */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
 
-        {/* ── 2/3 GAUCHE ── */}
-        <div className="flex-1 overflow-y-auto px-6 lg:px-20 py-14 lg:pr-10 min-w-0">
+        {/* Glow background */}
+        <div style={{ position: "absolute", top: "30%", left: "50%", transform: "translate(-50%, -50%)", width: 600, height: 600, background: "radial-gradient(circle, rgba(0,200,255,.06) 0%, transparent 70%)", pointerEvents: "none" }} />
 
-          {/* ACCUEIL */}
-          <div className="mb-14">
-            <p className="text-[10px] font-mono tracking-[0.5em] text-cyan-500 font-bold mb-4">{dict.welcome_label}</p>
-            <h1 className="text-5xl sm:text-6xl font-extralight tracking-[0.12em] text-white uppercase mb-5 leading-tight"
-              style={{ textShadow: "0 0 60px rgba(6,182,212,0.18)" }}>
-              {dict.title}
-            </h1>
-            <div className="w-20 h-px bg-gradient-to-r from-cyan-500/60 to-transparent mb-5" />
-            <p className="text-base text-zinc-400 leading-relaxed max-w-xl font-light">{dict.welcome_msg}</p>
-          </div>
-
-          {/* EXPLICATION GLOBALE */}
-          <div className="mb-14 border-l-2 border-cyan-500/30 pl-6">
-            <p className="text-[10px] font-mono tracking-[0.4em] text-zinc-500 uppercase mb-3">{dict.about_title}</p>
-            <p className="text-sm text-zinc-400 leading-relaxed max-w-lg">{dict.about_msg}</p>
-          </div>
-
-          {/* PORTAILS */}
-          <div className="mb-10">
-            <p className="text-[10px] font-mono tracking-[0.4em] text-zinc-500 uppercase mb-6">{dict.portals_title}</p>
-            <div className="flex flex-col gap-2">
-              {PORTALS.map(portal => {
-                const isOpen = openPortal === portal.id;
-                return (
-                  <div key={portal.id} className={`border rounded-xl transition-all duration-300 overflow-hidden ${isOpen ? "border-cyan-500/40 bg-black/40" : "border-zinc-900 bg-black/20 hover:border-zinc-800"}`}>
-                    {/* En-tête du portail — cliquable */}
-                    <button
-                      onClick={() => setOpenPortal(isOpen ? null : portal.id)}
-                      className="w-full flex items-center gap-4 px-5 py-4 text-left">
-                      <span className={`text-xl transition-all ${isOpen ? "scale-110" : ""}`}>{portal.icon}</span>
-                      <span className={`text-sm font-semibold flex-1 transition-colors ${isOpen ? "text-cyan-400" : "text-zinc-300"}`}>
-                        {portal.label[lang]}
-                      </span>
-                      <svg className={`w-4 h-4 text-zinc-600 transition-transform ${isOpen ? "rotate-180 text-cyan-400" : ""}`}
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
-                      </svg>
-                    </button>
-
-                    {/* Contenu du portail */}
-                    {isOpen && (
-                      <div className="px-5 pb-5 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <div className="h-px bg-zinc-800/60 mb-4" />
-                        <p className="text-sm text-zinc-400 leading-relaxed">{portal.content[lang]}</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+        {/* Welcome */}
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 6, color: accent, marginBottom: 24, opacity: .8 }}>
+          {t.welcome}
         </div>
 
-        {/* ── 1/3 DROITE — Réceptionniste IA ── */}
-        <div className="w-full lg:w-[360px] shrink-0 border-l border-zinc-900/60 bg-black/50 flex flex-col min-h-0">
-
-          {/* Header */}
-          <div className="p-5 border-b border-zinc-900/60 shrink-0 relative overflow-hidden">
-            <div className="absolute inset-0 pointer-events-none"
-              style={{ background: "radial-gradient(ellipse 80% 60% at 50% 0%, rgba(6,182,212,0.06) 0%, transparent 70%)" }} />
-            <div className="relative flex items-center gap-3 mb-3">
-              <div className="relative shrink-0">
-                <div className="absolute inset-0 rounded-full bg-cyan-400/15 blur-md" />
-                <img src="/echo1.png" alt="Echo" className="relative w-10 h-10 rounded-full object-cover border border-zinc-700/60" />
-              </div>
-              <div>
-                <p className="text-[10px] font-mono text-zinc-400 tracking-widest uppercase">{dict.reception_title}</p>
-                <span className="inline-flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#06b6d4]" />
-                  <span className="text-[10px] font-mono text-cyan-400 font-bold">{dict.online}</span>
-                </span>
-              </div>
-            </div>
-            <p className="relative text-[11px] text-zinc-500 leading-relaxed">{dict.reception_sub}</p>
-          </div>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-            {chatHistory.length === 0 && (
-              <p className="text-[11px] text-zinc-600 italic text-center pt-6 leading-relaxed">
-                {lang === "fr"
-                  ? "Posez une question sur les fiches, la clé, le Bureau, ou demandez-moi quel projet pourrait vous intéresser."
-                  : "Ask a question about listings, your key, the Desk, or ask me which project might interest you."}
-              </p>
-            )}
-            {chatHistory.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-zinc-800 text-zinc-200"
-                    : "bg-[#0d1117] border border-zinc-800/60 text-zinc-300"
-                }`}>
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            {chatLoading && (
-              <div className="flex justify-start">
-                <div className="bg-[#0d1117] border border-zinc-800/60 rounded-2xl px-3.5 py-3">
-                  <div className="flex gap-1 items-center">
-                    {[0, 1, 2].map(i => (
-                      <div key={i} className="w-1 h-1 rounded-full bg-cyan-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={chatBottomRef} />
-          </div>
-
-          {/* Input */}
-          <div className="p-4 border-t border-zinc-900/60 shrink-0">
-            <div className="flex gap-2">
-              <input
-                type="text" value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") sendToReception(); }}
-                placeholder={dict.reception_placeholder}
-                className="flex-1 bg-zinc-900/60 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors min-w-0" />
-              <button
-                onClick={sendToReception} disabled={chatLoading || !chatInput.trim()}
-                className="shrink-0 w-9 h-9 flex items-center justify-center bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white rounded-xl transition-colors">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
-                </svg>
-              </button>
-            </div>
-          </div>
+        {/* Image affinity */}
+        <div style={{ width: 220, height: 220, marginBottom: 32, position: "relative" }}>
+          <img src="/affinity.jpg" alt="Affinité de Projets"
+            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%", opacity: .9, border: `1px solid rgba(0,200,255,.2)`, boxShadow: "0 0 40px rgba(0,200,255,.15)" }} />
         </div>
-      </div>
 
-      <footer className="relative z-20 h-8 border-t border-zinc-950 bg-black/60 px-6 flex items-center justify-between text-[10px] font-mono text-zinc-600 shrink-0">
-        <p>THE GRAND HALL — <span className="text-zinc-500">SITE_2</span></p>
-        <p>© 2026 ECHOSAI.CA</p>
+        {/* Titre */}
+        <h1 style={{ fontSize: "clamp(42px, 8vw, 96px)", fontWeight: 900, lineHeight: .95, letterSpacing: -2, color: "#fff", marginBottom: 28, whiteSpace: "pre-line" }}>
+          {lang === "fr" ? <>AFFINITÉ<br/><span style={{color: "#7fe8ff"}}>DE PROJETS</span></> : <>PROJECT<br/><span style={{color: "#7fe8ff"}}>AFFINITY</span></>}
+        </h1>
+
+        {/* Tagline */}
+        <p style={{ fontSize: 18, color: "rgba(255,255,255,.7)", marginBottom: 8, fontWeight: 300, maxWidth: 560 }}>
+          {t.tagline}
+        </p>
+        <p style={{ fontSize: 14, color: "rgba(255,255,255,.4)", marginBottom: 56, whiteSpace: "pre-line", lineHeight: 1.7, maxWidth: 480 }}>
+          {t.sub}
+        </p>
+
+        {/* 3 Boutons */}
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center", maxWidth: 840, width: "100%" }}>
+
+          {/* Explorer */}
+          <Link href="/1/fiche" style={{ textDecoration: "none", flex: "1 1 240px", maxWidth: 280 }}>
+            <div style={{
+              background: "linear-gradient(135deg, rgba(0,200,255,.12), rgba(0,200,255,.04))",
+              border: "1px solid rgba(0,200,255,.25)",
+              borderRadius: 16, padding: "28px 24px",
+              cursor: "pointer", transition: "all .25s",
+              textAlign: "left",
+            }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, rgba(0,200,255,.2), rgba(0,200,255,.08))"; (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,200,255,.5)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, rgba(0,200,255,.12), rgba(0,200,255,.04))"; (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,200,255,.25)"; }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>🔍</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 6 }}>{t.btn1}</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.45)", lineHeight: 1.5 }}>{t.btn1sub}</div>
+              <div style={{ marginTop: 18, fontSize: 12, color: accent, fontWeight: 600 }}>Explorer →</div>
+            </div>
+          </Link>
+
+          {/* Bureau */}
+          <Link href="/1/desktop" style={{ textDecoration: "none", flex: "1 1 240px", maxWidth: 280 }}>
+            <div style={{
+              background: "linear-gradient(135deg, rgba(201,168,76,.1), rgba(201,168,76,.03))",
+              border: "1px solid rgba(201,168,76,.2)",
+              borderRadius: 16, padding: "28px 24px",
+              cursor: "pointer", transition: "all .25s",
+              textAlign: "left",
+            }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, rgba(201,168,76,.18), rgba(201,168,76,.08))"; (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(201,168,76,.4)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, rgba(201,168,76,.1), rgba(201,168,76,.03))"; (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(201,168,76,.2)"; }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>🔑</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 6 }}>{t.btn2}</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.45)", lineHeight: 1.5 }}>{t.btn2sub}</div>
+              <div style={{ marginTop: 18, fontSize: 12, color: gold, fontWeight: 600 }}>Accéder →</div>
+            </div>
+          </Link>
+
+          {/* Dashboard */}
+          <Link href="/1/dashboard" style={{ textDecoration: "none", flex: "1 1 240px", maxWidth: 280 }}>
+            <div style={{
+              background: "linear-gradient(135deg, rgba(139,92,246,.1), rgba(139,92,246,.03))",
+              border: "1px solid rgba(139,92,246,.2)",
+              borderRadius: 16, padding: "28px 24px",
+              cursor: "pointer", transition: "all .25s",
+              textAlign: "left",
+            }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, rgba(139,92,246,.18), rgba(139,92,246,.08))"; (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(139,92,246,.4)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, rgba(139,92,246,.1), rgba(139,92,246,.03))"; (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(139,92,246,.2)"; }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>⚡</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 6 }}>{t.btn3}</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.45)", lineHeight: 1.5 }}>{t.btn3sub}</div>
+              <div style={{ marginTop: 18, fontSize: 12, color: "#8b5cf6", fontWeight: 600 }}>Ouvrir →</div>
+            </div>
+          </Link>
+        </div>
+
+        {/* Scroll indicator */}
+        <div style={{ marginTop: 48, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, opacity: .3, animation: "bounce 2s infinite" }}>
+          <div style={{ fontSize: 11, letterSpacing: 3, color: "#fff" }}>SCROLL</div>
+          <div style={{ width: 1, height: 40, background: "linear-gradient(to bottom, rgba(255,255,255,.5), transparent)" }} />
+        </div>
+        </div>{/* fin centre */}
+        {/* Colonne droite décorative */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 120, gap: 24 }}>
+          <div style={{ width: 1, flex: 1, background: "linear-gradient(to bottom, transparent, rgba(201,168,76,.15), transparent)" }} />
+          <div style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(201,168,76,.3)" }} />
+          <div style={{ width: 1, flex: 1, background: "linear-gradient(to bottom, transparent, rgba(201,168,76,.08), transparent)" }} />
+        </div>
+      </section>
+
+      {/* ── SÉPARATEUR ───────────────────────────────────────────────────────── */}
+      <div style={{ height: 1, background: "linear-gradient(to right, transparent, rgba(255,255,255,.08), transparent)", margin: "0 40px" }} />
+
+      {/* ── COMMENT ÇA MARCHE ────────────────────────────────────────────────── */}
+      <section style={{ padding: "100px 40px", maxWidth: 960, margin: "0 auto" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 5, color: accent, marginBottom: 16, opacity: .7 }}>
+          PROCESSUS
+        </div>
+        <h2 style={{ fontSize: "clamp(28px, 4vw, 48px)", fontWeight: 900, color: "#fff", marginBottom: 64, letterSpacing: -1 }}>
+          {t.howTitle}
+        </h2>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 32 }}>
+          {t.steps.map((step, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              {/* Ligne de connexion */}
+              {i < t.steps.length - 1 && (
+                <div style={{ position: "absolute", top: 22, left: "calc(100% + 16px)", width: 32, height: 1, background: "rgba(255,255,255,.1)", display: "none" }} className="step-line" />
+              )}
+              <div style={{ fontSize: 36, fontWeight: 900, color: "rgba(255,255,255,.06)", lineHeight: 1, marginBottom: 16, fontVariantNumeric: "tabular-nums" }}>
+                {step.n}
+              </div>
+              <div style={{ width: 32, height: 2, background: `linear-gradient(to right, ${accent}, transparent)`, marginBottom: 16, opacity: .5 }} />
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 10 }}>
+                {step.title}
+              </div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,.4)", lineHeight: 1.7 }}>
+                {step.desc}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── SÉPARATEUR ───────────────────────────────────────────────────────── */}
+      <div style={{ height: 1, background: "linear-gradient(to right, transparent, rgba(255,255,255,.08), transparent)", margin: "0 40px" }} />
+
+      {/* ── CTA FINAL ────────────────────────────────────────────────────────── */}
+      <section style={{ padding: "80px 40px", textAlign: "center" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 5, color: gold, marginBottom: 16, opacity: .7 }}>
+          COMMENCER
+        </div>
+        <h2 style={{ fontSize: "clamp(24px, 3vw, 40px)", fontWeight: 900, color: "#fff", marginBottom: 12, letterSpacing: -1 }}>
+          {lang === "fr" ? "Votre fiche en 2 minutes." : "Your profile in 2 minutes."}
+        </h2>
+        <p style={{ fontSize: 14, color: "rgba(255,255,255,.4)", marginBottom: 36, maxWidth: 400, margin: "0 auto 36px" }}>
+          {lang === "fr"
+            ? "Créez votre présence sur la plateforme et commencez à découvrir des projets compatibles."
+            : "Create your presence on the platform and start discovering compatible projects."}
+        </p>
+        <Link href="/1/form"
+          style={{ display: "inline-block", background: `linear-gradient(135deg, ${accent}, #0080ff)`, color: "#000", fontWeight: 800, fontSize: 14, padding: "14px 36px", borderRadius: 12, textDecoration: "none", letterSpacing: .5, boxShadow: `0 0 30px rgba(0,200,255,.2)`, transition: "transform .2s, box-shadow .2s" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 40px rgba(0,200,255,.35)`; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 0 30px rgba(0,200,255,.2)`; }}>
+          {lang === "fr" ? "Créer ma fiche →" : "Create my profile →"}
+        </Link>
+      </section>
+
+      {/* ── FOOTER ───────────────────────────────────────────────────────────── */}
+      <footer style={{ padding: "24px 40px", borderTop: "1px solid rgba(255,255,255,.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,.2)" }}>{t.footer}</div>
+        <div style={{ display: "flex", gap: 20 }}>
+          {t.nav.slice(1).map((label, i) => (
+            <Link key={i} href={t.navHref[i + 1]}
+              style={{ fontSize: 11, color: "rgba(255,255,255,.2)", textDecoration: "none" }}>
+              {label}
+            </Link>
+          ))}
+        </div>
       </footer>
+
+      <style>{`
+        @keyframes bounce {
+          0%, 100% { transform: translateX(-50%) translateY(0); }
+          50% { transform: translateX(-50%) translateY(6px); }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
+        @media (max-width: 768px) {
+          nav { padding: 0 20px; }
+          nav a { display: none; }
+          section { padding: 80px 20px 60px; }
+        }
+      `}</style>
     </div>
   );
 }
