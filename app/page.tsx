@@ -621,7 +621,7 @@ export default function Home() {
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
-
+<meta name="p:domain_verify" content="b8c6e3722e58cd63a982307875f72ea7"/>
       {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
 
       <div className="flex flex-1 overflow-hidden min-h-0">

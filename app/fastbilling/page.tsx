@@ -182,6 +182,9 @@ export default function FastBillingPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => { if (data.user) setUser(data.user); });
     const { data: l } = supabase.auth.onAuthStateChange((_, s) => setUser(s?.user ?? null));
+    // Restaurer le brouillon après redirection OAuth
+    const draft = localStorage.getItem("fb_draft");
+    if (draft) { setFreeText(draft); localStorage.removeItem("fb_draft"); }
     return () => l.subscription.unsubscribe();
   }, []);
 
@@ -279,8 +282,9 @@ export default function FastBillingPage() {
     } catch { alert("Erreur Stripe."); } finally { setDonLoading(null); }
   };
 
-  const handleGoogle    = async () => { await supabase.auth.signInWithOAuth({ provider: "google",  options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } }); };
-  const handleMicrosoft = async () => { await supabase.auth.signInWithOAuth({ provider: "azure",   options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email User.Read" } }); };
+  const saveBeforeRedirect = () => { if (freeText.trim()) localStorage.setItem("fb_draft", freeText); };
+  const handleGoogle    = async () => { saveBeforeRedirect(); await supabase.auth.signInWithOAuth({ provider: "google",  options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } }); };
+  const handleMicrosoft = async () => { saveBeforeRedirect(); await supabase.auth.signInWithOAuth({ provider: "azure",   options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email User.Read" } }); };
   const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setShowUserMenu(false); };
 
   // ── SAUVEGARDE SUPABASE ──────────────────────────────────────────────────────
