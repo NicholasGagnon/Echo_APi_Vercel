@@ -120,6 +120,7 @@ export default function AvisPage() {
   const [donOpen, setDonOpen] = useState(false);
   const [donLoading, setDonLoading] = useState<string | null>(null);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
+  const [sessionId, setSessionId] = useState<string>("");
   const [user, setUser] = useState<any>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -137,10 +138,58 @@ export default function AvisPage() {
   }, [chatMessages, chatLoading]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => { if (data.user) setUser(data.user); });
-    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user ?? null);
+    // Session ID anonyme persistant
+    let sid = localStorage.getItem("avis_session_id");
+    if (!sid) { sid = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`; localStorage.setItem("avis_session_id", sid); }
+    setSessionId(sid);
+
+    // Restaurer URL après OAuth
+    const draftUrl = localStorage.getItem("avis_draft_url");
+    if (draftUrl) { setUrl(draftUrl); localStorage.removeItem("avis_draft_url"); }
+
+    // Restaurer dernière analyse — user_id si connecté, session_id sinon
+    const restoreAnalysis = async (currentUser: any) => {
+      try {
+        let query = supabase
+          .from("avis_analyses")
+          .select("data")
+          .order("updated_at", { ascending: false })
+          .limit(1);
+        if (currentUser) {
+          query = (query as any).eq("user_id", currentUser.id);
+        } else {
+          query = (query as any).eq("session_id", sid);
+        }
+        const { data, error } = await (query as any).maybeSingle();
+        if (!error && data?.data) {
+          const saved = data.data;
+          if (saved.url) setUrl(saved.url);
+          if (saved.results) setResults(saved.results);
+          if (saved.chatMessages) setChatMessages(saved.chatMessages);
+        }
+      } catch (e) {}
+    };
+
+    supabase.auth.getUser().then(({ data: authData }) => {
+      if (authData?.user) setUser(authData.user);
+      restoreAnalysis(authData?.user ?? null);
     });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_, session) => {
+      setUser(session?.user ?? null);
+      // Rattacher analyses anonymes au compte
+      if (session?.user) {
+        const s = localStorage.getItem("avis_session_id");
+        if (s) {
+          await supabase.from("avis_analyses")
+            .update({ user_id: session.user.id })
+            .eq("session_id", s)
+            .is("user_id", null);
+        }
+        restoreAnalysis(session.user);
+      }
+    });
+
     return () => listener.subscription.unsubscribe();
   }, []);
 
@@ -167,6 +216,27 @@ export default function AvisPage() {
         negatives: Array.isArray(data.negatives) ? data.negatives.slice(0, 5) : [],
       });
       setChatMessages([{ sender: "ia", text: `${t.chatWelcome} **${name}**${t.chatWelcome2}` }]);
+
+      // Sauvegarde automatique dans Supabase
+      try {
+        const sid = sessionId || localStorage.getItem("avis_session_id");
+        await supabase.from("avis_analyses").upsert({
+          id: `${sid}_${Date.now()}`,
+          user_id: user?.id || null,
+          session_id: sid,
+          data: {
+            url: url.trim(),
+            results: {
+              productName: name,
+              positives: Array.isArray(data.positives) ? data.positives.slice(0, 5) : [],
+              negatives: Array.isArray(data.negatives) ? data.negatives.slice(0, 5) : [],
+            },
+            chatMessages: [{ sender: "ia", text: `${t.chatWelcome} **${name}**${t.chatWelcome2}` }],
+          },
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id" }).then(() => {}).catch(() => {});
+      } catch (e) {}
+
     } catch (err: any) {
       setError(err.message || "Erreur inattendue.");
     } finally {
@@ -216,10 +286,13 @@ export default function AvisPage() {
     finally { setDonLoading(null); }
   };
 
+  const saveBeforeRedirect = () => { if (url.trim()) localStorage.setItem("avis_draft_url", url); };
   const handleGoogle = async () => {
+    saveBeforeRedirect();
     await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/avis`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
   };
   const handleMicrosoft = async () => {
+    saveBeforeRedirect();
     await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/avis`, scopes: "openid profile email User.Read" } });
   };
   const handleLogout = async () => { await supabase.auth.signOut(); setUser(null); setShowUserMenu(false); };

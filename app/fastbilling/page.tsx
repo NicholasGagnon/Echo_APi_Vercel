@@ -616,15 +616,10 @@ export default function FastBillingPage() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: .8 }}>Aperçu — {invoice.numero}</div>
                 <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-                  <button onClick={() => user ? handleExport("docx") : setShowAuthPopup(true)}
-                    style={{ background: user ? "#2563eb" : muted, color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", opacity: user ? 1 : .7 }}
-                    title={!user ? (lang === "fr" ? "Connexion requise" : "Sign in required") : ""}>
-                    {user ? t.exportDocx : `🔒 ${lang === "fr" ? "DOCX" : "DOCX"}`}
-                  </button>
                   <button onClick={() => user ? handleExport("pdf") : setShowAuthPopup(true)}
-                    style={{ background: user ? "#dc2626" : muted, color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", opacity: user ? 1 : .7 }}
+                    style={{ background: user ? "#dc2626" : muted, color: "#fff", border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: user ? 1 : .7 }}
                     title={!user ? (lang === "fr" ? "Connexion requise" : "Sign in required") : ""}>
-                    {user ? t.exportPdf : `🔒 ${lang === "fr" ? "PDF" : "PDF"}`}
+                    {user ? "⬇ PDF" : `🔒 PDF`}
                   </button>
                   <button onClick={handleSave} disabled={saving}
                     style={{ background: saving ? muted : "#16a34a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
