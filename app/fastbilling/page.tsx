@@ -149,6 +149,7 @@ export default function FastBillingPage() {
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [donOpen, setDonOpen] = useState(false);
   const [donLoading, setDonLoading] = useState<string | null>(null);
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
 
   const [freeText, setFreeText] = useState("");
   const [currency, setCurrency] = useState<Currency>("CAD");
@@ -187,6 +188,7 @@ export default function FastBillingPage() {
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!freeText.trim()) return;
+
     setLoading(true); setInvoice(null);
 
     const now = new Date();
@@ -553,8 +555,16 @@ export default function FastBillingPage() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: .8 }}>Aperçu — {invoice.numero}</div>
                 <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-                  <button onClick={() => handleExport("docx")} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.exportDocx}</button>
-                  <button onClick={() => handleExport("pdf")}  style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.exportPdf}</button>
+                  <button onClick={() => user ? handleExport("docx") : setShowAuthPopup(true)}
+                    style={{ background: user ? "#2563eb" : muted, color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", opacity: user ? 1 : .7 }}
+                    title={!user ? (lang === "fr" ? "Connexion requise" : "Sign in required") : ""}>
+                    {user ? t.exportDocx : `🔒 ${lang === "fr" ? "DOCX" : "DOCX"}`}
+                  </button>
+                  <button onClick={() => user ? handleExport("pdf") : setShowAuthPopup(true)}
+                    style={{ background: user ? "#dc2626" : muted, color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer", opacity: user ? 1 : .7 }}
+                    title={!user ? (lang === "fr" ? "Connexion requise" : "Sign in required") : ""}>
+                    {user ? t.exportPdf : `🔒 ${lang === "fr" ? "PDF" : "PDF"}`}
+                  </button>
                   <button onClick={handleSave} disabled={saving}
                     style={{ background: saving ? muted : "#16a34a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
                     {saving ? "…" : "💾"}
@@ -562,11 +572,36 @@ export default function FastBillingPage() {
                   {savedMsg && <span style={{ fontSize: 11, color: savedMsg.startsWith("✅") ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{savedMsg}</span>}
                 </div>
               </div>
+              <div style={{ position: "relative" }}>
               {renderInvoice()}
+              {/* Overlay freemium sur le bas */}
+              {!user && (
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%", background: `linear-gradient(to bottom, transparent, ${dark?"rgba(26,25,23,.97)":"rgba(240,236,228,.97)"})`, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 20, borderRadius: "0 0 12px 12px" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: acc, marginBottom: 4 }}>
+                      🔒 {lang === "fr" ? "Connecte-toi pour exporter" : "Sign in to export"}
+                    </div>
+                    <div style={{ fontSize: 11, color: muted, marginBottom: 10 }}>
+                      {lang === "fr" ? "PDF · DOCX · Sauvegarde automatique" : "PDF · DOCX · Auto-save"}
+                    </div>
+                    <button onClick={() => setShowAuthPopup(true)}
+                      style={{ background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "9px 22px", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 12px rgba(224,123,57,.4)" }}>
+                      {lang === "fr" ? "Créer un compte gratuit →" : "Create a free account →"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             </div>
           )}
 
-          <div style={{ marginTop: "auto", paddingTop: 10, fontSize: 10, color: muted, opacity: .5, textAlign: "center" }}>© FastBilling · echosai.ca/fastbilling</div>
+          <div style={{ marginTop: "auto", paddingTop: 10, fontSize: 10, color: muted, opacity: .5, textAlign: "center" }}>© FastBilling · echosai.ca/fastbilling
+          <a href="mailto:support@echosai.ca"
+            style={{ color: muted, textDecoration: "none", fontSize: 10, opacity: .6, display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 12 }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+            onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+            ✉ support
+          </a></div>
         </div>
 
         {/* COL DROITE */}
@@ -784,6 +819,47 @@ export default function FastBillingPage() {
           </div>
         )}
       </div>
+
+      {/* ── POPUP AUTH ──────────────────────────────────────────────────────── */}
+      {showAuthPopup && (
+        <div onClick={() => setShowAuthPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(6px)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 20, padding: "28px 28px 22px", width: 320, display: "flex", flexDirection: "column", gap: 14, position: "relative" }}>
+            <button onClick={() => setShowAuthPopup(false)} style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 18 }}>✕</button>
+            <div style={{ textAlign: "center", marginBottom: 4 }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>⚡</div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: txt, marginBottom: 4 }}>
+                {lang === "fr" ? "Connecte-toi pour générer" : "Sign in to generate"}
+              </div>
+              <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
+                {lang === "fr"
+                  ? "Un compte gratuit suffit. Tes factures sont sauvegardées."
+                  : "A free account is enough. Your invoices are saved."}
+              </div>
+            </div>
+            <button onClick={() => { handleGoogle(); setShowAuthPopup(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151", width: "100%" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
+              {lang === "fr" ? "Continuer avec Google" : "Continue with Google"}
+            </button>
+            <button onClick={() => { handleMicrosoft(); setShowAuthPopup(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: dark ? "#2d2b28" : "#1a1917", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", width: "100%" }}>
+              <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
+              {lang === "fr" ? "Continuer avec Microsoft" : "Continue with Microsoft"}
+            </button>
+            <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#0ea5e9", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", width: "100%" }}>
+              ✉ {lang === "fr" ? "Se connecter par email" : "Sign in with email"}
+            </button>
+            <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: surf2, border: `1px solid ${bord}`, borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: txt, width: "100%" }}>
+              ✦ {lang === "fr" ? "Créer un compte gratuit" : "Create a free account"}
+            </button>
+            <div style={{ fontSize: 10, color: muted, textAlign: "center" }}>
+              {lang === "fr" ? "Gratuit · Aucune carte requise" : "Free · No card required"}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL EMAIL */}
       {showEmailModal && (

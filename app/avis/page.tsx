@@ -119,6 +119,7 @@ export default function AvisPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [donOpen, setDonOpen] = useState(false);
   const [donLoading, setDonLoading] = useState<string | null>(null);
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -148,6 +149,7 @@ export default function AvisPage() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
+
     setLoading(true); setError(null); setResults(null); setChatMessages([]);
     try {
       const res = await fetch(`${api}/api/analyse-avis`, {
@@ -284,7 +286,7 @@ export default function AvisPage() {
             </div>
           </a>
 
-          <a href="https://echosai.ca/welcome" target="_blank" rel="noopener noreferrer"
+          <a href="https://echosai.ca/fastbilling" target="_blank" rel="noopener noreferrer"
             style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}` }}
             onMouseEnter={e => (e.currentTarget.style.opacity = ".9")}
             onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
@@ -346,7 +348,7 @@ export default function AvisPage() {
           </div>
 
           {/* Pubs pleine largeur mobile */}
-          <a href="https://echosai.ca/welcome" target="_blank" rel="noopener noreferrer"
+          <a href="https://echosai.ca/fastbilling" target="_blank" rel="noopener noreferrer"
             className="mobile-pubs-full"
             style={{ display: "none", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none", marginBottom: 6 }}>
             <img src="/facture.png" alt="Facture Rapide" style={{ width: "100%", display: "block", objectFit: "cover", maxHeight: 60 }} />
@@ -380,8 +382,13 @@ export default function AvisPage() {
                   </div>
                   <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 5 }}>
                     {results.positives.map((p, i) => (
-                      <li key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: txt, lineHeight: 1.4 }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 3, padding: "1px 4px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>{p}
+                      <li key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: txt, lineHeight: 1.4, position: "relative",
+                        filter: !user && i >= 2 ? "blur(4px)" : "none",
+                        userSelect: !user && i >= 2 ? "none" : "auto",
+                        pointerEvents: !user && i >= 2 ? "none" : "auto",
+                      }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 3, padding: "1px 4px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>
+                        {!user && i >= 2 ? "●●●●●●●●●●●●●●●" : p}
                       </li>
                     ))}
                   </ol>
@@ -393,13 +400,36 @@ export default function AvisPage() {
                   </div>
                   <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 5 }}>
                     {results.negatives.map((n, i) => (
-                      <li key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: txt, lineHeight: 1.4 }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: "#dc2626", background: "#fee2e2", borderRadius: 3, padding: "1px 4px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>{n}
+                      <li key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: txt, lineHeight: 1.4,
+                        filter: !user && i >= 2 ? "blur(4px)" : "none",
+                        userSelect: !user && i >= 2 ? "none" : "auto",
+                        pointerEvents: !user && i >= 2 ? "none" : "auto",
+                      }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: "#dc2626", background: "#fee2e2", borderRadius: 3, padding: "1px 4px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>
+                        {!user && i >= 2 ? "●●●●●●●●●●●●●●●" : n}
                       </li>
                     ))}
                   </ol>
                 </div>
               </div>
+
+              {/* Bandeau unlock si pas connecté */}
+              {!user && results && (
+                <div style={{ margin: "8px 0", padding: "14px 16px", background: `linear-gradient(135deg, ${dark?"rgba(224,123,57,.15)":"rgba(224,123,57,.08)"}, ${dark?"rgba(224,123,57,.08)":"rgba(224,123,57,.04)"})`, border: `1px solid rgba(224,123,57,.3)`, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: acc, marginBottom: 2 }}>
+                      {lang === "fr" ? "🔒 3 résultats cachés" : "🔒 3 results hidden"}
+                    </div>
+                    <div style={{ fontSize: 10, color: muted }}>
+                      {lang === "fr" ? "Connecte-toi gratuitement pour tout voir" : "Sign in for free to see everything"}
+                    </div>
+                  </div>
+                  <button onClick={() => setShowAuthPopup(true)}
+                    style={{ background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {lang === "fr" ? "Voir tout →" : "See all →"}
+                  </button>
+                </div>
+              )}
 
               {/* Liens affiliés Amazon */}
               <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
@@ -456,7 +486,13 @@ export default function AvisPage() {
           )}
 
           {/* Footer */}
-          <div style={{ marginTop: "auto", paddingTop: 10, fontSize: 10, color: muted, opacity: .5, textAlign: "center" }}>{t.footer} · {t.loading.split(",")[1]?.trim() || "GPT-4o Search"}</div>
+          <div style={{ marginTop: "auto", paddingTop: 10, fontSize: 10, color: muted, opacity: .5, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+          {t.footer}
+          <a href="mailto:support@echosai.ca" style={{ color: muted, textDecoration: "none", opacity: .6 }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+            onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+            ✉ support
+          </a> · {t.loading.split(",")[1]?.trim() || "GPT-4o Search"}</div>
         </div>
 
         {/* ── COL DROITE : contrôles + don + connexion ─────────────────────── */}
@@ -642,6 +678,47 @@ export default function AvisPage() {
           </button>
         )}
       </div>
+
+      {/* ── POPUP AUTH — connexion requise ──────────────────────────────────── */}
+      {showAuthPopup && (
+        <div onClick={() => setShowAuthPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(6px)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 20, padding: "28px 28px 22px", width: 320, display: "flex", flexDirection: "column", gap: 14 }}>
+            <button onClick={() => setShowAuthPopup(false)} style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 18, lineHeight: 1 }}>✕</button>
+            <div style={{ textAlign: "center", marginBottom: 4 }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>🔍</div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: txt, marginBottom: 4 }}>
+                {lang === "fr" ? "Connecte-toi pour analyser" : "Sign in to analyze"}
+              </div>
+              <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
+                {lang === "fr"
+                  ? "Un compte gratuit suffit. Tes analyses sont sauvegardées."
+                  : "A free account is enough. Your analyses are saved."}
+              </div>
+            </div>
+            <button onClick={() => { handleGoogle(); setShowAuthPopup(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151", width: "100%" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
+              {lang === "fr" ? "Continuer avec Google" : "Continue with Google"}
+            </button>
+            <button onClick={() => { handleMicrosoft(); setShowAuthPopup(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: dark ? "#2d2b28" : "#1a1917", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", width: "100%" }}>
+              <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
+              {lang === "fr" ? "Continuer avec Microsoft" : "Continue with Microsoft"}
+            </button>
+            <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#0ea5e9", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", width: "100%" }}>
+              ✉ {lang === "fr" ? "Se connecter par email" : "Sign in with email"}
+            </button>
+            <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: surf2, border: `1px solid ${bord}`, borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: txt, width: "100%" }}>
+              ✦ {lang === "fr" ? "Créer un compte gratuit" : "Create a free account"}
+            </button>
+            <div style={{ fontSize: 10, color: muted, textAlign: "center" }}>
+              {lang === "fr" ? "Gratuit · Aucune carte requise" : "Free · No card required"}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── MODAL EMAIL ─────────────────────────────────────────────────────── */}
       {showEmailModal && (

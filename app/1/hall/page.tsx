@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { supabase } from "../../lib/supabase";
 
 type Lang = "fr" | "en";
 
@@ -13,7 +14,7 @@ const T = {
     welcome: "BIENVENUE",
     title: "AFFINITÉ\nDE PROJETS",
     tagline: "Votre projet n'a pas besoin de tout faire seul.",
-    sub: "Bienvenue dans Affinité de Projets, cet espace existe pour aider les fondateurs de projets à trouver quelqu'un avec qui s'associer.",
+    sub: "Découvrez des fondateurs, des compétences et des audiences\nqui peuvent amplifier ce que vous construisez déjà.",
     btn1: "Explorer les projets",
     btn1sub: "Parcourir les fiches compatibles",
     btn2: "Mon Bureau",
@@ -22,7 +23,7 @@ const T = {
     btn3sub: "Tous vos outils réunis",
     howTitle: "Comment fonctionne Affinité de Projets ?",
     steps: [
-      { n: "01", title: "Créez votre fiches", desc: "Décrivez votre projet en quelques lignes. Votre fiche devient votre identité sur la plateforme." },
+      { n: "01", title: "Créez votre fiche", desc: "Décrivez votre projet en quelques lignes. Votre fiche devient votre identité sur la plateforme." },
       { n: "02", title: "Décrivez votre projet", desc: "Secteur, compétences recherchées, stade d'avancement. Soyez précis pour attirer les bons profils." },
       { n: "03", title: "Découvrez les projets compatibles", desc: "Explorez les fiches d'autres fondateurs. Filtrez par affinité, secteur ou besoin." },
       { n: "04", title: "Débloquez les coordonnées", desc: "Si une connexion vous intéresse, un paiement ponctuel déverrouille le contact. Pas d'abonnement." },
@@ -31,11 +32,11 @@ const T = {
   },
   en: {
     nav: ["Hall", "Dashboard", "Conversation", "Form", "Profiles", "Account"],
-    navHref: ["/1/hall", "/1/dashboard", "/1/conversation", "/1/formulaire", "/1/fiche", "/account"],
+    navHref: ["/1/hall", "/1/dashboard", "/1/conversation", "/1/formulaire", "/1/fiches", "/account"],
     welcome: "WELCOME",
     title: "PROJECT\nAFFINITY",
     tagline: "Your project doesn't need to do everything alone.",
-    sub: "Welcome to Project Affinity, a space designed to help project founders find someone to collaborate with.",
+    sub: "Discover founders, skills and audiences\nthat can amplify what you're already building.",
     btn1: "Explore Projects",
     btn1sub: "Browse compatible profiles",
     btn2: "My Desk",
@@ -56,7 +57,22 @@ const T = {
 export default function HallPage() {
   const [lang, setLang] = useState<Lang>("fr");
   const [scrolled, setScrolled] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
   const t = T[lang];
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => { if (data.user) setUser(data.user); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => setUser(session?.user ?? null));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const handleGoogle = async () => {
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+  };
+  const handleMicrosoft = async () => {
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email User.Read" } });
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -139,7 +155,7 @@ export default function HallPage() {
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center", maxWidth: 840, width: "100%" }}>
 
           {/* Explorer */}
-          <Link href="/1/fiche" style={{ textDecoration: "none", flex: "1 1 240px", maxWidth: 280 }}>
+          <Link href="/1/fiches" style={{ textDecoration: "none", flex: "1 1 240px", maxWidth: 280 }}>
             <div style={{
               background: "linear-gradient(135deg, rgba(0,200,255,.12), rgba(0,200,255,.04))",
               border: "1px solid rgba(0,200,255,.25)",
@@ -257,12 +273,13 @@ export default function HallPage() {
             ? "Créez votre présence sur la plateforme et commencez à découvrir des projets compatibles."
             : "Create your presence on the platform and start discovering compatible projects."}
         </p>
-        <Link href="/1/form"
-          style={{ display: "inline-block", background: `linear-gradient(135deg, ${accent}, #0080ff)`, color: "#000", fontWeight: 800, fontSize: 14, padding: "14px 36px", borderRadius: 12, textDecoration: "none", letterSpacing: .5, boxShadow: `0 0 30px rgba(0,200,255,.2)`, transition: "transform .2s, box-shadow .2s" }}
+        <button
+          onClick={() => user ? window.location.href = "/1/form" : setShowAuthPopup(true)}
+          style={{ display: "inline-block", background: `linear-gradient(135deg, ${accent}, #0080ff)`, color: "#000", fontWeight: 800, fontSize: 14, padding: "14px 36px", borderRadius: 12, border: "none", cursor: "pointer", letterSpacing: .5, boxShadow: `0 0 30px rgba(0,200,255,.2)`, transition: "transform .2s, box-shadow .2s" }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 40px rgba(0,200,255,.35)`; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 0 30px rgba(0,200,255,.2)`; }}>
           {lang === "fr" ? "Créer ma fiche →" : "Create my profile →"}
-        </Link>
+        </button>
       </section>
 
       {/* ── FOOTER ───────────────────────────────────────────────────────────── */}
@@ -277,6 +294,38 @@ export default function HallPage() {
           ))}
         </div>
       </footer>
+
+      {/* ── POPUP AUTH ──────────────────────────────────────────────────────── */}
+      {showAuthPopup && (
+        <div onClick={() => setShowAuthPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(8px)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#111", border: "1px solid rgba(0,200,255,.2)", borderRadius: 20, padding: "28px 28px 22px", width: 320, display: "flex", flexDirection: "column", gap: 14, position: "relative" }}>
+            <button onClick={() => setShowAuthPopup(false)} style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,.4)", fontSize: 18 }}>✕</button>
+            <div style={{ textAlign: "center", marginBottom: 4 }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: "#fff", marginBottom: 4 }}>
+                {lang === "fr" ? "Crée ton compte pour commencer" : "Create an account to get started"}
+              </div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)", lineHeight: 1.5 }}>
+                {lang === "fr" ? "Gratuit · Aucune carte requise" : "Free · No card required"}
+              </div>
+            </div>
+            <button onClick={handleGoogle}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151", width: "100%" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
+              {lang === "fr" ? "Continuer avec Google" : "Continue with Google"}
+            </button>
+            <button onClick={handleMicrosoft}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#1a1917", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", width: "100%" }}>
+              <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
+              {lang === "fr" ? "Continuer avec Microsoft" : "Continue with Microsoft"}
+            </button>
+            <a href="/1/account"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 14px", background: "rgba(0,200,255,.1)", border: "1px solid rgba(0,200,255,.25)", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#00c8ff", width: "100%", textDecoration: "none" }}>
+              ✉ {lang === "fr" ? "Se connecter par email" : "Sign in with email"}
+            </a>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes bounce {
