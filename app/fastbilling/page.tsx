@@ -156,6 +156,11 @@ export default function FastBillingPage() {
   const [fontTemplate, setFontTemplate] = useState<FontTemplate>("modern");
   const [loading, setLoading] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const invoiceRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const t = T[lang];
@@ -275,6 +280,66 @@ export default function FastBillingPage() {
   const handleGoogle    = async () => { await supabase.auth.signInWithOAuth({ provider: "google",  options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } }); };
   const handleMicrosoft = async () => { await supabase.auth.signInWithOAuth({ provider: "azure",   options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email User.Read" } }); };
   const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setShowUserMenu(false); };
+
+  // ── SAUVEGARDE SUPABASE ──────────────────────────────────────────────────────
+  const handleSave = async () => {
+    if (!invoice) return;
+    if (!user) {
+      setEmailMode("signin");
+      setAuthError(null);
+      setAuthSuccess(lang === "fr"
+        ? "Connecte-toi pour sauvegarder tes factures."
+        : "Sign in to save your invoices.");
+      setShowEmailModal(true);
+      return;
+    }
+    setSaving(true); setSavedMsg(null);
+    try {
+      const { error } = await supabase.from("invoices").upsert({
+        id: invoice.numero,
+        user_id: user.id,
+        data: invoice,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "id" });
+      if (error) throw error;
+      setSavedMsg(lang === "fr" ? "✅ Facture sauvegardée !" : "✅ Invoice saved!");
+      setTimeout(() => setSavedMsg(null), 3000);
+      loadHistory();
+    } catch (e: any) {
+      setSavedMsg(lang === "fr" ? "❌ Erreur de sauvegarde." : "❌ Save failed.");
+    } finally { setSaving(false); }
+  };
+
+  const loadHistory = async () => {
+    if (!user) return;
+    setLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("id, data, updated_at")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false })
+        .limit(20);
+      if (!error && data) setHistory(data);
+    } catch {}
+    setLoadingHistory(false);
+  };
+
+  const handleLoadInvoice = (row: any) => {
+    setInvoice(row.data);
+    setShowHistory(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDeleteInvoice = async (id: string) => {
+    await supabase.from("invoices").delete().eq("id", id).eq("user_id", user?.id);
+    loadHistory();
+  };
+
+  useEffect(() => {
+    if (user) loadHistory();
+  }, [user]);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault(); setAuthError(null); setAuthSuccess(null);
@@ -487,9 +552,14 @@ export default function FastBillingPage() {
             <div style={{ marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: .8 }}>Aperçu — {invoice.numero}</div>
-                <div style={{ display: "flex", gap: 7 }}>
+                <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
                   <button onClick={() => handleExport("docx")} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.exportDocx}</button>
                   <button onClick={() => handleExport("pdf")}  style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.exportPdf}</button>
+                  <button onClick={handleSave} disabled={saving}
+                    style={{ background: saving ? muted : "#16a34a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
+                    {saving ? "…" : "💾"}
+                  </button>
+                  {savedMsg && <span style={{ fontSize: 11, color: savedMsg.startsWith("✅") ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{savedMsg}</span>}
                 </div>
               </div>
               {renderInvoice()}
@@ -570,27 +640,149 @@ export default function FastBillingPage() {
               <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }} style={{ ...btn() }}>✦ {t.signup}</button>
             </div>
           )}
+        {/* HISTORIQUE */}
+          {user && (
+            <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, overflow: "hidden" }}>
+              <button onClick={() => { setShowHistory(h => !h); if (!showHistory) loadHistory(); }}
+                style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", color: txt, fontWeight: 700, fontSize: 12 }}>
+                <span>📋 {lang === "fr" ? "Mes factures" : "My invoices"}</span>
+                <span style={{ fontSize: 9, color: muted }}>{showHistory ? "▲" : "▼"}</span>
+              </button>
+              {showHistory && (
+                <div style={{ borderTop: `1px solid ${bord}`, maxHeight: 280, overflowY: "auto" }}>
+                  {loadingHistory && <div style={{ padding: "10px 12px", fontSize: 11, color: muted }}>Chargement…</div>}
+                  {!loadingHistory && history.length === 0 && (
+                    <div style={{ padding: "10px 12px", fontSize: 11, color: muted }}>{lang === "fr" ? "Aucune facture sauvegardée." : "No saved invoices."}</div>
+                  )}
+                  {history.map((row) => (
+                    <div key={row.id} style={{ padding: "8px 12px", borderBottom: `1px solid ${bord}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: txt, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {row.data?.emetteur || row.id}
+                        </div>
+                        <div style={{ fontSize: 10, color: muted }}>{row.id}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                        <button onClick={() => handleLoadInvoice(row)}
+                          style={{ background: acc, color: "#fff", border: "none", borderRadius: 6, padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                          ↩
+                        </button>
+                        <button onClick={() => handleDeleteInvoice(row.id)}
+                          style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </aside>
       </div>
 
       {/* BARRE MOBILE */}
       <div className="fb-mobile-bar" style={{ "--surf": dark ? "#242220" : "#fffdf9", "--bord": dark ? "#3a3835" : "#e2ddd5" } as React.CSSProperties}>
-        <button onClick={() => setDark(d => !d)} style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 13, color: muted, fontWeight: 700, cursor: "pointer" }}>{dark ? t.light : t.dark}</button>
+
+        {/* Dark */}
+        <button onClick={() => setDark(d => !d)}
+          style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 14, color: muted, fontWeight: 700, cursor: "pointer" }}>
+          {dark ? t.light : t.dark}
+        </button>
+
+        {/* Langue */}
         <div style={{ position: "relative" }}>
-          <button onClick={() => setShowLang(v => !v)} style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 11, color: txt, fontWeight: 700, cursor: "pointer" }}>{lang === "fr" ? "🇫🇷 FR" : "🇬🇧 EN"} {showLang ? "▲" : "▼"}</button>
+          <button onClick={() => setShowLang(v => !v)}
+            style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 12, color: txt, fontWeight: 700, cursor: "pointer" }}>
+            {lang === "fr" ? "🇫🇷" : "🇬🇧"} {showLang ? "▲" : "▼"}
+          </button>
           {showLang && (
-            <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 200, minWidth: 130, boxShadow: "0 -4px 16px rgba(0,0,0,.12)" }}>
+            <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 200, minWidth: 130, boxShadow: "0 -4px 16px rgba(0,0,0,.15)" }}>
               {(["fr", "en"] as Lang[]).map(l => (
-                <button key={l} onClick={() => { setLang(l); setShowLang(false); }} style={{ width: "100%", padding: "9px 13px", fontSize: 12, background: lang === l ? surf2 : "transparent", color: lang === l ? acc : txt, border: "none", cursor: "pointer", fontWeight: lang === l ? 700 : 500, textAlign: "left" }}>{l === "fr" ? "🇫🇷 Français" : "🇬🇧 English"}</button>
+                <button key={l} onClick={() => { setLang(l); setShowLang(false); }}
+                  style={{ width: "100%", padding: "10px 13px", fontSize: 12, background: lang === l ? surf2 : "transparent", color: lang === l ? acc : txt, border: "none", cursor: "pointer", fontWeight: lang === l ? 700 : 500, textAlign: "left" }}>
+                  {l === "fr" ? "🇫🇷 Français" : "🇬🇧 English"}
+                </button>
               ))}
             </div>
           )}
         </div>
-        <button onClick={() => setDonOpen(d => !d)} style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>☕</button>
-        {user
-          ? <button onClick={handleLogout} style={{ background: "#16a34a", border: "none", borderRadius: 8, padding: "7px 11px", fontSize: 11, color: "#fff", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#86efac", display: "inline-block" }} />{t.connected}</button>
-          : <button onClick={() => { setEmailMode("signin"); setShowEmailModal(true); }} style={{ background: "#0ea5e9", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.signin}</button>
-        }
+
+        {/* Don café — gros bouton central */}
+        <div style={{ position: "relative", flex: 1, display: "flex", justifyContent: "center" }}>
+          <button onClick={() => setDonOpen(d => !d)}
+            style={{ background: acc, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 8px rgba(224,123,57,.4)" }}>
+            ☕ {lang === "fr" ? "Don café" : "Buy coffee"}
+          </button>
+          {donOpen && (
+            <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", background: surf, border: `1px solid ${bord}`, borderRadius: 14, padding: "14px", zIndex: 300, boxShadow: "0 -4px 28px rgba(0,0,0,.18)", minWidth: 260 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", color: txt }}>
+                ☕ {lang === "fr" ? "Soutenir FastBilling" : "Support FastBilling"}
+                <button onClick={() => setDonOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 16, lineHeight: 1 }}>✕</button>
+              </div>
+              {DONATION_PLANS.map(d => (
+                <button key={d.plan} onClick={() => { handleDon(d.plan); setDonOpen(false); }} disabled={donLoading === d.plan}
+                  style={{ width: "100%", background: surf2, border: `1px solid ${bord}`, borderRadius: 9, padding: "9px 12px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7, color: txt, opacity: donLoading === d.plan ? .6 : 1 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div>
+                    <div style={{ fontSize: 10, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div>
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: acc }}>{d.amount}</div>
+                </button>
+              ))}
+              <div style={{ fontSize: 10, color: muted, textAlign: "center", marginTop: 4 }}>🔒 Stripe</div>
+            </div>
+          )}
+        </div>
+
+        {/* Connexion / Compte */}
+        {user ? (
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setShowUserMenu(v => !v)}
+              style={{ background: "#16a34a", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 11, color: "#fff", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#86efac", display: "inline-block" }} />
+              {t.connected}
+            </button>
+            {showUserMenu && (
+              <div style={{ position: "absolute", bottom: "calc(100% + 6px)", right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 10, overflow: "hidden", zIndex: 200, minWidth: 150, boxShadow: "0 -4px 16px rgba(0,0,0,.15)" }}>
+                <a href="/account" style={{ display: "block", padding: "9px 13px", fontSize: 12, color: txt, textDecoration: "none", fontWeight: 600, borderBottom: `1px solid ${bord}` }}>👤 {t.myAccount}</a>
+                <button onClick={handleLogout} style={{ width: "100%", padding: "9px 13px", fontSize: 12, color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontWeight: 600, textAlign: "left" }}>↩ {t.logout}</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setShowUserMenu(v => !v)}
+              style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: txt, fontWeight: 700, cursor: "pointer" }}>
+              {t.signin} {showUserMenu ? "▲" : "▼"}
+            </button>
+            {showUserMenu && (
+              <div style={{ position: "absolute", bottom: "calc(100% + 6px)", right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 12, padding: "12px", zIndex: 200, minWidth: 200, boxShadow: "0 -4px 20px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", gap: 8 }}>
+                {/* Google */}
+                <button onClick={() => { handleGoogle(); setShowUserMenu(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
+                  Google
+                </button>
+                {/* Microsoft */}
+                <button onClick={() => { handleMicrosoft(); setShowUserMenu(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "#1a1917", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#fff" }}>
+                  <svg width="14" height="14" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
+                  Microsoft
+                </button>
+                {/* Email */}
+                <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowUserMenu(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "#0ea5e9", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#fff" }}>
+                  ✉ {t.signin}
+                </button>
+                <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowUserMenu(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: surf2, border: `1px solid ${bord}`, borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: txt }}>
+                  ✦ {t.signup}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* MODAL EMAIL */}
