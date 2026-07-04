@@ -186,7 +186,6 @@ export default function FastBillingPage() {
     if (!sid) { sid = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`; localStorage.setItem("fb_session_id", sid); }
     setSessionId(sid);
 
-    supabase.auth.getUser().then(({ data }) => { if (data.user) setUser(data.user); });
     const { data: l } = supabase.auth.onAuthStateChange(async (_, s) => {
       setUser(s?.user ?? null);
       // Rattacher les factures anonymes au compte connecté
@@ -205,22 +204,30 @@ export default function FastBillingPage() {
     const draft = localStorage.getItem("fb_draft");
     if (draft) { setFreeText(draft); localStorage.removeItem("fb_draft"); }
 
-    // Restaurer dernière facture depuis Supabase (par session_id)
-    const restoreInvoice = async () => {
+    // Restaurer dernière facture — user_id si connecté, session_id sinon
+    const restoreInvoice = async (currentUser: any) => {
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from("invoices")
           .select("data")
-          .eq("session_id", sid)
           .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(1);
+        if (currentUser) {
+          query = (query as any).eq("user_id", currentUser.id);
+        } else {
+          query = (query as any).eq("session_id", sid);
+        }
+        const { data, error } = await (query as any).maybeSingle();
         if (!error && data?.data) setInvoice(data.data as InvoiceData);
       } catch (e) {
         console.log("[FastBilling] Pas de facture à restaurer");
       }
     };
-    restoreInvoice();
+
+    supabase.auth.getUser().then(({ data: authData }) => {
+      if (authData?.user) setUser(authData.user);
+      restoreInvoice(authData?.user ?? null);
+    });
 
     return () => l.subscription.unsubscribe();
   }, []);
