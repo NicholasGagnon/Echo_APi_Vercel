@@ -129,7 +129,7 @@ interface InvoiceData {
   numero: string; date: string; echeance: string;
   emetteur: string; adresseEmetteur: string; emailEmetteur: string; telEmetteur: string;
   neq: string; numTPS: string; numTVQ: string;
-  client: string; adresseClient: string;
+  client: string; adresseClient: string; telClient: string; emailClient: string;
   description: string; montantHT: number; currency: Currency; status: Status;
   lignesTaxes: { name: string; rate: number; amount: number }[];
   totalTTC: number; conditions: string; notes: string;
@@ -210,6 +210,8 @@ export default function FastBillingPage() {
         neq: data.neq || "", numTPS: data.numTPS || "", numTVQ: data.numTVQ || "",
         client: data.client || "Client",
         adresseClient: data.adresseClient || "",
+        telClient: data.telClient || "",
+        emailClient: data.emailClient || "",
         description: data.description || "",
         montantHT, currency, status,
         lignesTaxes, totalTTC,
@@ -222,7 +224,192 @@ export default function FastBillingPage() {
   };
 
   const handleExport = async (format: "docx" | "pdf") => {
-    if (!invoice || !invoiceRef.current) return;
+    if (!invoice) return;
+
+    if (format === "pdf") {
+      // Template HTML table-based optimisé impression — zéro flexbox, zéro grid
+      const st = STATUS_CONFIG[invoice.status];
+      const stLabel = lang === "fr" ? st.label : st.labelEn;
+      const cs = invoice.currency === "EUR" ? "€" : "$";
+      const fmt2 = (n: number) => `${cs}${n.toFixed(2)}`;
+
+      const pdfHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Facture ${invoice.numero}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #1a1a1a; background: #fff; }
+  @page { margin: 20mm 15mm; }
+  @media print { body { padding: 0; } .no-print { display: none; } }
+  table { width: 100%; border-collapse: collapse; }
+  td { vertical-align: top; }
+
+  /* HEADER */
+  .header { background: ${tmpl.headerBg}; color: #fff; padding: 20px 24px; margin-bottom: 0; }
+  .header-name { font-size: 18pt; font-weight: bold; margin-bottom: 3px; }
+  .header-info { font-size: 9pt; opacity: 0.8; line-height: 1.6; }
+  .badge { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 9pt; font-weight: bold; background: ${st.bg}; color: ${st.color}; }
+  .inv-num { font-size: 11pt; font-weight: bold; margin-bottom: 4px; }
+  .inv-meta { font-size: 9pt; opacity: 0.8; line-height: 1.6; }
+
+  /* PARTIES */
+  .parties { padding: 16px 24px; border-bottom: 1px solid #eee; }
+  .party-label { font-size: 8pt; font-weight: bold; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .party-name { font-size: 12pt; font-weight: bold; margin-bottom: 2px; }
+  .party-info { font-size: 9pt; color: #666; line-height: 1.5; }
+  .tax-box { margin-top: 6px; padding: 4px 8px; background: #f5f5f5; font-size: 8.5pt; color: #777; line-height: 1.7; }
+
+  /* ITEMS */
+  .items { padding: 16px 24px; }
+  .items-head { border-bottom: 2px solid ${tmpl.accentColor}; }
+  .items-head td { padding: 5px 4px; font-size: 8pt; font-weight: bold; color: ${tmpl.accentColor}; text-transform: uppercase; letter-spacing: 0.5px; }
+  .item-row td { padding: 12px 4px; font-size: 10pt; border-bottom: 1px solid #f0f0f0; line-height: 1.5; }
+  .right { text-align: right; }
+  .nowrap { white-space: nowrap; }
+
+  /* TOTALS */
+  .totals { padding: 0 24px 12px; }
+  .total-line td { padding: 2px 4px; font-size: 9.5pt; color: #555; }
+  .total-line .val { text-align: right; font-weight: 600; color: #1a1a1a; white-space: nowrap; width: 120px; }
+  .total-main td { padding: 6px 4px; font-size: 13pt; font-weight: bold; color: ${tmpl.accentColor}; border-top: 2px solid ${tmpl.accentColor}; }
+  .total-main .val { text-align: right; white-space: nowrap; width: 120px; }
+
+  /* CONDITIONS */
+  .terms { margin: 0 24px 10px; padding: 8px 12px; background: #f0f9ff; border-left: 3px solid ${tmpl.accentColor}; font-size: 9pt; color: #0369a1; line-height: 1.5; }
+  .terms-label { font-size: 8pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .notes { margin: 0 24px 10px; padding: 8px 12px; background: #f9f9f9; font-size: 9pt; color: #777; }
+  .late { margin: 0 24px 10px; padding: 8px 12px; background: #fee2e2; font-size: 9pt; color: #991b1b; font-weight: bold; }
+
+  /* FOOTER */
+  .footer { padding: 10px 24px 0; border-top: 1px solid #eee; }
+  .footer td { font-size: 8pt; color: #aaa; }
+
+  /* PRINT BUTTON */
+  .print-btn { position: fixed; top: 16px; right: 16px; padding: 10px 20px; background: ${tmpl.accentColor}; color: #fff; border: none; border-radius: 8px; font-size: 12pt; font-weight: bold; cursor: pointer; z-index: 999; }
+</style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print(); window.close();">
+  🖨 Imprimer / Sauvegarder PDF
+</button>
+
+<!-- HEADER -->
+<div class="header">
+  <table>
+    <tr>
+      <td style="width:60%">
+        <div class="header-name">${invoice.emetteur}</div>
+        ${invoice.adresseEmetteur ? `<div class="header-info">${invoice.adresseEmetteur}</div>` : ""}
+        ${invoice.emailEmetteur ? `<div class="header-info">&#9993; ${invoice.emailEmetteur}</div>` : ""}
+        ${invoice.telEmetteur ? `<div class="header-info">&#128222; ${invoice.telEmetteur}</div>` : ""}
+      </td>
+      <td style="width:40%;text-align:right">
+        <div style="margin-bottom:8px"><span class="badge">${stLabel}</span></div>
+        <div class="inv-num">${t.invoiceNum} ${invoice.numero}</div>
+        <div class="inv-meta">${t.date} : ${invoice.date}</div>
+        <div class="inv-meta">${t.dueDate} : ${invoice.echeance}</div>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<!-- PARTIES -->
+<div class="parties">
+  <table>
+    <tr>
+      <td style="width:50%;padding-right:16px">
+        <div class="party-label">${t.from}</div>
+        <div class="party-name">${invoice.emetteur}</div>
+        ${invoice.adresseEmetteur ? `<div class="party-info">${invoice.adresseEmetteur}</div>` : ""}
+        ${invoice.emailEmetteur ? `<div class="party-info">&#9993; ${invoice.emailEmetteur}</div>` : ""}
+        ${invoice.telEmetteur ? `<div class="party-info">&#128222; ${invoice.telEmetteur}</div>` : ""}
+        ${(invoice.neq || invoice.numTPS || invoice.numTVQ) ? `
+        <div class="tax-box">
+          ${invoice.neq ? `NEQ : ${invoice.neq}<br/>` : ""}
+          ${invoice.numTPS ? `TPS/GST : ${invoice.numTPS}<br/>` : ""}
+          ${invoice.numTVQ ? `TVQ/QST : ${invoice.numTVQ}` : ""}
+        </div>` : ""}
+      </td>
+      <td style="width:50%">
+        <div class="party-label">${t.billTo}</div>
+        <div class="party-name">${invoice.client}</div>
+        ${invoice.adresseClient ? `<div class="party-info">${invoice.adresseClient}</div>` : ""}
+        ${invoice.telClient ? `<div class="party-info">&#128222; ${invoice.telClient}</div>` : ""}
+        ${invoice.emailClient ? `<div class="party-info">&#9993; ${invoice.emailClient}</div>` : ""}
+      </td>
+    </tr>
+  </table>
+</div>
+
+<!-- ITEMS -->
+<div class="items">
+  <table>
+    <tr class="items-head">
+      <td style="width:75%">${t.desc}</td>
+      <td style="width:25%;text-align:right">${t.unitPrice}</td>
+    </tr>
+    <tr class="item-row">
+      <td style="width:75%">${invoice.description}</td>
+      <td style="width:25%;text-align:right;white-space:nowrap">${fmt2(invoice.montantHT)}</td>
+    </tr>
+  </table>
+</div>
+
+<!-- TOTALS -->
+<div class="totals">
+  <table>
+    <tr class="total-line">
+      <td style="width:75%;text-align:right">${t.totalHT}</td>
+      <td class="val">${fmt2(invoice.montantHT)}</td>
+    </tr>
+    ${invoice.lignesTaxes.map(lt => `
+    <tr class="total-line">
+      <td style="width:75%;text-align:right">${lt.name} (${(lt.rate * 100).toFixed(lt.rate === 0.09975 ? 3 : 0)}%)</td>
+      <td class="val">${fmt2(lt.amount)}</td>
+    </tr>`).join("")}
+    <tr class="total-main">
+      <td style="width:75%;text-align:right">${t.total}</td>
+      <td class="val">${fmt2(invoice.totalTTC)}</td>
+    </tr>
+  </table>
+</div>
+
+${invoice.conditions ? `
+<div class="terms">
+  <div class="terms-label">${t.paymentTerms}</div>
+  ${invoice.conditions}
+</div>` : ""}
+
+${invoice.notes ? `<div class="notes">${invoice.notes}</div>` : ""}
+
+${invoice.status === "late" ? `<div class="late">${t.lateWarning}</div>` : ""}
+
+<!-- FOOTER -->
+<div class="footer">
+  <table>
+    <tr>
+      <td>Généré par FastBilling · echosai.ca/fastbilling</td>
+      <td style="text-align:right">${cs} ${invoice.currency} · ${TAX_RULES[invoice.currency].label}</td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>`;
+
+      const win = window.open("", "_blank");
+      if (win) {
+        win.document.write(pdfHtml);
+        win.document.close();
+      }
+      return;
+    }
+
+    // DOCX — reste via Flask
+    if (!invoiceRef.current) return;
     try {
       const res = await fetch(`${api}/export`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -232,7 +419,7 @@ export default function FastBillingPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `facture-${invoice.numero}.${format}`; a.click();
       URL.revokeObjectURL(url);
-    } catch { alert("Erreur export."); }
+    } catch { alert("Erreur export DOCX."); }
   };
 
   const handleDon = async (plan: string) => {
@@ -295,6 +482,9 @@ export default function FastBillingPage() {
           <div style={{ padding: "16px 28px", borderRight: "1px solid #f3f4f6" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>{t.from}</div>
             <div style={{ fontSize: 13, fontWeight: 700 }}>{invoice.emetteur}</div>
+            {invoice.adresseEmetteur && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2, lineHeight: 1.5 }}>{invoice.adresseEmetteur}</div>}
+            {invoice.emailEmetteur && <div style={{ fontSize: 11, color: "#6b7280" }}>✉ {invoice.emailEmetteur}</div>}
+            {invoice.telEmetteur && <div style={{ fontSize: 11, color: "#6b7280" }}>📞 {invoice.telEmetteur}</div>}
             {(invoice.neq || invoice.numTPS || invoice.numTVQ) && (
               <div style={{ marginTop: 8, padding: "6px 10px", background: "#f9fafb", borderRadius: 6, fontSize: 10, color: "#6b7280", lineHeight: 1.8 }}>
                 {invoice.neq    && <div>NEQ : {invoice.neq}</div>}
@@ -307,6 +497,8 @@ export default function FastBillingPage() {
             <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 }}>{t.billTo}</div>
             <div style={{ fontSize: 13, fontWeight: 700 }}>{invoice.client}</div>
             {invoice.adresseClient && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>{invoice.adresseClient}</div>}
+            {invoice.telClient && <div style={{ fontSize: 11, color: "#6b7280" }}>📞 {invoice.telClient}</div>}
+            {invoice.emailClient && <div style={{ fontSize: 11, color: "#6b7280" }}>✉ {invoice.emailClient}</div>}
           </div>
         </div>
 
