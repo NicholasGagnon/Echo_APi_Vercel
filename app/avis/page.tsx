@@ -234,7 +234,7 @@ export default function AvisPage() {
             chatMessages: [{ sender: "ia", text: `${t.chatWelcome} **${name}**${t.chatWelcome2}` }],
           },
           updated_at: new Date().toISOString(),
-        }, { onConflict: "id" }).then(() => {}).catch(() => {});
+        }, { onConflict: "id" });
       } catch (e) {}
 
     } catch (err: any) {
