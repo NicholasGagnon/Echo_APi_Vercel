@@ -106,9 +106,9 @@ type AppContextType = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [lang,      setLangState]     = useState<LangType>("fr");
-  const [theme,     setThemeState]    = useState<ThemeType>("dark");
-  const [userTier,  setUserTierState] = useState<UserTierType>("connected_free");
+  const [lang,     setLangState]     = useState<LangType>("fr");
+  const [theme,    setThemeState]    = useState<ThemeType>("dark");
+  const [userTier, setUserTierState] = useState<UserTierType>("connected_free");
 
   const applyTheme = (target: ThemeType) => {
     if (typeof window === "undefined") return;
@@ -127,23 +127,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchAndSyncTier = async (userId: string) => {
     let tier: UserTierType = "connected_free";
     try {
-      const { data: profile } = await supabase
+      // ✅ maybeSingle() au lieu de single() — ne crash pas si le profil n'existe pas encore
+      const { data: profile, error } = await supabase
         .from("profiles")
         .select("user_tier")
         .eq("id", userId)
-        .single();
-      if (profile?.user_tier) {
+        .maybeSingle();
+
+      if (!error && profile?.user_tier) {
         tier = normalizeTier(profile.user_tier);
         setUserTierState(tier);
       }
     } catch (err) {
-      console.error("Erreur sync forfait :", err);
+      // Silencieux — tier reste "connected_free" par défaut
     }
 
-    // Passe le tier pour que loadQuotasFromSupabase sache si c'est free ou abonnement
-    loadQuotasFromSupabase(userId, tier as UserTier).catch(err =>
-      console.warn("Quota sync non-critique :", err)
-    );
+    loadQuotasFromSupabase(userId, tier as UserTier).catch(() => {});
   };
 
   useEffect(() => {
@@ -176,7 +175,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("echo-lang", newLang);
   };
 
-  const toggleLang = () => setLang(lang === "fr" ? "en" : "fr");
+  const toggleLang  = () => setLang(lang === "fr" ? "en" : "fr");
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -187,7 +186,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setUserTier = (newTier: UserTierType) => setUserTierState(newTier);
 
-  // Conservé pour compatibilité avec les pages qui l'utilisent encore
   const triggerToast = (_type: "error" | "warning" | "info", _message: string) => {};
 
   const t = translations[lang];
