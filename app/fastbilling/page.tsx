@@ -158,6 +158,7 @@ export default function FastBillingPage() {
   const [loading, setLoading] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sessionId, setSessionId] = useState<string>("");
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -180,11 +181,43 @@ export default function FastBillingPage() {
   const api   = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
   useEffect(() => {
+    // Session ID anonyme persistant
+    let sid = localStorage.getItem("fb_session_id");
+    if (!sid) { sid = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`; localStorage.setItem("fb_session_id", sid); }
+    setSessionId(sid);
+
     supabase.auth.getUser().then(({ data }) => { if (data.user) setUser(data.user); });
-    const { data: l } = supabase.auth.onAuthStateChange((_, s) => setUser(s?.user ?? null));
-    // Restaurer le brouillon après redirection OAuth
+    const { data: l } = supabase.auth.onAuthStateChange(async (_, s) => {
+      setUser(s?.user ?? null);
+      // Rattacher les factures anonymes au compte connecté
+      if (s?.user) {
+        const sid = localStorage.getItem("fb_session_id");
+        if (sid) {
+          await supabase.from("invoices")
+            .update({ user_id: s.user.id })
+            .eq("session_id", sid)
+            .is("user_id", null);
+        }
+      }
+    });
+
+    // Restaurer brouillon texte après OAuth
     const draft = localStorage.getItem("fb_draft");
     if (draft) { setFreeText(draft); localStorage.removeItem("fb_draft"); }
+
+    // Restaurer dernière facture depuis Supabase (par session_id)
+    const restoreInvoice = async () => {
+      const { data } = await supabase
+        .from("invoices")
+        .select("data")
+        .eq("session_id", sid)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (data?.data) setInvoice(data.data as InvoiceData);
+    };
+    restoreInvoice();
+
     return () => l.subscription.unsubscribe();
   }, []);
 
@@ -211,7 +244,7 @@ export default function FastBillingPage() {
       const lignesTaxes = taxRule.lines.map(l => ({ ...l, amount: montantHT * l.rate }));
       const totalTTC = montantHT + lignesTaxes.reduce((s, l) => s + l.amount, 0);
 
-      setInvoice({
+      const inv: InvoiceData = {
         numero, date: dateStr, echeance: dueStr,
         emetteur: data.emetteur || "Mon Entreprise",
         adresseEmetteur: data.adresseEmetteur || "",
@@ -227,7 +260,16 @@ export default function FastBillingPage() {
         lignesTaxes, totalTTC,
         conditions: data.conditions || "",
         notes: data.notes || "",
-      });
+      };
+      setInvoice(inv);
+      // Sauvegarde automatique dans Supabase
+      await supabase.from("invoices").upsert({
+        id: inv.numero,
+        user_id: user?.id || null,
+        session_id: sessionId || localStorage.getItem("fb_session_id"),
+        data: inv,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "id" });
     } catch {
       setInvoice(null);
     } finally { setLoading(false); }
