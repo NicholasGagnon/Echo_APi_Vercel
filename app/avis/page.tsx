@@ -119,6 +119,7 @@ export default function AvisPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [donOpen, setDonOpen] = useState(false);
   const [donLoading, setDonLoading] = useState<string | null>(null);
+  const [donCurrency, setDonCurrency] = useState<"CAD"|"USD"|"EUR">("CAD");
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
   const [user, setUser] = useState<any>(null);
@@ -191,6 +192,14 @@ export default function AvisPage() {
     });
 
     return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("echo-currency") as "CAD"|"USD"|"EUR"|null;
+    if (saved) setDonCurrency(saved);
+    const onStorage = (e: StorageEvent) => { if (e.key === "echo-currency" && e.newValue) setDonCurrency(e.newValue as "CAD"|"USD"|"EUR"); };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const api = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
@@ -278,7 +287,7 @@ export default function AvisPage() {
       const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, userId: user?.id || "guest_don", userEmail: user?.email || "don@echosai.ca", currency: "CAD" }),
+        body: JSON.stringify({ plan, userId: user?.id || "guest_don", userEmail: user?.email || "don@echosai.ca", currency: donCurrency }),
       });
       const data = await res.json();
       if (data.url) window.location.href = data.url;
@@ -628,6 +637,15 @@ export default function AvisPage() {
             <div style={{ padding: "10px 12px 8px" }}>
               <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>☕ {t.donTitle}</div>
               <div style={{ fontSize: 11, color: muted, lineHeight: 1.5, marginBottom: 10 }}>{t.donDesc}</div>
+              {/* Sélecteur devise */}
+              <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                {(["CAD", "USD", "EUR"] as const).map(c => (
+                  <button key={c} type="button" onClick={() => { setDonCurrency(c); localStorage.setItem("echo-currency", c); }}
+                    style={{ flex: 1, padding: "4px 0", fontSize: 10, fontWeight: 700, borderRadius: 7, border: `1px solid ${donCurrency === c ? acc : bord}`, background: donCurrency === c ? (dark ? "rgba(224,123,57,.15)" : "rgba(224,123,57,.1)") : surf2, color: donCurrency === c ? acc : muted, cursor: "pointer" }}>
+                    {c}
+                  </button>
+                ))}
+              </div>
               <button onClick={() => setDonOpen(d => !d)}
                 style={{ width: "100%", background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "10px 0", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
                 {donOpen ? t.donClose : t.donBtn}
