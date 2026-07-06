@@ -1148,7 +1148,7 @@ export default function WorldPage() {
             <button
               onClick={async () => {
                 if (!user) return;
-                const res = await fetch("/api/stripe/create-checkout", {
+                const res = await fetch("/api/stripe/create-checkout-site2", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
