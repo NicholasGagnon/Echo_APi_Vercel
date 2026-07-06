@@ -1,3 +1,4 @@
+// app/api/webhooks/stripe-webhook-site2/route.ts
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
@@ -16,14 +17,14 @@ const endpointSecret = "whsec_91ouSePttTSmS1saQvxPWrpYO9lfRR73";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const body = await req.text(); // Stripe exige le body brut pour vérifier la signature
+  const body      = await req.text();
   const signature = req.headers.get("stripe-signature")!;
 
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
   } catch (err: any) {
-    console.error(`Erreur de signature Webhook Site2: ${err.message}`);
+    console.error(`Erreur signature Webhook Site2: ${err.message}`);
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
 
@@ -31,14 +32,38 @@ export async function POST(req: Request) {
     const session  = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata;
 
-    if (metadata && metadata.type === "unlock_fiche") {
+    // ── WORLD PREMIUM ─────────────────────────────────────────────────────────
+    if (metadata?.type === "world_premium") {
+      const userId = metadata.user_id;
+      console.log(`[SITE2 WEBHOOK] World Premium activé pour user ${userId}`);
+
+      try {
+        await supabaseAdmin.from("world_quotas").upsert({
+          user_id:     userId,
+          available:   400,
+          tier:        "premium",
+          last_regen:  new Date().toISOString(),
+          cycle_start: new Date().toISOString(),
+          updated_at:  new Date().toISOString(),
+        }, { onConflict: "user_id" });
+
+        console.log(`[SITE2 WEBHOOK] World Premium — quota mis à jour pour ${userId}`);
+      } catch (err: any) {
+        console.error("[SITE2 WEBHOOK] Erreur World Premium:", err.message);
+        return NextResponse.json({ error: "Erreur DB" }, { status: 500 });
+      }
+
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
+    // ── UNLOCK FICHE (existant — inchangé) ────────────────────────────────────
+    if (metadata?.type === "unlock_fiche") {
       const ficheId    = metadata.fiche_id;
       const acheteurId = metadata.acheteur_id;
 
       console.log(`[SITE2 WEBHOOK] Déblocage fiche ${ficheId} pour acheteur ${acheteurId}`);
 
       try {
-        // Récupérer le propriétaire de la fiche (inscrit_id)
         const { data: ficheRow, error: ficheError } = await supabaseAdmin
           .from("fiches")
           .select("user_id")
@@ -46,17 +71,12 @@ export async function POST(req: Request) {
           .maybeSingle();
 
         if (ficheError) {
-          console.error("[SITE2 WEBHOOK] Erreur lecture fiche:", ficheError.message, "ficheId:", ficheId);
+          console.error("[SITE2 WEBHOOK] Erreur lecture fiche:", ficheError.message);
           return NextResponse.json({ error: "Fiche introuvable", details: ficheError.message }, { status: 500 });
-        }
-
-        if (!ficheRow) {
-          console.error("[SITE2 WEBHOOK] Aucune fiche trouvée pour id:", ficheId);
         }
 
         const inscritId = ficheRow?.user_id || null;
 
-        // Créer le tunnel — idempotent: si déjà débloqué (tests répétés), on ignore l'erreur de doublon
         const { error: insertError } = await supabaseAdmin
           .from("tunnels")
           .upsert(
@@ -65,15 +85,45 @@ export async function POST(req: Request) {
           );
 
         if (insertError) {
-          console.error("[SITE2 WEBHOOK] Erreur insertion tunnel:", insertError.message, JSON.stringify(insertError));
-          return NextResponse.json({ error: "Erreur base de données", details: insertError.message }, { status: 500 });
+          console.error("[SITE2 WEBHOOK] Erreur tunnel:", insertError.message);
+          return NextResponse.json({ error: "Erreur base de données" }, { status: 500 });
         }
 
-        console.log(`[SITE2 WEBHOOK] Tunnel ouvert avec succès — fiche ${ficheId}`);
+        console.log(`[SITE2 WEBHOOK] Tunnel ouvert — fiche ${ficheId}`);
       } catch (dbError: any) {
         console.error("[SITE2 WEBHOOK] Erreur serveur:", dbError.message);
         return NextResponse.json({ error: "Erreur interne" }, { status: 500 });
       }
+    }
+  }
+
+  // ── SUBSCRIPTION RENOUVELÉE — reset quota mensuel ─────────────────────────
+  if (event.type === "invoice.payment_succeeded") {
+    const invoice = event.data.object as Stripe.Invoice;
+    const subId   = (invoice as any).subscription as string | null;
+    if (!subId) return NextResponse.json({ received: true });
+
+    try {
+      const sub      = await stripe.subscriptions.retrieve(subId);
+      const metadata = sub.metadata;
+      if (metadata?.type === "world_premium" || sub.items.data.some(i =>
+        i.price.id === (process.env.STRIPE_WORLD_PRICE_ID || "")
+      )) {
+        const userId = metadata?.user_id || (sub as any).customer_metadata?.user_id;
+        if (userId) {
+          await supabaseAdmin.from("world_quotas").upsert({
+            user_id:     userId,
+            available:   400,
+            tier:        "premium",
+            last_regen:  new Date().toISOString(),
+            cycle_start: new Date().toISOString(),
+            updated_at:  new Date().toISOString(),
+          }, { onConflict: "user_id" });
+          console.log(`[SITE2 WEBHOOK] World Premium — renouvellement quota ${userId}`);
+        }
+      }
+    } catch (e: any) {
+      console.warn("[SITE2 WEBHOOK] Renouvellement World:", e.message);
     }
   }
 

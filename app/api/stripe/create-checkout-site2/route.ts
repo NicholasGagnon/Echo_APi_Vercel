@@ -1,3 +1,4 @@
+// app/api/stripe/create-checkout-site2/route.ts
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
@@ -7,7 +8,54 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(req: Request) {
   try {
-    const { ficheId, acheteurId, acheteurEmail } = await req.json();
+    const body = await req.json();
+    const origin = req.headers.get("origin") ?? "http://localhost:3000";
+
+    // ── PLAN WORLD PREMIUM ────────────────────────────────────────────────────
+    if (body.plan === "world") {
+      const { userId, userEmail, currency = "CAD" } = body;
+
+      if (!userId) {
+        return NextResponse.json({ message: "userId requis" }, { status: 400 });
+      }
+
+      // Prix par devise — tous créés dans Stripe sous le produit "world"
+      const WORLD_PRICE_IDS: Record<string, string> = {
+        CAD: process.env.STRIPE_WORLD_PRICE_ID_CAD || process.env.STRIPE_WORLD_PRICE_ID || "",
+        USD: process.env.STRIPE_WORLD_PRICE_ID_USD || process.env.STRIPE_WORLD_PRICE_ID || "",
+        EUR: process.env.STRIPE_WORLD_PRICE_ID_EUR || process.env.STRIPE_WORLD_PRICE_ID || "",
+        CNY: process.env.STRIPE_WORLD_PRICE_ID_CNY || process.env.STRIPE_WORLD_PRICE_ID || "",
+      };
+
+      const priceId = WORLD_PRICE_IDS[currency] || WORLD_PRICE_IDS.CAD;
+
+      if (!priceId) {
+        return NextResponse.json({ message: "STRIPE_WORLD_PRICE_ID non configuré" }, { status: 500 });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "subscription",
+        allow_promotion_codes: true,
+        customer_email: userEmail || undefined,
+
+        line_items: [{ price: priceId, quantity: 1 }],
+
+        metadata: {
+          type:      "world_premium",
+          user_id:   userId,
+          currency,
+        },
+
+        success_url: `${origin}/world?world_premium=success`,
+        cancel_url:  `${origin}/world?world_premium=canceled`,
+      });
+
+      return NextResponse.json({ url: session.url });
+    }
+
+    // ── PLAN UNLOCK FICHE (existant — inchangé) ───────────────────────────────
+    const { ficheId, acheteurId, acheteurEmail } = body;
 
     if (!ficheId || !acheteurId) {
       return NextResponse.json(
@@ -17,38 +65,31 @@ export async function POST(req: Request) {
     }
 
     const priceId = process.env.STRIPE_FICHE_PRICE_ID!;
-    const origin  = req.headers.get("origin") ?? "http://localhost:3000";
 
-    // ── CONFIGURATION DE LA SESSION DE PAIEMENT UNIQUE — 1,50$ ──
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      mode: "payment", // Paiement ponctuel
+      mode: "payment",
       allow_promotion_codes: true,
       customer_email: acheteurEmail || undefined,
 
-      line_items: [
-        {
-          price: priceId, // Produit Stripe existant — STRIPE_FICHE_PRICE_ID
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: priceId, quantity: 1 }],
 
-      // Métadonnées lues par le webhook site2 pour ouvrir le tunnel
       metadata: {
-        type: "unlock_fiche",
-        fiche_id: ficheId,
+        type:        "unlock_fiche",
+        fiche_id:    ficheId,
         acheteur_id: acheteurId,
       },
 
       success_url: `${origin}/1/fiche?success=true&fiche_id=${ficheId}`,
-      cancel_url: `${origin}/1/fiche?canceled=true`,
+      cancel_url:  `${origin}/1/fiche?canceled=true`,
     });
 
     return NextResponse.json({ url: session.url });
+
   } catch (error: any) {
-    console.error("Erreur lors de la création de la session Checkout Site 2:", error);
+    console.error("Erreur Checkout Site2:", error);
     return NextResponse.json(
-      { message: "Erreur interne du serveur", error: error.message },
+      { message: "Erreur interne", error: error.message },
       { status: 500 }
     );
   }

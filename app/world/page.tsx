@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
 
+
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 type Stage = "language" | "auth" | "continent" | "allegiance" | "chat";
 type Lang  = "fr" | "en" | "zh";
@@ -250,6 +251,21 @@ export default function WorldPage() {
   const [isLoading, setIsLoading]     = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [sessions, setSessions]       = useState<DebateSession[]>([]);
+  // ── QUOTA ────────────────────────────────────────────────────────────────────
+  const [worldAvailable, setWorldAvailable] = useState(3);
+  const [worldMax, setWorldMax]             = useState(3);
+  const [worldTier, setWorldTier]           = useState<"free"|"premium">("free");
+  const [showQuotaPopup, setShowQuotaPopup] = useState(false);
+  const [nextRegenIn, setNextRegenIn]       = useState(0);
+  const [currency, setCurrency]             = useState("CAD");
+  // ── DEVISE ───────────────────────────────────────────────────────────────────
+  const CURRENCIES = ["CAD","USD","EUR","CNY"];
+  const PRICES: Record<string, {amount:string;symbol:string}> = {
+    CAD: { amount:"9.99",  symbol:"CA$" },
+    USD: { amount:"7.99",  symbol:"US$" },
+    EUR: { amount:"7.49",  symbol:"€"   },
+    CNY: { amount:"59.00", symbol:"¥"   },
+  };
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pseudoRef   = useRef<HTMLInputElement>(null);
@@ -271,9 +287,15 @@ export default function WorldPage() {
       if (saved) setSessions(JSON.parse(saved));
     } catch {}
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
+        // Charger pseudo depuis Supabase
+        const { data: ps } = await supabase.from("world_pseudos")
+          .select("pseudo").eq("user_id", session.user.id).maybeSingle();
+        if (ps?.pseudo) { setPseudo(ps.pseudo); sessionStorage.setItem("world_pseudo", ps.pseudo); }
+        // Charger quota
+        await loadWorldQuotaState(session.user.id);
         if (savedStage && savedStage !== "auth" && savedStage !== "language") {
           setStage(savedStage);
         } else {
@@ -323,6 +345,82 @@ export default function WorldPage() {
     });
   };
 
+  // ── Quota helpers ─────────────────────────────────────────────────────────────
+  const loadWorldQuotaState = async (uid: string) => {
+    try {
+      const { data } = await supabase.from("world_quotas")
+        .select("*").eq("user_id", uid).maybeSingle();
+      if (data) {
+        const tier = (data.tier || "free") as "free"|"premium";
+        setWorldTier(tier);
+        const max = tier === "premium" ? 400 : 3;
+        setWorldMax(max);
+        if (tier === "free") {
+          const now = Date.now();
+          const elapsed = now - new Date(data.last_regen).getTime();
+          const recovered = Math.floor(elapsed / 3600000);
+          const available = Math.min(3, (data.available || 0) + recovered);
+          setWorldAvailable(available);
+        } else {
+          setWorldAvailable(data.available || 400);
+        }
+      }
+    } catch {}
+  };
+
+  const consumeWorldQuota = async (): Promise<boolean> => {
+    if (!user) return false;
+    if (worldTier === "premium") {
+      const newVal = Math.max(0, worldAvailable - 1);
+      setWorldAvailable(newVal);
+      await supabase.from("world_quotas").upsert({
+        user_id: user.id, available: newVal, tier: "premium",
+        last_regen: new Date().toISOString(), cycle_start: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+      return true;
+    }
+    // Free — vérifier le stock + regen
+    const { data } = await supabase.from("world_quotas")
+      .select("*").eq("user_id", user.id).maybeSingle();
+    const now = Date.now();
+    let available = 0;
+    let lastRegen = now;
+    if (data) {
+      const elapsed = now - new Date(data.last_regen).getTime();
+      const recovered = Math.floor(elapsed / 3600000);
+      available = Math.min(3, (data.available || 0) + recovered);
+      lastRegen = recovered > 0 ? now : new Date(data.last_regen).getTime();
+    } else {
+      available = 3; // première fois
+    }
+    if (available < 1) {
+      // Calculer temps restant
+      const elapsed = now - lastRegen;
+      setNextRegenIn(3600000 - (elapsed % 3600000));
+      setShowQuotaPopup(true);
+      return false;
+    }
+    const newVal = available - 1;
+    setWorldAvailable(newVal);
+    await supabase.from("world_quotas").upsert({
+      user_id: user.id, available: newVal, tier: "free",
+      last_regen: new Date(lastRegen).toISOString(),
+      cycle_start: data?.cycle_start || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+    return true;
+  };
+
+  const formatRegen = (ms: number) => {
+    const m = Math.ceil(ms / 60000);
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    if (lang === "fr") return h > 0 ? `${h}h ${min}min` : `${min} min`;
+    if (lang === "zh") return h > 0 ? `${h}小时${min}分钟` : `${min}分钟`;
+    return h > 0 ? `${h}h ${min}min` : `${min} min`;
+  };
+
   // ── Flow ──────────────────────────────────────────────────────────────────────
   const selectLang = (l: Lang) => {
     setLang(l);
@@ -331,7 +429,14 @@ export default function WorldPage() {
 
   const selectContinent = (c: Continent) => { setContinent(c); setStage("allegiance"); };
 
-  const confirmAllegiance = () => {
+  const confirmAllegiance = async () => {
+    // Sauvegarder pseudo dans Supabase
+    if (user && pseudo.trim()) {
+      await supabase.from("world_pseudos").upsert({
+        user_id: user.id, pseudo: pseudo.trim(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+    }
     setStage("chat");
     setTimeout(() => textareaRef.current?.focus(), 100);
   };
@@ -379,6 +484,8 @@ export default function WorldPage() {
 
   const handleSubmit = async () => {
     if (!question.trim() || !continent || isLoading) return;
+    const allowed = await consumeWorldQuota();
+    if (!allowed) return;
     setIsLoading(true);
     const currentQuestion = question;
     setQuestion("");
@@ -793,7 +900,36 @@ export default function WorldPage() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Quota indicator */}
+          {worldTier === "free" && (
+            <span className="text-xs font-mono" style={{ color: worldAvailable === 0 ? "#ef4444" : "#52525b" }}>
+              {worldAvailable}/{worldMax}
+            </span>
+          )}
+          {/* Bouton PREMIUM */}
+          {worldTier === "free" && (
+            <button onClick={() => setShowQuotaPopup(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono uppercase tracking-wider transition-all"
+              style={{
+                background: "linear-gradient(135deg, #f59e0b20, #ef444420)",
+                border: "1px solid #f59e0b50",
+                color: "#f59e0b",
+              }}>
+              ★ Premium
+            </button>
+          )}
+          {worldTier === "premium" && (
+            <span className="text-xs font-mono px-2 py-0.5 rounded-lg"
+              style={{ background: "#f59e0b15", color: "#f59e0b", border: "1px solid #f59e0b40" }}>
+              ★ Premium
+            </span>
+          )}
+          {/* Devise */}
+          <select value={currency} onChange={e => setCurrency(e.target.value)}
+            className="bg-transparent text-zinc-600 text-xs font-mono border-0 outline-none cursor-pointer hover:text-zinc-300 transition-colors">
+            {CURRENCIES.map(c => <option key={c} value={c} className="bg-zinc-950">{c}</option>)}
+          </select>
           {/* Sélecteur langue */}
           <div className="flex items-center gap-0.5 bg-zinc-900/80 border border-zinc-800 rounded-lg px-1 py-0.5">
             {(["fr","en","zh"] as Lang[]).map(l => (
@@ -808,6 +944,11 @@ export default function WorldPage() {
               </button>
             ))}
           </div>
+          {/* Changer pseudo */}
+          <button onClick={() => setStage("allegiance")}
+            className="text-zinc-600 hover:text-zinc-300 text-xs font-mono transition-colors">
+            {lang === "fr" ? "Pseudo" : lang === "en" ? "Handle" : "昵称"}
+          </button>
           <button onClick={() => setStage("continent")}
             className="text-zinc-600 hover:text-zinc-300 text-xs font-mono transition-colors">
             {t.change}
@@ -951,6 +1092,87 @@ export default function WorldPage() {
         })}
         <div ref={bottomRef} />
       </div>
+
+      {/* ── POP-UP QUOTA ATTEINT ── */}
+      {showQuotaPopup && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4"
+          onClick={() => setShowQuotaPopup(false)}>
+          <div className="relative w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-center shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            {/* Logo */}
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <img src="/echo2.png" alt="Echo" className="w-5 h-5 rounded object-contain opacity-70" />
+              <span className="text-zinc-500 text-xs font-mono uppercase tracking-widest">WORLD</span>
+            </div>
+
+            {worldAvailable === 0 ? (
+              <>
+                <div className="text-3xl mb-3">⏳</div>
+                <h3 className="text-white font-black text-lg mb-1">
+                  {lang === "fr" ? "Limite atteinte" : lang === "en" ? "Limit reached" : "已达上限"}
+                </h3>
+                <p className="text-zinc-400 text-sm mb-4">
+                  {lang === "fr"
+                    ? `Reviens dans ${formatRegen(nextRegenIn)} pour une question de plus.`
+                    : lang === "en"
+                    ? `Come back in ${formatRegen(nextRegenIn)} for another question.`
+                    : `${formatRegen(nextRegenIn)}后再回来提问。`}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="text-3xl mb-3">★</div>
+                <h3 className="text-white font-black text-lg mb-1">World Premium</h3>
+                <p className="text-zinc-400 text-sm mb-4">
+                  {lang === "fr" ? "400 questions par mois. Illimité." : lang === "en" ? "400 questions per month. Unlimited." : "每月400个问题。无限制。"}
+                </p>
+              </>
+            )}
+
+            {/* Prix */}
+            <div className="bg-zinc-900 rounded-xl p-4 mb-4">
+              <div className="text-2xl font-black text-white mb-0.5">
+                {PRICES[currency].symbol}{PRICES[currency].amount}
+                <span className="text-sm font-normal text-zinc-500">
+                  {lang === "fr" ? "/mois" : lang === "en" ? "/month" : "/月"}
+                </span>
+              </div>
+              <p className="text-zinc-600 text-xs">
+                {lang === "fr" ? "400 questions · Annulation à tout moment" : lang === "en" ? "400 questions · Cancel anytime" : "400次提问 · 随时取消"}
+              </p>
+            </div>
+
+            <button
+              onClick={async () => {
+                if (!user) return;
+                const res = await fetch("/api/stripe/create-checkout", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    plan: "world",
+                    currency,
+                    userId: user.id,
+                    userEmail: user.email,
+                  }),
+                });
+                const data = await res.json();
+                if (data.url) window.location.href = data.url;
+              }}
+              className="w-full py-3 rounded-xl font-black text-sm uppercase tracking-wider text-black transition-all mb-2"
+              style={{
+                background: "linear-gradient(135deg, #f59e0b, #ef4444)",
+                boxShadow: "0 0 20px rgba(245,158,11,0.3)",
+              }}>
+              {lang === "fr" ? "Passer à Premium →" : lang === "en" ? "Go Premium →" : "升级Premium →"}
+            </button>
+
+            <button onClick={() => setShowQuotaPopup(false)}
+              className="w-full py-2 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors">
+              {lang === "fr" ? "Fermer" : lang === "en" ? "Close" : "关闭"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input */}
       <div className="relative z-10 shrink-0 border-t border-zinc-900/80 bg-black/60 backdrop-blur-sm p-3">

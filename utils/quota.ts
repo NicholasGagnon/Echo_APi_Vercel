@@ -1,6 +1,7 @@
 import { supabase } from "../app/lib/supabase";
 
 export type UserTier = "connected_free" | "basic" | "premium" | "ultra" | "founder";
+export type WorldTier = "free" | "premium";
 
 export const getMessageMaxLength = (tier: UserTier): number => {
   if (tier === "connected_free") return 1000;
@@ -70,8 +71,6 @@ function setTracker(tracker: object, uid?: string | null) {
   localStorage.setItem(key, JSON.stringify(tracker));
 }
 
-// ── FIX QUOTA : applyRegen ne met à jour lastRegenTime que si consume=true ──
-// Quand consume=false (lecture seule), on calcule la valeur SANS modifier le tracker
 function computeAvailable(entry: any, maxLimit: number, now: number, tier: string): number {
   if (tier !== "connected_free") return Math.floor(entry?.available ?? maxLimit);
   if (!entry) return maxLimit;
@@ -96,7 +95,6 @@ function applyRegenAndSave(tracker: any, actionType: ActionType, maxLimit: numbe
     if (recovered > 0) {
       entry.available = Math.min(maxLimit, (entry.available ?? 0) + recovered);
     }
-    // Met à jour lastRegenTime SEULEMENT ici (lors d'une vraie consommation)
     entry.lastRegenTime = now;
     tracker[actionType] = entry;
   }
@@ -200,7 +198,6 @@ export const checkQuota = (
 
   const now = Date.now();
 
-  // ── ANONYME ───────────────────────────────────────────────────────────────
   if (!userId) {
     const anonMax = ANON_LIMITS[actionType];
     if (anonMax === 0) return { allowed: false, remaining: 0, current: 0, max: 0, error: "anon_blocked" };
@@ -225,15 +222,12 @@ export const checkQuota = (
     tracker = emptyTracker(now, tier);
   }
 
-  // ── FIX CLÉ : lecture seule = pas de modification du tracker ─────────────
   let available: number;
   if (consume) {
-    // On applique la regen ET on met à jour lastRegenTime
     tracker = applyRegenAndSave(tracker, actionType, maxAllowed, now, tier);
     if (!tracker[actionType]) tracker[actionType] = { available: maxAllowed, lastRegenTime: now };
     available = Math.floor(Math.min(maxAllowed, tracker[actionType].available ?? maxAllowed));
   } else {
-    // Lecture seule : calcule sans modifier le tracker
     if (!tracker[actionType]) tracker[actionType] = { available: maxAllowed, lastRegenTime: now };
     available = computeAvailable({ ...tracker[actionType], _type: actionType }, maxAllowed, now, tier);
   }
@@ -266,3 +260,160 @@ export const getQuotaInfo = (
   const result = checkQuota(actionType, tier, false, userId);
   return { current: result.current, max: result.max, remaining: result.remaining };
 };
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── WORLD QUOTA — séparé d'Echo, n'interfère pas ─────────────────────────────
+// Logique: 3 questions de base + 1 par heure, max 3 en stock
+// Premium: 400 questions/mois
+// ══════════════════════════════════════════════════════════════════════════════
+
+const WORLD_FREE_MAX     = 3;
+const WORLD_PREMIUM_MAX  = 400;
+const WORLD_LOCAL_KEY    = (uid: string) => `world-quota-${uid}`;
+
+interface WorldQuotaLocal {
+  available:     number;
+  lastRegenTime: number;
+  cycleStart:    number;
+  tier:          WorldTier;
+}
+
+function getWorldLocal(uid: string): WorldQuotaLocal | null {
+  if (typeof window === "undefined") return null;
+  try { return JSON.parse(localStorage.getItem(WORLD_LOCAL_KEY(uid)) || "null"); }
+  catch { return null; }
+}
+
+function setWorldLocal(uid: string, data: WorldQuotaLocal) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(WORLD_LOCAL_KEY(uid), JSON.stringify(data));
+}
+
+export interface WorldQuotaState {
+  available:    number;
+  max:          number;
+  tier:         WorldTier;
+  nextRegenIn?: number; // ms avant prochaine regen (free seulement)
+}
+
+// Charger depuis Supabase au login
+export async function loadWorldQuota(uid: string): Promise<WorldQuotaState> {
+  const now = Date.now();
+  try {
+    const { data } = await supabase
+      .from("world_quotas")
+      .select("*")
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    if (data) {
+      const tier       = (data.tier || "free") as WorldTier;
+      const max        = tier === "premium" ? WORLD_PREMIUM_MAX : WORLD_FREE_MAX;
+      const lastRegen  = new Date(data.last_regen).getTime();
+      let available    = data.available ?? max;
+
+      // Regen pour free
+      if (tier === "free") {
+        const elapsed   = now - lastRegen;
+        const recovered = Math.floor(elapsed / ONE_HOUR_MS);
+        available = Math.min(WORLD_FREE_MAX, available + recovered);
+      }
+
+      // Reset cycle mensuel pour premium
+      if (tier === "premium") {
+        const cycleStart = new Date(data.cycle_start).getTime();
+        if (now - cycleStart > THIRTY_DAYS_MS) {
+          available = WORLD_PREMIUM_MAX;
+          await supabase.from("world_quotas").upsert({
+            user_id: uid, available: WORLD_PREMIUM_MAX, tier: "premium",
+            last_regen: new Date().toISOString(),
+            cycle_start: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "user_id" });
+        }
+      }
+
+      const local: WorldQuotaLocal = { available, lastRegenTime: lastRegen, cycleStart: new Date(data.cycle_start).getTime(), tier };
+      setWorldLocal(uid, local);
+      return { available, max, tier };
+    }
+  } catch {}
+
+  // Pas de données — fresh free
+  const fresh: WorldQuotaLocal = { available: WORLD_FREE_MAX, lastRegenTime: now, cycleStart: now, tier: "free" };
+  setWorldLocal(uid, fresh);
+  return { available: WORLD_FREE_MAX, max: WORLD_FREE_MAX, tier: "free" };
+}
+
+// Vérifier + consommer 1 question World
+export async function consumeWorldQuestion(uid: string): Promise<{ allowed: boolean; nextRegenIn?: number }> {
+  const now    = Date.now();
+  const local  = getWorldLocal(uid);
+  const tier   = local?.tier ?? "free";
+  const max    = tier === "premium" ? WORLD_PREMIUM_MAX : WORLD_FREE_MAX;
+
+  // Calculer disponible avec regen
+  let available    = local?.available ?? max;
+  let lastRegen    = local?.lastRegenTime ?? now;
+
+  if (tier === "free" && local) {
+    const elapsed   = now - local.lastRegenTime;
+    const recovered = Math.floor(elapsed / ONE_HOUR_MS);
+    if (recovered > 0) {
+      available = Math.min(WORLD_FREE_MAX, available + recovered);
+      lastRegen = now;
+    }
+  }
+
+  if (available < 1) {
+    const elapsed     = now - lastRegen;
+    const nextRegenIn = ONE_HOUR_MS - (elapsed % ONE_HOUR_MS);
+    return { allowed: false, nextRegenIn };
+  }
+
+  const newAvailable = available - 1;
+  const updated: WorldQuotaLocal = {
+    available:     newAvailable,
+    lastRegenTime: lastRegen,
+    cycleStart:    local?.cycleStart ?? now,
+    tier,
+  };
+  setWorldLocal(uid, updated);
+
+  // Sync Supabase non-bloquant
+  supabase.from("world_quotas").upsert({
+    user_id:     uid,
+    available:   newAvailable,
+    tier,
+    last_regen:  new Date(lastRegen).toISOString(),
+    cycle_start: new Date(updated.cycleStart).toISOString(),
+    updated_at:  new Date().toISOString(),
+  }, { onConflict: "user_id" }).then(({ error }) => {
+    if (error) console.warn("[WorldQuota] Sync error:", error.message);
+  });
+
+  return { allowed: true };
+}
+
+// Activer Premium (appelé après succès Stripe depuis page)
+export async function activateWorldPremium(uid: string): Promise<void> {
+  const now = Date.now();
+  const updated: WorldQuotaLocal = { available: WORLD_PREMIUM_MAX, lastRegenTime: now, cycleStart: now, tier: "premium" };
+  setWorldLocal(uid, updated);
+  await supabase.from("world_quotas").upsert({
+    user_id: uid, available: WORLD_PREMIUM_MAX, tier: "premium",
+    last_regen: new Date().toISOString(),
+    cycle_start: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "user_id" });
+}
+
+// Formater le temps restant
+export function formatWorldRegen(ms: number, lang: string): string {
+  const minutes = Math.ceil(ms / 60000);
+  const hours   = Math.floor(minutes / 60);
+  const mins    = minutes % 60;
+  if (lang === "fr") return hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
+  if (lang === "zh") return hours > 0 ? `${hours}小时${mins}分钟` : `${mins}分钟`;
+  return hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
+}
