@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import Link from "next/link";
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
-type Stage = "auth" | "language" | "continent" | "allegiance" | "chat";
+type Stage = "language" | "auth" | "continent" | "allegiance" | "chat";
 type Lang  = "fr" | "en" | "zh";
 type Continent = "na" | "cn" | "eu";
 
@@ -45,6 +45,41 @@ const GoogleLogo = () => (
   </svg>
 );
 
+// ── SLOGAN PAR LANGUE ─────────────────────────────────────────────────────────
+const SLOGANS: Record<Lang, { main: string; sub: string }> = {
+  fr: {
+    main: "3 Empires. 1 Question. Alliance ou Chaos ?",
+    sub:  "Trois civilisations. Une seule vérité à trouver.",
+  },
+  en: {
+    main: "3 Empires. 1 Question. Alliance or Chaos?",
+    sub:  "Three civilizations. One truth to uncover.",
+  },
+  zh: {
+    main: "3个帝国。1个问题。联盟还是混沌？",
+    sub:  "三大文明。一个真理待揭晓。",
+  },
+};
+
+// ── MANTRAS PAR CONTINENT ─────────────────────────────────────────────────────
+const MANTRAS: Record<Continent, Record<Lang, string>> = {
+  na: {
+    fr: "Do. Ship. Iterate. Agis.",
+    en: "Do. Ship. Iterate. Act.",
+    zh: "行动。发布。迭代。去做。",
+  },
+  cn: {
+    fr: "La constance dépasse le talent. Persévère.",
+    en: "Consistency beats talent. Persevere.",
+    zh: "持之以恒胜过天赋。坚持。",
+  },
+  eu: {
+    fr: "Comprendre avant d'agir. Réfléchis.",
+    en: "Understand before acting. Think.",
+    zh: "行动前先理解。深思。",
+  },
+};
+
 // ── COPY ──────────────────────────────────────────────────────────────────────
 const copy = {
   fr: {
@@ -62,16 +97,17 @@ const copy = {
     allegianceConfirm: "Confirmer mon allégeance",
     allegianceDesc: (name: string) => `Vous représentez ${name}. Les autres continents parlent en premier — votre région a le dernier mot.`,
     chatPlaceholder: "Posez votre question au monde...",
+    pseudoPlaceholder: "Votre pseudo (ex: NicholasG)",
     chatSend: "Envoyer",
-    waiting: "En attente...",
     thinking: "Réflexion en cours...",
     finalVerdict: "Verdict final",
-    askAnother: "Nouvelle question",
     change: "Changer",
     exit: "Quitter",
     advancedModel: "Advanced AI Model",
     round: "Tour",
     verdict: "★ VERDICT",
+    enterPseudo: "Choisissez un pseudo pour entrer dans l'arène",
+    confirm: "Entrer dans l'arène",
   },
   en: {
     authTitle: "Sign in required",
@@ -88,16 +124,17 @@ const copy = {
     allegianceConfirm: "Confirm my allegiance",
     allegianceDesc: (name: string) => `You represent ${name}. The other continents speak first — your region gets the final word.`,
     chatPlaceholder: "Ask your question to the world...",
+    pseudoPlaceholder: "Your handle (e.g. NicholasG)",
     chatSend: "Send",
-    waiting: "Waiting...",
     thinking: "Thinking...",
     finalVerdict: "Final verdict",
-    askAnother: "New question",
     change: "Change",
     exit: "Exit",
     advancedModel: "Advanced AI Model",
     round: "Round",
     verdict: "★ VERDICT",
+    enterPseudo: "Choose a handle to enter the arena",
+    confirm: "Enter the arena",
   },
   zh: {
     authTitle: "需要登录",
@@ -114,16 +151,17 @@ const copy = {
     allegianceConfirm: "确认我的阵营",
     allegianceDesc: (name: string) => `您代表${name}。其他大陆先发言——您的地区拥有最终决定权。`,
     chatPlaceholder: "向世界提出您的问题...",
+    pseudoPlaceholder: "您的昵称（例如 NicholasG）",
     chatSend: "发送",
-    waiting: "等待中...",
     thinking: "思考中...",
     finalVerdict: "最终裁决",
-    askAnother: "新问题",
     change: "更改",
     exit: "退出",
     advancedModel: "Advanced AI Model",
     round: "轮",
     verdict: "★ 裁决",
+    enterPseudo: "选择昵称进入竞技场",
+    confirm: "进入竞技场",
   },
 };
 
@@ -164,36 +202,83 @@ const LANGS = [
   { code: "zh" as Lang, label: "中文",     sub: "中国 · 台湾 · 新加坡" },
 ];
 
+// ── BACKGROUND DRAPEAUX — visible sur toutes les pages ───────────────────────
+const FlagBackground = ({ stage, continent }: { stage: Stage; continent: Continent | null }) => (
+  <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+    {(Object.keys(CONTINENTS) as Continent[]).map((key, i) => {
+      const c = CONTINENTS[key];
+      const isActive = continent === key;
+      const positions = [
+        { top: "0", left: "0", width: "33.33%" },
+        { top: "0", left: "33.33%", width: "33.33%" },
+        { top: "0", left: "66.66%", width: "33.34%" },
+      ];
+      const pos = positions[i];
+      // Sur langue et auth — tous les 3 drapeaux égaux, subtils mais visibles
+      const isLangOrAuth = stage === "language" || stage === "auth";
+      return (
+        <div key={key} className="absolute h-full transition-all duration-700"
+          style={{
+            ...pos,
+            backgroundImage: `url(${c.img})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            opacity: isLangOrAuth ? 0.32 : isActive ? 0.15 : stage === "chat" ? 0.05 : 0.08,
+            filter: isLangOrAuth
+              ? "saturate(0.8) brightness(0.55)"
+              : isActive
+                ? "saturate(0.6) brightness(0.4)"
+                : "saturate(0.15) brightness(0.3)",
+          }} />
+      );
+    })}
+    {/* Overlay gradient pour lisibilité */}
+    <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/25 to-black/55" />
+  </div>
+);
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 export default function WorldPage() {
   const [user, setUser]               = useState<any>(null);
-  const [stage, setStage]             = useState<Stage>("auth");
+  const [stage, setStage]             = useState<Stage>("language");
   const [lang, setLang]               = useState<Lang>("fr");
   const [continent, setContinent]     = useState<Continent | null>(null);
   const [hovered, setHovered]         = useState<Continent | null>(null);
+  const [pseudo, setPseudo]           = useState("");
   const [question, setQuestion]       = useState("");
   const [messages, setMessages]       = useState<AIMessage[]>([]);
   const [isLoading, setIsLoading]     = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
-  const bottomRef  = useRef<HTMLDivElement>(null);
+  const [sessions, setSessions]       = useState<DebateSession[]>([]);
+  const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pseudoRef   = useRef<HTMLInputElement>(null);
 
   const t = copy[lang];
 
-  // ── Persist stage across tab switches ───────────────────────────────────────
+  // ── Persist ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const saved = sessionStorage.getItem("world_stage") as Stage | null;
-    const savedLang = sessionStorage.getItem("world_lang") as Lang | null;
-    const savedContinent = sessionStorage.getItem("world_continent") as Continent | null;
-    if (savedLang) setLang(savedLang);
+    const savedLang      = sessionStorage.getItem("world_lang")      as Lang | null;
+    const savedContinent = sessionStorage.getItem("world_continent")  as Continent | null;
+    const savedStage     = sessionStorage.getItem("world_stage")      as Stage | null;
+    const savedPseudo    = sessionStorage.getItem("world_pseudo")     || "";
+    if (savedLang)      setLang(savedLang);
     if (savedContinent) setContinent(savedContinent as Continent);
+    if (savedPseudo)    setPseudo(savedPseudo);
+
+    try {
+      const saved = localStorage.getItem("world_sessions");
+      if (saved) setSessions(JSON.parse(saved));
+    } catch {}
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        // Restore stage only if user is logged in
-        if (saved && saved !== "auth") setStage(saved);
-        else setStage("language");
+        if (savedStage && savedStage !== "auth" && savedStage !== "language") {
+          setStage(savedStage);
+        } else {
+          setStage("continent");
+        }
       }
     });
 
@@ -201,73 +286,27 @@ export default function WorldPage() {
       if (session?.user) {
         setUser(session.user);
         const s = sessionStorage.getItem("world_stage") as Stage | null;
-        setStage(s && s !== "auth" ? s : "language");
+        // Après OAuth redirect — si on était sur auth, aller au continent
+        setStage(s && s !== "auth" && s !== "language" ? s : "continent");
       } else {
         setUser(null);
-        setStage("auth");
+        setStage("language");
         sessionStorage.removeItem("world_stage");
       }
     });
     return () => subscription.unsubscribe();
   }, []);
 
-  // Persist stage/lang/continent to sessionStorage
   useEffect(() => { sessionStorage.setItem("world_stage", stage); }, [stage]);
   useEffect(() => { sessionStorage.setItem("world_lang", lang); }, [lang]);
   useEffect(() => { if (continent) sessionStorage.setItem("world_continent", continent); }, [continent]);
+  useEffect(() => { sessionStorage.setItem("world_pseudo", pseudo); }, [pseudo]);
 
-  // ── SESSIONS — historique des débats ──────────────────────────────────────
-  const [sessions, setSessions] = useState<DebateSession[]>([]);
-
-  // Charger depuis localStorage au démarrage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("world_sessions");
-      if (saved) setSessions(JSON.parse(saved));
-    } catch {}
-  }, []);
-
-  // Sauvegarder une session complète (localStorage + Supabase)
-  const saveSession = async (q: string, msgs: AIMessage[]) => {
-    if (!continent || !user) return;
-    const session: DebateSession = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      question: q,
-      continent,
-      lang,
-      messages: msgs.filter(m => !m.loading),
-      created_at: new Date().toISOString(),
-    };
-
-    // localStorage
-    setSessions(prev => {
-      const updated = [session, ...prev].slice(0, 50); // max 50 sessions
-      try { localStorage.setItem("world_sessions", JSON.stringify(updated)); } catch {}
-      return updated;
-    });
-
-    // Supabase
-    try {
-      await supabase.from("world_debates").insert({
-        id:         session.id,
-        user_id:    user.id,
-        question:   session.question,
-        continent:  session.continent,
-        lang:       session.lang,
-        messages:   session.messages,
-        created_at: session.created_at,
-      });
-    } catch (e) {
-      console.warn("[WORLD] Supabase save error:", e);
-    }
-  };
-
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ── AUTH ─────────────────────────────────────────────────────────────────────
+  // ── Auth ──────────────────────────────────────────────────────────────────────
   const handleGoogle = async () => {
     setAuthLoading(true);
     await supabase.auth.signInWithOAuth({
@@ -284,34 +323,51 @@ export default function WorldPage() {
     });
   };
 
-  // ── FLOW ──────────────────────────────────────────────────────────────────────
-  const selectLang = (l: Lang) => { setLang(l); setStage("continent"); };
+  // ── Flow ──────────────────────────────────────────────────────────────────────
+  const selectLang = (l: Lang) => {
+    setLang(l);
+    setStage(user ? "continent" : "auth");
+  };
+
   const selectContinent = (c: Continent) => { setContinent(c); setStage("allegiance"); };
+
   const confirmAllegiance = () => {
     setStage("chat");
     setTimeout(() => textareaRef.current?.focus(), 100);
   };
 
-  // ── AI CALL ───────────────────────────────────────────────────────────────────
-  const callContinent = async (
-    c: Continent,
-    contextSoFar: string,
-    isFinal: boolean,
-    round: 1 | 2,
-  ): Promise<string> => {
+  // ── Save session ──────────────────────────────────────────────────────────────
+  const saveSession = async (q: string, msgs: AIMessage[]) => {
+    if (!continent || !user) return;
+    const session: DebateSession = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      question: q, continent, lang,
+      messages: msgs.filter(m => !m.loading),
+      created_at: new Date().toISOString(),
+    };
+    setSessions(prev => {
+      const updated = [session, ...prev].slice(0, 50);
+      try { localStorage.setItem("world_sessions", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    try {
+      await supabase.from("world_debates").insert({
+        id: session.id, user_id: user.id, question: session.question,
+        continent: session.continent, lang: session.lang,
+        messages: session.messages, created_at: session.created_at,
+      });
+    } catch (e) { console.warn("[WORLD] Supabase save error:", e); }
+  };
+
+  // ── AI Call ───────────────────────────────────────────────────────────────────
+  const callContinent = async (c: Continent, contextSoFar: string, isFinal: boolean, round: 1 | 2): Promise<string> => {
     try {
       const res = await fetch("/api/world/conversation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question,
-          continent: c,
-          lang,
-          context: contextSoFar,
-          isFinal,
-          round,
-          userId: user?.id,
-          maxChars: 672,
+          question, continent: c, lang, context: contextSoFar,
+          isFinal, round, userId: user?.id, maxChars: 672,
         }),
       });
       const data = await res.json();
@@ -325,19 +381,15 @@ export default function WorldPage() {
     if (!question.trim() || !continent || isLoading) return;
     setIsLoading(true);
     const currentQuestion = question;
+    setQuestion("");
 
-    // Séparateur visuel entre débats (sauf si premier débat)
     setMessages(prev => prev.length > 0 ? [...prev, {
-      continent: "na" as Continent, round: 1, text: `── ${currentQuestion} ──`,
-      isFinal: false, loading: false,
+      continent: "na" as Continent, round: 1,
+      text: `── ${currentQuestion} ──`, isFinal: false, loading: false,
     }] : prev);
 
-    // Ordre alterné: chaque continent parle 1 fois avant que quiconque reprenne
-    // Résultat: A1 → B1 → C1 → A2 → B2 → C2 (jamais 2x le même à la suite)
-    // Le continent choisi est TOUJOURS C (dernier à parler les 2 fois)
     const others = (Object.keys(CONTINENTS) as Continent[]).filter(k => k !== continent);
     const [first, second] = others.sort(() => Math.random() - 0.5);
-    // Séquence: first→second→mine→first→second→mine
     const sequence: { c: Continent; round: 1 | 2; isFinal: boolean }[] = [
       { c: first,     round: 1, isFinal: false },
       { c: second,    round: 1, isFinal: false },
@@ -347,147 +399,237 @@ export default function WorldPage() {
       { c: continent, round: 2, isFinal: true  },
     ];
 
-    let contextSoFar = `Question: ${question}\n\n`;
+    let contextSoFar = `Question: ${currentQuestion}\n\n`;
 
     for (const step of sequence) {
       const { c, round, isFinal } = step;
-
-      // Ajoute bulle loading
-      setMessages(prev => [...prev, {
-        continent: c, round, text: "", isFinal, loading: true,
-      }]);
-
+      setMessages(prev => [...prev, { continent: c, round, text: "", isFinal, loading: true }]);
       const text = await callContinent(c, contextSoFar, isFinal, round);
       contextSoFar += `[${CONTINENTS[c].label.en} — round ${round}${isFinal ? " VERDICT" : ""}]: ${text}\n\n`;
-
       setMessages(prev => {
-        // Met à jour la DERNIÈRE bulle de ce continent/round (loading: true → texte)
         const idx = [...prev].reverse().findIndex(m => m.continent === c && m.round === round && m.loading);
         if (idx === -1) return prev;
         const realIdx = prev.length - 1 - idx;
         return prev.map((m, i) => i === realIdx ? { ...m, text, loading: false } : m);
       });
-
       await new Promise(r => setTimeout(r, 350));
     }
 
-    // Sauvegarder la session complète
     setMessages(prev => {
       const completedMsgs = prev.filter(m => !m.loading);
-      const sessionMsgs = completedMsgs.slice(
-        completedMsgs.findLastIndex(m => m.text.startsWith("──")) + 1
-      );
+      const sepIdx = completedMsgs.findLastIndex(m => m.text.startsWith("──"));
+      const sessionMsgs = completedMsgs.slice(sepIdx + 1);
       saveSession(currentQuestion, sessionMsgs);
       return prev;
     });
-
     setIsLoading(false);
   };
 
-  const handleReset = () => {
-    setQuestion("");
-    // Ne pas effacer les messages — on garde l'historique
-    setIsLoading(false);
-    setTimeout(() => textareaRef.current?.focus(), 100);
-  };
+  // ── Shared: background flags always visible ───────────────────────────────────
+  const myC = continent ? CONTINENTS[continent] : null;
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // RENDER: LANGUAGE — première page, slogan magistral
+  // ══════════════════════════════════════════════════════════════════════════════
+  if (stage === "language") return (
+    <div className="fixed inset-0 bg-black flex flex-col overflow-hidden">
+      <FlagBackground stage="language" continent={null} />
+
+      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 gap-10">
+        {/* Logo Echo + WORLD */}
+        <div className="flex items-center gap-3">
+          <img src="/echo2.png" alt="Echo" className="w-8 h-8 rounded-lg object-contain" />
+          <span className="text-white font-black font-mono text-xl tracking-widest">WORLD</span>
+        </div>
+
+        {/* Slogan magistral */}
+        <div className="text-center max-w-3xl">
+          <h1 className="font-black text-white tracking-tight leading-none mb-4"
+            style={{
+              fontSize: "clamp(2rem, 5vw, 3.5rem)",
+              textShadow: "0 0 60px rgba(255,255,255,0.15), 0 0 120px rgba(255,255,255,0.05)",
+              letterSpacing: "-0.02em",
+            }}>
+            {SLOGANS[lang].main}
+          </h1>
+          <p className="text-zinc-500 text-sm font-mono tracking-widest uppercase">
+            {SLOGANS[lang].sub}
+          </p>
+        </div>
+
+        {/* 3 mantras */}
+        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl">
+          {(Object.keys(CONTINENTS) as Continent[]).map(key => {
+            const c = CONTINENTS[key];
+            return (
+              <div key={key} className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl"
+                style={{ border: `1px solid ${c.color}25`, background: `${c.color}08` }}>
+                <div className="shrink-0 overflow-hidden rounded" style={{ width: 32, height: 21, border: `1px solid ${c.color}40` }}>
+                  <img src={c.img} alt={c.label[lang]} className="w-full h-full object-cover" />
+                </div>
+                <p className="text-xs font-mono" style={{ color: c.color }}>
+                  {MANTRAS[key][lang]}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Sélecteur langue */}
+        <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xl">
+          {LANGS.map(({ code, label, sub }) => (
+            <button key={code} onClick={() => selectLang(code)}
+              className="flex-1 group relative overflow-hidden rounded-2xl border-2 border-zinc-800 hover:border-cyan-500 bg-black/60 hover:bg-zinc-900/80 backdrop-blur-sm transition-all duration-300 p-6 text-center"
+              onMouseOver={e => (e.currentTarget.style.boxShadow = "0 0 25px rgba(6,182,212,0.15)")}
+              onMouseOut={e => (e.currentTarget.style.boxShadow = "none")}
+            >
+              <div className="text-white text-xl font-black mb-1">{label}</div>
+              <div className="text-zinc-600 text-xs font-mono">{sub}</div>
+              <div className="absolute inset-x-0 bottom-0 h-0.5 bg-cyan-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
+            </button>
+          ))}
+        </div>
+
+        <p className="text-zinc-800 text-xs font-mono">echosai.ca · WORLD v1.0</p>
+      </div>
+    </div>
+  );
 
   // ══════════════════════════════════════════════════════════════════════════════
   // RENDER: AUTH
   // ══════════════════════════════════════════════════════════════════════════════
   if (stage === "auth") return (
-    <div className="fixed inset-0 bg-black flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {(["#3b82f6","#ef4444","#10b981"] as const).map((c, i) => (
-          <div key={i} className="absolute w-96 h-96 rounded-full opacity-8"
-            style={{
-              background: `radial-gradient(circle, ${c}, transparent)`,
-              filter: "blur(90px)",
-              top: i === 0 ? "20%" : i === 1 ? "60%" : "40%",
-              left: i === 0 ? "15%" : i === 1 ? "65%" : "40%",
-            }} />
-        ))}
-      </div>
+    <div className="fixed inset-0 bg-black flex flex-col overflow-hidden">
+      <FlagBackground stage={stage} continent={continent} />
 
-      <div className="relative z-10 w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🌍</div>
-          <h1 className="text-3xl font-black text-white tracking-widest font-mono">WORLD</h1>
-          <p className="text-zinc-600 text-xs mt-1 font-mono tracking-wider uppercase">Global AI Debate Platform</p>
+      <div className="relative z-10 flex flex-col items-center justify-center h-full px-4 gap-6">
+        {/* Slogan en arrière-plan haut */}
+        <div className="text-center mb-2">
+          <p className="font-black text-white/20 tracking-tight"
+            style={{ fontSize: "clamp(1rem, 2.5vw, 1.5rem)" }}>
+            {SLOGANS[lang].main}
+          </p>
         </div>
 
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-3">
-          <div className="text-center mb-4">
-            <h2 className="text-white font-bold">{t.authTitle}</h2>
-            <p className="text-zinc-500 text-sm mt-0.5">{t.authSub}</p>
+        <div className="w-full max-w-sm">
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <img src="/echo2.png" alt="Echo" className="w-7 h-7 rounded-lg object-contain" />
+            <span className="text-white font-black font-mono text-lg tracking-widest">WORLD</span>
           </div>
 
-          <button onClick={handleGoogle} disabled={authLoading}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-cyan-500/40 rounded-xl transition-all duration-200 group disabled:opacity-50">
-            <GoogleLogo />
-            <span className="text-white text-sm font-medium flex-1 text-left">{t.google}</span>
-            <span className="text-zinc-600 group-hover:text-cyan-500 text-xs transition-colors">→</span>
-          </button>
+          <div className="bg-black/70 border border-zinc-800 rounded-2xl p-6 space-y-3 backdrop-blur-md">
+            <div className="text-center mb-4">
+              <h2 className="text-white font-bold">{t.authTitle}</h2>
+              <p className="text-zinc-500 text-sm mt-0.5">{t.authSub}</p>
+            </div>
 
-          <button onClick={handleMicrosoft} disabled={authLoading}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-cyan-500/40 rounded-xl transition-all duration-200 group disabled:opacity-50">
-            <MicrosoftLogo />
-            <span className="text-white text-sm font-medium flex-1 text-left">{t.microsoft}</span>
-            <span className="text-zinc-600 group-hover:text-cyan-500 text-xs transition-colors">→</span>
-          </button>
+            <button onClick={handleGoogle} disabled={authLoading}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 hover:border-cyan-500/40 rounded-xl transition-all duration-200 group disabled:opacity-50">
+              <GoogleLogo />
+              <span className="text-white text-sm font-medium flex-1 text-left">{t.google}</span>
+              <span className="text-zinc-600 group-hover:text-cyan-500 text-xs transition-colors">→</span>
+            </button>
 
-          <div className="flex gap-2 pt-1">
-            <Link href="/account"
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-xl transition-all text-xs text-zinc-400 hover:text-white font-medium">
-              ✉ {t.email}
-            </Link>
-            <Link href="/account"
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-500/20 hover:border-cyan-500/50 rounded-xl transition-all text-xs text-cyan-500 font-medium">
-              + {t.signup}
-            </Link>
+            <button onClick={handleMicrosoft} disabled={authLoading}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 hover:border-cyan-500/40 rounded-xl transition-all duration-200 group disabled:opacity-50">
+              <MicrosoftLogo />
+              <span className="text-white text-sm font-medium flex-1 text-left">{t.microsoft}</span>
+              <span className="text-zinc-600 group-hover:text-cyan-500 text-xs transition-colors">→</span>
+            </button>
+
+            <div className="flex gap-2 pt-1">
+              <Link href="/account"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-xl transition-all text-xs text-zinc-400 hover:text-white font-medium">
+                ✉ {t.email}
+              </Link>
+              <Link href="/account"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-500/20 hover:border-cyan-500/50 rounded-xl transition-all text-xs text-cyan-500 font-medium">
+                + {t.signup}
+              </Link>
+            </div>
           </div>
+
+          <button onClick={() => setStage("language")}
+            className="w-full mt-3 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors text-center">
+            ← {t.change}
+          </button>
         </div>
-        <p className="text-center text-zinc-800 text-xs mt-5 font-mono">echosai.ca · WORLD v1.0</p>
       </div>
     </div>
   );
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER: LANGUAGE
-  // ══════════════════════════════════════════════════════════════════════════════
-  if (stage === "language") return (
-    <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-6 p-6">
-      <div className="text-center">
-        <p className="text-zinc-600 text-xs font-mono uppercase tracking-widest mb-2">🌍 WORLD</p>
-        <h2 className="text-white text-2xl font-black tracking-tight">{t.langTitle}</h2>
-      </div>
-      <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xl">
-        {LANGS.map(({ code, label, sub }) => (
-          <button key={code} onClick={() => selectLang(code)}
-            className="flex-1 group relative overflow-hidden rounded-2xl border-2 border-zinc-800 hover:border-cyan-500 bg-zinc-950 hover:bg-zinc-900 transition-all duration-300 p-7 text-center"
-            onMouseOver={e => (e.currentTarget.style.boxShadow = "0 0 25px rgba(6,182,212,0.12)")}
-            onMouseOut={e => (e.currentTarget.style.boxShadow = "none")}
-          >
-            <div className="text-white text-2xl font-black mb-1">{label}</div>
-            <div className="text-zinc-600 text-xs font-mono">{sub}</div>
-            <div className="absolute inset-x-0 bottom-0 h-0.5 bg-cyan-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER: CONTINENT — 3 immenses boutons plein écran
+  // RENDER: CONTINENT — 3 immenses boutons + slogan flottant
   // ══════════════════════════════════════════════════════════════════════════════
   if (stage === "continent") return (
     <div className="fixed inset-0 bg-black flex flex-col">
-      <div className="shrink-0 text-center pt-6 pb-3">
-        <p className="text-zinc-600 text-xs font-mono uppercase tracking-widest mb-1">🌍 WORLD</p>
-        <h2 className="text-white text-xl font-black">{t.continentTitle}</h2>
-        <p className="text-zinc-700 text-xs mt-1">{t.continentSub}</p>
+
+      {/* Slogan flottant PAR-DESSUS les drapeaux — disparaît au hover */}
+      <div className="absolute inset-0 z-20 flex flex-col items-center justify-start pt-8 pointer-events-none transition-opacity duration-500"
+        style={{ opacity: hovered ? 0 : 1 }}>
+        <div className="flex items-center gap-2 mb-3">
+          <img src="/echo2.png" alt="Echo" className="w-6 h-6 rounded object-contain opacity-60" />
+          <span className="text-zinc-500 text-xs font-mono uppercase tracking-widest">WORLD</span>
+        </div>
+        {/* Slogan — chaque segment avec le drapeau de son continent clipé dans les lettres */}
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 mb-2"
+          style={{ fontSize: "clamp(1.6rem, 3.5vw, 2.8rem)" }}>
+          {/* "3 Empires." — drapeau USA */}
+          <span className="font-black"
+            style={{
+              backgroundImage: "url(/usa.png)",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              color: "transparent",
+              filter: "drop-shadow(0 0 12px rgba(59,130,246,0.8)) brightness(1.4) saturate(1.5)",
+            }}>
+            {lang === "fr" ? "3 Empires." : lang === "en" ? "3 Empires." : "3个帝国。"}
+          </span>
+          {/* "1 Question." — drapeau Chine */}
+          <span className="font-black"
+            style={{
+              backgroundImage: "url(/chinoix.png)",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              color: "transparent",
+              filter: "drop-shadow(0 0 12px rgba(239,68,68,0.8)) brightness(1.4) saturate(1.5)",
+            }}>
+            {lang === "fr" ? "1 Question." : lang === "en" ? "1 Question." : "1个问题。"}
+          </span>
+          {/* "Alliance ou Chaos ?" — drapeau Europe */}
+          <span className="font-black"
+            style={{
+              backgroundImage: "url(/france.png)",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              color: "transparent",
+              filter: "drop-shadow(0 0 12px rgba(16,185,129,0.8)) brightness(1.4) saturate(1.5)",
+            }}>
+            {lang === "fr" ? "Alliance ou Chaos ?" : lang === "en" ? "Alliance or Chaos?" : "联盟还是混沌？"}
+          </span>
+        </div>
+        <p className="text-white font-black text-center px-6 mt-1"
+          style={{
+            fontSize: "clamp(1rem, 2vw, 1.4rem)",
+            textShadow: "0 0 20px rgba(255,255,255,0.15), 0 2px 10px rgba(0,0,0,0.9)",
+            opacity: 0.7,
+          }}>
+          {t.continentTitle}
+        </p>
+        <p className="text-zinc-500 text-xs mt-2 font-mono">{t.continentSub}</p>
       </div>
 
-      <div className="flex-1 flex flex-col sm:flex-row min-h-0">
+      {/* 3 immenses boutons plein écran — drapeau en background comme avant */}
+      <div className="relative z-10 flex flex-col sm:flex-row" style={{ height: "100%" }}>
         {(Object.keys(CONTINENTS) as Continent[]).map((key) => {
           const c = CONTINENTS[key];
           const isHov = hovered === key;
@@ -496,46 +638,53 @@ export default function WorldPage() {
               onClick={() => selectContinent(key)}
               onMouseEnter={() => setHovered(key)}
               onMouseLeave={() => setHovered(null)}
-              className="flex-1 relative overflow-hidden flex flex-col items-center justify-center transition-all duration-400 outline-none"
+              className="flex-1 relative overflow-hidden flex flex-col items-center justify-center transition-all duration-500 outline-none"
               style={{
                 border: `2px solid ${isHov ? c.color : "transparent"}`,
-                boxShadow: isHov ? `inset 0 0 80px ${c.glow}, 0 0 30px ${c.glow}` : "none",
+                boxShadow: isHov ? `inset 0 0 80px ${c.glow}, 0 0 40px ${c.glow}` : "none",
               }}
             >
-              {/* Flag bg */}
+              {/* Drapeau en fond plein — LA MAGIE */}
               <div className="absolute inset-0 transition-all duration-500"
                 style={{
                   backgroundImage: `url(${c.img})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
-                  opacity: isHov ? 0.3 : 0.12,
+                  opacity: isHov ? 0.35 : 0.12,
                   filter: isHov ? "saturate(1.1)" : "saturate(0.2) brightness(0.5)",
                 }} />
               {/* Scanlines */}
               <div className="absolute inset-0 pointer-events-none opacity-20"
                 style={{ background: "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.15) 2px,rgba(0,0,0,0.15) 4px)" }} />
-              {/* Top/bottom glow lines */}
+              {/* Lignes colorées top/bottom */}
               <div className="absolute inset-x-0 top-0 h-px transition-all duration-300"
                 style={{ background: isHov ? c.color : "transparent", boxShadow: isHov ? `0 0 8px ${c.color}` : "none" }} />
               <div className="absolute inset-x-0 bottom-0 h-px transition-all duration-300"
                 style={{ background: isHov ? c.color : "transparent", boxShadow: isHov ? `0 0 8px ${c.color}` : "none" }} />
 
               <div className="relative z-10 text-center px-4">
-                <div className="text-7xl sm:text-8xl mb-3 transition-transform duration-300"
+                {/* Drapeau miniature au centre */}
+                <div className="mx-auto mb-4 overflow-hidden transition-all duration-300"
                   style={{
-                    transform: isHov ? "scale(1.12)" : "scale(1)",
-                    filter: isHov ? `drop-shadow(0 0 16px ${c.color})` : "none",
+                    width: isHov ? 110 : 80, height: isHov ? 72 : 52,
+                    borderRadius: "8px",
+                    border: `2px solid ${isHov ? c.color : c.color + "50"}`,
+                    boxShadow: isHov ? `0 0 25px ${c.glow}` : "none",
                   }}>
-                  {c.flag}
+                  <img src={c.img} alt={c.label[lang]} className="w-full h-full object-cover" />
                 </div>
-                <div className="text-white font-black text-xl sm:text-3xl font-mono tracking-wider uppercase mb-2"
-                  style={{ textShadow: isHov ? `0 0 15px ${c.color}` : "none" }}>
+                <div className="text-white font-black text-2xl sm:text-4xl font-mono tracking-wider uppercase"
+                  style={{ textShadow: isHov ? `0 0 20px ${c.color}` : "none" }}>
                   {c.label[lang]}
                 </div>
-                <div className="text-xs font-mono uppercase tracking-widest px-3 py-1 rounded-full transition-all duration-300 inline-block"
+                <p className="text-xs font-mono italic mt-2 mb-3 transition-all duration-300"
+                  style={{ color: isHov ? c.color : "rgba(255,255,255,0.15)" }}>
+                  {MANTRAS[key][lang]}
+                </p>
+                <div className="text-xs font-mono uppercase tracking-widest px-3 py-1 rounded-full inline-block transition-all duration-300"
                   style={{
                     border: `1px solid ${isHov ? c.color : "rgba(255,255,255,0.08)"}`,
-                    color: isHov ? c.color : "rgba(255,255,255,0.25)",
+                    color: isHov ? c.color : "rgba(255,255,255,0.2)",
                   }}>
                   {t.advancedModel}
                 </div>
@@ -548,37 +697,57 @@ export default function WorldPage() {
   );
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER: ALLEGIANCE
+  // RENDER: ALLEGIANCE + PSEUDO
   // ══════════════════════════════════════════════════════════════════════════════
   if (stage === "allegiance" && continent) {
     const c = CONTINENTS[continent];
     return (
       <div className="fixed inset-0 bg-black/92 backdrop-blur-md flex items-center justify-center p-6 z-50">
-        <div className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: `url(${c.img})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            opacity: 0.05,
-          }} />
+        <FlagBackground stage={stage} continent={continent} />
+
         <div className="relative z-10 w-full max-w-md text-center">
-          <div className="text-8xl mb-5" style={{ filter: `drop-shadow(0 0 25px ${c.color})` }}>
-            {c.flag}
+          {/* Logo */}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <img src="/echo2.png" alt="Echo" className="w-6 h-6 rounded object-contain opacity-70" />
+            <span className="text-zinc-600 text-xs font-mono uppercase tracking-widest">WORLD</span>
           </div>
-          <span className="text-xs font-mono uppercase tracking-widest px-3 py-1 rounded-full border inline-block mb-4"
+
+          {/* Drapeau grand */}
+          <div className="mx-auto mb-4 overflow-hidden rounded-xl"
+            style={{ width: 120, height: 78, border: `2px solid ${c.color}`, boxShadow: `0 0 30px ${c.glow}` }}>
+            <img src={c.img} alt={c.label[lang]} className="w-full h-full object-cover" />
+          </div>
+
+          <span className="text-xs font-mono uppercase tracking-widest px-3 py-1 rounded-full border inline-block mb-3"
             style={{ color: c.color, borderColor: c.color, boxShadow: `0 0 8px ${c.glow}` }}>
             {c.label[lang]}
           </span>
-          <h2 className="text-white text-3xl font-black font-mono uppercase tracking-wide mb-1">
+
+          <h2 className="text-white text-2xl font-black font-mono uppercase tracking-wide mb-1">
             {t.allegianceTitle}
           </h2>
-          <p className="text-zinc-500 text-sm mb-6">{t.allegianceSub}</p>
+          <p className="text-zinc-500 text-sm mb-5">{t.allegianceSub}</p>
 
-          <div className="bg-zinc-950 border rounded-2xl p-5 mb-5"
+          <div className="bg-black/80 border rounded-2xl p-5 mb-4 text-left"
             style={{ borderColor: `${c.color}60`, boxShadow: `0 0 30px ${c.glow}` }}>
-            <p className="text-zinc-300 text-sm leading-relaxed">
+            <p className="text-zinc-300 text-sm leading-relaxed mb-4">
               {t.allegianceDesc(c.label[lang])}
             </p>
+            {/* Pseudo */}
+            <label className="text-xs font-mono uppercase tracking-wider mb-1.5 block" style={{ color: c.color }}>
+              {t.enterPseudo}
+            </label>
+            <input
+              ref={pseudoRef}
+              type="text"
+              value={pseudo}
+              onChange={e => setPseudo(e.target.value.slice(0, 20))}
+              onKeyDown={e => { if (e.key === "Enter" && pseudo.trim()) confirmAllegiance(); }}
+              placeholder={t.pseudoPlaceholder}
+              className="w-full bg-zinc-900/80 border rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 outline-none transition-colors"
+              style={{ borderColor: `${c.color}40` }}
+              autoFocus
+            />
           </div>
 
           <div className="flex gap-3">
@@ -586,13 +755,13 @@ export default function WorldPage() {
               className="flex-1 py-3 rounded-xl border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-all text-sm font-medium">
               {t.change}
             </button>
-            <button onClick={confirmAllegiance}
-              className="flex-1 py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-white transition-all duration-200"
+            <button
+              onClick={confirmAllegiance}
+              disabled={!pseudo.trim()}
+              className="flex-1 py-3 rounded-xl font-bold text-sm uppercase tracking-wider text-white transition-all disabled:opacity-30"
               style={{ background: c.color, boxShadow: `0 0 15px ${c.glow}` }}
-              onMouseOver={e => (e.currentTarget.style.boxShadow = `0 0 30px ${c.glow}`)}
-              onMouseOut={e => (e.currentTarget.style.boxShadow = `0 0 15px ${c.glow}`)}
             >
-              {t.allegianceConfirm}
+              {t.confirm}
             </button>
           </div>
         </div>
@@ -601,26 +770,32 @@ export default function WorldPage() {
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER: CHAT — flux vertical, tous les pays sur la même page
+  // RENDER: CHAT
   // ══════════════════════════════════════════════════════════════════════════════
-  const myC = continent ? CONTINENTS[continent] : null;
-
   return (
     <div className="fixed inset-0 bg-black flex flex-col overflow-hidden">
+      <FlagBackground stage={stage} continent={continent} />
+
       {/* Topbar */}
-      <div className="shrink-0 border-b border-zinc-900 px-5 py-2.5 flex items-center justify-between bg-zinc-950/80 backdrop-blur-sm">
-        <div className="flex items-center gap-2.5">
-          <span className="text-white font-black font-mono">🌍 WORLD</span>
+      <div className="relative z-10 shrink-0 border-b border-zinc-900/80 px-5 py-2.5 flex items-center justify-between bg-black/60 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <img src="/echo2.png" alt="Echo" className="w-6 h-6 rounded object-contain" />
+          <span className="text-white font-black font-mono">WORLD</span>
           {myC && (
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full border"
-              style={{ color: myC.color, borderColor: `${myC.color}60` }}>
-              {myC.flag} {myC.label[lang]}
-            </span>
+            <div className="flex items-center gap-2">
+              <div className="overflow-hidden rounded shrink-0" style={{ width: 28, height: 18, border: `1px solid ${myC.color}60` }}>
+                <img src={myC.img} alt={myC.label[lang]} className="w-full h-full object-cover" />
+              </div>
+              <span className="text-xs font-mono px-2 py-0.5 rounded-full border"
+                style={{ color: myC.color, borderColor: `${myC.color}60` }}>
+                {pseudo || myC.label[lang]}
+              </span>
+            </div>
           )}
         </div>
         <div className="flex items-center gap-3">
-          {/* Sélecteur de langue inline */}
-          <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg px-1 py-0.5">
+          {/* Sélecteur langue */}
+          <div className="flex items-center gap-0.5 bg-zinc-900/80 border border-zinc-800 rounded-lg px-1 py-0.5">
             {(["fr","en","zh"] as Lang[]).map(l => (
               <button key={l} onClick={() => setLang(l)}
                 className="px-2 py-0.5 rounded text-xs font-mono transition-all"
@@ -644,30 +819,34 @@ export default function WorldPage() {
         </div>
       </div>
 
-      {/* Messages — arène pleine largeur */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-1">
+      {/* Messages */}
+      <div className="relative z-10 flex-1 overflow-y-auto px-6 py-4 space-y-1">
         {messages.length === 0 && !isLoading && (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center space-y-4">
-              <div className="flex gap-6 justify-center items-center">
+            <div className="text-center space-y-6">
+              {/* Slogan flottant dans le chat aussi */}
+              <p className="font-black text-white/10 tracking-tight"
+                style={{ fontSize: "clamp(1.2rem, 3vw, 2rem)" }}>
+                {SLOGANS[lang].main}
+              </p>
+              <div className="flex gap-6 justify-center items-end">
                 {(Object.keys(CONTINENTS) as Continent[]).map(k => {
                   const cc = CONTINENTS[k];
                   const isMe = k === continent;
                   return (
                     <div key={k} className="flex flex-col items-center gap-2">
-                      <div className="overflow-hidden border-2 transition-all duration-300"
+                      <div className="overflow-hidden transition-all duration-300"
                         style={{
-                          width: isMe ? 80 : 56,
-                          height: isMe ? 50 : 36,
+                          width: isMe ? 80 : 56, height: isMe ? 52 : 36,
                           borderRadius: "6px",
-                          borderColor: cc.color,
+                          border: `2px solid ${isMe ? cc.color : cc.color + "30"}`,
                           boxShadow: isMe ? `0 0 16px ${cc.glow}` : "none",
                         }}>
                         <img src={cc.img} alt={cc.label[lang]} className="w-full h-full object-cover"
-                          style={{ filter: isMe ? "saturate(1.2)" : "saturate(0.4) brightness(0.6)" }} />
+                          style={{ filter: isMe ? "saturate(1.2)" : "saturate(0.3) brightness(0.5)" }} />
                       </div>
-                      <span className="text-xs font-mono uppercase tracking-wider"
-                        style={{ color: isMe ? cc.color : "#52525b", fontSize: "10px" }}>
+                      <span className="text-xs font-mono"
+                        style={{ color: isMe ? cc.color : "#3f3f46", fontSize: "10px" }}>
                         {cc.label[lang]}
                       </span>
                     </div>
@@ -684,45 +863,46 @@ export default function WorldPage() {
         {messages.map((msg, idx) => {
           const c = CONTINENTS[msg.continent];
           const isMine = msg.continent === continent;
+          const isSep = msg.text.startsWith("──");
 
-          // Fix 3+4: position selon le continent
-          // first continent (others[0]) → gauche
-          // second continent (others[1]) → droite
-          // my continent → centre
-          // On détermine la position par l'ordre d'apparition unique des continents
+          // Séparateur entre débats
+          if (isSep) return (
+            <div key={idx} className="flex items-center gap-3 py-4">
+              <div className="flex-1 h-px bg-zinc-900" />
+              <span className="text-zinc-700 text-xs font-mono px-2">{msg.text}</span>
+              <div className="flex-1 h-px bg-zinc-900" />
+            </div>
+          );
+
           const order = messages
-            .filter((m, i) => i <= idx)
+            .filter((m, i) => i <= idx && !m.text.startsWith("──"))
             .reduce<Continent[]>((acc, m) => acc.includes(m.continent) ? acc : [...acc, m.continent], []);
-          const posIdx = order.indexOf(msg.continent); // 0=first, 1=second, 2=mine
+          const posIdx = order.indexOf(msg.continent);
           const isLeft   = posIdx === 0;
           const isRight  = posIdx === 1;
-          const isCenter = posIdx === 2 || isMine;
 
           return (
             <div key={idx}
-              className="animate-in fade-in slide-in-from-bottom-1 duration-400 w-full"
+              className="animate-in fade-in slide-in-from-bottom-1 duration-400 w-full py-1"
               style={{
-                paddingLeft:  isLeft   ? "0"    : isCenter ? "15%" : "30%",
-                paddingRight: isRight  ? "0"    : isCenter ? "15%" : "30%",
+                paddingLeft:  isLeft   ? "0"   : isRight ? "25%" : "12%",
+                paddingRight: isRight  ? "0"   : isLeft  ? "25%" : "12%",
               }}
             >
-              {/* Fix 5: pas de bloc/contour — juste le texte dans l'arène */}
-              <div className="py-3 px-2"
+              <div className="py-2.5"
                 style={{
                   borderLeft: isMine && msg.isFinal
-                    ? `2px solid ${c.color}`
-                    : `1px solid ${c.color}25`,
-                  paddingLeft: "12px",
+                    ? `3px solid ${c.color}`
+                    : `1px solid ${c.color}20`,
+                  paddingLeft: "14px",
                 }}>
-
-                {/* Header — miniature drapeau + nom + round */}
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="shrink-0 overflow-hidden border"
+                <div className="flex items-center gap-2 mb-1.5">
+                  {/* Miniature drapeau */}
+                  <div className="shrink-0 overflow-hidden"
                     style={{
-                      width: 38, height: 25,
-                      borderRadius: "4px",
-                      borderColor: c.color,
-                      boxShadow: isMine ? `0 0 8px ${c.glow}` : "none",
+                      width: 38, height: 25, borderRadius: "4px",
+                      border: `1px solid ${c.color}`,
+                      boxShadow: isMine ? `0 0 6px ${c.glow}` : "none",
                     }}>
                     <img src={c.img} alt={c.label[lang]} className="w-full h-full object-cover"
                       style={{ filter: "saturate(1.1) brightness(0.9)" }} />
@@ -731,6 +911,10 @@ export default function WorldPage() {
                     {c.label[lang]}
                   </span>
                   <span className="text-zinc-800 text-xs font-mono">· {msg.round}</span>
+                  {/* Signature discrète — toujours visible */}
+                  <span className="font-mono" style={{ color: c.color, opacity: 0.65, fontSize: "9px", letterSpacing: "0.04em" }}>
+                    🛰️ {msg.continent === "cn" ? "Real AI · China" : msg.continent === "na" ? "Real AI · North America" : "Real AI · Europe"}
+                  </span>
                   {msg.isFinal && !msg.loading && (
                     <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
                       style={{ background: `${c.color}20`, color: c.color }}>
@@ -739,13 +923,17 @@ export default function WorldPage() {
                   )}
                 </div>
 
-                {/* Texte brut — pas de bulle, pas de fond */}
                 {msg.loading ? (
-                  <div className="flex items-center gap-1.5 py-1">
-                    {[0,1,2].map(i => (
-                      <div key={i} className="w-1 h-1 rounded-full animate-bounce"
-                        style={{ background: c.color, opacity: 0.6, animationDelay: `${i * 0.18}s` }} />
-                    ))}
+                  <div className="flex items-center gap-2 py-0.5">
+                    <span className="text-xs animate-pulse" style={{ opacity: 0.4 }}>🛰️</span>
+                    <span className="font-mono"
+                      style={{ color: c.color, opacity: 0.45, fontSize: "10px", letterSpacing: "0.05em" }}>
+                      {msg.continent === "cn"
+                        ? "Real AI models from China. Connection established."
+                        : msg.continent === "na"
+                        ? "Real AI models from North America. Connection established."
+                        : "Real AI models from Europe. Connection established."}
+                    </span>
                   </div>
                 ) : (
                   <p className="text-sm leading-relaxed"
@@ -764,30 +952,30 @@ export default function WorldPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input — toujours visible, pas de bouton "nouvelle question" */}
-      <div className="shrink-0 border-t border-zinc-900 bg-zinc-950/90 backdrop-blur-sm p-3">
+      {/* Input */}
+      <div className="relative z-10 shrink-0 border-t border-zinc-900/80 bg-black/60 backdrop-blur-sm p-3">
         <div className="flex gap-2 max-w-3xl mx-auto">
-            <textarea
-              ref={textareaRef}
-              value={question}
-              onChange={e => setQuestion(e.target.value.slice(0, 500))}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-              placeholder={t.chatPlaceholder}
-              rows={2}
-              disabled={isLoading}
-              className="flex-1 bg-zinc-900 border border-zinc-800 focus:border-cyan-500/40 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 resize-none outline-none transition-colors disabled:opacity-50"
-            />
-            <button
-              onClick={handleSubmit}
-              disabled={!question.trim() || isLoading}
-              className="px-5 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition-all disabled:opacity-30"
-              style={{
-                background: myC?.color || "#06b6d4",
-                boxShadow: isLoading ? "none" : `0 0 12px ${myC?.glow || "rgba(6,182,212,0.4)"}`,
-              }}
-            >
-              {isLoading ? "..." : t.chatSend}
-            </button>
+          <textarea
+            ref={textareaRef}
+            value={question}
+            onChange={e => setQuestion(e.target.value.slice(0, 500))}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+            placeholder={t.chatPlaceholder}
+            rows={2}
+            disabled={isLoading}
+            className="flex-1 bg-zinc-900/60 border border-zinc-800 focus:border-cyan-500/40 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-600 resize-none outline-none transition-colors disabled:opacity-50 backdrop-blur-sm"
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={!question.trim() || isLoading}
+            className="px-5 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition-all disabled:opacity-30"
+            style={{
+              background: myC?.color || "#06b6d4",
+              boxShadow: isLoading ? "none" : `0 0 12px ${myC?.glow || "rgba(6,182,212,0.4)"}`,
+            }}
+          >
+            {isLoading ? "..." : t.chatSend}
+          </button>
         </div>
       </div>
     </div>
