@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
 
-
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 type Stage = "language" | "auth" | "continent" | "allegiance" | "chat";
 type Lang  = "fr" | "en" | "zh";
@@ -908,7 +907,7 @@ export default function WorldPage() {
             </span>
           )}
           {/* Bouton PREMIUM */}
-          {worldTier === "free" && (
+          {worldTier === "free" ? (
             <button onClick={() => setShowQuotaPopup(true)}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono uppercase tracking-wider transition-all"
               style={{
@@ -918,11 +917,15 @@ export default function WorldPage() {
               }}>
               ★ Premium
             </button>
-          )}
-          {worldTier === "premium" && (
-            <span className="text-xs font-mono px-2 py-0.5 rounded-lg"
-              style={{ background: "#f59e0b15", color: "#f59e0b", border: "1px solid #f59e0b40" }}>
-              ★ Premium
+          ) : (
+            <span className="flex items-center gap-1 text-xs font-bold font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg"
+              style={{
+                background: "linear-gradient(135deg, #10b98130, #059669 40%)",
+                border: "1px solid #10b98170",
+                color: "#6ee7b7",
+                boxShadow: "0 0 8px rgba(16,185,129,0.25)",
+              }}>
+              ✓ Active
             </span>
           )}
           {/* Devise */}
