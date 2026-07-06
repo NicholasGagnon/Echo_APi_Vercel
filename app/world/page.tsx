@@ -311,11 +311,11 @@ export default function WorldPage() {
           isFinal,
           round,
           userId: user?.id,
-          maxChars: 420,
+          maxChars: 672,
         }),
       });
       const data = await res.json();
-      return (data.response || data.error || "...").substring(0, 420);
+      return (data.response || data.error || "...").substring(0, 672);
     } catch {
       return lang === "fr" ? "Erreur de connexion." : lang === "en" ? "Connection error." : "连接错误。";
     }
@@ -764,17 +764,9 @@ export default function WorldPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
+      {/* Input — toujours visible, pas de bouton "nouvelle question" */}
       <div className="shrink-0 border-t border-zinc-900 bg-zinc-950/90 backdrop-blur-sm p-3">
-        {messages.length > 0 && !isLoading ? (
-          <div className="text-center">
-            <button onClick={handleReset}
-              className="px-5 py-2 rounded-xl border border-zinc-700 hover:border-cyan-500/40 text-zinc-400 hover:text-white text-sm font-medium transition-all">
-              {t.askAnother}
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2 max-w-3xl mx-auto">
+        <div className="flex gap-2 max-w-3xl mx-auto">
             <textarea
               ref={textareaRef}
               value={question}
@@ -796,8 +788,7 @@ export default function WorldPage() {
             >
               {isLoading ? "..." : t.chatSend}
             </button>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
