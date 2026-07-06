@@ -17,6 +17,15 @@ interface AIMessage {
   loading: boolean;
 }
 
+interface DebateSession {
+  id: string;
+  question: string;
+  continent: Continent;
+  lang: Lang;
+  messages: AIMessage[];
+  created_at: string;
+}
+
 // ── LOGOS ─────────────────────────────────────────────────────────────────────
 const MicrosoftLogo = () => (
   <svg className="w-5 h-5 shrink-0" viewBox="0 0 23 23" fill="none">
@@ -207,6 +216,52 @@ export default function WorldPage() {
   useEffect(() => { sessionStorage.setItem("world_lang", lang); }, [lang]);
   useEffect(() => { if (continent) sessionStorage.setItem("world_continent", continent); }, [continent]);
 
+  // ── SESSIONS — historique des débats ──────────────────────────────────────
+  const [sessions, setSessions] = useState<DebateSession[]>([]);
+
+  // Charger depuis localStorage au démarrage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("world_sessions");
+      if (saved) setSessions(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  // Sauvegarder une session complète (localStorage + Supabase)
+  const saveSession = async (q: string, msgs: AIMessage[]) => {
+    if (!continent || !user) return;
+    const session: DebateSession = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      question: q,
+      continent,
+      lang,
+      messages: msgs.filter(m => !m.loading),
+      created_at: new Date().toISOString(),
+    };
+
+    // localStorage
+    setSessions(prev => {
+      const updated = [session, ...prev].slice(0, 50); // max 50 sessions
+      try { localStorage.setItem("world_sessions", JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+
+    // Supabase
+    try {
+      await supabase.from("world_debates").insert({
+        id:         session.id,
+        user_id:    user.id,
+        question:   session.question,
+        continent:  session.continent,
+        lang:       session.lang,
+        messages:   session.messages,
+        created_at: session.created_at,
+      });
+    } catch (e) {
+      console.warn("[WORLD] Supabase save error:", e);
+    }
+  };
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -241,7 +296,8 @@ export default function WorldPage() {
   const callContinent = async (
     c: Continent,
     contextSoFar: string,
-    isFinal: boolean
+    isFinal: boolean,
+    round: 1 | 2,
   ): Promise<string> => {
     try {
       const res = await fetch("/api/world/conversation", {
@@ -253,12 +309,13 @@ export default function WorldPage() {
           lang,
           context: contextSoFar,
           isFinal,
+          round,
           userId: user?.id,
-          maxChars: 300,
+          maxChars: 420,
         }),
       });
       const data = await res.json();
-      return (data.response || data.error || "...").substring(0, 300);
+      return (data.response || data.error || "...").substring(0, 420);
     } catch {
       return lang === "fr" ? "Erreur de connexion." : lang === "en" ? "Connection error." : "连接错误。";
     }
@@ -267,52 +324,69 @@ export default function WorldPage() {
   const handleSubmit = async () => {
     if (!question.trim() || !continent || isLoading) return;
     setIsLoading(true);
-    setMessages([]);
+    const currentQuestion = question;
 
+    // Séparateur visuel entre débats (sauf si premier débat)
+    setMessages(prev => prev.length > 0 ? [...prev, {
+      continent: "na" as Continent, round: 1, text: `── ${currentQuestion} ──`,
+      isFinal: false, loading: false,
+    }] : prev);
+
+    // Ordre alterné: chaque continent parle 1 fois avant que quiconque reprenne
+    // Résultat: A1 → B1 → C1 → A2 → B2 → C2 (jamais 2x le même à la suite)
+    // Le continent choisi est TOUJOURS C (dernier à parler les 2 fois)
     const others = (Object.keys(CONTINENTS) as Continent[]).filter(k => k !== continent);
-    const shuffled = others.sort(() => Math.random() - 0.5);
-    const order: Continent[] = [...shuffled, continent];
+    const [first, second] = others.sort(() => Math.random() - 0.5);
+    // Séquence: first→second→mine→first→second→mine
+    const sequence: { c: Continent; round: 1 | 2; isFinal: boolean }[] = [
+      { c: first,     round: 1, isFinal: false },
+      { c: second,    round: 1, isFinal: false },
+      { c: continent, round: 1, isFinal: false },
+      { c: first,     round: 2, isFinal: false },
+      { c: second,    round: 2, isFinal: false },
+      { c: continent, round: 2, isFinal: true  },
+    ];
 
     let contextSoFar = `Question: ${question}\n\n`;
 
-    for (const c of order) {
-      const isFinal = c === continent;
+    for (const step of sequence) {
+      const { c, round, isFinal } = step;
 
-      // Round 1 — add loading bubble
+      // Ajoute bulle loading
       setMessages(prev => [...prev, {
-        continent: c, round: 1, text: "", isFinal: false, loading: true,
+        continent: c, round, text: "", isFinal, loading: true,
       }]);
 
-      const text1 = await callContinent(c, contextSoFar, false);
-      contextSoFar += `[${CONTINENTS[c].label.en} — round 1]: ${text1}\n\n`;
+      const text = await callContinent(c, contextSoFar, isFinal, round);
+      contextSoFar += `[${CONTINENTS[c].label.en} — round ${round}${isFinal ? " VERDICT" : ""}]: ${text}\n\n`;
 
-      setMessages(prev => prev.map(m =>
-        m.continent === c && m.round === 1 ? { ...m, text: text1, loading: false } : m
-      ));
+      setMessages(prev => {
+        // Met à jour la DERNIÈRE bulle de ce continent/round (loading: true → texte)
+        const idx = [...prev].reverse().findIndex(m => m.continent === c && m.round === round && m.loading);
+        if (idx === -1) return prev;
+        const realIdx = prev.length - 1 - idx;
+        return prev.map((m, i) => i === realIdx ? { ...m, text, loading: false } : m);
+      });
 
-      await new Promise(r => setTimeout(r, 500));
-
-      // Round 2 — add loading bubble
-      setMessages(prev => [...prev, {
-        continent: c, round: 2, text: "", isFinal, loading: true,
-      }]);
-
-      const text2 = await callContinent(c, contextSoFar, isFinal);
-      contextSoFar += `[${CONTINENTS[c].label.en} — round 2${isFinal ? " VERDICT" : ""}]: ${text2}\n\n`;
-
-      setMessages(prev => prev.map(m =>
-        m.continent === c && m.round === 2 ? { ...m, text: text2, loading: false } : m
-      ));
-
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 350));
     }
+
+    // Sauvegarder la session complète
+    setMessages(prev => {
+      const completedMsgs = prev.filter(m => !m.loading);
+      const sessionMsgs = completedMsgs.slice(
+        completedMsgs.findLastIndex(m => m.text.startsWith("──")) + 1
+      );
+      saveSession(currentQuestion, sessionMsgs);
+      return prev;
+    });
 
     setIsLoading(false);
   };
 
   const handleReset = () => {
     setQuestion("");
-    setMessages([]);
+    // Ne pas effacer les messages — on garde l'historique
     setIsLoading(false);
     setTimeout(() => textareaRef.current?.focus(), 100);
   };
@@ -544,7 +618,21 @@ export default function WorldPage() {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* Sélecteur de langue inline */}
+          <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg px-1 py-0.5">
+            {(["fr","en","zh"] as Lang[]).map(l => (
+              <button key={l} onClick={() => setLang(l)}
+                className="px-2 py-0.5 rounded text-xs font-mono transition-all"
+                style={{
+                  background: lang === l ? (myC?.color || "#06b6d4") + "25" : "transparent",
+                  color: lang === l ? (myC?.color || "#06b6d4") : "#52525b",
+                  fontWeight: lang === l ? 700 : 400,
+                }}>
+                {l === "fr" ? "FR" : l === "en" ? "EN" : "中"}
+              </button>
+            ))}
+          </div>
           <button onClick={() => setStage("continent")}
             className="text-zinc-600 hover:text-zinc-300 text-xs font-mono transition-colors">
             {t.change}
@@ -556,17 +644,35 @@ export default function WorldPage() {
         </div>
       </div>
 
-      {/* Messages — flux vertical */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      {/* Messages — arène pleine largeur */}
+      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-1">
         {messages.length === 0 && !isLoading && (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center space-y-2">
-              <div className="flex gap-3 justify-center text-3xl">
-                {(Object.keys(CONTINENTS) as Continent[]).map(k => (
-                  <span key={k} style={{ filter: k === continent ? `drop-shadow(0 0 8px ${CONTINENTS[k].color})` : "none" }}>
-                    {CONTINENTS[k].flag}
-                  </span>
-                ))}
+            <div className="text-center space-y-4">
+              <div className="flex gap-6 justify-center items-center">
+                {(Object.keys(CONTINENTS) as Continent[]).map(k => {
+                  const cc = CONTINENTS[k];
+                  const isMe = k === continent;
+                  return (
+                    <div key={k} className="flex flex-col items-center gap-2">
+                      <div className="overflow-hidden border-2 transition-all duration-300"
+                        style={{
+                          width: isMe ? 80 : 56,
+                          height: isMe ? 50 : 36,
+                          borderRadius: "6px",
+                          borderColor: cc.color,
+                          boxShadow: isMe ? `0 0 16px ${cc.glow}` : "none",
+                        }}>
+                        <img src={cc.img} alt={cc.label[lang]} className="w-full h-full object-cover"
+                          style={{ filter: isMe ? "saturate(1.2)" : "saturate(0.4) brightness(0.6)" }} />
+                      </div>
+                      <span className="text-xs font-mono uppercase tracking-wider"
+                        style={{ color: isMe ? cc.color : "#52525b", fontSize: "10px" }}>
+                        {cc.label[lang]}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
               <p className="text-zinc-700 text-xs font-mono">
                 {lang === "fr" ? "Posez votre question pour lancer le débat" : lang === "en" ? "Ask a question to start the debate" : "提问以开始辩论"}
@@ -578,63 +684,79 @@ export default function WorldPage() {
         {messages.map((msg, idx) => {
           const c = CONTINENTS[msg.continent];
           const isMine = msg.continent === continent;
+
+          // Fix 3+4: position selon le continent
+          // first continent (others[0]) → gauche
+          // second continent (others[1]) → droite
+          // my continent → centre
+          // On détermine la position par l'ordre d'apparition unique des continents
+          const order = messages
+            .filter((m, i) => i <= idx)
+            .reduce<Continent[]>((acc, m) => acc.includes(m.continent) ? acc : [...acc, m.continent], []);
+          const posIdx = order.indexOf(msg.continent); // 0=first, 1=second, 2=mine
+          const isLeft   = posIdx === 0;
+          const isRight  = posIdx === 1;
+          const isCenter = posIdx === 2 || isMine;
+
           return (
             <div key={idx}
-              className="flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300"
-              style={{ justifyContent: "flex-start" }}
+              className="animate-in fade-in slide-in-from-bottom-1 duration-400 w-full"
+              style={{
+                paddingLeft:  isLeft   ? "0"    : isCenter ? "15%" : "30%",
+                paddingRight: isRight  ? "0"    : isCenter ? "15%" : "30%",
+              }}
             >
-              {/* Avatar */}
-              <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm border"
+              {/* Fix 5: pas de bloc/contour — juste le texte dans l'arène */}
+              <div className="py-3 px-2"
                 style={{
-                  background: `${c.color}15`,
-                  borderColor: `${c.color}40`,
-                  boxShadow: isMine ? `0 0 8px ${c.glow}` : "none",
+                  borderLeft: isMine && msg.isFinal
+                    ? `2px solid ${c.color}`
+                    : `1px solid ${c.color}25`,
+                  paddingLeft: "12px",
                 }}>
-                {c.flag}
-              </div>
 
-              {/* Bubble */}
-              <div className="flex-1 max-w-2xl">
-                {/* Header */}
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-mono font-bold uppercase" style={{ color: c.color }}>
+                {/* Header — miniature drapeau + nom + round */}
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="shrink-0 overflow-hidden border"
+                    style={{
+                      width: 38, height: 25,
+                      borderRadius: "4px",
+                      borderColor: c.color,
+                      boxShadow: isMine ? `0 0 8px ${c.glow}` : "none",
+                    }}>
+                    <img src={c.img} alt={c.label[lang]} className="w-full h-full object-cover"
+                      style={{ filter: "saturate(1.1) brightness(0.9)" }} />
+                  </div>
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider" style={{ color: c.color }}>
                     {c.label[lang]}
                   </span>
-                  <span className="text-zinc-700 text-xs font-mono">
-                    [{t.round} {msg.round}]
-                  </span>
+                  <span className="text-zinc-800 text-xs font-mono">· {msg.round}</span>
                   {msg.isFinal && !msg.loading && (
-                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full"
+                    <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
                       style={{ background: `${c.color}20`, color: c.color }}>
                       {t.verdict}
                     </span>
                   )}
                 </div>
 
-                {/* Content */}
-                <div className="rounded-2xl rounded-tl-sm px-4 py-3 text-sm leading-relaxed"
-                  style={{
-                    background: msg.isFinal && !msg.loading
-                      ? `${c.color}12`
-                      : "rgba(255,255,255,0.03)",
-                    border: `1px solid ${msg.isFinal && !msg.loading ? `${c.color}40` : "rgba(255,255,255,0.06)"}`,
-                    color: "#e4e4e7",
-                    boxShadow: msg.isFinal && !msg.loading ? `0 0 20px ${c.glow}` : "none",
-                  }}>
-                  {msg.loading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-1">
-                        {[0,1,2].map(i => (
-                          <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce"
-                            style={{ background: c.color, animationDelay: `${i * 0.15}s` }} />
-                        ))}
-                      </div>
-                      <span className="text-xs font-mono" style={{ color: c.color }}>{t.thinking}</span>
-                    </div>
-                  ) : (
-                    msg.text
-                  )}
-                </div>
+                {/* Texte brut — pas de bulle, pas de fond */}
+                {msg.loading ? (
+                  <div className="flex items-center gap-1.5 py-1">
+                    {[0,1,2].map(i => (
+                      <div key={i} className="w-1 h-1 rounded-full animate-bounce"
+                        style={{ background: c.color, opacity: 0.6, animationDelay: `${i * 0.18}s` }} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm leading-relaxed"
+                    style={{
+                      color: msg.isFinal ? "#f4f4f5" : "#a1a1aa",
+                      fontWeight: msg.isFinal ? 500 : 400,
+                      textShadow: msg.isFinal ? `0 0 30px ${c.glow}` : "none",
+                    }}>
+                    {msg.text}
+                  </p>
+                )}
               </div>
             </div>
           );
