@@ -83,6 +83,8 @@ export default function AccountPage() {
   const [signInSuccess, setSignInSuccess] = useState<string | null>(null);
   const [signUpError, setSignUpError] = useState<string | null>(null);
   const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [resendEmail, setResendEmail] = useState("");
 
   const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
     setToast({ message, type });
@@ -277,6 +279,16 @@ export default function AccountPage() {
     }
   };
 
+  const startResendCountdown = () => {
+    setResendCountdown(30);
+    const interval = setInterval(() => {
+      setResendCountdown(prev => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   const handleEmailSignUp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setSignUpError(null);
@@ -285,20 +297,46 @@ export default function AccountPage() {
       setSignUpError(lang === "fr" ? "Veuillez entrer un courriel et un mot de passe" : "Please enter an email and password");
       return;
     }
+    const trimmedEmail = email.trim();
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
+      email: trimmedEmail,
       password,
       options: { emailRedirectTo: `${window.location.origin}/account` },
     });
     if (error) {
-      setSignUpError(error.message);
+      // Erreur 400 OTP = email déjà utilisé ou rate limit
+      if (error.message.includes("rate") || error.status === 429) {
+        setSignUpError(lang === "fr" ? "Trop de tentatives. Attendez 60 secondes." : "Too many attempts. Wait 60 seconds.");
+      } else if (error.message.includes("already") || error.message.includes("registered")) {
+        setSignUpError(lang === "fr" ? "Un compte avec cet e-mail existe déjà. Connectez-vous." : "An account with this email already exists. Sign in instead.");
+      } else {
+        setSignUpError(error.message);
+      }
     } else {
       if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
         setSignUpError(lang === "fr" ? "Un compte avec cet e-mail existe déjà." : "An account with this email already exists.");
         return;
       }
-      setSignUpSuccess(lang === "fr" ? "Inscription réussie ! Vérifiez votre boîte de réception." : "Registration success! Check your e-mail confirmation link.");
-      showToast(lang === "fr" ? "Lien envoyé !" : "Registration link transmitted!", "success");
+      setResendEmail(trimmedEmail);
+      setSignUpSuccess(lang === "fr" ? "Lien envoyé ! Vérifiez votre boîte de réception." : "Link sent! Check your inbox.");
+      showToast(lang === "fr" ? "Lien envoyé !" : "Registration link sent!", "success");
+      startResendCountdown();
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (resendCountdown > 0 || !resendEmail) return;
+    setSignUpError(null);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: resendEmail,
+      options: { emailRedirectTo: `${window.location.origin}/account` },
+    });
+    if (error) {
+      setSignUpError(error.message);
+    } else {
+      showToast(lang === "fr" ? "Lien renvoyé !" : "Link resent!", "success");
+      startResendCountdown();
     }
   };
 
@@ -850,7 +888,28 @@ export default function AccountPage() {
                 <button type="button" onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
               </div>
               {signUpError && <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-500/50 rounded-xl p-3 text-xs text-red-600 dark:text-red-400 font-mono">⚠️ {signUpError}</div>}
-              {signUpSuccess && <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 font-mono">✓ {signUpSuccess}</div>}
+              {signUpSuccess && (
+                <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-600 dark:text-emerald-400 font-mono space-y-2">
+                  <p>✓ {signUpSuccess}</p>
+                  <button
+                    type="button"
+                    onClick={handleResendEmail}
+                    disabled={resendCountdown > 0}
+                    className="w-full py-2 rounded-lg text-xs font-mono font-bold transition-all border"
+                    style={{
+                      opacity: resendCountdown > 0 ? 0.5 : 1,
+                      cursor: resendCountdown > 0 ? "not-allowed" : "pointer",
+                      borderColor: resendCountdown > 0 ? "#10b98140" : "#10b981",
+                      color: resendCountdown > 0 ? "#6ee7b7" : "#10b981",
+                      background: "transparent",
+                    }}
+                  >
+                    {resendCountdown > 0
+                      ? (lang === "fr" ? `Renvoyer dans ${resendCountdown}s` : `Resend in ${resendCountdown}s`)
+                      : (lang === "fr" ? "↺ Renvoyer le lien" : "↺ Resend link")}
+                  </button>
+                </div>
+              )}
               <div className="space-y-4">
                 <div>
                   <label className="text-[11px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang === "fr" ? "Adresse Courriel" : "Identity Node (Email)"}</label>

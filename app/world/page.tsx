@@ -52,31 +52,50 @@ const SLOGANS: Record<Lang, { main: string; sub: string }> = {
     sub:  "Trois civilisations. Une seule vérité à trouver.",
   },
   en: {
-    main: "3 Empires. 1 Question. Alliance or Chaos?",
+    main: "Three Powers. One Question. No Easy Answer.",
     sub:  "Three civilizations. One truth to uncover.",
   },
   zh: {
-    main: "3个帝国。1个问题。联盟还是混沌？",
+    main: "三方势力，一个问题，没有简单答案。",
     sub:  "三大文明。一个真理待揭晓。",
+  },
+};
+
+// Slogans par continent — affichés sur chaque drapeau
+const CONTINENT_SLOGANS: Record<Continent, Record<Lang, string>> = {
+  na: {
+    fr: "3 Empires. 1 Question. Alliance ou Chaos ?",
+    en: "Three Powers. One Question. No Easy Answer.",
+    zh: "三方势力，一个问题，没有简单答案。",
+  },
+  cn: {
+    fr: "3 Empires. 1 Question. Alliance ou Chaos ?",
+    en: "Three Powers. One Question. No Easy Answer.",
+    zh: "三方势力，一个问题，没有简单答案。",
+  },
+  eu: {
+    fr: "3 Empires. 1 Question. Alliance ou Chaos ?",
+    en: "Three Powers. One Question. No Easy Answer.",
+    zh: "三方势力，一个问题，没有简单答案。",
   },
 };
 
 // ── MANTRAS PAR CONTINENT ─────────────────────────────────────────────────────
 const MANTRAS: Record<Continent, Record<Lang, string>> = {
   na: {
-    fr: "Do. Ship. Iterate. Agis.",
+    fr: "Do. Ship. Iterate. Act.",
     en: "Do. Ship. Iterate. Act.",
-    zh: "行动。发布。迭代。去做。",
+    zh: "Do. Ship. Iterate. Act.",
   },
   cn: {
     fr: "La constance dépasse le talent. Persévère.",
-    en: "Consistency beats talent. Persevere.",
+    en: "La constance dépasse le talent. Persévère.",
     zh: "持之以恒胜过天赋。坚持。",
   },
   eu: {
     fr: "Comprendre avant d'agir. Réfléchis.",
-    en: "Understand before acting. Think.",
-    zh: "行动前先理解。深思。",
+    en: "Comprendre avant d'agir. Réfléchis.",
+    zh: "Comprendre avant d'agir. Réfléchis.",
   },
 };
 
@@ -315,15 +334,12 @@ export default function WorldPage() {
     } catch {}
 
     // Restaurer les messages IMMÉDIATEMENT depuis localStorage
-    // Supabase viendra les enrichir/remplacer ensuite
     try {
       const savedMsgs = localStorage.getItem("world_messages");
       if (savedMsgs) {
         const msgs = JSON.parse(savedMsgs);
         if (msgs.length > 0) {
           setMessages(msgs);
-          // Si on a des messages et qu'on était au chat → rester au chat
-          if (savedStage === "chat") setStage("chat");
         }
       }
     } catch {}
@@ -651,33 +667,48 @@ export default function WorldPage() {
           <span className="text-white font-black font-mono text-xl tracking-widest">WORLD</span>
         </div>
 
-        {/* Slogan magistral */}
-        <div className="text-center max-w-3xl">
-          <h1 className="font-black text-white tracking-tight leading-none mb-4"
-            style={{
-              fontSize: "clamp(2rem, 5vw, 3.5rem)",
-              textShadow: "0 0 60px rgba(255,255,255,0.15), 0 0 120px rgba(255,255,255,0.05)",
-              letterSpacing: "-0.02em",
-            }}>
-            {SLOGANS[lang].main}
-          </h1>
-          <p className="text-zinc-500 text-sm font-mono tracking-widest uppercase">
-            {SLOGANS[lang].sub}
-          </p>
-        </div>
-
-        {/* 3 mantras */}
-        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl">
-          {(Object.keys(CONTINENTS) as Continent[]).map(key => {
+        {/* 3 cartes continents — slogan en haut, mantra au milieu */}
+        <div className="flex w-full max-w-4xl gap-4" style={{ height: "190px" }}>
+          {(["na","cn","eu"] as Continent[]).map((key, i) => {
             const c = CONTINENTS[key];
+            const sloganLang: Lang = i === 0 ? "en" : i === 1 ? "zh" : "fr";
             return (
-              <div key={key} className="flex-1 flex items-center gap-3 px-4 py-3 rounded-xl"
-                style={{ border: `1px solid ${c.color}25`, background: `${c.color}08` }}>
-                <div className="shrink-0 overflow-hidden rounded" style={{ width: 32, height: 21, border: `1px solid ${c.color}40` }}>
-                  <img src={c.img} alt={c.label[lang]} className="w-full h-full object-cover" />
+              <div key={key} className="flex-1 relative overflow-hidden rounded-xl flex flex-col justify-between p-3"
+                style={{ border: `1px solid ${c.color}35` }}>
+                {/* Drapeau bg */}
+                <div className="absolute inset-0"
+                  style={{
+                    backgroundImage: `url(${c.img})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    opacity: 0.2,
+                    filter: "saturate(0.5) brightness(0.4)",
+                  }} />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/60" />
+
+                {/* Slogan en haut */}
+                <p className="relative font-black text-white leading-tight"
+                  style={{ fontSize: "clamp(0.7rem, 1vw, 0.85rem)", textShadow: "0 2px 8px rgba(0,0,0,0.95)" }}>
+                  {SLOGANS[sloganLang].main}
+                </p>
+
+                {/* Mantra mini boîte au milieu */}
+                <div className="relative self-center px-3 py-1.5 rounded-lg"
+                  style={{
+                    background: `${c.color}20`,
+                    border: `1px solid ${c.color}50`,
+                    maxWidth: "90%",
+                  }}>
+                  <p className="font-mono italic text-center"
+                    style={{ color: c.color, fontSize: "clamp(0.65rem, 0.85vw, 0.8rem)" }}>
+                    {MANTRAS[key][sloganLang]}
+                  </p>
                 </div>
-                <p className="text-xs font-mono" style={{ color: c.color }}>
-                  {MANTRAS[key][lang]}
+
+                {/* Nom continent bas */}
+                <p className="relative text-center font-mono uppercase tracking-widest"
+                  style={{ color: c.color, fontSize: "9px", opacity: 0.5 }}>
+                  {c.label[sloganLang]}
                 </p>
               </div>
             );
@@ -986,7 +1017,7 @@ export default function WorldPage() {
       <FlagBackground stage={stage} continent={continent} />
 
       {/* Topbar */}
-      <div className="relative z-10 shrink-0 border-b border-zinc-900/80 px-4 py-2 flex items-center justify-between bg-black/60 backdrop-blur-sm" style={{ overflow: "visible" }}>
+      <div className="relative z-30 shrink-0 border-b border-zinc-900/80 px-4 py-2 flex items-center justify-between bg-black/60 backdrop-blur-sm" style={{ overflow: "visible" }}>
 
         {/* GAUCHE — Echo + WORLD + nav links */}
         <div className="flex items-center gap-2">
@@ -1069,10 +1100,8 @@ export default function WorldPage() {
 
             {showSettings && (
               <>
-                {/* Backdrop pour fermer */}
-                <div className="fixed inset-0 z-40" onClick={() => setShowSettings(false)} />
-                {/* Menu */}
-                <div className="absolute right-0 top-10 z-50 w-56 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden">
+                {/* Menu — rendu EN PREMIER dans le DOM pour être au-dessus */}
+                <div className="fixed right-4 top-14 w-56 rounded-xl shadow-2xl overflow-hidden" style={{ zIndex: 99999, background: "#09090b", border: "1px solid #27272a" }}>
                   {/* Email */}
                   {user?.email && (
                     <div className="px-4 py-2.5 border-b border-zinc-800">
