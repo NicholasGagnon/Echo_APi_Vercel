@@ -693,9 +693,23 @@ export default function Home() {
                         <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(234,179,8,0.6)`}}/>
                         <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(234,179,8,0.6)`}}/>
                         <span className="relative z-10 text-3xl">💰</span>
+
+
+
                         <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-yellow-400">BUDGET</span>
-                      </a>
-                      <a href="/vitality"
+                                              </a>
+                                              <a href="/world"
+                                                className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                                                style={{background:`linear-gradient(135deg,rgba(34,211,238,0.12) 0%,rgba(34,211,238,0.05) 100%)`,borderColor:`rgba(34,211,238,0.35)`,boxShadow:`0 0 20px rgba(34,211,238,0.1),inset 0 1px 0 rgba(34,211,238,0.2)`}}
+                                                onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(34,211,238,0.35)`;el.style.transform="translateY(-2px)";}}
+                                                onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(34,211,238,0.1),inset 0 1px 0 rgba(34,211,238,0.2)`;el.style.transform="translateY(0)";}}>
+                                                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(34,211,238,0.2) 0%,rgba(34,211,238,0.08) 100%)`}}/>
+                                                <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(34,211,238,0.6)`}}/>
+                                                <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(34,211,238,0.6)`}}/>
+                                                <span className="relative z-10 text-3xl">🌍</span>
+                                                <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-cyan-300">WORLD</span>
+                                              </a>
+                                              <a href="/vitality"
                         className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
                         style={{background:`linear-gradient(135deg,rgba(34,197,94,0.12) 0%,rgba(34,197,94,0.05) 100%)`,borderColor:`rgba(34,197,94,0.35)`,boxShadow:`0 0 20px rgba(34,197,94,0.1),inset 0 1px 0 rgba(34,197,94,0.2)`}}
                         onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(34,197,94,0.35)`;el.style.transform="translateY(-2px)";}}
@@ -780,6 +794,17 @@ export default function Home() {
                         <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(139,92,246,0.6)`}}/>
                         <span className="relative z-10 text-3xl">💬</span>
                         <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-violet-400">TALK</span>
+                      </a>
+                      <a href="/idea"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(249,115,22,0.12) 0%,rgba(249,115,22,0.05) 100%)`,borderColor:`rgba(249,115,22,0.35)`,boxShadow:`0 0 20px rgba(249,115,22,0.1),inset 0 1px 0 rgba(249,115,22,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(249,115,22,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(249,115,22,0.1),inset 0 1px 0 rgba(249,115,22,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(249,115,22,0.2) 0%,rgba(249,115,22,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(249,115,22,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(249,115,22,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">💡</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-orange-400">IDEA</span>
                       </a>
                   </div>
                 </div>

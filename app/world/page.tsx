@@ -83,6 +83,15 @@ const MANTRAS: Record<Continent, Record<Lang, string>> = {
 // ── COPY ──────────────────────────────────────────────────────────────────────
 const copy = {
   fr: {
+    navLinks: [
+      { label: "Echo AI",     href: "https://echosai.ca" },
+      { label: "Avis",        href: "https://echosai.ca/avis" },
+      { label: "Facturation", href: "https://echosai.ca/fastbilling" },
+      { label: "Idée",        href: "https://echosai.ca/idea" },
+      { label: "Chat",        href: "https://echosai.ca/chat" },
+      { label: "Talk",        href: "https://echosai.ca/2/talk" },
+      { label: "Hall",        href: "https://echosai.ca/1/Hall" },
+    ],
     authTitle: "Connexion requise",
     authSub: "Accède au débat mondial",
     google: "Continuer avec Google",
@@ -110,6 +119,15 @@ const copy = {
     confirm: "Entrer dans l'arène",
   },
   en: {
+    navLinks: [
+      { label: "Echo AI",     href: "https://echosai.ca" },
+      { label: "Reviews",     href: "https://echosai.ca/avis" },
+      { label: "Fast Billing",href: "https://echosai.ca/fastbilling" },
+      { label: "Idea",        href: "https://echosai.ca/idea" },
+      { label: "Chat",        href: "https://echosai.ca/chat" },
+      { label: "Talk",        href: "https://echosai.ca/2/talk" },
+      { label: "Hall",        href: "https://echosai.ca/1/Hall" },
+    ],
     authTitle: "Sign in required",
     authSub: "Access the global debate",
     google: "Continue with Google",
@@ -137,6 +155,15 @@ const copy = {
     confirm: "Enter the arena",
   },
   zh: {
+    navLinks: [
+      { label: "Echo AI",  href: "https://echosai.ca" },
+      { label: "评价",     href: "https://echosai.ca/avis" },
+      { label: "快速账单", href: "https://echosai.ca/fastbilling" },
+      { label: "创意",     href: "https://echosai.ca/idea" },
+      { label: "聊天",    href: "https://echosai.ca/chat" },
+      { label: "交流",    href: "https://echosai.ca/2/talk" },
+      { label: "Hall",     href: "https://echosai.ca/1/Hall" },
+    ],
     authTitle: "需要登录",
     authSub: "进入全球辩论",
     google: "使用 Google 继续",
@@ -265,6 +292,7 @@ export default function WorldPage() {
     EUR: { amount:"7.49",  symbol:"€"   },
     CNY: { amount:"59.00", symbol:"¥"   },
   };
+  const [showSettings, setShowSettings] = useState(false);
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pseudoRef   = useRef<HTMLInputElement>(null);
@@ -286,6 +314,20 @@ export default function WorldPage() {
       if (saved) setSessions(JSON.parse(saved));
     } catch {}
 
+    // Restaurer les messages IMMÉDIATEMENT depuis localStorage
+    // Supabase viendra les enrichir/remplacer ensuite
+    try {
+      const savedMsgs = localStorage.getItem("world_messages");
+      if (savedMsgs) {
+        const msgs = JSON.parse(savedMsgs);
+        if (msgs.length > 0) {
+          setMessages(msgs);
+          // Si on a des messages et qu'on était au chat → rester au chat
+          if (savedStage === "chat") setStage("chat");
+        }
+      }
+    } catch {}
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
@@ -295,6 +337,8 @@ export default function WorldPage() {
         if (ps?.pseudo) { setPseudo(ps.pseudo); sessionStorage.setItem("world_pseudo", ps.pseudo); }
         // Charger quota
         await loadWorldQuotaState(session.user.id);
+        // Charger historique des débats
+        await loadDebatesFromSupabase(session.user.id);
         if (savedStage && savedStage !== "auth" && savedStage !== "language") {
           setStage(savedStage);
         } else {
@@ -303,16 +347,18 @@ export default function WorldPage() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
       if (session?.user) {
         setUser(session.user);
         const s = sessionStorage.getItem("world_stage") as Stage | null;
-        // Après OAuth redirect — si on était sur auth, aller au continent
         setStage(s && s !== "auth" && s !== "language" ? s : "continent");
       } else {
         setUser(null);
         setStage("language");
         sessionStorage.removeItem("world_stage");
+        // Vider les messages au logout
+        setMessages([]);
+        try { localStorage.removeItem("world_messages"); } catch {}
       }
     });
     return () => subscription.unsubscribe();
@@ -322,9 +368,16 @@ export default function WorldPage() {
   useEffect(() => { sessionStorage.setItem("world_lang", lang); }, [lang]);
   useEffect(() => { if (continent) sessionStorage.setItem("world_continent", continent); }, [continent]);
   useEffect(() => { sessionStorage.setItem("world_pseudo", pseudo); }, [pseudo]);
+  // Sauvegarder les messages au fur et à mesure
+  useEffect(() => {
+    if (messages.length > 0) {
+      try { localStorage.setItem("world_messages", JSON.stringify(messages.filter(m => !m.loading))); }
+      catch {}
+    }
+  }, [messages]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "instant" });
   }, [messages]);
 
   // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -449,18 +502,68 @@ export default function WorldPage() {
       messages: msgs.filter(m => !m.loading),
       created_at: new Date().toISOString(),
     };
+
+    // localStorage
     setSessions(prev => {
       const updated = [session, ...prev].slice(0, 50);
       try { localStorage.setItem("world_sessions", JSON.stringify(updated)); } catch {}
       return updated;
     });
+
+    // Supabase — même pattern que les autres pages
     try {
       await supabase.from("world_debates").insert({
-        id: session.id, user_id: user.id, question: session.question,
-        continent: session.continent, lang: session.lang,
-        messages: session.messages, created_at: session.created_at,
+        id:         session.id,
+        user_id:    user.id,
+        question:   session.question,
+        continent:  session.continent,
+        lang:       session.lang,
+        messages:   session.messages,
+        created_at: session.created_at,
       });
-    } catch (e) { console.warn("[WORLD] Supabase save error:", e); }
+      console.log("[WORLD] Session sauvegardée dans Supabase");
+    } catch (e) {
+      console.warn("[WORLD] Supabase save error:", e);
+    }
+  };
+
+  // Charger l'historique depuis Supabase au login
+  const loadDebatesFromSupabase = async (uid: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("world_debates")
+        .select("*")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: true })
+        .limit(20);
+
+      if (error) throw error;
+      if (data && data.length > 0) {
+        // Reconstruire les messages de tous les débats en ordre
+        const allMessages: AIMessage[] = [];
+        for (const debate of data) {
+          // Séparateur entre débats
+          if (allMessages.length > 0) {
+            allMessages.push({
+              continent: "na" as Continent,
+              round: 1,
+              text: `── ${debate.question} ──`,
+              isFinal: false,
+              loading: false,
+            });
+          }
+          allMessages.push(...(debate.messages || []));
+        }
+        if (allMessages.length > 0) {
+          setMessages(allMessages);
+          // Sync localStorage aussi
+          try { localStorage.setItem("world_messages", JSON.stringify(allMessages)); } catch {}
+        }
+        console.log(`[WORLD] ${data.length} débats chargés depuis Supabase`);
+      }
+    } catch (e) {
+      console.warn("[WORLD] Chargement historique Supabase:", e);
+    }
   };
 
   // ── AI Call ───────────────────────────────────────────────────────────────────
@@ -883,33 +986,59 @@ export default function WorldPage() {
       <FlagBackground stage={stage} continent={continent} />
 
       {/* Topbar */}
-      <div className="relative z-10 shrink-0 border-b border-zinc-900/80 px-5 py-2.5 flex items-center justify-between bg-black/60 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <img src="/echo2.png" alt="Echo" className="w-6 h-6 rounded object-contain" />
-          <span className="text-white font-black font-mono">WORLD</span>
+      <div className="relative z-10 shrink-0 border-b border-zinc-900/80 px-4 py-2 flex items-center justify-between bg-black/60 backdrop-blur-sm" style={{ overflow: "visible" }}>
+
+        {/* GAUCHE — Echo + WORLD + nav links */}
+        <div className="flex items-center gap-2">
+          {/* Echo logo débordant */}
+          <div className="relative shrink-0" style={{ width: 44, height: 44, marginTop: -8, marginBottom: -8 }}>
+            <img src="/echo2.png" alt="Echo"
+              className="absolute inset-0 w-full h-full object-contain rounded-xl"
+              style={{ filter: "drop-shadow(0 0 6px rgba(6,182,212,0.4))" }} />
+          </div>
+          {/* WORLD sous l'image */}
+          <span className="text-white font-black font-mono text-sm leading-none">WORLD</span>
+
+          {/* Nav links — desktop seulement, cachés Premium */}
+          {worldTier === "free" && (
+            <div className="hidden md:flex items-center gap-0.5 ml-1">
+              {t.navLinks.map((link: {label:string;href:string}) => (
+                <a key={link.href} href={link.href} target="_blank" rel="noopener noreferrer"
+                  className="px-2 py-1 rounded text-xs font-mono text-zinc-700 hover:text-white hover:bg-zinc-800/50 transition-all whitespace-nowrap">
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* DROITE — Pseudo+drapeau · Premium · ⚙️ */}
+        <div className="flex items-center gap-2 shrink-0">
+
+          {/* Pseudo + drapeau */}
           {myC && (
-            <div className="flex items-center gap-2">
-              <div className="overflow-hidden rounded shrink-0" style={{ width: 28, height: 18, border: `1px solid ${myC.color}60` }}>
+            <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setStage("allegiance")}>
+              <div className="overflow-hidden rounded shrink-0" style={{ width: 24, height: 16, border: `1px solid ${myC.color}60` }}>
                 <img src={myC.img} alt={myC.label[lang]} className="w-full h-full object-cover" />
               </div>
-              <span className="text-xs font-mono px-2 py-0.5 rounded-full border"
-                style={{ color: myC.color, borderColor: `${myC.color}60` }}>
+              <span className="text-xs font-mono hidden sm:block"
+                style={{ color: myC.color }}>
                 {pseudo || myC.label[lang]}
               </span>
             </div>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Quota indicator */}
+
+          {/* Quota count — free seulement */}
           {worldTier === "free" && (
-            <span className="text-xs font-mono" style={{ color: worldAvailable === 0 ? "#ef4444" : "#52525b" }}>
+            <span className="text-xs font-mono hidden sm:block" style={{ color: worldAvailable === 0 ? "#ef4444" : "#52525b" }}>
               {worldAvailable}/{worldMax}
             </span>
           )}
-          {/* Bouton PREMIUM */}
+
+          {/* Bouton Premium / Active */}
           {worldTier === "free" ? (
             <button onClick={() => setShowQuotaPopup(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono uppercase tracking-wider transition-all"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono uppercase tracking-wider transition-all shrink-0"
               style={{
                 background: "linear-gradient(135deg, #f59e0b20, #ef444420)",
                 border: "1px solid #f59e0b50",
@@ -918,7 +1047,7 @@ export default function WorldPage() {
               ★ Premium
             </button>
           ) : (
-            <span className="flex items-center gap-1 text-xs font-bold font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg"
+            <span className="flex items-center gap-1 text-xs font-bold font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg shrink-0"
               style={{
                 background: "linear-gradient(135deg, #10b98130, #059669 40%)",
                 border: "1px solid #10b98170",
@@ -928,38 +1057,74 @@ export default function WorldPage() {
               ✓ Active
             </span>
           )}
-          {/* Devise */}
-          <select value={currency} onChange={e => setCurrency(e.target.value)}
-            className="bg-transparent text-zinc-600 text-xs font-mono border-0 outline-none cursor-pointer hover:text-zinc-300 transition-colors">
-            {CURRENCIES.map(c => <option key={c} value={c} className="bg-zinc-950">{c}</option>)}
-          </select>
-          {/* Sélecteur langue */}
-          <div className="flex items-center gap-0.5 bg-zinc-900/80 border border-zinc-800 rounded-lg px-1 py-0.5">
-            {(["fr","en","zh"] as Lang[]).map(l => (
-              <button key={l} onClick={() => setLang(l)}
-                className="px-2 py-0.5 rounded text-xs font-mono transition-all"
-                style={{
-                  background: lang === l ? (myC?.color || "#06b6d4") + "25" : "transparent",
-                  color: lang === l ? (myC?.color || "#06b6d4") : "#52525b",
-                  fontWeight: lang === l ? 700 : 400,
-                }}>
-                {l === "fr" ? "FR" : l === "en" ? "EN" : "中"}
-              </button>
-            ))}
+
+          {/* ⚙️ Settings dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSettings(s => !s)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 hover:border-zinc-600 transition-all text-zinc-500 hover:text-white text-sm"
+            >
+              ⚙
+            </button>
+
+            {showSettings && (
+              <>
+                {/* Backdrop pour fermer */}
+                <div className="fixed inset-0 z-40" onClick={() => setShowSettings(false)} />
+                {/* Menu */}
+                <div className="absolute right-0 top-10 z-50 w-56 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden">
+                  {/* Email */}
+                  {user?.email && (
+                    <div className="px-4 py-2.5 border-b border-zinc-800">
+                      <p className="text-zinc-600 text-xs font-mono">
+                        {user.email.split("@")[0].slice(0, 4)}xxxx@{user.email.split("@")[1]}
+                      </p>
+                    </div>
+                  )}
+                  {/* Langue */}
+                  <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between">
+                    <span className="text-zinc-500 text-xs font-mono">{lang === "fr" ? "Langue" : lang === "en" ? "Language" : "语言"}</span>
+                    <div className="flex gap-1">
+                      {(["fr","en","zh"] as Lang[]).map(l => (
+                        <button key={l} onClick={() => { setLang(l); }}
+                          className="px-1.5 py-0.5 rounded text-xs font-mono transition-all"
+                          style={{
+                            background: lang === l ? (myC?.color || "#06b6d4") + "25" : "transparent",
+                            color: lang === l ? (myC?.color || "#06b6d4") : "#52525b",
+                            fontWeight: lang === l ? 700 : 400,
+                          }}>
+                          {l === "fr" ? "FR" : l === "en" ? "EN" : "中"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Devise */}
+                  <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between">
+                    <span className="text-zinc-500 text-xs font-mono">{lang === "fr" ? "Devise" : lang === "en" ? "Currency" : "货币"}</span>
+                    <select value={currency} onChange={e => setCurrency(e.target.value)}
+                      className="bg-transparent text-zinc-400 text-xs font-mono border-0 outline-none cursor-pointer">
+                      {CURRENCIES.map(c => <option key={c} value={c} className="bg-zinc-950">{c}</option>)}
+                    </select>
+                  </div>
+                  {/* Pseudo */}
+                  <button onClick={() => { setStage("allegiance"); setShowSettings(false); }}
+                    className="w-full px-4 py-2.5 text-left text-zinc-400 hover:text-white hover:bg-zinc-900 text-xs font-mono transition-colors border-b border-zinc-800">
+                    👤 {lang === "fr" ? "Changer de pseudo" : lang === "en" ? "Change handle" : "更改昵称"}
+                  </button>
+                  {/* Changer continent */}
+                  <button onClick={() => { setStage("continent"); setShowSettings(false); }}
+                    className="w-full px-4 py-2.5 text-left text-zinc-400 hover:text-white hover:bg-zinc-900 text-xs font-mono transition-colors border-b border-zinc-800">
+                    🌍 {lang === "fr" ? "Changer d'allégeance" : lang === "en" ? "Change allegiance" : "更换阵营"}
+                  </button>
+                  {/* Quitter */}
+                  <button onClick={() => { supabase.auth.signOut(); setShowSettings(false); }}
+                    className="w-full px-4 py-2.5 text-left text-red-600 hover:text-red-400 hover:bg-zinc-900 text-xs font-mono transition-colors">
+                    ⏏ {lang === "fr" ? "Quitter" : lang === "en" ? "Sign out" : "退出"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-          {/* Changer pseudo */}
-          <button onClick={() => setStage("allegiance")}
-            className="text-zinc-600 hover:text-zinc-300 text-xs font-mono transition-colors">
-            {lang === "fr" ? "Pseudo" : lang === "en" ? "Handle" : "昵称"}
-          </button>
-          <button onClick={() => setStage("continent")}
-            className="text-zinc-600 hover:text-zinc-300 text-xs font-mono transition-colors">
-            {t.change}
-          </button>
-          <button onClick={() => { supabase.auth.signOut(); }}
-            className="text-zinc-700 hover:text-red-500 text-xs font-mono transition-colors">
-            ⏏ {t.exit}
-          </button>
         </div>
       </div>
 
@@ -1098,10 +1263,8 @@ export default function WorldPage() {
 
       {/* ── POP-UP QUOTA ATTEINT ── */}
       {showQuotaPopup && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4"
-          onClick={() => setShowQuotaPopup(false)}>
-          <div className="relative w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-center shadow-2xl"
-            onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4">
+          <div className="relative w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-center shadow-2xl">
             {/* Logo */}
             <div className="flex items-center justify-center gap-2 mb-4">
               <img src="/echo2.png" alt="Echo" className="w-5 h-5 rounded object-contain opacity-70" />
