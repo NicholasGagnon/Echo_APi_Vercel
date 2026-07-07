@@ -846,7 +846,18 @@ export default function Home() {
                         <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
                         <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
                         <span className="relative z-10 text-3xl">🗄</span>
-                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-emerald-400">BUREAU</span>
+                                                <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-emerald-400">BUREAU</span>
+                      </a>
+                      <a href="/1/conversation"
+                        className="group relative w-24 h-24 flex flex-col items-center justify-center gap-1.5 rounded-2xl border transition-all duration-300 overflow-hidden select-none no-underline"
+                        style={{background:`linear-gradient(135deg,rgba(52,211,153,0.12) 0%,rgba(52,211,153,0.05) 100%)`,borderColor:`rgba(52,211,153,0.35)`,boxShadow:`0 0 20px rgba(52,211,153,0.1),inset 0 1px 0 rgba(52,211,153,0.2)`}}
+                        onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 30px rgba(52,211,153,0.35)`;el.style.transform="translateY(-2px)";}}
+                        onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.boxShadow=`0 0 20px rgba(52,211,153,0.1),inset 0 1px 0 rgba(52,211,153,0.2)`;el.style.transform="translateY(0)";}}>
+                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" style={{background:`linear-gradient(135deg,rgba(52,211,153,0.2) 0%,rgba(52,211,153,0.08) 100%)`}}/>
+                        <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
+                        <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r" style={{borderColor:`rgba(52,211,153,0.6)`}}/>
+                        <span className="relative z-10 text-3xl">💬</span>
+                        <span className="relative z-10 text-[8px] font-mono font-black tracking-widest uppercase text-emerald-400">{lang==="fr"?"CONVERSATION":"CONVERSATION"}</span>
                       </a>
                   </div>
                 </div>

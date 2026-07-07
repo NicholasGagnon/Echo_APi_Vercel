@@ -98,7 +98,18 @@ const ROWS = [
       { icon:"🧠", nameFr:"Avis Achat",  nameEn:"Reviews",    href:"/avis",       textClass:"text-violet-400" },
       { icon:"🌐", nameFr:"Horizon",     nameEn:"Horizon",    href:"/horizonweb", textClass:"text-cyan-400"   },
       { icon:"💬", nameFr:"Chat",        nameEn:"Chat",       href:"/chat",       textClass:"text-cyan-400"   },
-      { icon:"📚", nameFr:"Livres",      nameEn:"Books",      href:"/books",      textClass:"text-violet-400" },
+            { icon:"📚", nameFr:"Livres",      nameEn:"Books",      href:"/books",      textClass:"text-violet-400" },
+    ],
+  },
+  {
+    labelFr: "🚀 Outils Echo",
+    labelEn: "🚀 Echo Tools",
+    color: "rgba(249,115,22,",
+    tools: [
+      { icon:"🧠", nameFr:"Idée",         nameEn:"Idea",        href:"/idea",       textClass:"text-orange-400" },
+      { icon:"🌍", nameFr:"World",        nameEn:"World",       href:"/world",      textClass:"text-cyan-400"   },
+      { icon:"🔥", nameFr:"Calories",     nameEn:"Calories",    href:"/vitality",   textClass:"text-green-400"  },
+      { icon:"📅", nameFr:"Calendrier",   nameEn:"Calendar",    href:"/calendar",   textClass:"text-blue-400"   },
     ],
   },
 ];

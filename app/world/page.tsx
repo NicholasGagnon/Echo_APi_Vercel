@@ -660,59 +660,12 @@ export default function WorldPage() {
     <div className="fixed inset-0 bg-black flex flex-col overflow-hidden">
       <FlagBackground stage="language" continent={null} />
 
-      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 gap-10">
-        {/* Logo Echo + WORLD */}
-        <div className="flex items-center gap-3">
-          <img src="/echo2.png" alt="Echo" className="w-8 h-8 rounded-lg object-contain" />
-          <span className="text-white font-black font-mono text-xl tracking-widest">WORLD</span>
-        </div>
-
-        {/* 3 cartes continents — slogan en haut, mantra au milieu */}
-        <div className="flex w-full max-w-4xl gap-4" style={{ height: "190px" }}>
-          {(["na","cn","eu"] as Continent[]).map((key, i) => {
-            const c = CONTINENTS[key];
-            const sloganLang: Lang = i === 0 ? "en" : i === 1 ? "zh" : "fr";
-            return (
-              <div key={key} className="flex-1 relative overflow-hidden rounded-xl flex flex-col justify-between p-3"
-                style={{ border: `1px solid ${c.color}35` }}>
-                {/* Drapeau bg */}
-                <div className="absolute inset-0"
-                  style={{
-                    backgroundImage: `url(${c.img})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    opacity: 0.2,
-                    filter: "saturate(0.5) brightness(0.4)",
-                  }} />
-                <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/60" />
-
-                {/* Slogan en haut */}
-                <p className="relative font-black text-white leading-tight"
-                  style={{ fontSize: "clamp(0.7rem, 1vw, 0.85rem)", textShadow: "0 2px 8px rgba(0,0,0,0.95)" }}>
-                  {SLOGANS[sloganLang].main}
-                </p>
-
-                {/* Mantra mini boîte au milieu */}
-                <div className="relative self-center px-3 py-1.5 rounded-lg"
-                  style={{
-                    background: `${c.color}20`,
-                    border: `1px solid ${c.color}50`,
-                    maxWidth: "90%",
-                  }}>
-                  <p className="font-mono italic text-center"
-                    style={{ color: c.color, fontSize: "clamp(0.65rem, 0.85vw, 0.8rem)" }}>
-                    {MANTRAS[key][sloganLang]}
-                  </p>
-                </div>
-
-                {/* Nom continent bas */}
-                <p className="relative text-center font-mono uppercase tracking-widest"
-                  style={{ color: c.color, fontSize: "9px", opacity: 0.5 }}>
-                  {c.label[sloganLang]}
-                </p>
-              </div>
-            );
-          })}
+      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 gap-8">
+        {/* Logo Echo + WORLD — gros et en haut */}
+        <div className="flex items-center gap-4 -mt-8">
+          <img src="/echo2.png" alt="Echo" className="w-16 h-16 rounded-2xl object-contain"
+            style={{ filter: "drop-shadow(0 0 12px rgba(6,182,212,0.5))" }} />
+          <span className="text-white font-black font-mono text-3xl tracking-widest">WORLD</span>
         </div>
 
         {/* Sélecteur langue */}
