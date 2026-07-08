@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
@@ -207,7 +207,7 @@ function Field({ label, value, onChange, placeholder, multiline, type="text" }: 
 }
 
 // ── PAGE ──────────────────────────────────────────────────────────────────────
-export default function InscriptionPage() {
+function InscriptionPageInner() {
   const [lang, setLang]       = useState<Lang>("fr");
   const [step, setStep]       = useState(1);
   const [form, setForm]       = useState<FormData>(INITIAL);
@@ -803,5 +803,13 @@ export default function InscriptionPage() {
       )}
 
     </main>
+  );
+}
+
+export default function InscriptionPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center"><p className="text-zinc-500 font-mono text-sm">Chargement...</p></div>}>
+      <InscriptionPageInner />
+    </Suspense>
   );
 }

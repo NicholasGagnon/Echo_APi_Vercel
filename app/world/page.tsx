@@ -507,6 +507,12 @@ export default function WorldPage() {
     }
     setStage("chat");
     setTimeout(() => textareaRef.current?.focus(), 100);
+    // Warmup Flask en arrière-plan — réveille Render avant la première question
+    fetch("/api/world/conversation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ warmup: true, question: "ping" }),
+    }).catch(() => {});
   };
 
   // ── Save session ──────────────────────────────────────────────────────────────
@@ -1215,16 +1221,29 @@ export default function WorldPage() {
                 </div>
 
                 {msg.loading ? (
-                  <div className="flex items-center gap-2 py-0.5">
-                    <span className="text-xs animate-pulse" style={{ opacity: 0.4 }}>🛰️</span>
-                    <span className="font-mono"
-                      style={{ color: c.color, opacity: 0.45, fontSize: "10px", letterSpacing: "0.05em" }}>
-                      {msg.continent === "cn"
-                        ? "Real AI models from China. Connection established."
-                        : msg.continent === "na"
-                        ? "Real AI models from North America. Connection established."
-                        : "Real AI models from Europe. Connection established."}
-                    </span>
+                  <div className="flex flex-col gap-1 py-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs animate-pulse" style={{ opacity: 0.4 }}>🛰️</span>
+                      <span className="font-mono"
+                        style={{ color: c.color, opacity: 0.45, fontSize: "10px", letterSpacing: "0.05em" }}>
+                        {msg.continent === "cn"
+                          ? "Real AI models from China. Connection established."
+                          : msg.continent === "na"
+                          ? "Real AI models from North America. Connection established."
+                          : "Real AI models from Europe. Connection established."}
+                      </span>
+                    </div>
+                    {/* Warmup message — seulement sur le 1er message */}
+                    {messages.filter(m => !m.loading).length === 0 && messages.indexOf(msg) === 0 && (
+                      <span className="font-mono animate-pulse"
+                        style={{ color: "#52525b", fontSize: "9px", letterSpacing: "0.05em" }}>
+                        {lang === "fr"
+                          ? "⚡ Réveil des serveurs IA — première connexion plus lente..."
+                          : lang === "en"
+                          ? "⚡ Waking up AI servers — first connection may be slower..."
+                          : "⚡ 正在唤醒AI服务器 — 首次连接可能较慢..."}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm leading-relaxed"
