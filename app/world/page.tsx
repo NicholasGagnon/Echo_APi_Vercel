@@ -943,8 +943,8 @@ export default function WorldPage() {
         <p className="text-zinc-500 text-xs mt-2 font-mono">{t.continentSub}</p>
       </div>
 
-      {/* 3 immenses boutons plein écran — drapeau en background comme avant */}
-      <div className="relative z-10 flex flex-col sm:flex-row" style={{ height: "100%" }}>
+      {/* 3 immenses boutons plein écran */}
+      <div className="relative z-10 flex flex-row" style={{ height: "100%" }}>
         {(Object.keys(CONTINENTS) as Continent[]).map((key) => {
           const c = CONTINENTS[key];
           const isHov = hovered === key;
@@ -1390,7 +1390,7 @@ export default function WorldPage() {
 
       {/* ── POP-UP QUOTA ATTEINT ── */}
       {showQuotaPopup && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4" style={{ zIndex: 999999 }}>
           <div className="relative w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-center shadow-2xl">
             {/* Logo */}
             <div className="flex items-center justify-center gap-2 mb-4">
@@ -1415,19 +1415,19 @@ export default function WorldPage() {
               </p>
             )}
 
-            {/* 2 colonnes — Avantage | Premium */}
+            {/* 2 colonnes identiques — seul le contenu change */}
             <div className="grid grid-cols-2 gap-3 mb-4">
-              {/* AVANTAGE */}
+              {/* AVANTAGE — clone de Premium */}
               <div className="flex flex-col rounded-xl p-4 text-center"
-                style={{ background: "#1e3a5f", border: "1px solid #3b82f660" }}>
-                <div className="text-blue-400 font-black text-sm mb-1">
+                style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
+                <div className="text-amber-400 font-black text-sm mb-1">
                   {lang === "fr" ? "Avantage" : lang === "en" ? "Advantage" : "优势"}
                 </div>
                 <div className="text-white font-black text-xl mb-0.5">
                   {PRICES_ADVANTAGE[currency].symbol}{PRICES_ADVANTAGE[currency].amount}
                 </div>
                 <div className="text-zinc-500 text-xs mb-3">
-                  100 {lang === "fr" ? "questions/mois" : lang === "en" ? "q/month" : "问题/月"}
+                  100 {lang === "fr" ? "q/mois" : lang === "en" ? "q/month" : "问题/月"}
                 </div>
                 <button
                   onClick={async () => {
@@ -1439,13 +1439,13 @@ export default function WorldPage() {
                     const d = await res.json();
                     if (d.url) window.location.href = d.url;
                   }}
-                  className="w-full py-2 rounded-lg font-bold text-xs text-white transition-all mt-auto"
-                  style={{ background: "linear-gradient(135deg, #3b82f6, #2563eb)", boxShadow: "0 0 10px rgba(59,130,246,0.3)" }}>
+                  className="w-full py-2 rounded-lg font-bold text-xs text-black transition-all mt-auto"
+                  style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)", boxShadow: "0 0 10px rgba(245,158,11,0.3)" }}>
                   {lang === "fr" ? "Choisir" : lang === "en" ? "Select" : "选择"}
                 </button>
               </div>
 
-              {/* PREMIUM */}
+              {/* PREMIUM — original */}
               <div className="flex flex-col rounded-xl p-4 text-center"
                 style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
                 <div className="text-amber-400 font-black text-sm mb-1">Premium</div>
@@ -1453,7 +1453,7 @@ export default function WorldPage() {
                   {PRICES[currency].symbol}{PRICES[currency].amount}
                 </div>
                 <div className="text-zinc-500 text-xs mb-3">
-                  400 {lang === "fr" ? "questions/mois" : lang === "en" ? "q/month" : "问题/月"}
+                  400 {lang === "fr" ? "q/mois" : lang === "en" ? "q/month" : "问题/月"}
                 </div>
                 <button
                   onClick={async () => {

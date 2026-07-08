@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     const origin = req.headers.get("origin") ?? "http://localhost:3000";
 
     // ── PLAN WORLD PREMIUM ────────────────────────────────────────────────────
-    if (body.plan === "world") {
+    if (body.plan === "world" || body.plan === "world_advantage") {
       const { userId, userEmail, currency = "CAD" } = body;
 
       if (!userId) {
