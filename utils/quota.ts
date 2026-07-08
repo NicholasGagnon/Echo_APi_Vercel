@@ -1,7 +1,7 @@
 import { supabase } from "../app/lib/supabase";
 
 export type UserTier = "connected_free" | "basic" | "premium" | "ultra" | "founder";
-export type WorldTier = "free" | "premium";
+export type WorldTier = "free" | "advantage" | "premium";
 
 export const getMessageMaxLength = (tier: UserTier): number => {
   if (tier === "connected_free") return 1000;
@@ -267,8 +267,9 @@ export const getQuotaInfo = (
 // Premium: 400 questions/mois
 // ══════════════════════════════════════════════════════════════════════════════
 
-const WORLD_FREE_MAX     = 3;
-const WORLD_PREMIUM_MAX  = 400;
+const WORLD_FREE_MAX      = 3;
+const WORLD_ADVANTAGE_MAX = 100;
+const WORLD_PREMIUM_MAX   = 400;
 const WORLD_LOCAL_KEY    = (uid: string) => `world-quota-${uid}`;
 
 interface WorldQuotaLocal {
@@ -308,7 +309,7 @@ export async function loadWorldQuota(uid: string): Promise<WorldQuotaState> {
 
     if (data) {
       const tier       = (data.tier || "free") as WorldTier;
-      const max        = tier === "premium" ? WORLD_PREMIUM_MAX : WORLD_FREE_MAX;
+      const max        = tier === "premium" ? WORLD_PREMIUM_MAX : tier === "advantage" ? WORLD_ADVANTAGE_MAX : WORLD_FREE_MAX;
       const lastRegen  = new Date(data.last_regen).getTime();
       let available    = data.available ?? max;
 
@@ -319,13 +320,14 @@ export async function loadWorldQuota(uid: string): Promise<WorldQuotaState> {
         available = Math.min(WORLD_FREE_MAX, available + recovered);
       }
 
-      // Reset cycle mensuel pour premium
-      if (tier === "premium") {
+      // Reset cycle mensuel pour advantage et premium
+      if (tier === "advantage" || tier === "premium") {
         const cycleStart = new Date(data.cycle_start).getTime();
+        const maxQ = tier === "premium" ? WORLD_PREMIUM_MAX : WORLD_ADVANTAGE_MAX;
         if (now - cycleStart > THIRTY_DAYS_MS) {
-          available = WORLD_PREMIUM_MAX;
+          available = maxQ;
           await supabase.from("world_quotas").upsert({
-            user_id: uid, available: WORLD_PREMIUM_MAX, tier: "premium",
+            user_id: uid, available: maxQ, tier,
             last_regen: new Date().toISOString(),
             cycle_start: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -350,7 +352,7 @@ export async function consumeWorldQuestion(uid: string): Promise<{ allowed: bool
   const now    = Date.now();
   const local  = getWorldLocal(uid);
   const tier   = local?.tier ?? "free";
-  const max    = tier === "premium" ? WORLD_PREMIUM_MAX : WORLD_FREE_MAX;
+  const max    = tier === "premium" ? WORLD_PREMIUM_MAX : tier === "advantage" ? WORLD_ADVANTAGE_MAX : WORLD_FREE_MAX;
 
   // Calculer disponible avec regen
   let available    = local?.available ?? max;
@@ -393,6 +395,19 @@ export async function consumeWorldQuestion(uid: string): Promise<{ allowed: bool
   });
 
   return { allowed: true };
+}
+
+// Activer Advantage (appelé après succès Stripe)
+export async function activateWorldAdvantage(uid: string): Promise<void> {
+  const now = Date.now();
+  const updated: WorldQuotaLocal = { available: WORLD_ADVANTAGE_MAX, lastRegenTime: now, cycleStart: now, tier: "advantage" };
+  setWorldLocal(uid, updated);
+  await supabase.from("world_quotas").upsert({
+    user_id: uid, available: WORLD_ADVANTAGE_MAX, tier: "advantage",
+    last_regen: new Date().toISOString(),
+    cycle_start: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "user_id" });
 }
 
 // Activer Premium (appelé après succès Stripe depuis page)

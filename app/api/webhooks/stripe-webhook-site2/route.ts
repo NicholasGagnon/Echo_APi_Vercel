@@ -33,23 +33,26 @@ export async function POST(req: Request) {
     const metadata = session.metadata;
 
     // ── WORLD PREMIUM ─────────────────────────────────────────────────────────
-    if (metadata?.type === "world_premium") {
-      const userId = metadata.user_id;
-      console.log(`[SITE2 WEBHOOK] World Premium activé pour user ${userId}`);
+    if (metadata?.type === "world_premium" || metadata?.type === "world_advantage") {
+      const userId    = metadata.user_id;
+      const isAdv     = metadata.type === "world_advantage";
+      const available = isAdv ? 100 : 400;
+      const tier      = isAdv ? "advantage" : "premium";
+      console.log(`[SITE2 WEBHOOK] World ${tier} activé pour user ${userId}`);
 
       try {
         await supabaseAdmin.from("world_quotas").upsert({
           user_id:     userId,
-          available:   400,
-          tier:        "premium",
+          available,
+          tier,
           last_regen:  new Date().toISOString(),
           cycle_start: new Date().toISOString(),
           updated_at:  new Date().toISOString(),
         }, { onConflict: "user_id" });
 
-        console.log(`[SITE2 WEBHOOK] World Premium — quota mis à jour pour ${userId}`);
+        console.log(`[SITE2 WEBHOOK] World ${tier} — quota mis à jour pour ${userId}`);
       } catch (err: any) {
-        console.error("[SITE2 WEBHOOK] Erreur World Premium:", err.message);
+        console.error(`[SITE2 WEBHOOK] Erreur World ${tier}:`, err.message);
         return NextResponse.json({ error: "Erreur DB" }, { status: 500 });
       }
 

@@ -20,14 +20,26 @@ export async function POST(req: Request) {
       }
 
       // Prix par devise — tous créés dans Stripe sous le produit "world"
+      // Prix selon plan et devise
+      const plan = body.plan as string;
+      const isAdvantage = plan === "world_advantage";
+
       const WORLD_PRICE_IDS: Record<string, string> = {
-        CAD: process.env.STRIPE_WORLD_PRICE_ID_CAD || process.env.STRIPE_WORLD_PRICE_ID || "",
-        USD: process.env.STRIPE_WORLD_PRICE_ID_USD || process.env.STRIPE_WORLD_PRICE_ID || "",
-        EUR: process.env.STRIPE_WORLD_PRICE_ID_EUR || process.env.STRIPE_WORLD_PRICE_ID || "",
-        CNY: process.env.STRIPE_WORLD_PRICE_ID_CNY || process.env.STRIPE_WORLD_PRICE_ID || "",
+        CAD: process.env.STRIPE_WORLD_PRICE_ID || "",
+        USD: process.env.STRIPE_WORLD_PRICE_ID || "",
+        EUR: process.env.STRIPE_WORLD_PRICE_ID || "",
+        CNY: process.env.STRIPE_WORLD_PRICE_ID || "",
+      };
+      const ADVANTAGE_PRICE_IDS: Record<string, string> = {
+        CAD: process.env.STRIPE_WORLDBASIC_PRICE_ID || "",
+        USD: process.env.STRIPE_WORLDBASIC_PRICE_ID || "",
+        EUR: process.env.STRIPE_WORLDBASIC_PRICE_ID || "",
+        CNY: process.env.STRIPE_WORLDBASIC_PRICE_ID || "",
       };
 
-      const priceId = WORLD_PRICE_IDS[currency] || WORLD_PRICE_IDS.CAD;
+      const priceId = isAdvantage
+        ? (ADVANTAGE_PRICE_IDS[currency] || ADVANTAGE_PRICE_IDS.CAD)
+        : (WORLD_PRICE_IDS[currency] || WORLD_PRICE_IDS.CAD);
 
       if (!priceId) {
         return NextResponse.json({ message: "STRIPE_WORLD_PRICE_ID non configuré" }, { status: 500 });
@@ -42,7 +54,7 @@ export async function POST(req: Request) {
         line_items: [{ price: priceId, quantity: 1 }],
 
         metadata: {
-          type:      "world_premium",
+          type:      isAdvantage ? "world_advantage" : "world_premium",
           user_id:   userId,
           currency,
         },
