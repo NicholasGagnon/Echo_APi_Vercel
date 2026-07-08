@@ -83,19 +83,19 @@ const CONTINENT_SLOGANS: Record<Continent, Record<Lang, string>> = {
 // ── MANTRAS PAR CONTINENT ─────────────────────────────────────────────────────
 const MANTRAS: Record<Continent, Record<Lang, string>> = {
   na: {
-    fr: "Do. Ship. Iterate. Act.",
+    fr: "Fais. Lance. Itère. Agis.",
     en: "Do. Ship. Iterate. Act.",
-    zh: "Do. Ship. Iterate. Act.",
+    zh: "做。发布。迭代。行动。",
   },
   cn: {
     fr: "La constance dépasse le talent. Persévère.",
-    en: "La constance dépasse le talent. Persévère.",
+    en: "Consistency beats talent. Persevere.",
     zh: "持之以恒胜过天赋。坚持。",
   },
   eu: {
     fr: "Comprendre avant d'agir. Réfléchis.",
-    en: "Comprendre avant d'agir. Réfléchis.",
-    zh: "Comprendre avant d'agir. Réfléchis.",
+    en: "Understand before acting. Think.",
+    zh: "行动前先理解。深思。",
   },
 };
 
@@ -131,7 +131,7 @@ const copy = {
     finalVerdict: "Verdict final",
     change: "Changer",
     exit: "Quitter",
-    advancedModel: "Advanced AI Model",
+    advancedModel: "Modèle IA Avancé",
     round: "Tour",
     verdict: "★ VERDICT",
     enterPseudo: "Choisissez un pseudo pour entrer dans l'arène",
@@ -181,7 +181,7 @@ const copy = {
       { label: "创意",     href: "https://echosai.ca/idea" },
       { label: "聊天",    href: "https://echosai.ca/chat" },
       { label: "交流",    href: "https://echosai.ca/2/talk" },
-      { label: "Hall",     href: "https://echosai.ca/1/Hall" },
+      { label: "大厅",     href: "https://echosai.ca/1/Hall" },
     ],
     authTitle: "需要登录",
     authSub: "进入全球辩论",
@@ -203,7 +203,7 @@ const copy = {
     finalVerdict: "最终裁决",
     change: "更改",
     exit: "退出",
-    advancedModel: "Advanced AI Model",
+    advancedModel: "高级AI模型",
     round: "轮",
     verdict: "★ 裁决",
     enterPseudo: "选择昵称进入竞技场",
@@ -309,13 +309,13 @@ export default function WorldPage() {
     CAD: { amount:"9.99",  symbol:"CA$" },
     USD: { amount:"7.99",  symbol:"US$" },
     EUR: { amount:"7.49",  symbol:"€"   },
-    CNY: { amount:"59.00", symbol:"¥"   },
+    CNY: { amount:"59.00", symbol:"¥ CNY" },
   };
   const PRICES_ADVANTAGE: Record<string, {amount:string;symbol:string}> = {
     CAD: { amount:"3.99",  symbol:"CA$" },
     USD: { amount:"2.99",  symbol:"US$" },
     EUR: { amount:"2.79",  symbol:"€"   },
-    CNY: { amount:"21.00", symbol:"¥"   },
+    CNY: { amount:"21.00", symbol:"¥ CNY" },
   };
   const [showSettings, setShowSettings] = useState(false);
   const [authMode, setAuthMode] = useState<"none" | "signin" | "signup">("none");
@@ -1339,7 +1339,11 @@ export default function WorldPage() {
                   <span className="text-zinc-800 text-xs font-mono">· {msg.round}</span>
                   {/* Signature discrète — toujours visible */}
                   <span className="font-mono" style={{ color: c.color, opacity: 0.65, fontSize: "9px", letterSpacing: "0.04em" }}>
-                    🛰️ {msg.continent === "cn" ? "Real AI · China" : msg.continent === "na" ? "Real AI · North America" : "Real AI · Europe"}
+                    🛰️ {lang === "zh"
+                      ? (msg.continent === "cn" ? "真实AI · 中国" : msg.continent === "na" ? "真实AI · 北美洲" : "真实AI · 欧洲")
+                      : lang === "fr"
+                      ? (msg.continent === "cn" ? "Vraie IA · Chine" : msg.continent === "na" ? "Vraie IA · Amérique du Nord" : "Vraie IA · Europe")
+                      : (msg.continent === "cn" ? "Real AI · China" : msg.continent === "na" ? "Real AI · North America" : "Real AI · Europe")}
                   </span>
                   {msg.isFinal && !msg.loading && (
                     <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
@@ -1355,11 +1359,11 @@ export default function WorldPage() {
                       <span className="text-xs animate-pulse" style={{ opacity: 0.4 }}>🛰️</span>
                       <span className="font-mono"
                         style={{ color: c.color, opacity: 0.45, fontSize: "10px", letterSpacing: "0.05em" }}>
-                        {msg.continent === "cn"
-                          ? "Real AI models from China. Connection established."
-                          : msg.continent === "na"
-                          ? "Real AI models from North America. Connection established."
-                          : "Real AI models from Europe. Connection established."}
+                        {lang === "zh"
+                          ? (msg.continent === "cn" ? "真实AI · 来自中国。连接已建立。" : msg.continent === "na" ? "真实AI · 来自北美洲。连接已建立。" : "真实AI · 来自欧洲。连接已建立。")
+                          : lang === "fr"
+                          ? (msg.continent === "cn" ? "Vraie IA · Chine. Connexion établie." : msg.continent === "na" ? "Vraie IA · Amérique du Nord. Connexion établie." : "Vraie IA · Europe. Connexion établie.")
+                          : (msg.continent === "cn" ? "Real AI · China. Connection established." : msg.continent === "na" ? "Real AI · North America. Connection established." : "Real AI · Europe. Connection established.")}
                       </span>
                     </div>
                     {/* Warmup message — seulement sur le 1er message */}
@@ -1451,7 +1455,7 @@ export default function WorldPage() {
               {/* PREMIUM — original */}
               <div className="flex flex-col rounded-xl p-4 text-center"
                 style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
-                <div className="text-amber-400 font-black text-sm mb-1">Premium</div>
+                <div className="text-amber-400 font-black text-sm mb-1">{lang === "zh" ? "高级版" : "Premium"}</div>
                 <div className="text-white font-black text-xl mb-0.5">
                   {PRICES[currency].symbol}{PRICES[currency].amount}
                 </div>
