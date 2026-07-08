@@ -932,15 +932,18 @@ export default function WorldPage() {
             {lang === "fr" ? "Alliance ou Chaos ?" : lang === "en" ? "Alliance or Chaos?" : "联盟还是混沌？"}
           </span>
         </div>
-        <p className="text-white font-black text-center px-6 mt-1"
-          style={{
-            fontSize: "clamp(1rem, 2vw, 1.4rem)",
-            textShadow: "0 0 20px rgba(255,255,255,0.15), 0 2px 10px rgba(0,0,0,0.9)",
-            opacity: 0.7,
-          }}>
-          {t.continentTitle}
-        </p>
-        <p className="text-zinc-500 text-xs mt-2 font-mono">{t.continentSub}</p>
+        {/* Bas — choisissez votre continent */}
+        <div className="text-center px-6 pb-2">
+          <p className="text-white font-black"
+            style={{
+              fontSize: "clamp(0.8rem, 1.5vw, 1.1rem)",
+              textShadow: "0 0 20px rgba(255,255,255,0.15), 0 2px 10px rgba(0,0,0,0.9)",
+              opacity: 0.9,
+            }}>
+            {t.continentTitle}
+          </p>
+          <p className="text-zinc-500 text-xs mt-1 font-mono">{t.continentSub}</p>
+        </div>
       </div>
 
       {/* 3 immenses boutons plein écran */}
