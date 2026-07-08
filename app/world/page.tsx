@@ -299,7 +299,7 @@ export default function WorldPage() {
   // ── QUOTA ────────────────────────────────────────────────────────────────────
   const [worldAvailable, setWorldAvailable] = useState(3);
   const [worldMax, setWorldMax]             = useState(3);
-  const [worldTier, setWorldTier]           = useState<"free"|"premium">("free");
+  const [worldTier, setWorldTier]           = useState<"free"|"advantage"|"premium">("free");
   const [showQuotaPopup, setShowQuotaPopup] = useState(false);
   const [nextRegenIn, setNextRegenIn]       = useState(0);
   const [currency, setCurrency]             = useState("CAD");
@@ -311,7 +311,20 @@ export default function WorldPage() {
     EUR: { amount:"7.49",  symbol:"€"   },
     CNY: { amount:"59.00", symbol:"¥"   },
   };
+  const PRICES_ADVANTAGE: Record<string, {amount:string;symbol:string}> = {
+    CAD: { amount:"3.99",  symbol:"CA$" },
+    USD: { amount:"2.99",  symbol:"US$" },
+    EUR: { amount:"2.79",  symbol:"€"   },
+    CNY: { amount:"21.00", symbol:"¥"   },
+  };
   const [showSettings, setShowSettings] = useState(false);
+  const [authMode, setAuthMode] = useState<"none" | "signin" | "signup">("none");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+  const [authLoading2, setAuthLoading2] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const pseudoRef   = useRef<HTMLInputElement>(null);
@@ -396,6 +409,50 @@ export default function WorldPage() {
     bottomRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "instant" });
   }, [messages]);
 
+  // ── Email auth handlers ──────────────────────────────────────────────────────
+  const startResend = () => {
+    setResendCountdown(30);
+    const iv = setInterval(() => setResendCountdown(p => { if (p <= 1) { clearInterval(iv); return 0; } return p - 1; }), 1000);
+  };
+
+  const handleEmailSignIn = async () => {
+    setAuthError(null);
+    if (!authEmail.trim() || !authPassword.trim()) { setAuthError(lang === "fr" ? "Courriel et mot de passe requis" : "Email and password required"); return; }
+    setAuthLoading2(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
+    setAuthLoading2(false);
+    if (error) { setAuthError(error.message); }
+  };
+
+  const handleEmailSignUp = async () => {
+    setAuthError(null);
+    if (!authEmail.trim() || !authPassword.trim()) { setAuthError(lang === "fr" ? "Courriel et mot de passe requis" : "Email and password required"); return; }
+    setAuthLoading2(true);
+    const trimmed = authEmail.trim();
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmed, password: authPassword,
+      options: { emailRedirectTo: `${window.location.origin}/world` },
+    });
+    setAuthLoading2(false);
+    if (error) {
+      if (error.message.includes("already") || error.message.includes("registered")) {
+        setAuthError(lang === "fr" ? "Compte existant — connectez-vous." : "Account exists — sign in instead.");
+      } else { setAuthError(error.message); }
+    } else {
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setAuthError(lang === "fr" ? "Compte existant — connectez-vous." : "Account exists — sign in."); return;
+      }
+      setAuthSuccess(lang === "fr" ? "Lien envoyé ! Vérifiez votre boîte." : "Link sent! Check your inbox.");
+      startResend();
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCountdown > 0) return;
+    await supabase.auth.resend({ type: "signup", email: authEmail.trim(), options: { emailRedirectTo: `${window.location.origin}/world` } });
+    startResend();
+  };
+
   // ── Auth ──────────────────────────────────────────────────────────────────────
   const handleGoogle = async () => {
     setAuthLoading(true);
@@ -419,9 +476,9 @@ export default function WorldPage() {
       const { data } = await supabase.from("world_quotas")
         .select("*").eq("user_id", uid).maybeSingle();
       if (data) {
-        const tier = (data.tier || "free") as "free"|"premium";
+        const tier = (data.tier || "free") as "free"|"advantage"|"premium";
         setWorldTier(tier);
-        const max = tier === "premium" ? 400 : 3;
+        const max = tier === "premium" ? 400 : tier === "advantage" ? 100 : 3;
         setWorldMax(max);
         if (tier === "free") {
           const now = Date.now();
@@ -430,7 +487,7 @@ export default function WorldPage() {
           const available = Math.min(3, (data.available || 0) + recovered);
           setWorldAvailable(available);
         } else {
-          setWorldAvailable(data.available || 400);
+          setWorldAvailable(data.available || (tier === "advantage" ? 100 : 400));
         }
       }
     } catch {}
@@ -438,11 +495,12 @@ export default function WorldPage() {
 
   const consumeWorldQuota = async (): Promise<boolean> => {
     if (!user) return false;
-    if (worldTier === "premium") {
+    if (worldTier === "premium" || worldTier === "advantage") {
       const newVal = Math.max(0, worldAvailable - 1);
+      if (newVal < 0) { setShowQuotaPopup(true); return false; }
       setWorldAvailable(newVal);
       await supabase.from("world_quotas").upsert({
-        user_id: user.id, available: newVal, tier: "premium",
+        user_id: user.id, available: newVal, tier: worldTier,
         last_regen: new Date().toISOString(), cycle_start: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
@@ -726,32 +784,90 @@ export default function WorldPage() {
               className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 hover:border-cyan-500/40 rounded-xl transition-all duration-200 group disabled:opacity-50">
               <GoogleLogo />
               <span className="text-white text-sm font-medium flex-1 text-left">{t.google}</span>
-              <span className="text-zinc-600 group-hover:text-cyan-500 text-xs transition-colors">→</span>
             </button>
 
             <button onClick={handleMicrosoft} disabled={authLoading}
               className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 hover:border-cyan-500/40 rounded-xl transition-all duration-200 group disabled:opacity-50">
               <MicrosoftLogo />
               <span className="text-white text-sm font-medium flex-1 text-left">{t.microsoft}</span>
-              <span className="text-zinc-600 group-hover:text-cyan-500 text-xs transition-colors">→</span>
             </button>
 
-            <div className="flex gap-2 pt-1">
-              <Link href="/account"
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-xl transition-all text-xs text-zinc-400 hover:text-white font-medium">
-                ✉ {t.email}
-              </Link>
-              <Link href="/account"
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-500/20 hover:border-cyan-500/50 rounded-xl transition-all text-xs text-cyan-500 font-medium">
-                + {t.signup}
-              </Link>
-            </div>
+            {/* Boutons toggle signin/signup */}
+            {authMode === "none" && (
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => { setAuthMode("signin"); setAuthError(null); setAuthSuccess(null); }}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-xl transition-all text-xs text-zinc-400 hover:text-white font-medium">
+                  ✉ {t.email}
+                </button>
+                <button onClick={() => { setAuthMode("signup"); setAuthError(null); setAuthSuccess(null); }}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-500/20 hover:border-cyan-500/50 rounded-xl transition-all text-xs text-cyan-500 font-medium">
+                  {t.signup}
+                </button>
+              </div>
+            )}
+
+            {/* Formulaire email inline */}
+            {authMode !== "none" && (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-zinc-400 text-xs font-mono">
+                    {authMode === "signin"
+                      ? (lang === "fr" ? "Connexion" : "Sign in")
+                      : (lang === "fr" ? "Créer un compte" : "Create account")}
+                  </span>
+                  <button onClick={() => { setAuthMode("none"); setAuthError(null); setAuthSuccess(null); }}
+                    className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors">✕</button>
+                </div>
+                <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)}
+                  placeholder={lang === "fr" ? "Courriel" : "Email"}
+                  className="w-full px-3 py-2.5 bg-zinc-900/80 border border-zinc-700 focus:border-cyan-500/50 rounded-xl text-sm text-white placeholder-zinc-600 outline-none transition-colors" />
+                <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") authMode === "signin" ? handleEmailSignIn() : handleEmailSignUp(); }}
+                  placeholder={lang === "fr" ? "Mot de passe (min 6 car.)" : "Password (min 6 chars)"}
+                  className="w-full px-3 py-2.5 bg-zinc-900/80 border border-zinc-700 focus:border-cyan-500/50 rounded-xl text-sm text-white placeholder-zinc-600 outline-none transition-colors" />
+                {authError && <p className="text-red-400 text-xs font-mono px-1">{authError}</p>}
+                {authSuccess && (
+                  <div className="space-y-2">
+                    <p className="text-emerald-400 text-xs font-mono px-1">✓ {authSuccess}</p>
+                    <p className="text-zinc-600 text-xs px-1">
+                      {lang === "fr" ? "📱 Gmail/Outlook: confirmez sur votre téléphone d'abord." : "📱 Gmail/Outlook: confirm on your phone first."}
+                    </p>
+                    <button onClick={handleResend} disabled={resendCountdown > 0}
+                      className="w-full py-2 rounded-xl text-xs font-mono border transition-all disabled:opacity-40"
+                      style={{ borderColor: "#10b981", color: "#10b981" }}>
+                      {resendCountdown > 0
+                        ? (lang === "fr" ? `Renvoyer dans ${resendCountdown}s` : `Resend in ${resendCountdown}s`)
+                        : (lang === "fr" ? "↺ Renvoyer le lien" : "↺ Resend link")}
+                    </button>
+                  </div>
+                )}
+                {!authSuccess && (
+                  <button onClick={authMode === "signin" ? handleEmailSignIn : handleEmailSignUp}
+                    disabled={authLoading2}
+                    className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-50"
+                    style={{ background: authMode === "signin" ? "#3f3f46" : "#0891b2" }}>
+                    {authLoading2 ? "..." : authMode === "signin"
+                      ? (lang === "fr" ? "Se connecter" : "Sign in")
+                      : (lang === "fr" ? "Créer mon compte" : "Create account")}
+                  </button>
+                )}
+                {authMode === "signin" && (
+                  <button onClick={() => { setAuthMode("signup"); setAuthError(null); }}
+                    className="w-full text-center text-zinc-600 hover:text-zinc-400 text-xs transition-colors">
+                    {lang === "fr" ? "Pas de compte ? Créer →" : "No account? Create →"}
+                  </button>
+                )}
+                {authMode === "signup" && (
+                  <button onClick={() => { setAuthMode("signin"); setAuthError(null); }}
+                    className="w-full text-center text-zinc-600 hover:text-zinc-400 text-xs transition-colors">
+                    {lang === "fr" ? "Déjà un compte ? Se connecter →" : "Already have one? Sign in →"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          <button onClick={() => setStage("language")}
-            className="w-full mt-3 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors text-center">
-            ← {t.change}
-          </button>
+
         </div>
       </div>
     </div>
@@ -990,7 +1106,7 @@ export default function WorldPage() {
           <span className="text-white font-black font-mono text-sm leading-none">WORLD</span>
 
           {/* Nav links — desktop seulement, cachés Premium */}
-          {worldTier === "free" && (
+          {(worldTier === "free") && (
             <div className="hidden md:flex items-center gap-0.5 ml-1">
               {t.navLinks.map((link: {label:string;href:string}) => (
                 <a key={link.href} href={link.href} target="_blank" rel="noopener noreferrer"
@@ -1025,7 +1141,7 @@ export default function WorldPage() {
             </span>
           )}
 
-          {/* Bouton Premium / Active */}
+          {/* Bouton Premium / Advantage / Active */}
           {worldTier === "free" ? (
             <button onClick={() => setShowQuotaPopup(true)}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono uppercase tracking-wider transition-all shrink-0"
@@ -1036,6 +1152,16 @@ export default function WorldPage() {
               }}>
               ★ Premium
             </button>
+          ) : worldTier === "advantage" ? (
+            <span className="flex items-center gap-1 text-xs font-bold font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg shrink-0"
+              style={{
+                background: "linear-gradient(135deg, #3b82f630, #2563eb 40%)",
+                border: "1px solid #3b82f670",
+                color: "#93c5fd",
+                boxShadow: "0 0 8px rgba(59,130,246,0.25)",
+              }}>
+              ✓ {lang === "fr" ? "Avantage" : lang === "en" ? "Advantage" : "优势"}
+            </span>
           ) : (
             <span className="flex items-center gap-1 text-xs font-bold font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg shrink-0"
               style={{
@@ -1044,7 +1170,7 @@ export default function WorldPage() {
                 color: "#6ee7b7",
                 boxShadow: "0 0 8px rgba(16,185,129,0.25)",
               }}>
-              ✓ Active
+              ✓ Premium
             </span>
           )}
 
@@ -1272,66 +1398,79 @@ export default function WorldPage() {
               <span className="text-zinc-500 text-xs font-mono uppercase tracking-widest">WORLD</span>
             </div>
 
+            {/* Message limite ou upgrade */}
             {worldAvailable === 0 ? (
-              <>
-                <div className="text-3xl mb-3">⏳</div>
-                <h3 className="text-white font-black text-lg mb-1">
+              <div className="mb-4">
+                <div className="text-3xl mb-2">⏳</div>
+                <h3 className="text-white font-black text-base mb-1">
                   {lang === "fr" ? "Limite atteinte" : lang === "en" ? "Limit reached" : "已达上限"}
                 </h3>
-                <p className="text-zinc-400 text-sm mb-4">
-                  {lang === "fr"
-                    ? `Reviens dans ${formatRegen(nextRegenIn)} pour une question de plus.`
-                    : lang === "en"
-                    ? `Come back in ${formatRegen(nextRegenIn)} for another question.`
-                    : `${formatRegen(nextRegenIn)}后再回来提问。`}
+                <p className="text-zinc-500 text-xs">
+                  {lang === "fr" ? `Reviens dans ${formatRegen(nextRegenIn)}` : lang === "en" ? `Come back in ${formatRegen(nextRegenIn)}` : `${formatRegen(nextRegenIn)}后再来`}
                 </p>
-              </>
+              </div>
             ) : (
-              <>
-                <div className="text-3xl mb-3">★</div>
-                <h3 className="text-white font-black text-lg mb-1">World Premium</h3>
-                <p className="text-zinc-400 text-sm mb-4">
-                  {lang === "fr" ? "400 questions par mois. Illimité." : lang === "en" ? "400 questions per month. Unlimited." : "每月400个问题。无限制。"}
-                </p>
-              </>
+              <p className="text-zinc-400 text-sm mb-4">
+                {lang === "fr" ? "Passez à un plan supérieur" : lang === "en" ? "Upgrade your plan" : "升级您的计划"}
+              </p>
             )}
 
-            {/* Prix */}
-            <div className="bg-zinc-900 rounded-xl p-4 mb-4">
-              <div className="text-2xl font-black text-white mb-0.5">
-                {PRICES[currency].symbol}{PRICES[currency].amount}
-                <span className="text-sm font-normal text-zinc-500">
-                  {lang === "fr" ? "/mois" : lang === "en" ? "/month" : "/月"}
-                </span>
+            {/* 2 colonnes — Avantage | Premium */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {/* AVANTAGE */}
+              <div className="flex flex-col rounded-xl p-4 text-center"
+                style={{ background: "#1e3a5f", border: "1px solid #3b82f660" }}>
+                <div className="text-blue-400 font-black text-sm mb-1">
+                  {lang === "fr" ? "Avantage" : lang === "en" ? "Advantage" : "优势"}
+                </div>
+                <div className="text-white font-black text-xl mb-0.5">
+                  {PRICES_ADVANTAGE[currency].symbol}{PRICES_ADVANTAGE[currency].amount}
+                </div>
+                <div className="text-zinc-500 text-xs mb-3">
+                  100 {lang === "fr" ? "questions/mois" : lang === "en" ? "q/month" : "问题/月"}
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!user) return;
+                    const res = await fetch("/api/stripe/create-checkout-site2", {
+                      method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ plan: "world_advantage", currency, userId: user.id, userEmail: user.email }),
+                    });
+                    const d = await res.json();
+                    if (d.url) window.location.href = d.url;
+                  }}
+                  className="w-full py-2 rounded-lg font-bold text-xs text-white transition-all mt-auto"
+                  style={{ background: "linear-gradient(135deg, #3b82f6, #2563eb)", boxShadow: "0 0 10px rgba(59,130,246,0.3)" }}>
+                  {lang === "fr" ? "Choisir" : lang === "en" ? "Select" : "选择"}
+                </button>
               </div>
-              <p className="text-zinc-600 text-xs">
-                {lang === "fr" ? "400 questions · Annulation à tout moment" : lang === "en" ? "400 questions · Cancel anytime" : "400次提问 · 随时取消"}
-              </p>
-            </div>
 
-            <button
-              onClick={async () => {
-                if (!user) return;
-                const res = await fetch("/api/stripe/create-checkout-site2", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    plan: "world",
-                    currency,
-                    userId: user.id,
-                    userEmail: user.email,
-                  }),
-                });
-                const data = await res.json();
-                if (data.url) window.location.href = data.url;
-              }}
-              className="w-full py-3 rounded-xl font-black text-sm uppercase tracking-wider text-black transition-all mb-2"
-              style={{
-                background: "linear-gradient(135deg, #f59e0b, #ef4444)",
-                boxShadow: "0 0 20px rgba(245,158,11,0.3)",
-              }}>
-              {lang === "fr" ? "Passer à Premium →" : lang === "en" ? "Go Premium →" : "升级Premium →"}
-            </button>
+              {/* PREMIUM */}
+              <div className="flex flex-col rounded-xl p-4 text-center"
+                style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
+                <div className="text-amber-400 font-black text-sm mb-1">Premium</div>
+                <div className="text-white font-black text-xl mb-0.5">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}
+                </div>
+                <div className="text-zinc-500 text-xs mb-3">
+                  400 {lang === "fr" ? "questions/mois" : lang === "en" ? "q/month" : "问题/月"}
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!user) return;
+                    const res = await fetch("/api/stripe/create-checkout-site2", {
+                      method: "POST", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ plan: "world", currency, userId: user.id, userEmail: user.email }),
+                    });
+                    const d = await res.json();
+                    if (d.url) window.location.href = d.url;
+                  }}
+                  className="w-full py-2 rounded-lg font-bold text-xs text-black transition-all mt-auto"
+                  style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)", boxShadow: "0 0 10px rgba(245,158,11,0.3)" }}>
+                  {lang === "fr" ? "Choisir" : lang === "en" ? "Select" : "选择"}
+                </button>
+              </div>
+            </div>
 
             <button onClick={() => setShowQuotaPopup(false)}
               className="w-full py-2 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors">
