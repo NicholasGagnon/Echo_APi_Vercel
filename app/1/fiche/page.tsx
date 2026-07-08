@@ -53,10 +53,12 @@ const TYPE_COLORS: Record<string, string> = {
 const generateKey = (): string => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const nums = "0123456789";
-  const letter1 = chars[Math.floor(Math.random() * chars.length)];
-  const num = nums[Math.floor(Math.random() * nums.length)];
-  const letter2 = chars[Math.floor(Math.random() * chars.length)];
-  return `${letter1}${num}${letter2}`;
+  const l1 = chars[Math.floor(Math.random() * chars.length)];
+  const n1 = nums[Math.floor(Math.random() * nums.length)];
+  const l2 = chars[Math.floor(Math.random() * chars.length)];
+  const n2 = nums[Math.floor(Math.random() * nums.length)];
+  const l3 = chars[Math.floor(Math.random() * chars.length)];
+  return `${l1}${n1}${l2}${n2}${l3}`;
 };
 
 export default function FichePage() {
@@ -86,14 +88,20 @@ export default function FichePage() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
+      // Champs publics seulement — jamais les coords privées pour tout le monde
+      const PUBLIC_FIELDS = "id,user_id,nom_projet,type_projet,type_profil,description,tech,cherche,engagement,temps,distance,avancement,idee,produit,utilisateurs,revenus,objectif_court,objectif_moyen,objectif_long,photo_urls,langue,likes,interets,created_at,contacts_visibles,creator_email";
+
       const { data, error } = await supabase
         .from("fiches")
-        .select("*")
+        .select(PUBLIC_FIELDS)
         .order("created_at", { ascending: false });
       if (!error && data) {
         const fiches_with_keys = data.map((f: any) => ({
           ...f,
           key: f.key || generateKey(),
+          // Champs privés vides par défaut — chargés séparément si autorisé
+          email_prive: null, discord_prive: null, github_prive: null,
+          linkedin_prive: null, site_web_prive: null, telephone_prive: null,
         }));
         setFiches(fiches_with_keys as Fiche[]);
       }
@@ -112,10 +120,34 @@ export default function FichePage() {
         .from("tunnels")
         .select("fiche_id")
         .eq("acheteur_id", userId);
-      if (data) setUnlockedIds(new Set(data.map((t: any) => t.fiche_id)));
+      if (data) {
+        const ids = new Set(data.map((t: any) => t.fiche_id as string));
+        setUnlockedIds(ids);
+        // Charger les champs privés pour les fiches débloquées + les siennes
+        loadPrivateFields(userId, ids);
+      }
     };
     checkUnlocks();
   }, [userId]);
+
+  const loadPrivateFields = async (uid: string, unlockedSet: Set<string>) => {
+    // Charger les champs privés pour : mes fiches + fiches débloquées
+    const fichesACharger = fiches.filter(f => f.user_id === uid || unlockedSet.has(f.id));
+    if (fichesACharger.length === 0) return;
+
+    const ids = fichesACharger.map(f => f.id);
+    const { data } = await supabase
+      .from("fiches")
+      .select("id,key,email_prive,discord_prive,github_prive,linkedin_prive,site_web_prive,telephone_prive")
+      .in("id", ids);
+
+    if (data) {
+      setFiches(prev => prev.map(f => {
+        const priv = data.find((d: any) => d.id === f.id);
+        return priv ? { ...f, ...priv } : f;
+      }));
+    }
+  };
 
   const getOutils = (fiche: Fiche) => {
     if (!fiche.tech) return [];
@@ -142,7 +174,9 @@ export default function FichePage() {
       notifLike: "Notification d'intérêt envoyée",
       notifInteret: "Notification envoyée — très intéressé",
       myFiche: "C'est ma fiche",
-      manage: "Gérer / supprimer",
+      manage: "Supprimer",
+      modifier: "Modifier",
+      sendKey: "Envoyer ma clé",
       ownFiche: "Votre fiche",
       regulation: "⚠️ Règlement: Toute info fausse mènera à un bannissement.",
     },
@@ -158,7 +192,9 @@ export default function FichePage() {
       notifLike: "Interest notification sent",
       notifInteret: "Notification sent — very interested",
       myFiche: "My listing",
-      manage: "Manage / delete",
+      manage: "Delete",
+      modifier: "Edit",
+      sendKey: "Send my key",
       ownFiche: "Your listing",
       regulation: "⚠️ Policy: Any false info will result in ban.",
     },
@@ -225,6 +261,43 @@ export default function FichePage() {
   const [keyErrors, setKeyErrors] = useState<Record<string, string>>({});
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
 
+  // ── CLÉ PERDUE ────────────────────────────────────────────────────────────
+  const [lostKeyFicheId, setLostKeyFicheId] = useState<string | null>(null);
+  const [lostKeyEmail, setLostKeyEmail] = useState("");
+  const [lostKeySending, setLostKeySending] = useState(false);
+  const [lostKeyMsg, setLostKeyMsg] = useState<string | null>(null);
+
+  const handleLostKey = async () => {
+    if (!lostKeyFicheId || !lostKeyEmail.trim()) return;
+    setLostKeySending(true);
+    setLostKeyMsg(null);
+    try {
+      const fiche = fiches.find(f => f.id === lostKeyFicheId);
+      if (!fiche) throw new Error("Fiche introuvable");
+      const res = await fetch("/api/notifications/cle-perdue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fiche_id: fiche.id,
+          fiche_nom: fiche.nom_projet,
+          fiche_key: fiche.key,
+          email_demandeur: lostKeyEmail.trim(),
+          creator_email: fiche.creator_email,
+        }),
+      });
+      if (res.ok) {
+        setLostKeyMsg(lang === "fr" ? "✅ Email envoyé ! Vérifie ta boîte mail." : "✅ Email sent! Check your inbox.");
+        setTimeout(() => { setLostKeyFicheId(null); setLostKeyEmail(""); setLostKeyMsg(null); }, 3000);
+      } else {
+        setLostKeyMsg(lang === "fr" ? "❌ Erreur d'envoi." : "❌ Send error.");
+      }
+    } catch {
+      setLostKeyMsg(lang === "fr" ? "❌ Erreur réseau." : "❌ Network error.");
+    } finally {
+      setLostKeySending(false);
+    }
+  };
+
   const handleVerifyKey = (fiche: Fiche) => {
     const entered = (keyInputs[fiche.id] || "").trim();
     if (!entered) {
@@ -244,6 +317,35 @@ export default function FichePage() {
   };
 
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
+  const [authEmailMode, setAuthEmailMode] = useState<"signin"|"signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState<string|null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string|null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const handleGoogle = async () => {
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/fiche`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+  };
+  const handleMicrosoft = async () => {
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/fiche`, scopes: "openid profile email User.Read" } });
+  };
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault(); setAuthError(null); setAuthSuccess(null); setAuthLoading(true);
+    if (authEmailMode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
+      if (error) setAuthError(error.message);
+      else setShowAuthPopup(false);
+    } else {
+      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/1/fiche` } });
+      if (error) setAuthError(error.message);
+      else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError("Compte existant.");
+      else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
+    }
+    setAuthLoading(false);
+  };
+  const handleLogout = async () => { await supabase.auth.signOut(); setUserId(null); setUserEmail(null); };
 
   const handleAcheter = async (id: string) => {
     if (!userId) {
@@ -347,6 +449,22 @@ export default function FichePage() {
           >
             {lang === "fr" ? "EN" : "FR"}
           </button>
+          {userId ? (
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                {userEmail}
+              </span>
+              <button onClick={handleLogout} className="text-xs text-zinc-500 hover:text-red-400 transition-colors">
+                ↩
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAuthPopup(true)}
+              className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 rounded-full hover:bg-cyan-500/20 transition-colors">
+              {lang === "fr" ? "Se connecter" : "Sign in"}
+            </button>
+          )}
         </div>
       </nav>
 
@@ -705,6 +823,13 @@ export default function FichePage() {
                           </button>
                         </div>
                         {keyErrors[fiche.id] && <p className="text-xs text-red-500">{keyErrors[fiche.id]}</p>}
+                        <button
+                          type="button"
+                          onClick={() => { setLostKeyFicheId(fiche.id); setLostKeyEmail(""); setLostKeyMsg(null); }}
+                          className="text-xs text-zinc-400 hover:text-cyan-400 transition-colors mt-1 underline underline-offset-2"
+                        >
+                          {lang === "fr" ? "Clé perdue ?" : "Lost key?"}
+                        </button>
                       </div>
                     )
                   ) : (
@@ -784,10 +909,25 @@ export default function FichePage() {
                           setDeleteModalId(fiche.id);
                           setDeleteError(null);
                         }}
-                        className="text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors"
+                        className="text-sm font-semibold text-red-500 hover:text-red-400 transition-colors"
                       >
                         {dict.manage} →
                       </button>
+                      <span className="text-zinc-600">·</span>
+                      <button
+                        type="button"
+                        onClick={() => { setLostKeyFicheId(fiche.id); setLostKeyEmail(userEmail || ""); setLostKeyMsg(null); }}
+                        className="text-sm font-semibold text-amber-500 hover:text-amber-400 transition-colors"
+                      >
+                        🔑 {dict.sendKey}
+                      </button>
+                      <span className="text-zinc-600">·</span>
+                      <Link
+                        href={`/1/form?edit=${fiche.id}`}
+                        className="text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 transition-colors"
+                      >
+                        ✏️ {dict.modifier}
+                      </Link>
                     </div>
                   </div>
                 )}
@@ -797,6 +937,107 @@ export default function FichePage() {
       </div>
 
       {/* ── MODAL CONNEXION REQUISE ── */}
+      {/* ── POPUP AUTH ──────────────────────────────────────────────────────── */}
+      {showAuthPopup && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowAuthPopup(false)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-zinc-200 dark:border-zinc-700"
+            onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-5">
+              <div className="text-3xl mb-2">🔐</div>
+              <h3 className="font-bold text-base dark:text-white">
+                {lang === "fr" ? "Connexion" : "Sign in"}
+              </h3>
+              <p className="text-xs text-zinc-500 mt-1">
+                {lang === "fr" ? "Accédez à votre fiche et vos contacts." : "Access your listing and contacts."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 mb-4">
+              <button onClick={handleGoogle}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:border-zinc-400 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
+                Google
+              </button>
+              <button onClick={handleMicrosoft}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-800 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
+                Microsoft
+              </button>
+            </div>
+            <div className="relative mb-4">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-700"/></div>
+              <div className="relative flex justify-center"><span className="bg-white dark:bg-zinc-900 px-2 text-xs text-zinc-400">{lang === "fr" ? "ou par email" : "or by email"}</span></div>
+            </div>
+            <form onSubmit={handleEmailAuth} className="flex flex-col gap-2">
+              <input type="email" placeholder={lang === "fr" ? "ton@email.com" : "your@email.com"} value={authEmail} onChange={e => setAuthEmail(e.target.value)} required
+                className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
+              <input type="password" placeholder="••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required
+                className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
+              {authError && <p className="text-xs text-red-400">{authError}</p>}
+              {authSuccess && <p className="text-xs text-emerald-400">{authSuccess}</p>}
+              <button type="submit" disabled={authLoading}
+                className="w-full py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+                {authLoading ? "…" : authEmailMode === "signin" ? (lang === "fr" ? "Se connecter" : "Sign in") : (lang === "fr" ? "Créer un compte" : "Create account")}
+              </button>
+            </form>
+            <button onClick={() => { setAuthEmailMode(m => m === "signin" ? "signup" : "signin"); setAuthError(null); setAuthSuccess(null); }}
+              className="w-full mt-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors underline underline-offset-2">
+              {authEmailMode === "signin" ? (lang === "fr" ? "Pas de compte ? Créer" : "No account? Create one") : (lang === "fr" ? "Déjà un compte ?" : "Already have an account?")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL CLÉ PERDUE ──────────────────────────────────────────────────── */}
+      {lostKeyFicheId && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setLostKeyFicheId(null)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-zinc-200 dark:border-zinc-700"
+            onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-4">
+              <div className="text-3xl mb-2">🔑</div>
+              <h3 className="font-bold text-base dark:text-white">
+                {lang === "fr" ? "Retrouver ma clé" : "Recover my key"}
+              </h3>
+              <p className="text-xs text-zinc-500 mt-1">
+                {lang === "fr"
+                  ? "Entre l'adresse email utilisée pour créer ta fiche. Ta clé te sera envoyée."
+                  : "Enter the email used to create your listing. Your key will be sent to you."}
+              </p>
+            </div>
+            <input
+              type="email"
+              value={lostKeyEmail}
+              onChange={e => setLostKeyEmail(e.target.value)}
+              placeholder={lang === "fr" ? "ton@email.com" : "your@email.com"}
+              className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white mb-3 outline-none focus:border-cyan-500"
+            />
+            {lostKeyMsg && (
+              <p className={`text-xs mb-3 text-center ${lostKeyMsg.startsWith("✅") ? "text-green-500" : "text-red-400"}`}>
+                {lostKeyMsg}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLostKeyFicheId(null)}
+                className="flex-1 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-500 hover:border-zinc-400 transition-colors"
+              >
+                {lang === "fr" ? "Annuler" : "Cancel"}
+              </button>
+              <button
+                onClick={handleLostKey}
+                disabled={lostKeySending || !lostKeyEmail.trim()}
+                className="flex-1 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {lostKeySending
+                  ? (lang === "fr" ? "Envoi…" : "Sending…")
+                  : (lang === "fr" ? "Envoyer ma clé" : "Send my key")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showLoginModal && (
         <div
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
@@ -216,6 +217,117 @@ export default function InscriptionPage() {
   const [uploading, setUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // ── AUTH ─────────────────────────────────────────────────────────────────
+  const [userId, setUserId]   = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin"|"signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState<string|null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string|null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id || null);
+      setUserEmail(session?.user?.email || null);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUserId(session?.user?.id || null);
+      setUserEmail(session?.user?.email || null);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const handleGoogle = async () => {
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+  };
+  const handleMicrosoft = async () => {
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email User.Read" } });
+  };
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault(); setAuthError(null); setAuthSuccess(null); setAuthLoading(true);
+    if (authMode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
+      if (error) setAuthError(error.message); else setShowAuthPopup(false);
+    } else {
+      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/1/form` } });
+      if (error) setAuthError(error.message);
+      else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError("Compte existant.");
+      else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
+    }
+    setAuthLoading(false);
+  };
+  const handleLogout = async () => { await supabase.auth.signOut(); setUserId(null); setUserEmail(null); setMesfiches([]); };
+
+  // ── MES FICHES ───────────────────────────────────────────────────────────
+  const [mesFiches, setMesfiches] = useState<{id:string; nom_projet:string}[]>([]);
+  const [ficheActive, setFicheActive] = useState<string|null>(null);
+  const [showFichesMenu, setShowFichesMenu] = useState(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (!userId) return;
+    supabase.from("fiches")
+      .select("id, nom_projet")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { if (data) setMesfiches(data); });
+  }, [userId]);
+
+  // Charger fiche depuis ?edit=id ou depuis sélection menu
+  const chargerFiche = async (id: string) => {
+    const { data } = await supabase
+      .from("fiches")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (!data) return;
+    setFicheActive(id);
+    setStep(1);
+    setMyKey(null);
+    setError(null);
+    setForm({
+      nom_projet: data.nom_projet || "",
+      description: data.description || "",
+      type_projet: data.type_projet || "",
+      type_profil: data.type_profil || "",
+      idee: data.idee || "",
+      avancement: data.avancement || "",
+      produit: data.produit || "",
+      utilisateurs: data.utilisateurs || "",
+      revenus: data.revenus || "",
+      objectif_court: data.objectif_court || "",
+      objectif_moyen: data.objectif_moyen || "",
+      objectif_long: data.objectif_long || "",
+      cherche: data.cherche || [],
+      temps: data.temps || "",
+      distance: data.distance || "",
+      engagement: data.engagement || "",
+      tech: data.tech || { backend:[], frontend:[], paiement:[], ia:[], infra:[], automatisation:[] },
+      nom_complet: data.nom_complet || "",
+      pays: data.pays || "",
+      langue: data.langue || "",
+      photo_url: data.photo_urls?.[0] || "",
+      contacts_visibles: data.contacts_visibles || ["Email"],
+      email: data.email_prive || "",
+      discord: data.discord_prive || "",
+      github: data.github_prive || "",
+      linkedin: data.linkedin_prive || "",
+      site_web: data.site_web_prive || "",
+      telephone: data.telephone_prive || "",
+    });
+    setShowFichesMenu(false);
+  };
+
+  // Charger depuis ?edit=id au montage
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (editId && userId) chargerFiche(editId);
+  }, [searchParams, userId]);
+
   const set     = (key: keyof FormData, value: any) => setForm(f => ({ ...f, [key]: value }));
   const setTech = (cat: string, vals: string[])     => setForm(f => ({ ...f, tech: { ...f.tech, [cat]: vals } }));
 
@@ -253,15 +365,17 @@ export default function InscriptionPage() {
       setError(t("email_invalid", lang)); return;
     }
 
-    // Vérifier que l'email n'est pas déjà utilisé
-    const { data: existing } = await supabase
-      .from("fiches")
-      .select("id")
-      .eq("email_prive", form.email.trim())
-      .maybeSingle();
-    if (existing) {
-      setError(lang === "fr" ? "Ce courriel a déjà une fiche associée." : "This email already has a listing.");
-      return;
+    // Vérifier que l'email n'est pas déjà utilisé (seulement en création)
+    if (!ficheActive) {
+      const { data: existing } = await supabase
+        .from("fiches")
+        .select("id")
+        .eq("email_prive", form.email.trim())
+        .maybeSingle();
+      if (existing) {
+        setError(lang === "fr" ? "Ce courriel a déjà une fiche associée." : "This email already has a listing.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -271,6 +385,27 @@ export default function InscriptionPage() {
       const generatedKey = keyData as string;
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || null;
+
+      if (ficheActive) {
+        // UPDATE fiche existante
+        const { error: updateError } = await supabase.from("fiches").update({
+          nom_projet: form.nom_projet, description: form.description,
+          type_projet: form.type_projet, type_profil: form.type_profil,
+          idee: form.idee, avancement: form.avancement, produit: form.produit,
+          utilisateurs: form.utilisateurs, revenus: form.revenus,
+          objectif_court: form.objectif_court, objectif_moyen: form.objectif_moyen, objectif_long: form.objectif_long,
+          cherche: form.cherche, temps: form.temps, distance: form.distance, engagement: form.engagement,
+          tech: form.tech, nom_complet: form.nom_complet, pays: form.pays, langue: form.langue,
+          photo_urls: form.photo_url ? [form.photo_url] : null,
+          contacts_visibles: form.contacts_visibles,
+          email_prive: form.email.trim(), discord_prive: form.discord.trim(), github_prive: form.github.trim(),
+          linkedin_prive: form.linkedin.trim(), site_web_prive: form.site_web.trim(), telephone_prive: form.telephone.trim(),
+        }).eq("id", ficheActive);
+        if (updateError) throw updateError;
+        setMyKey("UPDATED");
+        setLoading(false);
+        return;
+      }
 
       const { error: insertError } = await supabase.from("fiches").insert({
         key: generatedKey, user_id: userId,
@@ -315,11 +450,23 @@ export default function InscriptionPage() {
   if (myKey) return (
     <main className="min-h-screen bg-white dark:bg-[#0f0f0f] flex items-center justify-center p-6">
       <div className="text-center max-w-sm w-full">
-        <div className="text-5xl mb-6">🎉</div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">{t("confirme_titre", lang)}</h1>
-        <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-4">{t("confirme_texte", lang)}</p>
-        <div className="bg-zinc-900 dark:bg-zinc-800 text-white rounded-2xl px-6 py-4 mb-3 font-mono text-2xl font-bold tracking-wider">{myKey}</div>
-        <p className="text-zinc-400 text-xs mb-8">{t("confirme_note", lang)}</p>
+        <div className="text-5xl mb-6">{myKey === "UPDATED" ? "✅" : "🎉"}</div>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
+          {myKey === "UPDATED"
+            ? (lang === "fr" ? "Fiche mise à jour !" : "Listing updated!")
+            : t("confirme_titre", lang)}
+        </h1>
+        <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-4">
+          {myKey === "UPDATED"
+            ? (lang === "fr" ? "Vos modifications ont été sauvegardées." : "Your changes have been saved.")
+            : t("confirme_texte", lang)}
+        </p>
+        {myKey !== "UPDATED" && (
+          <>
+            <div className="bg-zinc-900 dark:bg-zinc-800 text-white rounded-2xl px-6 py-4 mb-3 font-mono text-2xl font-bold tracking-wider">{myKey}</div>
+            <p className="text-zinc-400 text-xs mb-8">{t("confirme_note", lang)}</p>
+          </>
+        )}
         <Link href="/1/fiche" className="inline-block w-full px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-semibold text-sm hover:bg-zinc-700 transition-colors text-center">
           {t("voir_fiches", lang)}
         </Link>
@@ -335,15 +482,51 @@ export default function InscriptionPage() {
       {/* NAV */}
       <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-10">
         <span className="font-bold text-sm">Echo AI</span>
-        <div className="flex items-center gap-5 text-sm">
-          <Link href="/1"               className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).home}</Link>
+        <div className="flex items-center gap-5 text-sm flex-wrap">
+          <Link href="/1/hall"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).home}</Link>
           <Link href="/1/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).conv}</Link>
           <Link href="/1/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).fiches}</Link>
-          <Link href="/1/inscription"   className="text-zinc-900 dark:text-white font-semibold">{t("nav",lang).inscription}</Link>
+          <Link href="/1/form"          className="text-zinc-900 dark:text-white font-semibold">{t("nav",lang).inscription}</Link>
           <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")}
             className="text-xs text-zinc-400 border border-zinc-200 dark:border-zinc-800 px-2 py-1 rounded-lg hover:border-zinc-400 transition-colors">
             {lang === "fr" ? "EN" : "FR"}
           </button>
+          {userId ? (
+            <div className="flex items-center gap-2 relative">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-500 border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                {userEmail}
+              </span>
+              {mesFiches.length > 0 && (
+                <div className="relative">
+                  <button onClick={() => setShowFichesMenu(v => !v)}
+                    className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 bg-cyan-50 dark:bg-cyan-950/20 px-3 py-1 rounded-full hover:bg-cyan-100 dark:hover:bg-cyan-950/40 transition-colors">
+                    {ficheActive ? "✏️ " + (mesFiches.find(f=>f.id===ficheActive)?.nom_projet || "Fiche") : (lang === "fr" ? "Mes fiches ▼" : "My listings ▼")}
+                  </button>
+                  {showFichesMenu && (
+                    <div className="absolute right-0 top-full mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl z-50 min-w-48 overflow-hidden">
+                      <button onClick={() => { setFicheActive(null); setForm(INITIAL); setStep(1); setMyKey(null); setShowFichesMenu(false); }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-cyan-600 dark:text-cyan-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-700">
+                        + {lang === "fr" ? "Nouvelle fiche" : "New listing"}
+                      </button>
+                      {mesFiches.map(f => (
+                        <button key={f.id} onClick={() => chargerFiche(f.id)}
+                          className={`w-full text-left px-4 py-2.5 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors ${ficheActive === f.id ? "font-bold text-zinc-900 dark:text-white bg-zinc-50 dark:bg-zinc-800" : "text-zinc-600 dark:text-zinc-400"}`}>
+                          {f.nom_projet}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <button onClick={handleLogout} className="text-xs text-zinc-400 hover:text-red-400 transition-colors">↩</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAuthPopup(true)}
+              className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 bg-cyan-50 dark:bg-cyan-950/20 px-3 py-1 rounded-full hover:bg-cyan-100 dark:hover:bg-cyan-950/40 transition-colors">
+              {lang === "fr" ? "Se connecter" : "Sign in"}
+            </button>
+          )}
         </div>
       </nav>
 
@@ -558,12 +741,67 @@ export default function InscriptionPage() {
           ) : (
             <button onClick={handleSubmit} disabled={loading}
               className="px-6 py-2.5 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm disabled:opacity-60">
-              {loading ? t("chargement",lang) : `${t("soumettre",lang)} ✓`}
+              {loading
+                ? t("chargement",lang)
+                : ficheActive
+                  ? (lang === "fr" ? "Sauvegarder les modifications ✓" : "Save changes ✓")
+                  : `${t("soumettre",lang)} ✓`}
             </button>
           )}
         </div>
 
       </div>
+      {/* ── POPUP AUTH ─────────────────────────────────────────────────────── */}
+      {showAuthPopup && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowAuthPopup(false)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-zinc-200 dark:border-zinc-700"
+            onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-5">
+              <div className="text-3xl mb-2">🔐</div>
+              <h3 className="font-bold text-base dark:text-white">
+                {lang === "fr" ? "Connecte-toi" : "Sign in"}
+              </h3>
+              <p className="text-xs text-zinc-500 mt-1">
+                {lang === "fr" ? "Ta fiche sera liée à ton compte." : "Your listing will be linked to your account."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 mb-4">
+              <button onClick={handleGoogle}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:border-zinc-400 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
+                Google
+              </button>
+              <button onClick={handleMicrosoft}
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-800 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
+                Microsoft
+              </button>
+            </div>
+            <div className="relative mb-4">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-700"/></div>
+              <div className="relative flex justify-center"><span className="bg-white dark:bg-zinc-900 px-2 text-xs text-zinc-400">{lang === "fr" ? "ou par email" : "or by email"}</span></div>
+            </div>
+            <form onSubmit={handleEmailAuth} className="flex flex-col gap-2">
+              <input type="email" placeholder={lang === "fr" ? "ton@email.com" : "your@email.com"} value={authEmail} onChange={e => setAuthEmail(e.target.value)} required
+                className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
+              <input type="password" placeholder="••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required
+                className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
+              {authError && <p className="text-xs text-red-400">{authError}</p>}
+              {authSuccess && <p className="text-xs text-emerald-400">{authSuccess}</p>}
+              <button type="submit" disabled={authLoading}
+                className="w-full py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+                {authLoading ? "…" : authMode === "signin" ? (lang === "fr" ? "Se connecter" : "Sign in") : (lang === "fr" ? "Créer un compte" : "Create account")}
+              </button>
+            </form>
+            <button onClick={() => { setAuthMode(m => m === "signin" ? "signup" : "signin"); setAuthError(null); setAuthSuccess(null); }}
+              className="w-full mt-2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors underline underline-offset-2">
+              {authMode === "signin" ? (lang === "fr" ? "Pas de compte ? Créer" : "No account? Create one") : (lang === "fr" ? "Déjà un compte ?" : "Already have an account?")}
+            </button>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
