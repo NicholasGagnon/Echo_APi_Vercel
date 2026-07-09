@@ -115,8 +115,9 @@ export default function FichePage() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [fiches, setFiches] = useState<Fiche[]>([]);
   const [loading, setLoading] = useState(true);
-  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
-  const [interestedIds, setInterestedIds] = useState<Set<string>>(new Set());
+  const [myInteractions, setMyInteractions] = useState<Set<string>>(new Set()); // "ficheId:type"
+  const [hasOwnFiche, setHasOwnFiche] = useState(false);
+  const [myFicheId, setMyFicheId] = useState<string | null>(null);
   const [sentNotif, setSentNotif] = useState<{ id: string; type: "like" | "interet" } | null>(null);
 
   useEffect(() => {
@@ -239,20 +240,62 @@ export default function FichePage() {
     },
   }[lang];
 
+  useEffect(() => {
+    if (!userId) {
+      setHasOwnFiche(false);
+      setMyFicheId(null);
+      setMyInteractions(new Set());
+      return;
+    }
+    // A-t-il au moins une fiche ? (obligatoire pour pouvoir envoyer un intérêt)
+    supabase.from("fiches").select("id").eq("user_id", userId).limit(1)
+      .then(({ data }) => {
+        setHasOwnFiche(!!data && data.length > 0);
+        setMyFicheId(data && data[0] ? data[0].id : null);
+      });
+    // Quels intérêts/likes a-t-il déjà envoyés ? (persisté en base, survit au refresh)
+    supabase.from("interets_fiches").select("fiche_id,type").eq("user_id", userId)
+      .then(({ data }) => {
+        if (data) setMyInteractions(new Set(data.map((r: any) => `${r.fiche_id}:${r.type}`)));
+      });
+  }, [userId]);
+
+  const canInteract = (): boolean => {
+    if (!userId) { setShowLoginModal(true); return false; }
+    if (!hasOwnFiche) {
+      alert(lang === "fr"
+        ? "Tu dois avoir créé au moins une fiche pour pouvoir manifester de l'intérêt."
+        : "You need to have created at least one listing to express interest.");
+      return false;
+    }
+    return true;
+  };
+
   const handleLike = async (id: string) => {
-    if (likedIds.has(id)) return;
+    if (!canInteract()) return;
+    const key = `${id}:interesse`;
+    if (myInteractions.has(key)) return;
     const fiche = fiches.find(f => f.id === id);
     if (!fiche) return;
-    setLikedIds(prev => new Set([...prev, id]));
+
+    const { error: insertErr } = await supabase.from("interets_fiches").insert({ fiche_id: id, user_id: userId, type: "interesse" });
+    if (insertErr) {
+      if ((insertErr as any).code === "23505") setMyInteractions(prev => new Set([...prev, key]));
+      return;
+    }
+    await supabase.rpc("increment_fiche_stat", { p_fiche_id: id, p_field: "likes" });
+    setMyInteractions(prev => new Set([...prev, key]));
+    setFiches(prev => prev.map(f => f.id === id ? { ...f, likes: f.likes + 1 } : f));
     setSentNotif({ id, type: "like" });
     setTimeout(() => setSentNotif(null), 3000);
+
     try {
       await fetch("/api/notifications/interet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fiche_id: id, fiche_nom: fiche.nom_projet, fiche_key: fiche.key,
-          sender_email: userEmail || "anonymous@visitor.local",
+          sender_id: userId, sender_fiche_id: myFicheId,
           creator_email: fiche.creator_email, type: "interesse",
         }),
       });
@@ -260,19 +303,30 @@ export default function FichePage() {
   };
 
   const handleInteret = async (id: string) => {
-    if (interestedIds.has(id)) return;
+    if (!canInteract()) return;
+    const key = `${id}:tres_interesse`;
+    if (myInteractions.has(key)) return;
     const fiche = fiches.find(f => f.id === id);
     if (!fiche) return;
-    setInterestedIds(prev => new Set([...prev, id]));
+
+    const { error: insertErr } = await supabase.from("interets_fiches").insert({ fiche_id: id, user_id: userId, type: "tres_interesse" });
+    if (insertErr) {
+      if ((insertErr as any).code === "23505") setMyInteractions(prev => new Set([...prev, key]));
+      return;
+    }
+    await supabase.rpc("increment_fiche_stat", { p_fiche_id: id, p_field: "interets" });
+    setMyInteractions(prev => new Set([...prev, key]));
+    setFiches(prev => prev.map(f => f.id === id ? { ...f, interets: f.interets + 1 } : f));
     setSentNotif({ id, type: "interet" });
     setTimeout(() => setSentNotif(null), 3000);
+
     try {
       await fetch("/api/notifications/interet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fiche_id: id, fiche_nom: fiche.nom_projet, fiche_key: fiche.key,
-          sender_email: userEmail || "anonymous@visitor.local",
+          sender_id: userId, sender_fiche_id: myFicheId,
           creator_email: fiche.creator_email, type: "tres_interesse",
         }),
       });
@@ -562,10 +616,10 @@ export default function FichePage() {
                       {/* Compteurs — rapprochés du titre, plus visibles (#6) */}
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="flex items-center gap-1 text-xs font-semibold text-rose-500/90 bg-rose-500/5 border border-rose-500/20 px-2 py-1 rounded-lg">
-                          ♥ {fiche.likes + (likedIds.has(fiche.id) ? 1 : 0)}
+                          ♥ {fiche.likes}
                         </span>
                         <span className="flex items-center gap-1 text-xs font-semibold text-amber-500/90 bg-amber-500/5 border border-amber-500/20 px-2 py-1 rounded-lg">
-                          ★ {fiche.interets + (interestedIds.has(fiche.id) ? 1 : 0)}
+                          ★ {fiche.interets}
                         </span>
                       </div>
                     </div>
@@ -737,19 +791,19 @@ export default function FichePage() {
 
                   {/* ── ACTIONS ── */}
                   <div className="flex items-center gap-2 pt-1 flex-wrap">
-                    <button onClick={() => handleLike(fiche.id)} disabled={isOwn}
+                    <button onClick={() => handleLike(fiche.id)} disabled={isOwn || myInteractions.has(`${fiche.id}:interesse`)}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                         isOwn ? "opacity-50 cursor-not-allowed"
-                        : likedIds.has(fiche.id) ? "bg-rose-500/10 border-rose-500/50 text-rose-400"
+                        : myInteractions.has(`${fiche.id}:interesse`) ? "bg-rose-500/10 border-rose-500/50 text-rose-400 cursor-default"
                         : "border-zinc-200 dark:border-zinc-700/60 text-zinc-500 hover:border-rose-400/50 hover:text-rose-400 hover:bg-rose-50/20 dark:hover:bg-rose-950/20"
                       }`}>
                       <span>♥</span><span>{dict.like}</span>
                     </button>
 
-                    <button onClick={() => handleInteret(fiche.id)} disabled={isOwn}
+                    <button onClick={() => handleInteret(fiche.id)} disabled={isOwn || myInteractions.has(`${fiche.id}:tres_interesse`)}
                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
                         isOwn ? "opacity-50 cursor-not-allowed"
-                        : interestedIds.has(fiche.id) ? "bg-amber-500/10 border-amber-500/50 text-amber-400"
+                        : myInteractions.has(`${fiche.id}:tres_interesse`) ? "bg-amber-500/10 border-amber-500/50 text-amber-400 cursor-default"
                         : "border-zinc-200 dark:border-zinc-700/60 text-zinc-500 hover:border-amber-400/50 hover:text-amber-400 hover:bg-amber-50/20 dark:hover:bg-amber-950/20"
                       }`}>
                       <span>★</span><span>{dict.interet}</span>
