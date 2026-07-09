@@ -425,7 +425,7 @@ export default function VitalityPage() {
     } catch {
       setEchoMessages([...baseMessages, { raw: "Echo: Unable to reach backend server." }]);
     }
-    setTimeout(() => setEchoState("idle"), 10000);
+    setTimeout(() => setEchoState("idle"), 20000);
   };
 
   const handleSubmitModalProfile = (e: React.FormEvent) => {

@@ -620,7 +620,7 @@ export default function ChatPage() {
     } catch {
       setMessages([...baseMessages, { raw: "Echo: Unable to connect to backend server." }]);
     } finally {
-      setTimeout(() => setEchoState("idle"), 10000);
+      setTimeout(() => setEchoState("idle"), 20000);
     }
   };
 
