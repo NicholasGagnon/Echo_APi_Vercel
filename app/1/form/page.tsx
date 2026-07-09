@@ -409,6 +409,7 @@ function InscriptionPageInner() {
   // ── AUTH ─────────────────────────────────────────────────────────────────
   const [userId, setUserId]   = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [showAuthRequired, setShowAuthRequired] = useState(false);
 
@@ -416,10 +417,12 @@ function InscriptionPageInner() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
+      setAuthChecked(true);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => {
       setUserId(session?.user?.id || null);
       setUserEmail(session?.user?.email || null);
+      setAuthChecked(true);
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -647,6 +650,53 @@ function InscriptionPageInner() {
   );
 
   const etapes = t("etapes", lang) as string[];
+
+  // ── GATE: pendant la vérification de session ────────────────────────────
+  if (!authChecked) {
+    return (
+      <main className="min-h-screen bg-white dark:bg-[#0f0f0f] flex items-center justify-center">
+        <p className="text-zinc-400 text-sm">{lang === "fr" ? "Chargement..." : "Loading..."}</p>
+      </main>
+    );
+  }
+
+  // ── GATE: connexion obligatoire avant de commencer la fiche ─────────────
+  if (!userId) {
+    return (
+      <main className="min-h-screen bg-white dark:bg-[#0f0f0f] text-zinc-900 dark:text-zinc-100 font-sans">
+        <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between">
+          <span className="font-bold text-sm">Echo AI</span>
+          <div className="flex items-center gap-5 text-sm">
+            <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).home}</Link>
+            <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).fiches}</Link>
+            <LangDropdown lang={lang} setLang={setLang} />
+          </div>
+        </nav>
+
+        <div className="max-w-md mx-auto px-6 py-24 text-center">
+          <div className="text-4xl mb-4">🔒</div>
+          <h1 className="text-2xl font-bold mb-3">{t("auth_required_title", lang)}</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-8">
+            {lang === "fr"
+              ? "Connecte-toi ou crée un compte avant de commencer à remplir ta fiche. Ça évite les fiches orphelines et protège tes données."
+              : "Sign in or create an account before starting your listing. This prevents orphan listings and protects your data."}
+          </p>
+          <button onClick={() => setShowAuthPopup(true)}
+            className="px-6 py-3 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-sm">
+            {t("auth_required_btn", lang)}
+          </button>
+        </div>
+
+        {showAuthPopup && (
+          <AuthPopup
+            lang={lang}
+            onClose={() => setShowAuthPopup(false)}
+            onAuthed={() => setShowAuthPopup(false)}
+          />
+        )}
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-white dark:bg-[#0f0f0f] text-zinc-900 dark:text-zinc-100 font-sans">
