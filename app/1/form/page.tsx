@@ -8,7 +8,25 @@ import { supabase } from "../../lib/supabase";
 type Lang = "fr" | "en";
 const STEPS = 6;
 
-// ── DICTIONNAIRE COMPLET ──────────────────────────────────────────────────────
+// ── LOGOS ──────────────────────────────────────────────────────────────────
+const MicrosoftLogo = () => (
+  <svg width="16" height="16" viewBox="0 0 23 23" fill="none">
+    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
+  </svg>
+);
+const GoogleLogo = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/>
+  </svg>
+);
+
+// ── DICTIONNAIRE ───────────────────────────────────────────────────────────
 const D = {
   nav: {
     fr: { home:"Accueil", conv:"Conversation", fiches:"Fiches", inscription:"Inscription" },
@@ -26,7 +44,6 @@ const D = {
     en: ["Project","Progress","Goals","Collaboration","Technologies","Profile"],
   },
 
-  // Étape 1
   nom_projet:   { fr:"Nom du projet *",    en:"Project name *"      },
   description:  { fr:"Description *",      en:"Description *"       },
   desc_hint:    { fr:"Explique ton projet comme si tu l'expliquais à un ami.", en:"Explain your project as if talking to a friend." },
@@ -42,7 +59,6 @@ const D = {
     en: ["I do everything myself and I'm alone.","I do everything myself but I already have someone.","We are two on the project.","We are several on the project.","Other."],
   },
 
-  // Étape 2
   idee_label:   { fr:"L'idée globale est :",      en:"The overall idea is:"    },
   avanc_label:  { fr:"Le projet est :",           en:"The project is:"         },
   produit_label:{ fr:"Produit fonctionnel :",     en:"Functional product:"     },
@@ -70,13 +86,11 @@ const D = {
     en: ["None.","A few dollars.","A few hundred.","A few thousand.","More.","I'd rather not say."],
   },
 
-  // Étape 3
   court_label:  { fr:"Court terme (1 à 3 mois)",   en:"Short term (1 to 3 months)"   },
   moyen_label:  { fr:"Moyen terme (6 à 12 mois)",  en:"Medium term (6 to 12 months)" },
   long_label:   { fr:"Long terme",                  en:"Long term"                    },
   court_hint:   { fr:"Finir le prototype, trouver un collaborateur...", en:"Finish the prototype, find a collaborator..." },
 
-  // Étape 4
   cherche_label:   { fr:"Qu'est-ce que tu recherches ?", en:"What are you looking for?"    },
   temps_label:     { fr:"Temps disponible par semaine :", en:"Time available per week:"     },
   distance_label:  { fr:"Collaboration recherchée :",    en:"Preferred collaboration:"      },
@@ -99,13 +113,11 @@ const D = {
     en: ["Occasional discussion.","A few hours per month.","A few hours per week.","Regular collaboration.","Long-term partnership.","Potential association."],
   },
 
-  // Étape 5
   tech_labels: {
     fr: { backend:"Backend", frontend:"Frontend", paiement:"Paiement", ia:"IA", infra:"Infrastructure", automatisation:"Automatisation" },
     en: { backend:"Backend", frontend:"Frontend", paiement:"Payment",  ia:"AI", infra:"Infrastructure", automatisation:"Automation"     },
   },
 
-  // Étape 6
   nom_complet_label:  { fr:"Nom complet",         en:"Full name"          },
   pays_label:         { fr:"Pays",                en:"Country"            },
   langue_label:       { fr:"Langue principale",   en:"Primary language"   },
@@ -120,14 +132,30 @@ const D = {
   email_invalid:      { fr:"Adresse courriel invalide.",   en:"Invalid email address."             },
   email_missing:      { fr:"Un courriel est obligatoire pour créer une fiche.", en:"An email is required to create a listing." },
 
-  // Confirmation
   confirme_titre: { fr:"Ta fiche est en ligne ! 🎉", en:"Your listing is live! 🎉"             },
   confirme_texte: { fr:"Ta clé personnelle est :",   en:"Your personal key is:"                 },
   confirme_note:  { fr:"Garde-la précieusement — elle t'identifie sur la plateforme.", en:"Keep it safe — it identifies you on the platform." },
   voir_fiches:    { fr:"Voir les fiches",            en:"See listings"                          },
+
+  auth_required_title: { fr:"Connexion requise", en:"Login required" },
+  auth_required_text:  { fr:"Tu dois être connecté(e) pour créer ou modifier une fiche. Connecte-toi ou crée un compte pour continuer.", en:"You must be signed in to create or edit a listing. Sign in or create an account to continue." },
+  auth_required_btn:   { fr:"Se connecter / S'inscrire", en:"Sign in / Sign up" },
+
+  tab_signin: { fr:"Se connecter", en:"Sign in" },
+  tab_signup: { fr:"Créer un compte", en:"Create account" },
+  or_email:   { fr:"ou par email", en:"or by email" },
+  email_ph:   { fr:"ton@email.com", en:"your@email.com" },
+  pass_ph:    { fr:"Mot de passe", en:"Password" },
+  create_account_btn: { fr:"Créer mon compte", en:"Create my account" },
+  signin_btn: { fr:"Se connecter", en:"Sign in" },
+  signup_success: { fr:"Vérifie ta boîte mail pour confirmer ton compte.", en:"Check your inbox to confirm your account." },
+  resend_link: { fr:"Renvoyer le lien", en:"Resend link" },
+  resend_wait: { fr:"Renvoyer dans", en:"Resend in" },
 };
 
 const t = (key: keyof typeof D, lang: Lang): any => (D[key] as any)[lang];
+
+const LANG_LABELS: Record<Lang, string> = { fr: "Français", en: "English" };
 
 const TECH: Record<string, string[]> = {
   backend:       ["Supabase","Firebase","PostgreSQL","MongoDB","Appwrite","Autre"],
@@ -162,7 +190,7 @@ const INITIAL: FormData = {
   email:"", discord:"", github:"", linkedin:"", site_web:"", telephone:"",
 };
 
-// ── COMPOSANTS ────────────────────────────────────────────────────────────────
+// ── COMPOSANTS UI ──────────────────────────────────────────────────────────
 function Radio({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex flex-col gap-2">
@@ -206,7 +234,168 @@ function Field({ label, value, onChange, placeholder, multiline, type="text" }: 
   );
 }
 
-// ── PAGE ──────────────────────────────────────────────────────────────────────
+// Dropdown FR/EN
+function LangDropdown({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 text-xs text-zinc-500 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 rounded-lg hover:border-zinc-400 transition-colors">
+        {LANG_LABELS[lang]}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl z-50 min-w-32 overflow-hidden">
+            {(["fr","en"] as Lang[]).map(l => (
+              <button key={l} onClick={() => { setLang(l); setOpen(false); }}
+                className={`w-full text-left px-4 py-2.5 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors ${lang === l ? "font-bold text-zinc-900 dark:text-white" : "text-zinc-600 dark:text-zinc-400"}`}>
+                {LANG_LABELS[l]}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── AUTH POPUP (3 vrais boutons + email + création de compte) ─────────────
+function AuthPopup({ lang, onClose, onAuthed }: { lang: Lang; onClose: () => void; onAuthed: () => void }) {
+  const [tab, setTab] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown(c => (c > 0 ? c - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  const handleGoogle = async () => {
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+  };
+  const handleMicrosoft = async () => {
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email User.Read" } });
+  };
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) setError(error.message); else onAuthed();
+    setLoading(false);
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(), password,
+      options: { emailRedirectTo: `${window.location.origin}/1/form` },
+    });
+    if (error) {
+      setError(error.message);
+    } else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+      setError(lang === "fr" ? "Un compte avec ce courriel existe déjà." : "An account with this email already exists.");
+    } else {
+      setSuccess(t("signup_success", lang));
+      setCooldown(30);
+    }
+    setLoading(false);
+  };
+
+  const handleResend = async () => {
+    if (cooldown > 0 || !email.trim()) return;
+    setError(null);
+    const { error } = await supabase.auth.resend({ type: "signup", email: email.trim() });
+    if (error) setError(error.message);
+    else { setSuccess(t("signup_success", lang)); setCooldown(30); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-zinc-200 dark:border-zinc-700" onClick={e => e.stopPropagation()}>
+        <div className="text-center mb-5">
+          <div className="text-3xl mb-2">🔐</div>
+          <h3 className="font-bold text-base dark:text-white">
+            {lang === "fr" ? "Connexion" : "Sign in"}
+          </h3>
+          <p className="text-xs text-zinc-500 mt-1">
+            {lang === "fr" ? "Ta fiche sera liée à ton compte." : "Your listing will be linked to your account."}
+          </p>
+        </div>
+
+        {/* TABS */}
+        <div className="flex mb-5 bg-zinc-100 dark:bg-zinc-800 rounded-xl p-1">
+          {(["signin","signup"] as const).map(tb => (
+            <button key={tb} type="button"
+              onClick={() => { setTab(tb); setError(null); setSuccess(null); }}
+              className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${tab === tb ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500"}`}>
+              {tb === "signin" ? t("tab_signin", lang) : t("tab_signup", lang)}
+            </button>
+          ))}
+        </div>
+
+        {/* PROVIDERS */}
+        <div className="flex flex-col gap-2 mb-4">
+          <button onClick={handleGoogle} type="button"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:border-zinc-400 transition-colors">
+            <GoogleLogo /> Google
+          </button>
+          <button onClick={handleMicrosoft} type="button"
+            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-800 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors">
+            <MicrosoftLogo /> Microsoft
+          </button>
+        </div>
+
+        <div className="relative mb-4">
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-700"/></div>
+          <div className="relative flex justify-center"><span className="bg-white dark:bg-zinc-900 px-2 text-xs text-zinc-400">{t("or_email", lang)}</span></div>
+        </div>
+
+        {error && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-600 dark:text-red-400">{error}</div>}
+        {success && <div className="mb-3 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg text-xs text-emerald-600 dark:text-emerald-400">{success}</div>}
+
+        {tab === "signin" ? (
+          <form onSubmit={handleSignIn} className="flex flex-col gap-2">
+            <input type="email" placeholder={t("email_ph", lang)} value={email} onChange={e => setEmail(e.target.value)} required
+              className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
+            <input type="password" placeholder={t("pass_ph", lang)} value={password} onChange={e => setPassword(e.target.value)} required
+              className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
+            <button type="submit" disabled={loading}
+              className="w-full py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+              {loading ? "…" : t("signin_btn", lang)}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleSignUp} className="flex flex-col gap-2">
+            <input type="email" placeholder={t("email_ph", lang)} value={email} onChange={e => setEmail(e.target.value)} required
+              className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
+            <input type="password" placeholder={t("pass_ph", lang)} value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
+              className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
+            <button type="submit" disabled={loading}
+              className="w-full py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
+              {loading ? "…" : t("create_account_btn", lang)}
+            </button>
+
+            {success && (
+              <button type="button" onClick={handleResend} disabled={cooldown > 0}
+                className="w-full py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-white disabled:opacity-50 transition-colors">
+                {cooldown > 0 ? `${t("resend_wait", lang)} ${cooldown}s` : t("resend_link", lang)}
+              </button>
+            )}
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── PAGE ──────────────────────────────────────────────────────────────────
 function InscriptionPageInner() {
   const [lang, setLang]       = useState<Lang>("fr");
   const [step, setStep]       = useState(1);
@@ -221,14 +410,8 @@ function InscriptionPageInner() {
   const [userId, setUserId]   = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
-  const [authMode, setAuthMode] = useState<"signin"|"signup">("signin");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError] = useState<string|null>(null);
-  const [authSuccess, setAuthSuccess] = useState<string|null>(null);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [showAuthRequired, setShowAuthRequired] = useState(false);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUserId(session?.user?.id || null);
@@ -241,25 +424,6 @@ function InscriptionPageInner() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
-  };
-  const handleMicrosoft = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email User.Read" } });
-  };
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault(); setAuthError(null); setAuthSuccess(null); setAuthLoading(true);
-    if (authMode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
-      if (error) setAuthError(error.message); else setShowAuthPopup(false);
-    } else {
-      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/1/form` } });
-      if (error) setAuthError(error.message);
-      else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError("Compte existant.");
-      else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
-    }
-    setAuthLoading(false);
-  };
   const handleLogout = async () => { await supabase.auth.signOut(); setUserId(null); setUserEmail(null); setMesfiches([]); };
 
   // ── MES FICHES ───────────────────────────────────────────────────────────
@@ -277,13 +441,8 @@ function InscriptionPageInner() {
       .then(({ data }) => { if (data) setMesfiches(data); });
   }, [userId]);
 
-  // Charger fiche depuis ?edit=id ou depuis sélection menu
   const chargerFiche = async (id: string) => {
-    const { data } = await supabase
-      .from("fiches")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const { data } = await supabase.from("fiches").select("*").eq("id", id).single();
     if (!data) return;
     setFicheActive(id);
     setStep(1);
@@ -322,7 +481,6 @@ function InscriptionPageInner() {
     setShowFichesMenu(false);
   };
 
-  // Charger depuis ?edit=id au montage
   useEffect(() => {
     const editId = searchParams.get("edit");
     if (editId && userId) chargerFiche(editId);
@@ -358,6 +516,16 @@ function InscriptionPageInner() {
   // ── SUBMIT ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     setError(null);
+
+    // FIX: bloque toute création/modification si pas connecté.
+    // Avant ce fix, une fiche pouvait être insérée avec user_id: null,
+    // ce qui la faisait apparaître comme "possédée" par n'importe quel
+    // visiteur non connecté (null === null côté page /1/fiche).
+    if (!userId) {
+      setShowAuthRequired(true);
+      return;
+    }
+
     if (!form.contacts_visibles.includes("Email") || !form.email.trim()) {
       setError(t("email_missing", lang)); return;
     }
@@ -365,7 +533,6 @@ function InscriptionPageInner() {
       setError(t("email_invalid", lang)); return;
     }
 
-    // Vérifier que l'email n'est pas déjà utilisé (seulement en création)
     if (!ficheActive) {
       const { data: existing } = await supabase
         .from("fiches")
@@ -384,10 +551,16 @@ function InscriptionPageInner() {
       if (keyError) throw keyError;
       const generatedKey = keyData as string;
       const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id || null;
+      const currentUserId = session?.user?.id || null;
+
+      // Double sécurité : si la session a expiré entre-temps, on bloque aussi ici.
+      if (!currentUserId) {
+        setLoading(false);
+        setShowAuthRequired(true);
+        return;
+      }
 
       if (ficheActive) {
-        // UPDATE fiche existante
         const { error: updateError } = await supabase.from("fiches").update({
           nom_projet: form.nom_projet, description: form.description,
           type_projet: form.type_projet, type_profil: form.type_profil,
@@ -408,7 +581,7 @@ function InscriptionPageInner() {
       }
 
       const { error: insertError } = await supabase.from("fiches").insert({
-        key: generatedKey, user_id: userId,
+        key: generatedKey, user_id: currentUserId,
         nom_projet: form.nom_projet, description: form.description,
         type_projet: form.type_projet, type_profil: form.type_profil,
         idee: form.idee, avancement: form.avancement, produit: form.produit,
@@ -425,7 +598,6 @@ function InscriptionPageInner() {
       });
       if (insertError) throw insertError;
 
-      // Envoyer la Key par courriel via Resend
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
         await fetch(`${API_URL}/1/envoyer-cle`, {
@@ -487,10 +659,9 @@ function InscriptionPageInner() {
           <Link href="/1/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).conv}</Link>
           <Link href="/1/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).fiches}</Link>
           <Link href="/1/form"          className="text-zinc-900 dark:text-white font-semibold">{t("nav",lang).inscription}</Link>
-          <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")}
-            className="text-xs text-zinc-400 border border-zinc-200 dark:border-zinc-800 px-2 py-1 rounded-lg hover:border-zinc-400 transition-colors">
-            {lang === "fr" ? "EN" : "FR"}
-          </button>
+
+          <LangDropdown lang={lang} setLang={setLang} />
+
           {userId ? (
             <div className="flex items-center gap-2 relative">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-500 border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1 rounded-full">
@@ -532,6 +703,15 @@ function InscriptionPageInner() {
 
       <div className="max-w-2xl mx-auto px-6 py-12">
         <h1 className="text-2xl font-bold mb-8">{t("titre", lang)}</h1>
+
+        {!userId && (
+          <div className="mb-8 px-4 py-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm text-amber-700 dark:text-amber-400 flex items-center justify-between gap-3">
+            <span>⚠️ {lang === "fr" ? "Tu n'es pas connecté. Connecte-toi avant de soumettre." : "You're not signed in. Sign in before submitting."}</span>
+            <button onClick={() => setShowAuthPopup(true)} className="shrink-0 text-xs font-bold underline underline-offset-2">
+              {lang === "fr" ? "Se connecter" : "Sign in"}
+            </button>
+          </div>
+        )}
 
         {/* PROGRESS */}
         <div className="flex items-center mb-10 gap-0">
@@ -644,7 +824,6 @@ function InscriptionPageInner() {
             <Field label={t("pays_label",lang)}        value={form.pays}        onChange={v => set("pays",v)}        />
             <Field label={t("langue_label",lang)}      value={form.langue}      onChange={v => set("langue",v)}      />
 
-            {/* UPLOAD PHOTO */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("photo_label",lang)}</label>
               <p className="text-xs text-zinc-400">{t("photo_hint",lang)}</p>
@@ -678,7 +857,6 @@ function InscriptionPageInner() {
 
             <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2"/>
 
-            {/* CONTACTS PRIVÉS */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-1">🔒 {t("contacts_titre",lang)}</p>
               <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">{t("contacts_hint",lang)}</p>
@@ -751,55 +929,37 @@ function InscriptionPageInner() {
         </div>
 
       </div>
-      {/* ── POPUP AUTH ─────────────────────────────────────────────────────── */}
-      {showAuthPopup && (
+
+      {/* POPUP "CONNEXION REQUISE" */}
+      {showAuthRequired && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setShowAuthPopup(false)}>
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-zinc-200 dark:border-zinc-700"
+          onClick={() => setShowAuthRequired(false)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-zinc-200 dark:border-zinc-700 text-center"
             onClick={e => e.stopPropagation()}>
-            <div className="text-center mb-5">
-              <div className="text-3xl mb-2">🔐</div>
-              <h3 className="font-bold text-base dark:text-white">
-                {lang === "fr" ? "Connecte-toi" : "Sign in"}
-              </h3>
-              <p className="text-xs text-zinc-500 mt-1">
-                {lang === "fr" ? "Ta fiche sera liée à ton compte." : "Your listing will be linked to your account."}
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 mb-4">
-              <button onClick={handleGoogle}
-                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:border-zinc-400 transition-colors">
-                <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
-                Google
+            <div className="text-3xl mb-3">🔒</div>
+            <h3 className="font-bold text-base dark:text-white mb-2">{t("auth_required_title", lang)}</h3>
+            <p className="text-xs text-zinc-500 mb-5">{t("auth_required_text", lang)}</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowAuthRequired(false)}
+                className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 transition-colors">
+                {lang === "fr" ? "Annuler" : "Cancel"}
               </button>
-              <button onClick={handleMicrosoft}
-                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-800 text-sm font-semibold text-white hover:bg-zinc-700 transition-colors">
-                <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
-                Microsoft
+              <button onClick={() => { setShowAuthRequired(false); setShowAuthPopup(true); }}
+                className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold transition-colors">
+                {t("auth_required_btn", lang)}
               </button>
             </div>
-            <div className="relative mb-4">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-700"/></div>
-              <div className="relative flex justify-center"><span className="bg-white dark:bg-zinc-900 px-2 text-xs text-zinc-400">{lang === "fr" ? "ou par email" : "or by email"}</span></div>
-            </div>
-            <form onSubmit={handleEmailAuth} className="flex flex-col gap-2">
-              <input type="email" placeholder={lang === "fr" ? "ton@email.com" : "your@email.com"} value={authEmail} onChange={e => setAuthEmail(e.target.value)} required
-                className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
-              <input type="password" placeholder="••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required
-                className="w-full border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm dark:bg-zinc-800 dark:text-white outline-none focus:border-cyan-500" />
-              {authError && <p className="text-xs text-red-400">{authError}</p>}
-              {authSuccess && <p className="text-xs text-emerald-400">{authSuccess}</p>}
-              <button type="submit" disabled={authLoading}
-                className="w-full py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white text-sm font-semibold transition-colors disabled:opacity-50">
-                {authLoading ? "…" : authMode === "signin" ? (lang === "fr" ? "Se connecter" : "Sign in") : (lang === "fr" ? "Créer un compte" : "Create account")}
-              </button>
-            </form>
-            <button onClick={() => { setAuthMode(m => m === "signin" ? "signup" : "signin"); setAuthError(null); setAuthSuccess(null); }}
-              className="w-full mt-2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors underline underline-offset-2">
-              {authMode === "signin" ? (lang === "fr" ? "Pas de compte ? Créer" : "No account? Create one") : (lang === "fr" ? "Déjà un compte ?" : "Already have an account?")}
-            </button>
           </div>
         </div>
+      )}
+
+      {/* POPUP AUTH (3 boutons + email + création de compte avec resend) */}
+      {showAuthPopup && (
+        <AuthPopup
+          lang={lang}
+          onClose={() => setShowAuthPopup(false)}
+          onAuthed={() => setShowAuthPopup(false)}
+        />
       )}
 
     </main>
