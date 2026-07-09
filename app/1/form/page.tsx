@@ -585,6 +585,7 @@ function InscriptionPageInner() {
 
       const { error: insertError } = await supabase.from("fiches").insert({
         key: generatedKey, user_id: currentUserId,
+        creator_email: userEmail,
         nom_projet: form.nom_projet, description: form.description,
         type_projet: form.type_projet, type_profil: form.type_profil,
         idee: form.idee, avancement: form.avancement, produit: form.produit,
