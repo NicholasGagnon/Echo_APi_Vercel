@@ -24,20 +24,78 @@ type CrashPost = {
   comments: Comment[];
 };
 
-const CRITIQUES = [
-  { key: "exist",    emoji: "🧠", text: "Je comprends le projet, mais pas pourquoi il existe." },
-  { key: "already",  emoji: "🔄", text: "Ça ressemble trop à quelque chose qui existe déjà." },
-  { key: "no_pay",   emoji: "💰", text: "Je l'utiliserais, mais je ne paierais jamais pour ça." },
+const RESSENTI = [
   { key: "wish",     emoji: "🔥", text: "J'aurais aimé avoir eu cette idée." },
-  { key: "blurry",   emoji: "🌫️", text: "Le message est flou." },
-  { key: "numb",     emoji: "💤", text: "Je ne ressens rien." },
-  { key: "lost",     emoji: "🤔", text: "Je suis intrigué mais perdu." },
   { key: "client",   emoji: "💳", text: "Je pourrais devenir client." },
-  { key: "clone",    emoji: "🥸", text: "Ça sent le clone" },
+  { key: "lost",     emoji: "🤔", text: "Je suis intrigué mais perdu." },
   { key: "spark",    emoji: "🧪", text: "Il y a quelque chose ici, continue de creuser" },
   { key: "big",      emoji: "🧨", text: "Cette idée pourrait devenir grosse" },
-  { key: "fail",     emoji: "🩻", text: "Je pense savoir exactement pourquoi ça ne marchera pas." },
 ];
+
+const EXPLICATIONS = [
+  { key: "fail",     emoji: "🩻", text: "Je pense savoir exactement pourquoi ça ne marchera pas." },
+  { key: "blurry",   emoji: "🌫️", text: "Le message est flou." },
+  { key: "already",  emoji: "🔄", text: "Ça ressemble trop à quelque chose qui existe déjà." },
+  { key: "clone",    emoji: "🥸", text: "Ça sent le clone" },
+  { key: "exist",    emoji: "🧠", text: "Je comprends le projet, mais pas pourquoi il existe." },
+  { key: "no_pay",   emoji: "💰", text: "Je l'utiliserais, mais je ne paierais jamais pour ça." },
+  { key: "numb",     emoji: "💤", text: "Je ne ressens rien." },
+];
+
+const CRITIQUES = [...RESSENTI, ...EXPLICATIONS]; // gardé pour totalVotes / lookup pratique
+
+// ── PALIERS (Bronze/Argent/Or/VIP) — calculés à partir de public.user_badges ──
+type BadgeRow = {
+  reglement_lu: boolean; fiche_count: number; tunnel_count: number;
+  talk_participation: number; comment_count: number; interets_sent: number;
+  max_project_interest: number;
+};
+
+type Tier = "none" | "bronze" | "argent" | "or" | "vip";
+const TIER_EMOJI: Record<Tier, string> = { none: "", bronze: "🥉", argent: "🥈", or: "🥇", vip: "💎" };
+const TIER_LABEL: Record<Tier, string> = { none: "", bronze: "Bronze", argent: "Argent", or: "Or", vip: "VIP" };
+
+type Task = { label: string; done: boolean };
+
+const getTierTasks = (row: BadgeRow) => {
+  const bronze: Task[] = [
+    { label: "Lire le règlement", done: row.reglement_lu },
+    { label: "Voter sur 1 projet Talk", done: row.talk_participation >= 1 },
+    { label: "Envoyer 1 intérêt", done: row.interets_sent >= 1 },
+  ];
+  const bronzeDone = bronze.every(t => t.done);
+
+  const argent: Task[] = [
+    { label: "Obtenir Bronze", done: bronzeDone },
+    { label: "Voter sur 3 projets Talk au total", done: row.talk_participation >= 3 },
+    { label: "Débloquer 1 contact", done: row.tunnel_count >= 1 },
+  ];
+  const argentDone = bronzeDone && row.talk_participation >= 3 && row.tunnel_count >= 1;
+
+  const or: Task[] = [
+    { label: "Obtenir Argent", done: argentDone },
+    { label: "Voter sur 5 projets Talk au total", done: row.talk_participation >= 5 },
+    { label: "Débloquer 2 contacts", done: row.tunnel_count >= 2 },
+  ];
+  const orDone = argentDone && row.talk_participation >= 5 && row.tunnel_count >= 2;
+
+  const vip: Task[] = [
+    { label: "Obtenir Or", done: orDone },
+    { label: "Débloquer 5 contacts", done: row.tunnel_count >= 5 },
+  ];
+  const vipDone = orDone && row.tunnel_count >= 5;
+
+  let tier: Tier = "none";
+  if (vipDone) tier = "vip";
+  else if (orDone) tier = "or";
+  else if (argentDone) tier = "argent";
+  else if (bronzeDone) tier = "bronze";
+
+  const nextTier: Tier = tier === "none" ? "bronze" : tier === "bronze" ? "argent" : tier === "argent" ? "or" : tier === "or" ? "vip" : "vip";
+  const nextTasks = { bronze, argent, or, vip }[nextTier];
+
+  return { tier, nextTier, nextTasks };
+};
 
 export default function TalkPage() {
   const [lang, setLang] = useState<Lang>("fr");
@@ -45,12 +103,13 @@ export default function TalkPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [pseudo, setPseudo] = useState<string>("");
+  const [myBadgeRow, setMyBadgeRow] = useState<BadgeRow | null>(null);
   const [pseudoInput, setPseudoInput] = useState<string>("");
   const [isSavingPseudo, setIsSavingPseudo] = useState(false);
 
   const [input, setInput] = useState("");
   const [posts, setPosts] = useState<CrashPost[]>([]);
-  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [badgeMap, setBadgeMap] = useState<Record<string, Tier>>({});
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,7 +124,15 @@ export default function TalkPage() {
           .eq("id", session.user.id)
           .maybeSingle();
 
-        if (profile?.username) setPseudo(profile.username);
+        if (profile?.username) {
+          setPseudo(profile.username);
+          const { data: badgeRow } = await supabase
+            .from("user_badges")
+            .select("username,reglement_lu,fiche_count,tunnel_count,talk_participation,comment_count,interets_sent,max_project_interest")
+            .eq("username", profile.username)
+            .maybeSingle();
+          if (badgeRow) setMyBadgeRow(badgeRow as BadgeRow);
+        }
 
         if (session.user.email === 'lafailleestouverte@gmail.com' || session.user.email === 'nicholas@echosai.ca') {
           setUserRole("admin");
@@ -107,6 +174,26 @@ export default function TalkPage() {
       };
     });
     setPosts(formatted);
+    await loadBadges(formatted);
+  };
+
+  // Charge les badges de tous les pseudos visibles dans le feed en un seul appel
+  const loadBadges = async (feedPosts: CrashPost[]) => {
+    const pseudos = new Set<string>();
+    feedPosts.forEach(p => {
+      if (p.author_pseudo) pseudos.add(p.author_pseudo);
+      p.comments.forEach(c => { if (c.author) pseudos.add(c.author); });
+    });
+    if (pseudos.size === 0) return;
+
+    const { data } = await supabase
+      .from("user_badges")
+      .select("username,reglement_lu,fiche_count,tunnel_count,talk_participation,comment_count,interets_sent,max_project_interest")
+      .in("username", Array.from(pseudos));
+
+    const map: Record<string, Tier> = {};
+    (data || []).forEach((row: any) => { map[row.username] = getTierTasks(row).tier; });
+    setBadgeMap(map);
   };
 
   const savePseudo = async () => {
@@ -121,6 +208,12 @@ export default function TalkPage() {
     } finally {
       setIsSavingPseudo(false);
     }
+  };
+
+  const handleMarkReglementLu = async () => {
+    if (!userId) return;
+    await supabase.from("profiles").update({ reglement_lu: true }).eq("id", userId);
+    setMyBadgeRow(prev => prev ? { ...prev, reglement_lu: true } : prev);
   };
 
   const handleModAction = async (actionType: string, targetPseudo: string, targetId: string, isComment: boolean) => {
@@ -162,21 +255,6 @@ export default function TalkPage() {
       user_pseudo: pseudo,
     });
     setInput("");
-    await fetchFeed();
-  };
-
-  const handleAddComment = async (postId: string) => {
-    const text = commentInputs[postId]?.trim();
-    if (!text || !pseudo) return;
-
-    await supabase.from("talk_comments").insert({
-      post_id: postId,
-      user_id: userId,
-      user_email: pseudo,
-      text: text
-    });
-
-    setCommentInputs(prev => ({ ...prev, [postId]: "" }));
     await fetchFeed();
   };
 
@@ -249,12 +327,40 @@ export default function TalkPage() {
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_#06b6d4]" />
-                <span className="font-bold text-cyan-600 dark:text-cyan-400 font-mono">{pseudo}</span>
+            <div className="flex flex-col gap-2 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_#06b6d4]" />
+                  <span className="font-bold text-cyan-600 dark:text-cyan-400 font-mono">{pseudo}</span>
+                  {myBadgeRow && getTierTasks(myBadgeRow).tier !== "none" && (
+                    <span className="text-sm" title={TIER_LABEL[getTierTasks(myBadgeRow).tier]}>
+                      {TIER_EMOJI[getTierTasks(myBadgeRow).tier]} {TIER_LABEL[getTierTasks(myBadgeRow).tier]}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">{userEmail}</span>
               </div>
-              <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">{userEmail}</span>
+
+              {myBadgeRow && (
+                <div className="border-t border-zinc-100 dark:border-zinc-900 pt-2 mt-1">
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1.5">
+                    {lang === "fr" ? "Prochain palier" : "Next tier"}: {TIER_EMOJI[getTierTasks(myBadgeRow).nextTier]} {TIER_LABEL[getTierTasks(myBadgeRow).nextTier]}
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {getTierTasks(myBadgeRow).nextTasks.map(task => (
+                      <div key={task.label} className="flex items-center gap-2 text-[11px]">
+                        <span className={task.done ? "text-emerald-500" : "text-zinc-400 dark:text-zinc-600"}>{task.done ? "☑" : "☐"}</span>
+                        <span className={task.done ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-600 dark:text-zinc-400"}>{task.label}</span>
+                        {task.label === "Lire le règlement" && !task.done && (
+                          <button onClick={handleMarkReglementLu} className="text-cyan-600 dark:text-cyan-400 underline underline-offset-2 ml-1">
+                            {lang === "fr" ? "marquer comme lu" : "mark as read"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -271,7 +377,15 @@ export default function TalkPage() {
         {/* FEED */}
         <div className={`flex flex-col gap-5 ${!pseudo ? "opacity-30 pointer-events-none select-none" : ""}`}>
           {posts.map(post => {
-            const totalVotes = Object.values(post.votes).reduce((sum, curr) => sum + curr.length, 0) || 1;
+            // Chaque réaction est un sondage indépendant "oui/non" — le dénominateur
+            // est le nombre de PERSONNES uniques ayant réagi au post (pas la somme des
+            // votes), donc les catégories ne se volent plus de points entre elles.
+            const uniqueVoters = new Set<string>();
+            Object.values(post.votes).forEach(voters => voters.forEach(v => uniqueVoters.add(v)));
+            const totalParticipants = uniqueVoters.size;
+            const CONFIDENCE_THRESHOLD = 30; // en dessous, on affiche des comptes bruts, pas des %
+            const showPercent = totalParticipants >= CONFIDENCE_THRESHOLD;
+            const confidence = totalParticipants >= 100 ? "high" : totalParticipants >= 10 ? "medium" : "low";
 
             return (
               <div key={post.id} className="bg-white dark:bg-zinc-950 border border-cyan-500/20 dark:border-cyan-500/10 rounded-xl overflow-hidden flex flex-col shadow-sm">
@@ -279,12 +393,17 @@ export default function TalkPage() {
                 <div className="p-4 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/60 dark:bg-zinc-900/10 flex justify-between items-start relative">
                   <div className="flex-1 mr-4">
                     {post.author_pseudo && (
-                      <span className="text-[10px] font-mono font-bold text-cyan-600/80 dark:text-cyan-500/70 block mb-1">@{post.author_pseudo}</span>
+                      <span className="text-[10px] font-mono font-bold text-cyan-600/80 dark:text-cyan-500/70 mb-1 flex items-center gap-1.5">
+                        @{post.author_pseudo}
+                        {badgeMap[post.author_pseudo] && badgeMap[post.author_pseudo] !== "none" && (
+                          <span title={TIER_LABEL[badgeMap[post.author_pseudo]]}>{TIER_EMOJI[badgeMap[post.author_pseudo]]}</span>
+                        )}
+                      </span>
                     )}
                     <p className="text-zinc-800 dark:text-zinc-200 text-sm leading-relaxed">{post.text}</p>
                     {post.fiche_id && post.fiche_nom && (
-                      <Link href="/1/fiche" className="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline">
-                        🔗 {lang === "fr" ? "Fiche liée" : "Linked listing"}: {post.fiche_nom}
+                      <Link href="/1/fiche" className="inline-flex items-center gap-1.5 mt-2 text-[11px] font-semibold text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-800/50 px-2.5 py-1 rounded-full hover:bg-cyan-100 dark:hover:bg-cyan-950/50 transition-colors">
+                        🔗 {lang === "fr" ? "Voir la fiche" : "See listing"}: {post.fiche_nom}
                       </Link>
                     )}
                   </div>
@@ -304,66 +423,107 @@ export default function TalkPage() {
                   )}
                 </div>
 
-                {/* SONDAGES */}
-                <div className="p-4 border-b border-zinc-100 dark:border-zinc-900 bg-white dark:bg-zinc-950 flex flex-col gap-1">
-                  {CRITIQUES.map(crit => {
-                    const voters = post.votes[crit.key] || [];
-                    const count = voters.length;
-                    const hasVoted = voters.includes(pseudo);
-                    const ratio = Math.round((count / totalVotes) * 100);
-
-                    return (
-                      <button key={crit.key} onClick={() => handleVote(post.id, crit.key)}
-                        className={`w-full h-7 rounded-lg relative overflow-hidden text-left border transition-all ${hasVoted ? "border-cyan-500/40 bg-cyan-500/[0.04]" : "border-zinc-100 dark:border-zinc-900/40 bg-zinc-50/50 dark:bg-zinc-900/5 hover:border-zinc-300 dark:hover:border-zinc-800"}`}>
-                        <div className={`absolute left-0 top-0 bottom-0 ${hasVoted ? "bg-cyan-500/10" : "bg-zinc-200/40 dark:bg-zinc-900/20"}`} style={{ width: `${count > 0 ? ratio : 0}%` }} />
-                        <div className="absolute inset-0 flex items-center justify-between px-3 text-[11px]">
-                          <div className="flex items-center gap-2 truncate">
-                            <span className="text-xs shrink-0">{crit.emoji}</span>
-                            <span className="truncate text-zinc-600 dark:text-zinc-400">{crit.text}</span>
-                          </div>
-                          {count > 0 && <span className="font-mono text-[9px] text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-1 py-0.5 rounded">{count}</span>}
-                        </div>
-                      </button>
-                    );
-                  })}
+                {/* Indice de confiance — évite qu'un tout petit nombre de votes soit pris pour une vraie tendance */}
+                <div className="px-4 pt-3 pb-1 bg-white dark:bg-zinc-950 flex items-center gap-1.5">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    confidence === "high" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    : confidence === "medium" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    : "bg-zinc-200/50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400"
+                  }`}>
+                    {confidence === "high" ? "🟢" : confidence === "medium" ? "🟡" : "🔴"}{" "}
+                    {totalParticipants} {lang === "fr" ? (totalParticipants > 1 ? "personnes ont réagi" : "personne a réagi") : (totalParticipants === 1 ? "person reacted" : "people reacted")}
+                  </span>
                 </div>
 
-                {/* COMMENTAIRES */}
-                <div className="bg-white dark:bg-zinc-950 p-4 flex flex-col gap-4">
-                  {post.comments.length > 0 && (
-                    <div className="flex flex-col gap-2.5 border-b border-zinc-100 dark:border-zinc-900 pb-3">
-                      {post.comments.map(comment => (
-                        <div key={comment.id} className="text-xs text-zinc-500 dark:text-zinc-400 pl-3 border-l border-zinc-200 dark:border-zinc-800 flex justify-between items-start relative group">
-                          <div className="flex flex-col flex-1 mr-4">
-                            <span className="font-mono text-[9px] text-cyan-600/80 dark:text-cyan-500/70 font-bold">@{comment.author}</span>
-                            <p className="font-normal text-zinc-700 dark:text-zinc-300 mt-0.5">{comment.text}</p>
-                          </div>
-
-                          {(userRole === "admin" || userRole === "moderator") && (
-                            <div className="relative">
-                              <button onClick={() => setActiveMenuId(activeMenuId === comment.id ? null : comment.id)} className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-700 dark:hover:text-zinc-500 text-[10px] p-0.5 font-bold">⠇</button>
-                              {activeMenuId === comment.id && (
-                                <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-2xl py-1 z-30 text-[10px] font-mono">
-                                  <button onClick={() => handleModAction("delete", comment.author, comment.id, true)} className="w-full text-left px-2.5 py-1 text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">✕ Supprimer</button>
-                                  <button onClick={() => handleModAction("mute_1d", comment.author, comment.id, true)} className="w-full text-left px-2.5 py-1 hover:bg-zinc-50 dark:hover:bg-zinc-800">🤫 Mute 1j</button>
-                                  <button onClick={() => handleModAction("ban", comment.author, comment.id, true)} className="w-full text-left px-2.5 py-1 text-amber-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">💥 Ban</button>
-                                </div>
-                              )}
+                {/* RÉACTIONS — 2 colonnes avec un rôle distinct chacune */}
+                <div className="p-4 border-b border-zinc-100 dark:border-zinc-900 bg-white dark:bg-zinc-950">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 mb-1">
+                        {lang === "fr" ? "Ce que les gens ressentent" : "What people feel"}
+                      </p>
+                      {RESSENTI.map(crit => {
+                        const voters = post.votes[crit.key] || [];
+                        const count = voters.length;
+                        const hasVoted = voters.includes(pseudo);
+                        const ratio = Math.round((count / (totalParticipants || 1)) * 100);
+                        return (
+                          <button key={crit.key} onClick={() => handleVote(post.id, crit.key)}
+                            className={`w-full h-8 rounded-lg relative overflow-hidden text-left border transition-all ${hasVoted ? "border-cyan-500/40 bg-cyan-500/[0.04]" : "border-zinc-100 dark:border-zinc-900/40 bg-zinc-50/50 dark:bg-zinc-900/5 hover:border-zinc-300 dark:hover:border-zinc-800"}`}>
+                            <div className={`absolute left-0 top-0 bottom-0 ${hasVoted ? "bg-cyan-500/10" : "bg-zinc-200/40 dark:bg-zinc-900/20"}`} style={{ width: `${count > 0 ? ratio : 0}%` }} />
+                            <div className="absolute inset-0 flex items-center justify-between px-3 text-[11px]">
+                              <div className="flex items-center gap-2 truncate">
+                                <span className="text-xs shrink-0">{crit.emoji}</span>
+                                <span className="truncate text-zinc-600 dark:text-zinc-400">{crit.text}</span>
+                              </div>
+                              <span className="font-mono text-[10px] font-bold text-cyan-600 dark:text-cyan-400 shrink-0">{count === 0 ? "—" : showPercent ? `${ratio}%` : `${count} ${lang === "fr" ? (count > 1 ? "pers." : "pers.") : "ppl"}`}</span>
                             </div>
-                          )}
-                        </div>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </div>
-                  )}
 
-                  <div className="flex gap-2">
-                    <input type="text" disabled={!pseudo} value={commentInputs[post.id] || ""} onChange={e => setCommentInputs(prev => ({ ...prev, [post.id]: e.target.value }))}
-                      onKeyDown={e => { if (e.key === "Enter") handleAddComment(post.id); }}
-                      placeholder={lang === "fr" ? "Ajoute un avis ou un conseil..." : "Add your advice..."}
-                      className="flex-1 bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-900 rounded-lg px-3 py-1 h-8 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none focus:border-cyan-500" />
-                    <button onClick={() => handleAddComment(post.id)} className="px-3 h-8 bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-800 text-[11px] rounded-lg hover:border-cyan-400 transition-colors">Écrire</button>
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-1">
+                        {lang === "fr" ? "Ce qu'ils expliquent" : "What they explain"}
+                      </p>
+                      {EXPLICATIONS.map(crit => {
+                        const voters = post.votes[crit.key] || [];
+                        const count = voters.length;
+                        const hasVoted = voters.includes(pseudo);
+                        const ratio = Math.round((count / (totalParticipants || 1)) * 100);
+                        return (
+                          <button key={crit.key} onClick={() => handleVote(post.id, crit.key)}
+                            className={`w-full h-8 rounded-lg relative overflow-hidden text-left border transition-all ${hasVoted ? "border-amber-500/40 bg-amber-500/[0.04]" : "border-zinc-100 dark:border-zinc-900/40 bg-zinc-50/50 dark:bg-zinc-900/5 hover:border-zinc-300 dark:hover:border-zinc-800"}`}>
+                            <div className={`absolute left-0 top-0 bottom-0 ${hasVoted ? "bg-amber-500/10" : "bg-zinc-200/40 dark:bg-zinc-900/20"}`} style={{ width: `${count > 0 ? ratio : 0}%` }} />
+                            <div className="absolute inset-0 flex items-center justify-between px-3 text-[11px]">
+                              <div className="flex items-center gap-2 truncate">
+                                <span className="text-xs shrink-0">{crit.emoji}</span>
+                                <span className="truncate text-zinc-600 dark:text-zinc-400">{crit.text}</span>
+                              </div>
+                              <span className="font-mono text-[10px] font-bold text-amber-600 dark:text-amber-500 shrink-0">{count === 0 ? "—" : showPercent ? `${ratio}%` : `${count} ${lang === "fr" ? (count > 1 ? "pers." : "pers.") : "ppl"}`}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
+
+                {/* CONSEILS DÉJÀ LAISSÉS — lecture seule, plus de nouvelle saisie libre */}
+                {post.comments.length > 0 && (
+                  <div className="bg-white dark:bg-zinc-950 p-4 flex flex-col gap-2.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">
+                      {lang === "fr" ? "Conseils reçus" : "Advice received"}
+                    </p>
+                    {post.comments.map(comment => (
+                      <div key={comment.id} className="text-xs text-zinc-500 dark:text-zinc-400 pl-3 border-l border-zinc-200 dark:border-zinc-800 flex justify-between items-start relative group">
+                        <div className="flex flex-col flex-1 mr-4">
+                          <span className="font-mono text-[9px] text-cyan-600/80 dark:text-cyan-500/70 font-bold flex items-center gap-1">
+                            @{comment.author}
+                            {badgeMap[comment.author] && badgeMap[comment.author] !== "none" && (
+                              <span title={TIER_LABEL[badgeMap[comment.author]]}>{TIER_EMOJI[badgeMap[comment.author]]}</span>
+                            )}
+                          </span>
+                          <p className="font-normal text-zinc-700 dark:text-zinc-300 mt-0.5">{comment.text}</p>
+                        </div>
+
+                        {(userRole === "admin" || userRole === "moderator") && (
+                          <div className="relative">
+                            <button onClick={() => setActiveMenuId(activeMenuId === comment.id ? null : comment.id)} className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-700 dark:hover:text-zinc-500 text-[10px] p-0.5 font-bold">⠇</button>
+                            {activeMenuId === comment.id && (
+                              <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-2xl py-1 z-30 text-[10px] font-mono">
+                                <button onClick={() => handleModAction("delete", comment.author, comment.id, true)} className="w-full text-left px-2.5 py-1 text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">✕ Supprimer</button>
+                                <button onClick={() => handleModAction("mute_1d", comment.author, comment.id, true)} className="w-full text-left px-2.5 py-1 hover:bg-zinc-50 dark:hover:bg-zinc-800">🤫 Mute 1j</button>
+                                <button onClick={() => handleModAction("ban", comment.author, comment.id, true)} className="w-full text-left px-2.5 py-1 text-amber-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">💥 Ban</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
               </div>
             );

@@ -6,24 +6,22 @@ import { supabase } from "../../lib/supabase";
 
 type Lang = "fr" | "en";
 
-const NAV_ITEMS = [
-  { href: "/1/hall",         key: "hall"    },
-  { href: "/1/dashboard",    key: "dash"    },
-  { href: "/1/conversation", key: "conv"    },
-  { href: "/1/form",         key: "form"    },
-  { href: "/1/fiche",        key: "fiches"  },
-  { href: "/1/desktop",      key: "bureau"  },
-  { href: "/1/account",      key: "account" },
+const RESSENTI = [
+  { key: "wish",     emoji: "🔥", text: "J'aurais aimé avoir eu cette idée." },
+  { key: "client",   emoji: "💳", text: "Je pourrais devenir client." },
+  { key: "lost",     emoji: "🤔", text: "Je suis intrigué mais perdu." },
+  { key: "spark",    emoji: "🧪", text: "Il y a quelque chose ici, continue de creuser" },
+  { key: "big",      emoji: "🧨", text: "Cette idée pourrait devenir grosse" },
 ];
-const LABELS: Record<string, { fr: string; en: string }> = {
-  hall:    { fr: "Hall",         en: "Hall"         },
-  dash:    { fr: "Dashboard",    en: "Dashboard"    },
-  conv:    { fr: "Conversation", en: "Conversation" },
-  form:    { fr: "Formulaire",   en: "Form"         },
-  fiches:  { fr: "Fiches",       en: "Listings"     },
-  bureau:  { fr: "Bureau",        en: "Desk"         },
-  account: { fr: "Compte",       en: "Account"      },
-};
+const EXPLICATIONS = [
+  { key: "fail",     emoji: "🩻", text: "Je pense savoir exactement pourquoi ça ne marchera pas." },
+  { key: "blurry",   emoji: "🌫️", text: "Le message est flou." },
+  { key: "already",  emoji: "🔄", text: "Ça ressemble trop à quelque chose qui existe déjà." },
+  { key: "clone",    emoji: "🥸", text: "Ça sent le clone" },
+  { key: "exist",    emoji: "🧠", text: "Je comprends le projet, mais pas pourquoi il existe." },
+  { key: "no_pay",   emoji: "💰", text: "Je l'utiliserais, mais je ne paierais jamais pour ça." },
+  { key: "numb",     emoji: "💤", text: "Je ne ressens rien." },
+];
 
 // ── SVG ICONS CUSTOM ─────────────────────────────────────────────────────────
 const IconKey = ({ glow }: { glow?: boolean }) => (
@@ -36,7 +34,6 @@ const IconKey = ({ glow }: { glow?: boolean }) => (
     {glow && <circle cx="30" cy="32" r="20" fill="rgba(6,182,212,0.08)"/>}
   </svg>
 );
-
 const IconFiche = ({ glow }: { glow?: boolean }) => (
   <svg viewBox="0 0 80 80" fill="none" className="w-full h-full">
     <rect x="14" y="10" width="38" height="50" rx="4" stroke={glow?"#06b6d4":"#52525b"} strokeWidth="3.5" fill={glow?"rgba(6,182,212,0.04)":"none"}/>
@@ -47,7 +44,6 @@ const IconFiche = ({ glow }: { glow?: boolean }) => (
     <line x1="22" y1="45" x2="42" y2="45" stroke={glow?"#06b6d4":"#3f3f46"} strokeWidth="1.5" strokeLinecap="round"/>
   </svg>
 );
-
 const IconUnlock = ({ glow }: { glow?: boolean }) => (
   <svg viewBox="0 0 80 80" fill="none" className="w-full h-full">
     <rect x="18" y="36" width="44" height="32" rx="5" stroke={glow?"#06b6d4":"#52525b"} strokeWidth="3.5" fill={glow?"rgba(6,182,212,0.05)":"none"}/>
@@ -57,7 +53,6 @@ const IconUnlock = ({ glow }: { glow?: boolean }) => (
     {glow && <rect x="18" y="36" width="44" height="32" rx="5" fill="rgba(6,182,212,0.06)"/>}
   </svg>
 );
-
 const IconSent = ({ glow }: { glow?: boolean }) => (
   <svg viewBox="0 0 80 80" fill="none" className="w-full h-full">
     <path d="M10 40 L70 15 L50 70 L38 48 Z" stroke={glow?"#06b6d4":"#52525b"} strokeWidth="3" strokeLinejoin="round" fill={glow?"rgba(6,182,212,0.05)":"none"}/>
@@ -65,7 +60,6 @@ const IconSent = ({ glow }: { glow?: boolean }) => (
     <circle cx="38" cy="48" r="3" fill={glow?"#06b6d4":"#52525b"}/>
   </svg>
 );
-
 const IconReceived = ({ glow }: { glow?: boolean }) => (
   <svg viewBox="0 0 80 80" fill="none" className="w-full h-full">
     <path d="M12 20 L40 44 L68 20" stroke={glow?"#06b6d4":"#52525b"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
@@ -75,12 +69,22 @@ const IconReceived = ({ glow }: { glow?: boolean }) => (
     <circle cx="40" cy="44" r="4" fill={glow?"#06b6d4":"#52525b"}/>
   </svg>
 );
+const IconTalk = ({ glow }: { glow?: boolean }) => (
+  <svg viewBox="0 0 80 80" fill="none" className="w-full h-full">
+    <path d="M14 20h52a4 4 0 0 1 4 4v26a4 4 0 0 1-4 4H36l-14 12V54H14a4 4 0 0 1-4-4V24a4 4 0 0 1 4-4z"
+      stroke={glow?"#06b6d4":"#52525b"} strokeWidth="3.5" strokeLinejoin="round" fill={glow?"rgba(6,182,212,0.05)":"none"}/>
+    <circle cx="28" cy="37" r="2.5" fill={glow?"#22d3ee":"#52525b"}/>
+    <circle cx="40" cy="37" r="2.5" fill={glow?"#22d3ee":"#52525b"}/>
+    <circle cx="52" cy="37" r="2.5" fill={glow?"#22d3ee":"#52525b"}/>
+    {glow && <circle cx="40" cy="37" r="30" fill="rgba(6,182,212,0.04)"/>}
+  </svg>
+);
 
-type PanelId = "key" | "fiches" | "unlocked" | "sent" | "received";
+type PanelId = "key" | "fiches" | "unlocked" | "sent" | "received" | "talk";
 
-type MyFiche = { id:string; key:string; nom_projet:string; likes:number; interets:number };
-type UnlockedFiche = { fiche_id:string; nom_projet:string; key:string };
-type Interet = { id:string; type:string; sender_key:string; created_at:string; nom_projet:string; fiche_id:string };
+type MyFiche = { id: string; nom_projet: string; likes: number; interets: number };
+type UnlockedFiche = { fiche_id: string; nom_projet: string };
+type InteretRow = { id: string; type: string; created_at: string; nom_projet: string; fiche_id: string; other_pseudo: string | null };
 
 export default function BureauPage() {
   const [lang, setLang] = useState<Lang>("fr");
@@ -89,14 +93,19 @@ export default function BureauPage() {
   const [myKey, setMyKey]       = useState<string|null>(null);
   const [myFiches, setMyFiches] = useState<MyFiche[]>([]);
   const [unlocked, setUnlocked] = useState<UnlockedFiche[]>([]);
-  const [sentInterets, setSentInterets] = useState<Interet[]>([]);
-  const [receivedInterets, setReceivedInterets] = useState<Interet[]>([]);
+  const [sentInterets, setSentInterets] = useState<InteretRow[]>([]);
+  const [receivedInterets, setReceivedInterets] = useState<InteretRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [openPanel, setOpenPanel] = useState<PanelId|null>(null);
   const [globalStats, setGlobalStats] = useState({ fiches: 0, tunnels: 0, interets: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
   const [keyRevealed, setKeyRevealed] = useState(false);
   const [time, setTime] = useState("");
+
+  // ── STATS TALK (par fiche) ──
+  const [talkFicheId, setTalkFicheId] = useState<string | null>(null);
+  const [talkStats, setTalkStats] = useState<{ totalParticipants: number; votes: Record<string, number> } | null>(null);
+  const [loadingTalk, setLoadingTalk] = useState(false);
 
   useEffect(() => {
     const tick = () => setTime(new Date().toLocaleTimeString(lang==="fr"?"fr-CA":"en-CA",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}));
@@ -113,27 +122,67 @@ export default function BureauPage() {
     if(!userId){setLoading(false);return;}
     const load = async()=>{
       setLoading(true);
-      const {data:fd} = await supabase.from("fiches").select("id,key,nom_projet,likes,interets").eq("user_id",userId).order("created_at",{ascending:false});
+
+      // FIX: "key" n'est plus lisible directement (verrouillé côté DB).
+      // On charge les fiches sans cette colonne...
+      const {data:fd} = await supabase.from("fiches").select("id,nom_projet,likes,interets").eq("user_id",userId).order("created_at",{ascending:false});
       const fiches = (fd||[]) as MyFiche[];
       setMyFiches(fiches);
-      if(fiches.length>0) setMyKey(fiches[0].key);
+      if (fiches.length > 0) setTalkFicheId(fiches[0].id);
 
+      // ...et on récupère la vraie clé via le RPC sécurisé (première fiche seulement,
+      // celle affichée dans le panneau "Ma Clé").
+      if (fiches.length > 0) {
+        const { data: priv } = await supabase.rpc("get_fiche_private_fields", { p_fiche_id: fiches[0].id });
+        if (priv && priv.length > 0) setMyKey(priv[0].key);
+      }
+
+      // Fiches débloquées (achetées) — sans la colonne "key"
       const {data:td} = await supabase.from("tunnels").select("fiche_id").eq("acheteur_id",userId);
-      if(td&&td.length>0){
+      if(td && td.length>0){
         const ids = td.map((t:any)=>t.fiche_id);
-        const {data:ud} = await supabase.from("fiches").select("id,key,nom_projet").in("id",ids);
-        setUnlocked((ud||[]).map((f:any)=>({fiche_id:f.id,...f})));
+        const {data:ud} = await supabase.from("fiches").select("id,nom_projet").in("id",ids);
+        setUnlocked((ud||[]).map((f:any)=>({fiche_id:f.id, nom_projet:f.nom_projet})));
       }
 
-      // Intérêts que J'AI envoyés (sur des fiches d'autres personnes)
-      const {data:sid} = await supabase.from("fiche_interets").select("id,type,sender_key,created_at,fiche_id").eq("sender_key", fiches[0]?.key||"NONE").order("created_at",{ascending:false}).limit(8);
-      // Pour les intérêts reçus
-      if(fiches.length>0){
-        const ficheIds = fiches.map(f=>f.id);
-        const {data:rid} = await supabase.from("fiche_interets").select("id,type,sender_key,created_at,fiche_id").in("fiche_id",ficheIds).order("created_at",{ascending:false}).limit(8);
-        setReceivedInterets((rid||[]).map((it:any)=>({...it, nom_projet: fiches.find(f=>f.id===it.fiche_id)?.nom_projet||"—"})));
+      // FIX: "fiche_interets" (ancienne table /2) a été supprimée. On utilise
+      // maintenant "interets_fiches" (fiche_id, user_id, type), la vraie table
+      // en usage sur /1.
+      const { data: sentRows } = await supabase
+        .from("interets_fiches")
+        .select("id,type,created_at,fiche_id, fiches(nom_projet)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      setSentInterets((sentRows||[]).map((r: any) => ({
+        id: r.id, type: r.type, created_at: r.created_at, fiche_id: r.fiche_id,
+        nom_projet: r.fiches?.nom_projet || "—", other_pseudo: null,
+      })));
+
+      if (fiches.length > 0) {
+        const ficheIds = fiches.map(f => f.id);
+        const { data: recvRows } = await supabase
+          .from("interets_fiches")
+          .select("id,type,created_at,fiche_id,user_id")
+          .in("fiche_id", ficheIds)
+          .order("created_at", { ascending: false })
+          .limit(8);
+
+        // pseudo de l'expéditeur, via profiles (lecture publique autorisée)
+        const senderIds = [...new Set((recvRows || []).map((r: any) => r.user_id))];
+        let pseudoMap: Record<string, string> = {};
+        if (senderIds.length > 0) {
+          const { data: profs } = await supabase.from("profiles").select("id,username").in("id", senderIds);
+          (profs || []).forEach((p: any) => { pseudoMap[p.id] = p.username; });
+        }
+
+        setReceivedInterets((recvRows||[]).map((r: any) => ({
+          id: r.id, type: r.type, created_at: r.created_at, fiche_id: r.fiche_id,
+          nom_projet: fiches.find(f => f.id === r.fiche_id)?.nom_projet || "—",
+          other_pseudo: pseudoMap[r.user_id] || null,
+        })));
       }
-      setSentInterets((sid||[]) as Interet[]);
+
       setLoading(false);
     };
     load();
@@ -145,7 +194,7 @@ export default function BureauPage() {
       const [{ count: f }, { count: t }, { count: i }] = await Promise.all([
         supabase.from("fiches").select("*", { count:"exact", head:true }),
         supabase.from("tunnels").select("*", { count:"exact", head:true }),
-        supabase.from("fiche_interets").select("*", { count:"exact", head:true }),
+        supabase.from("interets_fiches").select("*", { count:"exact", head:true }),
       ]);
       setGlobalStats({ fiches: f||0, tunnels: t||0, interets: i||0 });
       setLoadingStats(false);
@@ -153,9 +202,31 @@ export default function BureauPage() {
     loadGlobal();
   },[]);
 
+  // Charge les stats Talk quand on ouvre le panneau ou change de fiche sélectionnée
+  useEffect(() => {
+    if (openPanel !== "talk" || !talkFicheId) return;
+    const loadTalkStats = async () => {
+      setLoadingTalk(true);
+      const { data: post } = await supabase.from("talk_posts").select("id").eq("fiche_id", talkFicheId).maybeSingle();
+      if (!post) { setTalkStats({ totalParticipants: 0, votes: {} }); setLoadingTalk(false); return; }
+
+      const { data: votesData } = await supabase.from("talk_votes").select("critique_key, user_email").eq("post_id", post.id);
+      const votes: Record<string, number> = {};
+      const uniqueVoters = new Set<string>();
+      (votesData || []).forEach((v: any) => {
+        votes[v.critique_key] = (votes[v.critique_key] || 0) + 1;
+        uniqueVoters.add(v.user_email);
+      });
+      setTalkStats({ totalParticipants: uniqueVoters.size, votes });
+      setLoadingTalk(false);
+    };
+    loadTalkStats();
+  }, [openPanel, talkFicheId]);
+
   const panels: { id:PanelId; label:{fr:string;en:string}; icon: React.FC<{glow?:boolean}>; count?:number }[] = [
     { id:"key",      label:{fr:"Ma Clé",       en:"My Key"    }, icon:IconKey,      count:undefined },
     { id:"fiches",   label:{fr:"Mes Fiches",   en:"My Listings"}, icon:IconFiche,   count:myFiches.length },
+    { id:"talk",     label:{fr:"Talk",         en:"Talk"      }, icon:IconTalk,     count:undefined },
     { id:"unlocked", label:{fr:"Contacts",     en:"Contacts"  }, icon:IconUnlock,   count:unlocked.length },
     { id:"sent",     label:{fr:"Envoyés",      en:"Sent"      }, icon:IconSent,     count:sentInterets.length },
     { id:"received", label:{fr:"Reçus",        en:"Received"  }, icon:IconReceived, count:receivedInterets.length },
@@ -175,7 +246,6 @@ export default function BureauPage() {
           style={{background:"radial-gradient(ellipse 50% 80% at 50% 0%, rgba(6,182,212,0.07) 0%, transparent 70%)"}}/>
       </div>
 
-      {/* 3 COLONNES CHAQUE CÔTÉ */}
       {["left","right"].map(side=>(
         <div key={side} className={`pointer-events-none fixed inset-y-0 ${side==="left"?"left-0":"right-0"} z-0 hidden lg:flex gap-10 px-6 items-stretch`}>
           {[0,1,2].map(i=>(
@@ -191,24 +261,23 @@ export default function BureauPage() {
 
       {/* NAV */}
       <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-50">
-  <Link href="/1/hall" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
-    Echo AI
-  </Link>
-  <div className="flex items-center gap-5 text-sm flex-wrap">
-    <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Hall</Link>
-    <Link href="/1/dashboard" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Dashboard</Link>
-    <Link href="/1/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
-    <Link href="/1/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Formulaire</Link>
-    <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Fiches</Link>
-    <Link href="/1/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Talk</Link>
-    <Link href="/1/desktop" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Bureau</Link>
-    <Link href="/1/account" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Compte</Link>
-  </div>
-</nav>
+        <Link href="/1/hall" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+          Echo AI
+        </Link>
+        <div className="flex items-center gap-5 text-sm flex-wrap">
+          <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Hall</Link>
+          <Link href="/1/dashboard" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/1/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
+          <Link href="/1/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Formulaire</Link>
+          <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Fiches</Link>
+          <Link href="/1/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Talk</Link>
+          <Link href="/1/desktop" className="text-cyan-600 dark:text-cyan-400 font-semibold">Bureau</Link>
+          <Link href="/1/account" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Compte</Link>
+        </div>
+      </nav>
 
       <div className="relative z-10 flex-1 px-4 lg:px-32 py-12 flex flex-col items-center">
 
-        {/* EN-TÊTE */}
         <div className="text-center mb-14">
           <p className="text-[10px] font-mono tracking-[0.5em] text-cyan-500 font-bold mb-3">{lang==="fr"?"ESPACE PRIVÉ":"PRIVATE SPACE"}</p>
           <h1 className="text-4xl sm:text-5xl font-extralight tracking-[0.15em] text-white uppercase mb-3"
@@ -249,8 +318,8 @@ export default function BureauPage() {
               ))}
             </div>
 
-            {/* ── 5 PLAQUES ── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+            {/* ── 6 PLAQUES ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
               {panels.map(panel=>{
                 const isOpen = openPanel===panel.id;
                 const Icon = panel.icon;
@@ -297,7 +366,7 @@ export default function BureauPage() {
                     ) : (
                       <div className="space-y-4">
                         <div className="inline-block bg-black/40 border border-zinc-800 rounded-2xl px-10 py-5 font-mono text-4xl font-black text-zinc-700 tracking-widest select-none blur-sm">
-                          Key_A00
+                          ??????
                         </div>
                         <div>
                           <button onClick={()=>setKeyRevealed(true)}
@@ -323,16 +392,73 @@ export default function BureauPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {myFiches.map(f=>(
                           <div key={f.id} className="bg-black/40 border border-zinc-800 rounded-xl px-4 py-3 flex items-center justify-between">
-                            <div>
-                              <p className="text-sm text-white font-semibold">{f.nom_projet}</p>
-                              <p className="text-[10px] font-mono text-zinc-500">{f.key}</p>
-                            </div>
+                            <p className="text-sm text-white font-semibold">{f.nom_projet}</p>
                             <div className="text-right text-[10px] text-zinc-500">
                               <p>♥ {f.likes}</p>
                               <p>★ {f.interets}</p>
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── TALK — statistiques par fiche ── */}
+                {openPanel==="talk" && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">{lang==="fr"?"Statistiques Talk":"Talk statistics"}</p>
+                      {myFiches.length > 1 && (
+                        <select value={talkFicheId || ""} onChange={e => setTalkFicheId(e.target.value)}
+                          className="bg-black/40 border border-zinc-800 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-cyan-500">
+                          {myFiches.map(f => <option key={f.id} value={f.id}>{f.nom_projet}</option>)}
+                        </select>
+                      )}
+                    </div>
+
+                    {myFiches.length === 0 ? (
+                      <p className="text-sm text-zinc-500 text-center py-6">{lang==="fr"?"Crée une fiche pour voir ses statistiques Talk.":"Create a listing to see its Talk stats."}</p>
+                    ) : loadingTalk ? (
+                      <p className="text-sm text-zinc-500 text-center py-6">{lang==="fr"?"Chargement...":"Loading..."}</p>
+                    ) : !talkStats || talkStats.totalParticipants === 0 ? (
+                      <div className="text-center py-6">
+                        <p className="text-sm text-zinc-500 mb-3">{lang==="fr"?"Pas encore publiée sur Talk, ou aucune réaction reçue.":"Not posted on Talk yet, or no reactions received."}</p>
+                        <Link href="/1/talk" className="text-xs text-cyan-400 hover:text-cyan-300">Talk →</Link>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-xs text-zinc-400 mb-4">
+                          👥 <span className="text-white font-bold">{talkStats.totalParticipants}</span> {lang==="fr"?"personnes ont réagi":"people reacted"}
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-500 mb-1">{lang==="fr"?"Ressenti":"Feelings"}</p>
+                            {RESSENTI.map(c => {
+                              const count = talkStats.votes[c.key] || 0;
+                              const pct = Math.round((count / talkStats.totalParticipants) * 100);
+                              return (
+                                <div key={c.key} className="flex items-center justify-between text-xs bg-black/30 border border-zinc-800 rounded-lg px-3 py-2">
+                                  <span className="flex items-center gap-2 text-zinc-400 truncate"><span>{c.emoji}</span><span className="truncate">{c.text}</span></span>
+                                  <span className="font-mono font-bold text-cyan-400 shrink-0 ml-2">{count > 0 ? `${pct}% (${count})` : "—"}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">{lang==="fr"?"Explications":"Explanations"}</p>
+                            {EXPLICATIONS.map(c => {
+                              const count = talkStats.votes[c.key] || 0;
+                              const pct = Math.round((count / talkStats.totalParticipants) * 100);
+                              return (
+                                <div key={c.key} className="flex items-center justify-between text-xs bg-black/30 border border-zinc-800 rounded-lg px-3 py-2">
+                                  <span className="flex items-center gap-2 text-zinc-400 truncate"><span>{c.emoji}</span><span className="truncate">{c.text}</span></span>
+                                  <span className="font-mono font-bold text-amber-400 shrink-0 ml-2">{count > 0 ? `${pct}% (${count})` : "—"}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -352,7 +478,6 @@ export default function BureauPage() {
                         {unlocked.map(f=>(
                           <div key={f.fiche_id} className="bg-emerald-900/10 border border-emerald-800/30 rounded-xl px-4 py-3">
                             <p className="text-sm text-emerald-300 font-semibold">{f.nom_projet}</p>
-                            <p className="text-[10px] font-mono text-zinc-500">{f.key}</p>
                           </div>
                         ))}
                       </div>
@@ -372,7 +497,7 @@ export default function BureauPage() {
                           <div key={it.id} className="bg-black/40 border border-zinc-800 rounded-xl px-4 py-2.5 flex items-center gap-3">
                             <span>{it.type==="tres_interesse"?"🔥":"💌"}</span>
                             <div>
-                              <p className="text-xs text-zinc-300">{it.nom_projet||it.fiche_id}</p>
+                              <p className="text-xs text-zinc-300">{it.nom_projet}</p>
                               <p className="text-[10px] text-zinc-600">{new Date(it.created_at).toLocaleDateString(lang==="fr"?"fr-CA":"en-CA")}</p>
                             </div>
                           </div>
@@ -394,7 +519,7 @@ export default function BureauPage() {
                           <div key={it.id} className="bg-black/40 border border-zinc-800 rounded-xl px-4 py-2.5 flex items-center gap-3">
                             <span>{it.type==="tres_interesse"?"🔥":"💌"}</span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs text-cyan-400 font-mono font-bold">{it.sender_key}</p>
+                              <p className="text-xs text-cyan-400 font-mono font-bold">{it.other_pseudo ? `@${it.other_pseudo}` : (lang==="fr"?"Anonyme":"Anonymous")}</p>
                               <p className="text-[10px] text-zinc-500 truncate">{it.nom_projet}</p>
                             </div>
                             <p className="text-[10px] text-zinc-600 shrink-0">{new Date(it.created_at).toLocaleDateString(lang==="fr"?"fr-CA":"en-CA")}</p>
@@ -411,7 +536,7 @@ export default function BureauPage() {
       </div>
 
       <footer className="relative z-20 h-8 border-t border-zinc-950 bg-black/60 px-6 flex items-center justify-between text-[10px] font-mono text-zinc-600 shrink-0">
-        <p>BUREAU — <span className="text-zinc-500">SITE_2</span></p>
+        <p>BUREAU</p>
         <p>{time}</p>
         <p>© 2026 ECHOSAI.CA</p>
       </footer>

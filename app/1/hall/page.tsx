@@ -220,7 +220,25 @@ export default function HallPage() {
           </Link>
         </div>
 
-        <div style={{ marginTop: 48, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, opacity: .3, animation: "bounce 2s infinite" }}>
+        {/* CTA TALK — ferme la boucle Hall ↔ Talk */}
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", marginTop: 20 }}>
+          <Link href="/1/talk" style={{ textDecoration: "none" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,.55)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 20, padding: "8px 16px", transition: "all .2s" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#fff"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,200,255,.4)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,.55)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,.12)"; }}>
+              🗣️ {lang === "fr" ? "Publier sur Talk" : "Post on Talk"}
+            </span>
+          </Link>
+          <Link href="/1/talk" style={{ textDecoration: "none" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,.55)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 20, padding: "8px 16px", transition: "all .2s" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = "#fff"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(201,168,76,.4)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,.55)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,.12)"; }}>
+              ⭐ {lang === "fr" ? "Voir les avis Talk" : "See Talk feedback"}
+            </span>
+          </Link>
+        </div>
+
+        <div style={{ marginTop: 32, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, opacity: .3, animation: "bounce 2s infinite" }}>
           <div style={{ fontSize: 11, letterSpacing: 3, color: "#fff" }}>SCROLL</div>
           <div style={{ width: 1, height: 40, background: "linear-gradient(to bottom, rgba(255,255,255,.5), transparent)" }} />
         </div>

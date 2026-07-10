@@ -301,8 +301,10 @@ export default function WorldPage() {
   const [worldMax, setWorldMax]             = useState(3);
   const [worldTier, setWorldTier]           = useState<"free"|"advantage"|"premium">("free");
   const [showQuotaPopup, setShowQuotaPopup] = useState(false);
+  const [showAuthInPopup, setShowAuthInPopup] = useState(false);
   const [nextRegenIn, setNextRegenIn]       = useState(0);
   const [currency, setCurrency]             = useState("CAD");
+  const [anonQuestions, setAnonQuestions]   = useState(0); // questions posées sans compte
   // ── DEVISE ───────────────────────────────────────────────────────────────────
   const CURRENCIES = ["CAD","USD","EUR","CNY"];
   const PRICES: Record<string, {amount:string;symbol:string}> = {
@@ -344,6 +346,16 @@ export default function WorldPage() {
     try {
       const saved = localStorage.getItem("world_sessions");
       if (saved) setSessions(JSON.parse(saved));
+    } catch {}
+
+    // Quota anonyme depuis localStorage
+    try {
+      const anonQ = parseInt(localStorage.getItem("world_anon_questions") || "0");
+      setAnonQuestions(anonQ);
+      if (!user) {
+        const remaining = Math.max(0, 3 - anonQ);
+        setWorldAvailable(remaining);
+      }
     } catch {}
 
     // Restaurer les messages IMMÉDIATEMENT depuis localStorage
@@ -494,7 +506,20 @@ export default function WorldPage() {
   };
 
   const consumeWorldQuota = async (): Promise<boolean> => {
-    if (!user) return false;
+    // Utilisateur non connecté — quota anonyme de 3 questions
+    if (!user) {
+      const newAnon = anonQuestions + 1;
+      if (anonQuestions >= 3) {
+        // 3 questions épuisées — demander connexion pour 3 de plus
+        setShowAuthInPopup(true);
+        setShowQuotaPopup(true);
+        return false;
+      }
+      setAnonQuestions(newAnon);
+      setWorldAvailable(Math.max(0, 3 - newAnon));
+      try { localStorage.setItem("world_anon_questions", String(newAnon)); } catch {}
+      return true;
+    }
     if (worldTier === "premium" || worldTier === "advantage") {
       const newVal = Math.max(0, worldAvailable - 1);
       if (newVal < 0) { setShowQuotaPopup(true); return false; }
@@ -550,7 +575,7 @@ export default function WorldPage() {
   // ── Flow ──────────────────────────────────────────────────────────────────────
   const selectLang = (l: Lang) => {
     setLang(l);
-    setStage(user ? "continent" : "auth");
+    setStage("continent"); // Plus d'auth obligatoire au départ
   };
 
   const selectContinent = (c: Continent) => { setContinent(c); setStage("allegiance"); };
@@ -654,11 +679,11 @@ export default function WorldPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question, continent: c, lang, context: contextSoFar,
-          isFinal, round, userId: user?.id, maxChars: 672,
+          isFinal, round, userId: user?.id, maxChars: 650,
         }),
       });
       const data = await res.json();
-      return (data.response || data.error || "...").substring(0, 672);
+      return (data.response || data.error || "...").substring(0, 650);
     } catch {
       return lang === "fr" ? "Erreur de connexion." : lang === "en" ? "Connection error." : "连接错误。";
     }
@@ -1395,94 +1420,136 @@ export default function WorldPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* ── POP-UP QUOTA ATTEINT ── */}
+      {/* ── POP-UP QUOTA ── */}
       {showQuotaPopup && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4" style={{ zIndex: 999999 }}>
-          <div className="relative w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-center shadow-2xl">
+          <div className="relative w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
             {/* Logo */}
             <div className="flex items-center justify-center gap-2 mb-4">
               <img src="/echo2.png" alt="Echo" className="w-5 h-5 rounded object-contain opacity-70" />
               <span className="text-zinc-500 text-xs font-mono uppercase tracking-widest">WORLD</span>
             </div>
 
-            {/* Message limite ou upgrade */}
-            {worldAvailable === 0 ? (
-              <div className="mb-4">
-                <div className="text-3xl mb-2">⏳</div>
-                <h3 className="text-white font-black text-base mb-1">
-                  {lang === "fr" ? "Limite atteinte" : lang === "en" ? "Limit reached" : "已达上限"}
-                </h3>
-                <p className="text-zinc-500 text-xs">
-                  {lang === "fr" ? `Reviens dans ${formatRegen(nextRegenIn)}` : lang === "en" ? `Come back in ${formatRegen(nextRegenIn)}` : `${formatRegen(nextRegenIn)}后再来`}
-                </p>
+            {showAuthInPopup ? (
+              /* ── MODE CONNEXION — après 3 questions anon ── */
+              <div className="space-y-3">
+                <div className="text-center mb-3">
+                  <div className="text-2xl mb-2">🎁</div>
+                  <h3 className="text-white font-black text-base mb-1">
+                    {lang === "fr" ? "3 questions de plus" : lang === "en" ? "3 more questions" : "再3个问题"}
+                  </h3>
+                  <p className="text-zinc-400 text-xs">
+                    {lang === "fr" ? "Connecte-toi pour continuer gratuitement" : lang === "en" ? "Sign in to continue for free" : "登录后免费继续"}
+                  </p>
+                </div>
+                <button onClick={handleGoogle} disabled={authLoading}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl transition-all group">
+                  <GoogleLogo />
+                  <span className="text-white text-sm font-medium flex-1 text-left">{t.google}</span>
+                </button>
+                <button onClick={handleMicrosoft} disabled={authLoading}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl transition-all group">
+                  <MicrosoftLogo />
+                  <span className="text-white text-sm font-medium flex-1 text-left">{t.microsoft}</span>
+                </button>
+                {authMode === "none" && (
+                  <div className="flex gap-2">
+                    <button onClick={() => { setAuthMode("signin"); setAuthError(null); }}
+                      className="flex-1 py-2 rounded-xl border border-zinc-700 text-zinc-400 hover:text-white text-xs font-mono transition-all">
+                      ✉ {t.email}
+                    </button>
+                    <button onClick={() => { setAuthMode("signup"); setAuthError(null); }}
+                      className="flex-1 py-2 rounded-xl border border-cyan-500/20 text-cyan-500 text-xs font-mono transition-all">
+                      {t.signup}
+                    </button>
+                  </div>
+                )}
+                {authMode !== "none" && (
+                  <div className="space-y-2">
+                    <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)}
+                      placeholder={lang === "fr" ? "Courriel" : "Email"}
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-white placeholder-zinc-600 outline-none" />
+                    <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") authMode === "signin" ? handleEmailSignIn() : handleEmailSignUp(); }}
+                      placeholder={lang === "fr" ? "Mot de passe" : "Password"}
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-white placeholder-zinc-600 outline-none" />
+                    {authError && <p className="text-red-400 text-xs">{authError}</p>}
+                    {authSuccess && <p className="text-emerald-400 text-xs">✓ {authSuccess}</p>}
+                    <button onClick={authMode === "signin" ? handleEmailSignIn : handleEmailSignUp}
+                      disabled={authLoading2}
+                      className="w-full py-2 rounded-xl text-sm font-bold text-white transition-all"
+                      style={{ background: "#0891b2" }}>
+                      {authLoading2 ? "..." : authMode === "signin"
+                        ? (lang === "fr" ? "Se connecter" : lang === "en" ? "Sign in" : "登录")
+                        : (lang === "fr" ? "Créer mon compte" : lang === "en" ? "Create account" : "创建账户")}
+                    </button>
+                    <button onClick={() => { setAuthMode("none"); setAuthError(null); }}
+                      className="w-full text-center text-zinc-700 text-xs transition-colors">
+                      ← {lang === "fr" ? "Retour" : lang === "en" ? "Back" : "返回"}
+                    </button>
+                  </div>
+                )}
+                <button onClick={() => { setShowQuotaPopup(false); setShowAuthInPopup(false); setAuthMode("none"); }}
+                  className="w-full py-2 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors text-center mt-1">
+                  {lang === "fr" ? "Fermer" : lang === "en" ? "Close" : "关闭"}
+                </button>
               </div>
             ) : (
-              <p className="text-zinc-400 text-sm mb-4">
-                {lang === "fr" ? "Passez à un plan supérieur" : lang === "en" ? "Upgrade your plan" : "升级您的计划"}
-              </p>
+              /* ── MODE PLANS — limite atteinte ── */
+              <div className="text-center">
+                {worldAvailable === 0 ? (
+                  <div className="mb-4">
+                    <div className="text-3xl mb-2">⏳</div>
+                    <h3 className="text-white font-black text-base mb-1">
+                      {lang === "fr" ? "Limite atteinte" : lang === "en" ? "Limit reached" : "已达上限"}
+                    </h3>
+                    <p className="text-zinc-500 text-xs mb-3">
+                      {lang === "fr" ? `Reviens dans ${formatRegen(nextRegenIn)}` : lang === "en" ? `Come back in ${formatRegen(nextRegenIn)}` : `${formatRegen(nextRegenIn)}后再来`}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-zinc-400 text-sm mb-4">
+                    {lang === "fr" ? "Passez à un plan supérieur" : lang === "en" ? "Upgrade your plan" : "升级您的计划"}
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="flex flex-col rounded-xl p-4 text-center" style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
+                    <div className="text-amber-400 font-black text-sm mb-1">
+                      {lang === "fr" ? "Avantage" : lang === "en" ? "Advantage" : "优势"}
+                    </div>
+                    <div className="text-white font-black text-xl mb-0.5">
+                      {PRICES_ADVANTAGE[currency].symbol}{PRICES_ADVANTAGE[currency].amount}
+                    </div>
+                    <div className="text-zinc-500 text-xs mb-3">100 {lang === "fr" ? "q/mois" : lang === "en" ? "q/month" : "问题/月"}</div>
+                    <button onClick={async () => {
+                      if (!user) return;
+                      const res = await fetch("/api/stripe/create-checkout-site2", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan: "world_advantage", currency, userId: user.id, userEmail: user.email }) });
+                      const d = await res.json(); if (d.url) window.location.href = d.url;
+                    }} className="w-full py-2 rounded-lg font-bold text-xs text-black mt-auto" style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)" }}>
+                      {lang === "fr" ? "Choisir" : lang === "en" ? "Select" : "选择"}
+                    </button>
+                  </div>
+                  <div className="flex flex-col rounded-xl p-4 text-center" style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
+                    <div className="text-amber-400 font-black text-sm mb-1">{lang === "zh" ? "高级版" : "Premium"}</div>
+                    <div className="text-white font-black text-xl mb-0.5">
+                      {PRICES[currency].symbol}{PRICES[currency].amount}
+                    </div>
+                    <div className="text-zinc-500 text-xs mb-3">400 {lang === "fr" ? "q/mois" : lang === "en" ? "q/month" : "问题/月"}</div>
+                    <button onClick={async () => {
+                      if (!user) return;
+                      const res = await fetch("/api/stripe/create-checkout-site2", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan: "world", currency, userId: user.id, userEmail: user.email }) });
+                      const d = await res.json(); if (d.url) window.location.href = d.url;
+                    }} className="w-full py-2 rounded-lg font-bold text-xs text-black mt-auto" style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)" }}>
+                      {lang === "fr" ? "Choisir" : lang === "en" ? "Select" : "选择"}
+                    </button>
+                  </div>
+                </div>
+                <button onClick={() => setShowQuotaPopup(false)}
+                  className="w-full py-2 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors">
+                  {lang === "fr" ? "Fermer" : lang === "en" ? "Close" : "关闭"}
+                </button>
+              </div>
             )}
-
-            {/* 2 colonnes identiques — seul le contenu change */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {/* AVANTAGE — clone de Premium */}
-              <div className="flex flex-col rounded-xl p-4 text-center"
-                style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
-                <div className="text-amber-400 font-black text-sm mb-1">
-                  {lang === "fr" ? "Avantage" : lang === "en" ? "Advantage" : "优势"}
-                </div>
-                <div className="text-white font-black text-xl mb-0.5">
-                  {PRICES_ADVANTAGE[currency].symbol}{PRICES_ADVANTAGE[currency].amount}
-                </div>
-                <div className="text-zinc-500 text-xs mb-3">
-                  100 {lang === "fr" ? "q/mois" : lang === "en" ? "q/month" : "问题/月"}
-                </div>
-                <button
-                  onClick={async () => {
-                    if (!user) return;
-                    const res = await fetch("/api/stripe/create-checkout-site2", {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ plan: "world_advantage", currency, userId: user.id, userEmail: user.email }),
-                    });
-                    const d = await res.json();
-                    if (d.url) window.location.href = d.url;
-                  }}
-                  className="w-full py-2 rounded-lg font-bold text-xs text-black transition-all mt-auto"
-                  style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)", boxShadow: "0 0 10px rgba(245,158,11,0.3)" }}>
-                  {lang === "fr" ? "Choisir" : lang === "en" ? "Select" : "选择"}
-                </button>
-              </div>
-
-              {/* PREMIUM — original */}
-              <div className="flex flex-col rounded-xl p-4 text-center"
-                style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
-                <div className="text-amber-400 font-black text-sm mb-1">{lang === "zh" ? "高级版" : "Premium"}</div>
-                <div className="text-white font-black text-xl mb-0.5">
-                  {PRICES[currency].symbol}{PRICES[currency].amount}
-                </div>
-                <div className="text-zinc-500 text-xs mb-3">
-                  400 {lang === "fr" ? "q/mois" : lang === "en" ? "q/month" : "问题/月"}
-                </div>
-                <button
-                  onClick={async () => {
-                    if (!user) return;
-                    const res = await fetch("/api/stripe/create-checkout-site2", {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ plan: "world", currency, userId: user.id, userEmail: user.email }),
-                    });
-                    const d = await res.json();
-                    if (d.url) window.location.href = d.url;
-                  }}
-                  className="w-full py-2 rounded-lg font-bold text-xs text-black transition-all mt-auto"
-                  style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)", boxShadow: "0 0 10px rgba(245,158,11,0.3)" }}>
-                  {lang === "fr" ? "Choisir" : lang === "en" ? "Select" : "选择"}
-                </button>
-              </div>
-            </div>
-
-            <button onClick={() => setShowQuotaPopup(false)}
-              className="w-full py-2 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors">
-              {lang === "fr" ? "Fermer" : lang === "en" ? "Close" : "关闭"}
-            </button>
           </div>
         </div>
       )}
