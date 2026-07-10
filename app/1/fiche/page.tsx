@@ -117,7 +117,7 @@ export default function FichePage() {
   const [loading, setLoading] = useState(true);
   const [myInteractions, setMyInteractions] = useState<Set<string>>(new Set()); // "ficheId:type"
   const [hasOwnFiche, setHasOwnFiche] = useState(false);
-  const [myFicheId, setMyFicheId] = useState<string | null>(null);
+  const [myFicheIds, setMyFicheIds] = useState<string[]>([]);
   const [sentNotif, setSentNotif] = useState<{ id: string; type: "like" | "interet" } | null>(null);
 
   useEffect(() => {
@@ -243,15 +243,16 @@ export default function FichePage() {
   useEffect(() => {
     if (!userId) {
       setHasOwnFiche(false);
-      setMyFicheId(null);
+      setMyFicheIds([]);
       setMyInteractions(new Set());
       return;
     }
     // A-t-il au moins une fiche ? (obligatoire pour pouvoir envoyer un intérêt)
-    supabase.from("fiches").select("id").eq("user_id", userId).limit(1)
+    // On récupère TOUTES ses fiches pour pouvoir les afficher dans le courriel.
+    supabase.from("fiches").select("id").eq("user_id", userId)
       .then(({ data }) => {
         setHasOwnFiche(!!data && data.length > 0);
-        setMyFicheId(data && data[0] ? data[0].id : null);
+        setMyFicheIds(data ? data.map((f: any) => f.id) : []);
       });
     // Quels intérêts/likes a-t-il déjà envoyés ? (persisté en base, survit au refresh)
     supabase.from("interets_fiches").select("fiche_id,type").eq("user_id", userId)
@@ -295,7 +296,7 @@ export default function FichePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fiche_id: id, fiche_nom: fiche.nom_projet, fiche_key: fiche.key,
-          sender_id: userId, sender_fiche_id: myFicheId,
+          sender_id: userId, sender_fiche_ids: myFicheIds,
           creator_email: fiche.creator_email, type: "interesse",
         }),
       });
@@ -326,7 +327,7 @@ export default function FichePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fiche_id: id, fiche_nom: fiche.nom_projet, fiche_key: fiche.key,
-          sender_id: userId, sender_fiche_id: myFicheId,
+          sender_id: userId, sender_fiche_ids: myFicheIds,
           creator_email: fiche.creator_email, type: "tres_interesse",
         }),
       });

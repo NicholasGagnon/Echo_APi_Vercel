@@ -13,21 +13,20 @@ const supabase = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    const { fiche_id, fiche_nom, fiche_key, sender_id, sender_fiche_id, creator_email, type } = await req.json();
+    const { fiche_id, fiche_nom, fiche_key, sender_id, sender_fiche_ids, creator_email, type } = await req.json();
 
     if (!creator_email || !fiche_nom || !sender_id) {
       return NextResponse.json({ error: "Champs manquants." }, { status: 400 });
     }
 
-    // On va chercher la fiche du visiteur (jamais son email — juste un aperçu public)
-    let senderFiche: { nom_projet: string; type_projet: string; description: string; key: string } | null = null;
-    if (sender_fiche_id) {
+    // On va chercher TOUTES les fiches du visiteur (jamais son email — juste un aperçu public)
+    let senderFiches: { nom_projet: string; type_projet: string; description: string; key: string }[] = [];
+    if (Array.isArray(sender_fiche_ids) && sender_fiche_ids.length > 0) {
       const { data } = await supabase
         .from("fiches")
         .select("nom_projet,type_projet,description,key")
-        .eq("id", sender_fiche_id)
-        .maybeSingle();
-      senderFiche = data;
+        .in("id", sender_fiche_ids);
+      senderFiches = data || [];
     }
 
     const isTresInteresse = type === "tres_interesse";
@@ -36,11 +35,16 @@ export async function POST(req: NextRequest) {
       ? `⭐ Quelqu'un est très intéressé par "${fiche_nom}"`
       : `💛 Quelqu'un a marqué un intérêt pour "${fiche_nom}"`;
 
-    const descSnippet = senderFiche?.description
-      ? senderFiche.description.length > 140
-        ? senderFiche.description.slice(0, 140).trim() + "…"
-        : senderFiche.description
-      : null;
+    const snippet = (desc: string) => desc && desc.length > 140 ? desc.slice(0, 140).trim() + "…" : desc;
+
+    const senderFichesHtml = senderFiches.map(f => `
+      <div style="background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 14px; margin-bottom: 10px;">
+        <p style="color: #22d3ee; font-size: 13px; font-weight: bold; margin: 0 0 4px;">
+          ${f.nom_projet} ${f.type_projet ? `<span style="color:#52525b; font-weight: normal;">· ${f.type_projet}</span>` : ""}
+        </p>
+        ${f.description ? `<p style="color: #a1a1aa; font-size: 12px; margin: 0;">${snippet(f.description)}</p>` : ""}
+      </div>
+    `).join("");
 
     const { error } = await resend.emails.send({
       from: "Echo AI <noreply@echosai.ca>",
@@ -73,17 +77,14 @@ export async function POST(req: NextRequest) {
             </p>
           </div>
 
-          ${senderFiche ? `
+          ${senderFiches.length > 0 ? `
           <div style="margin-bottom: 24px;">
-            <p style="color: #71717a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 8px;">Son projet</p>
-            <div style="background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 14px;">
-              <p style="color: #22d3ee; font-size: 13px; font-weight: bold; margin: 0 0 4px;">
-                ${senderFiche.nom_projet} ${senderFiche.type_projet ? `<span style="color:#52525b; font-weight: normal;">· ${senderFiche.type_projet}</span>` : ""}
-              </p>
-              ${descSnippet ? `<p style="color: #a1a1aa; font-size: 12px; margin: 0;">${descSnippet}</p>` : ""}
-            </div>
+            <p style="color: #71717a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 0 8px;">
+              ${senderFiches.length > 1 ? "Ses projets" : "Son projet"}
+            </p>
+            ${senderFichesHtml}
             <p style="color: #71717a; font-size: 11px; margin: 10px 0 0;">
-              Débloquez sa fiche pour accéder à ses coordonnées et lui répondre directement.
+              Débloquez ${senderFiches.length > 1 ? "une de ses fiches" : "sa fiche"} pour accéder à ${senderFiches.length > 1 ? "ses" : "ses"} coordonnées et lui répondre directement.
             </p>
           </div>
           ` : `
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
           `}
 
           <a href="https://echosai.ca/1/fiche" style="display:inline-block; background:#06b6d4; color:#000; font-weight:bold; font-size:13px; padding:10px 20px; border-radius:8px; text-decoration:none; margin-bottom:24px;">
-            ${senderFiche ? "Débloquer sa fiche →" : "Voir les fiches →"}
+            ${senderFiches.length > 0 ? "Débloquer sa fiche →" : "Voir les fiches →"}
           </a>
 
           <p style="color: #3f3f46; font-size: 10px; margin-top: 16px; border-top: 1px solid #27272a; padding-top: 16px;">
