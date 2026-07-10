@@ -174,7 +174,8 @@ export default function FichePage() {
     const results = await Promise.all(
       fichesACharger.map(async f => {
         const { data, error } = await supabase.rpc("get_fiche_private_fields", { p_fiche_id: f.id });
-        if (error || !data || data.length === 0) return null;
+        if (error) console.error(`[get_fiche_private_fields] fiche ${f.id}:`, error);
+        if (!data || data.length === 0) { console.warn(`[get_fiche_private_fields] fiche ${f.id}: 0 ligne retournée (vérif propriétaire/tunnel a échoué ?)`); return null; }
         return { id: f.id, ...data[0] };
       })
     );
