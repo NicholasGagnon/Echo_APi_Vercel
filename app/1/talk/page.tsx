@@ -19,6 +19,7 @@ type CrashPost = {
   created_at: string;
   fiche_id: string | null;
   fiche_nom: string | null;
+  author_pseudo: string | null;
   votes: Record<string, string[]>;
   comments: Comment[];
 };
@@ -95,6 +96,7 @@ export default function TalkPage() {
         created_at: p.created_at,
         fiche_id: p.fiche_id || null,
         fiche_nom: p.fiches?.nom_projet || null,
+        author_pseudo: p.user_pseudo || null,
         votes: votesStructure,
         comments: (p.talk_comments || []).map((c: any) => ({
           id: c.id,
@@ -156,7 +158,8 @@ export default function TalkPage() {
     if (!input.trim() || !pseudo) return;
     await supabase.from("talk_posts").insert({
       user_id: userId,
-      text: input.trim()
+      text: input.trim(),
+      user_pseudo: pseudo,
     });
     setInput("");
     await fetchFeed();
@@ -275,6 +278,9 @@ export default function TalkPage() {
 
                 <div className="p-4 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/60 dark:bg-zinc-900/10 flex justify-between items-start relative">
                   <div className="flex-1 mr-4">
+                    {post.author_pseudo && (
+                      <span className="text-[10px] font-mono font-bold text-cyan-600/80 dark:text-cyan-500/70 block mb-1">@{post.author_pseudo}</span>
+                    )}
                     <p className="text-zinc-800 dark:text-zinc-200 text-sm leading-relaxed">{post.text}</p>
                     {post.fiche_id && post.fiche_nom && (
                       <Link href="/1/fiche" className="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline">

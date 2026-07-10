@@ -664,6 +664,7 @@ function InscriptionPageInner() {
         user_id: userId,
         text: talkText.trim(),
         fiche_id: createdFicheId,
+        user_pseudo: pseudo,
       });
       if (error) {
         // Sécurité serveur : contrainte unique sur talk_posts.fiche_id — si ça a déjà
