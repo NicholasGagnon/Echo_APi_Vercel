@@ -6,22 +6,26 @@ import { supabase } from "../../lib/supabase";
 
 type Lang = "fr" | "en";
 
-const NAV_ITEMS = [
-  { href: "/1/hall",       key: "hall"    },
-  { href: "/1/dashboard",  key: "dash", active: true },
-  { href: "/1/conversation", key: "conv" },
-  { href: "/1/form",       key: "form"    },
-  { href: "/1/fiche",      key: "fiches"  },
-  { href: "/1/account",    key: "account" },
+const NAV_FR = [
+  { label: "Hall",         href: "/1/hall" },
+  { label: "Dashboard",    href: "/1/dashboard" },
+  { label: "Conversation", href: "/1/conversation" },
+  { label: "Formulaire",   href: "/1/form" },
+  { label: "Fiches",       href: "/1/fiche" },
+  { label: "Talk",         href: "/1/talk" },
+  { label: "Bureau",       href: "/1/desktop" },
+  { label: "Compte",       href: "/1/account" },
 ];
-const LABELS: Record<string, { fr: string; en: string }> = {
-  hall:    { fr: "Hall",         en: "Hall"         },
-  dash:    { fr: "Dashboard",    en: "Dashboard"    },
-  conv:    { fr: "Conversation", en: "Conversation" },
-  form:    { fr: "Formulaire",   en: "Form"         },
-  fiches:  { fr: "Fiches",       en: "Listings"     },
-  account: { fr: "Compte",       en: "Account"      },
-};
+const NAV_EN = [
+  { label: "Hall",         href: "/1/hall" },
+  { label: "Dashboard",    href: "/1/dashboard" },
+  { label: "Conversation", href: "/1/conversation" },
+  { label: "Form",         href: "/1/form" },
+  { label: "Listings",     href: "/1/fiche" },
+  { label: "Talk",         href: "/1/talk" },
+  { label: "Desk",         href: "/1/desktop" },
+  { label: "Account",      href: "/1/account" },
+];
 
 const REGLES = {
   fr: [
@@ -87,7 +91,7 @@ const ROWS = [
     color: "rgba(201,168,76,",
     tools: [
       { icon:"🧾", nameFr:"FastBilling", nameEn:"FastBilling", href:"/fastbilling", textClass:"text-yellow-400" },
-      { icon:"💬", nameFr:"Talk",        nameEn:"Talk",        href:"/2/talk",      textClass:"text-violet-400" },
+      { icon:"💬", nameFr:"Talk",        nameEn:"Talk",        href:"/1/talk",      textClass:"text-violet-400" },
     ],
   },
   {
@@ -98,7 +102,7 @@ const ROWS = [
       { icon:"🧠", nameFr:"Avis Achat",  nameEn:"Reviews",    href:"/avis",       textClass:"text-violet-400" },
       { icon:"🌐", nameFr:"Horizon",     nameEn:"Horizon",    href:"/horizonweb", textClass:"text-cyan-400"   },
       { icon:"💬", nameFr:"Chat",        nameEn:"Chat",       href:"/chat",       textClass:"text-cyan-400"   },
-            { icon:"📚", nameFr:"Livres",      nameEn:"Books",      href:"/books",      textClass:"text-violet-400" },
+      { icon:"📚", nameFr:"Livres",      nameEn:"Books",      href:"/books",      textClass:"text-violet-400" },
     ],
   },
   {
@@ -123,6 +127,8 @@ export default function DashboardPage() {
   const [loadingStats, setLoadingStats] = useState(true);
   const [activeSection, setActiveSection] = useState<"outils"|"events"|"regles">("outils");
 
+  const navItems = lang === "fr" ? NAV_FR : NAV_EN;
+
   useEffect(() => {
     const tick = () => setTime(new Date().toLocaleTimeString(lang==="fr"?"fr-CA":"en-CA", { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false }));
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
@@ -131,10 +137,11 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       setLoadingStats(true);
+      // FIX: "fiche_interets" (ancienne table /2, supprimée) → "interets_fiches"
       const [{ count: f }, { count: t }, { count: i }] = await Promise.all([
         supabase.from("fiches").select("*", { count:"exact", head:true }),
         supabase.from("tunnels").select("*", { count:"exact", head:true }),
-        supabase.from("fiche_interets").select("*", { count:"exact", head:true }),
+        supabase.from("interets_fiches").select("*", { count:"exact", head:true }),
       ]);
       setStats({ fiches: f||0, tunnels: t||0, interets: i||0 });
       setLoadingStats(false);
@@ -176,7 +183,6 @@ export default function DashboardPage() {
           style={{background:"radial-gradient(ellipse 50% 80% at 50% 0%, rgba(6,182,212,0.06) 0%, transparent 70%)"}}/>
       </div>
 
-      {/* 3 COLONNES CHAQUE CÔTÉ */}
       {["left","right"].map(side=>(
         <div key={side} className={`pointer-events-none fixed inset-y-0 ${side==="left"?"left-0":"right-0"} z-0 hidden lg:flex gap-10 px-6 items-stretch`}>
           {[0,1,2].map(i=>(
@@ -190,21 +196,20 @@ export default function DashboardPage() {
         </div>
       ))}
 
+      {/* NAV — 8 onglets fixes, traduits, page active mise en évidence */}
       <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-50">
-  <Link href="/1/hall" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
-    Echo AI
-  </Link>
-  <div className="flex items-center gap-5 text-sm flex-wrap">
-    <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Hall</Link>
-    <Link href="/1/dashboard" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Dashboard</Link>
-    <Link href="/1/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
-    <Link href="/1/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Formulaire</Link>
-    <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Fiches</Link>
-    <Link href="/1/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Talk</Link>
-    <Link href="/1/desktop" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Bureau</Link>
-    <Link href="/1/account" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Compte</Link>
-  </div>
-</nav>
+        <Link href="/1/hall" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+          Echo AI
+        </Link>
+        <div className="flex items-center gap-5 text-sm flex-wrap">
+          {navItems.map(item => (
+            <Link key={item.href} href={item.href}
+              className={item.href === "/1/dashboard" ? "text-cyan-600 dark:text-cyan-400 font-semibold" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"}>
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </nav>
 
       <div className="relative z-10 flex-1 px-4 lg:px-32 py-12">
 
@@ -219,8 +224,8 @@ export default function DashboardPage() {
           <p className="text-sm text-zinc-500 italic">{dict.subtitle}</p>
         </div>
 
-        {/* ONGLETS */}
-        <div className="flex justify-center gap-2 mb-10">
+        {/* ONGLETS + BOUTON EN/FR */}
+        <div className="flex justify-center items-center gap-2 mb-10 flex-wrap">
           {(["outils","events","regles"] as const).map(tab=>(
             <button key={tab} onClick={()=>setActiveSection(tab)}
               className={`px-5 py-2 rounded-xl text-xs font-mono uppercase tracking-widest font-bold transition-all border ${
@@ -231,11 +236,15 @@ export default function DashboardPage() {
               {dict.tabs[tab]}
             </button>
           ))}
+          <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")}
+            className="px-3 py-2 rounded-xl text-xs font-mono uppercase tracking-widest font-bold border border-zinc-800 bg-black/20 text-zinc-500 hover:border-cyan-500/50 hover:text-cyan-400 transition-all">
+            {lang === "fr" ? "EN" : "FR"}
+          </button>
         </div>
 
         <div className="max-w-2xl mx-auto">
 
-          {/* ── OUTILS — grille tuiles graphiques ── */}
+          {/* ── OUTILS ── */}
           {activeSection==="outils" && (
             <div className="space-y-8 animate-in fade-in duration-200">
               {ROWS.map((row, ri) => (
@@ -336,7 +345,7 @@ export default function DashboardPage() {
       </div>
 
       <footer className="relative z-20 h-8 border-t border-zinc-950 bg-black/60 px-6 flex items-center justify-between text-[10px] font-mono text-zinc-600 shrink-0">
-        <p>DASHBOARD — <span className="text-zinc-500">SITE_2</span></p>
+        <p>DASHBOARD</p>
         <p>{time}</p>
         <p>© 2026 ECHOSAI.CA</p>
       </footer>
