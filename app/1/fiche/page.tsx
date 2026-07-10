@@ -166,18 +166,23 @@ export default function FichePage() {
     const fichesACharger = fiches.filter(f => f.user_id === uid || unlockedSet.has(f.id));
     if (fichesACharger.length === 0) return;
 
-    const ids = fichesACharger.map(f => f.id);
-    const { data } = await supabase
-      .from("fiches")
-      .select("id,key,email_prive,discord_prive,github_prive,linkedin_prive,site_web_prive,telephone_prive")
-      .in("id", ids);
+    // SÉCURITÉ : les colonnes privées (email_prive, discord_prive, etc.) ne sont
+    // plus lisibles via une requête directe sur "fiches" — l'accès direct a été
+    // révoqué au niveau de la base de données. La seule façon de les obtenir est
+    // ce RPC, qui vérifie côté serveur que l'appelant est bien propriétaire ou a
+    // débloqué la fiche via un tunnel payé, avant de retourner quoi que ce soit.
+    const results = await Promise.all(
+      fichesACharger.map(async f => {
+        const { data, error } = await supabase.rpc("get_fiche_private_fields", { p_fiche_id: f.id });
+        if (error || !data || data.length === 0) return null;
+        return { id: f.id, ...data[0] };
+      })
+    );
 
-    if (data) {
-      setFiches(prev => prev.map(f => {
-        const priv = data.find((d: any) => d.id === f.id);
-        return priv ? { ...f, ...priv } : f;
-      }));
-    }
+    setFiches(prev => prev.map(f => {
+      const priv = results.find(r => r && r.id === f.id);
+      return priv ? { ...f, ...priv } : f;
+    }));
   };
 
   const getOutils = (fiche: Fiche) => {

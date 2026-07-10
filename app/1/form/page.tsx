@@ -403,8 +403,17 @@ function InscriptionPageInner() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [myKey, setMyKey]     = useState<string | null>(null);
+  const [createdFicheId, setCreatedFicheId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // ── TALK CROSSPOST (choix sur l'écran de confirmation) ─────────────────
+  const [pseudo, setPseudo] = useState<string>("");
+  const [pseudoInput, setPseudoInput] = useState<string>("");
+  const [talkText, setTalkText] = useState<string>("");
+  const [talkPosted, setTalkPosted] = useState(false);
+  const [talkPosting, setTalkPosting] = useState(false);
+  const [talkError, setTalkError] = useState<string | null>(null);
 
   // ── AUTH ─────────────────────────────────────────────────────────────────
   const [userId, setUserId]   = useState<string | null>(null);
@@ -426,6 +435,12 @@ function InscriptionPageInner() {
     });
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!userId) { setPseudo(""); return; }
+    supabase.from("profiles").select("username").eq("id", userId).maybeSingle()
+      .then(({ data }) => { if (data?.username) setPseudo(data.username); });
+  }, [userId]);
 
   const handleLogout = async () => { await supabase.auth.signOut(); setUserId(null); setUserEmail(null); setMesfiches([]); };
 
@@ -578,12 +593,20 @@ function InscriptionPageInner() {
           linkedin_prive: form.linkedin.trim(), site_web_prive: form.site_web.trim(), telephone_prive: form.telephone.trim(),
         }).eq("id", ficheActive);
         if (updateError) throw updateError;
+
+        setCreatedFicheId(ficheActive);
+        setTalkText(`${form.nom_projet} — ${form.description}`.slice(0, 500));
+        // Sécurité : on vérifie si cette fiche a déjà été postée sur Talk avant de proposer le bouton
+        const { data: existingTalkPost } = await supabase
+          .from("talk_posts").select("id").eq("fiche_id", ficheActive).maybeSingle();
+        setTalkPosted(!!existingTalkPost);
+
         setMyKey("UPDATED");
         setLoading(false);
         return;
       }
 
-      const { error: insertError } = await supabase.from("fiches").insert({
+      const { data: insertedFiche, error: insertError } = await supabase.from("fiches").insert({
         key: generatedKey, user_id: currentUserId,
         creator_email: userEmail,
         nom_projet: form.nom_projet, description: form.description,
@@ -599,8 +622,10 @@ function InscriptionPageInner() {
         email_prive: form.email || null, discord_prive: form.discord || null,
         github_prive: form.github || null, linkedin_prive: form.linkedin || null,
         site_web_prive: form.site_web || null, telephone_prive: form.telephone || null,
-      });
+      }).select("id").single();
       if (insertError) throw insertError;
+      setCreatedFicheId(insertedFiche?.id || null);
+      setTalkText(`${form.nom_projet} — ${form.description}`.slice(0, 500));
 
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -622,10 +647,46 @@ function InscriptionPageInner() {
     }
   };
 
+  // ── CROSSPOST TALK (depuis l'écran de confirmation) ─────────────────────
+  const handleSaveTalkPseudo = async () => {
+    const clean = pseudoInput.trim();
+    if (!clean || !userId) return;
+    await supabase.from("profiles").upsert({ id: userId, username: clean, updated_at: new Date().toISOString() });
+    setPseudo(clean);
+  };
+
+  const handlePostToTalk = async () => {
+    if (!userId || !pseudo || !talkText.trim() || talkPosted) return; // sécurité client
+    setTalkPosting(true);
+    setTalkError(null);
+    try {
+      const { error } = await supabase.from("talk_posts").insert({
+        user_id: userId,
+        text: talkText.trim(),
+        fiche_id: createdFicheId,
+      });
+      if (error) {
+        // Sécurité serveur : contrainte unique sur talk_posts.fiche_id — si ça a déjà
+        // été posté (même via une autre session/onglet), on ne duplique jamais.
+        if ((error as any).code === "23505") {
+          setTalkPosted(true);
+          return;
+        }
+        throw error;
+      }
+      setTalkPosted(true);
+    } catch (e: any) {
+      console.error(e);
+      setTalkError(lang === "fr" ? "Erreur lors de la publication sur Talk." : "Error posting to Talk.");
+    } finally {
+      setTalkPosting(false);
+    }
+  };
+
   // ── CONFIRMATION ─────────────────────────────────────────────────────────
   if (myKey) return (
     <main className="min-h-screen bg-white dark:bg-[#0f0f0f] flex items-center justify-center p-6">
-      <div className="text-center max-w-sm w-full">
+      <div className="text-center max-w-md w-full">
         <div className="text-5xl mb-6">{myKey === "UPDATED" ? "✅" : "🎉"}</div>
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
           {myKey === "UPDATED"
@@ -643,6 +704,53 @@ function InscriptionPageInner() {
             <p className="text-zinc-400 text-xs mb-8">{t("confirme_note", lang)}</p>
           </>
         )}
+
+        {/* ── CROSSPOST TALK — optionnel, en plus de la fiche (création OU mise à jour) ── */}
+        {!talkPosted && createdFicheId && (
+          <div className="mb-8 text-left bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5">
+            <p className="text-sm font-bold text-zinc-800 dark:text-zinc-200 mb-1">
+              {lang === "fr" ? "🗣️ Partager aussi sur Talk ?" : "🗣️ Also share on Talk?"}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">
+              {lang === "fr"
+                ? "Optionnel — obtiens des retours rapides de la communauté sur ton pitch."
+                : "Optional — get quick feedback from the community on your pitch."}
+            </p>
+
+            {!pseudo ? (
+              <div className="flex flex-col gap-2 mb-3">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {lang === "fr" ? "Choisis d'abord un pseudo pour Talk :" : "Pick a Talk nickname first:"}
+                </p>
+                <div className="flex gap-2">
+                  <input type="text" value={pseudoInput} onChange={e => setPseudoInput(e.target.value.replace(/[^a-zA-Z0-9_\s-]/g, ""))}
+                    placeholder={lang === "fr" ? "Pseudo" : "Nickname"}
+                    className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none focus:border-cyan-500" />
+                  <button onClick={handleSaveTalkPseudo} className="px-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs rounded-lg font-semibold">
+                    {lang === "fr" ? "Valider" : "Save"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <textarea value={talkText} onChange={e => setTalkText(e.target.value)} rows={3}
+                  className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none focus:border-cyan-500 resize-none mb-2" />
+                {talkError && <p className="text-xs text-red-500 mb-2">{talkError}</p>}
+                <button onClick={handlePostToTalk} disabled={talkPosting || !talkText.trim()}
+                  className="w-full py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-colors disabled:opacity-50">
+                  {talkPosting ? "…" : (lang === "fr" ? "Publier sur Talk" : "Post to Talk")}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        {talkPosted && (
+          <div className="mb-8 text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3">
+            ✓ {lang === "fr" ? "Cette fiche est déjà publiée sur Talk." : "This listing is already posted on Talk."}{" "}
+            <Link href="/1/talk" className="underline underline-offset-2 font-semibold">{lang === "fr" ? "Voir" : "View"}</Link>
+          </div>
+        )}
+
         <Link href="/1/fiche" className="inline-block w-full px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-semibold text-sm hover:bg-zinc-700 transition-colors text-center">
           {t("voir_fiches", lang)}
         </Link>
@@ -707,9 +815,13 @@ function InscriptionPageInner() {
         <span className="font-bold text-sm">Echo AI</span>
         <div className="flex items-center gap-5 text-sm flex-wrap">
           <Link href="/1/hall"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).home}</Link>
+          <Link href="/1/dashboard"     className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Dashboard</Link>
           <Link href="/1/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).conv}</Link>
-          <Link href="/1/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).fiches}</Link>
           <Link href="/1/form"          className="text-zinc-900 dark:text-white font-semibold">{t("nav",lang).inscription}</Link>
+          <Link href="/1/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).fiches}</Link>
+          <Link href="/1/talk"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Talk</Link>
+          <Link href="/1/desktop"       className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Bureau" : "Desktop"}</Link>
+          <Link href="/1/account"       className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Compte" : "Account"}</Link>
 
           <LangDropdown lang={lang} setLang={setLang} />
 

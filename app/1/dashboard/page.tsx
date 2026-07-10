@@ -190,21 +190,21 @@ export default function DashboardPage() {
         </div>
       ))}
 
-      {/* NAV */}
-      <nav className="relative z-20 border-b border-zinc-900/60 px-6 py-4 flex items-center justify-between shrink-0 bg-black/50 backdrop-blur-sm">
-        <span className="font-bold text-sm text-white tracking-wide">Echo AI</span>
-        <div className="flex items-center gap-5 text-sm">
-          {NAV_ITEMS.map(item=>(
-            <Link key={item.href} href={item.href}
-              className={(item as any).active?"text-cyan-400 font-semibold":"text-zinc-500 hover:text-zinc-200 transition-colors"}>
-              {LABELS[item.key][lang]}
-            </Link>
-          ))}
-          <button onClick={()=>setLang(l=>l==="fr"?"en":"fr")} className="text-xs text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg hover:border-zinc-600 transition-colors">
-            {lang==="fr"?"EN":"FR"}
-          </button>
-        </div>
-      </nav>
+      <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-50">
+  <Link href="/1/hall" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+    Echo AI
+  </Link>
+  <div className="flex items-center gap-5 text-sm flex-wrap">
+    <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Hall</Link>
+    <Link href="/1/dashboard" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Dashboard</Link>
+    <Link href="/1/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
+    <Link href="/1/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Formulaire</Link>
+    <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Fiches</Link>
+    <Link href="/1/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Talk</Link>
+    <Link href="/1/desktop" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Bureau</Link>
+    <Link href="/1/account" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Compte</Link>
+  </div>
+</nav>
 
       <div className="relative z-10 flex-1 px-4 lg:px-32 py-12">
 

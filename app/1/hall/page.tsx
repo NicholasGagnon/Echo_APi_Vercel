@@ -7,10 +7,30 @@ import { supabase } from "../../lib/supabase";
 
 type Lang = "fr" | "en";
 
+// NAV — les 8 onglets fixes, identiques à toutes les autres pages /1
+const NAV_FR: { label: string; href: string }[] = [
+  { label: "Hall",         href: "/1/hall" },
+  { label: "Dashboard",    href: "/1/dashboard" },
+  { label: "Conversation", href: "/1/conversation" },
+  { label: "Formulaire",   href: "/1/form" },
+  { label: "Fiches",       href: "/1/fiche" },
+  { label: "Talk",         href: "/1/talk" },
+  { label: "Bureau",       href: "/1/desktop" },
+  { label: "Compte",       href: "/1/account" },
+];
+const NAV_EN: { label: string; href: string }[] = [
+  { label: "Hall",         href: "/1/hall" },
+  { label: "Dashboard",    href: "/1/dashboard" },
+  { label: "Conversation", href: "/1/conversation" },
+  { label: "Form",         href: "/1/form" },
+  { label: "Listings",     href: "/1/fiche" },
+  { label: "Talk",         href: "/1/talk" },
+  { label: "Desk",         href: "/1/desktop" },
+  { label: "Account",      href: "/1/account" },
+];
+
 const T = {
   fr: {
-    nav: ["Hall", "Dashboard", "Conversation", "Formulaire", "Fiches", "Compte"],
-    navHref: ["/1/hall", "/1/dashboard", "/1/conversation", "/1/formulaire", "/1/fiches", "/account"],
     welcome: "BIENVENUE",
     title: "AFFINITÉ\nDE PROJETS",
     tagline: "Votre projet n'a pas besoin de tout faire seul.",
@@ -31,8 +51,6 @@ const T = {
     footer: "© 2026 Echo AI · Affinité de Projets",
   },
   en: {
-    nav: ["Hall", "Dashboard", "Conversation", "Form", "Profiles", "Account"],
-    navHref: ["/1/hall", "/1/dashboard", "/1/conversation", "/1/formulaire", "/1/fiches", "/account"],
     welcome: "WELCOME",
     title: "PROJECT\nAFFINITY",
     tagline: "Your project doesn't need to do everything alone.",
@@ -60,6 +78,7 @@ export default function HallPage() {
   const [user, setUser] = useState<any>(null);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const t = T[lang];
+  const navItems = lang === "fr" ? NAV_FR : NAV_EN;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => { if (data.user) setUser(data.user); });
@@ -96,14 +115,14 @@ export default function HallPage() {
         padding: "0 40px", height: 60,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
-        <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: 1, color: "#fff" }}>Echo AI</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
-          {t.nav.map((label, i) => (
-            <Link key={i} href={t.navHref[i]}
+        <Link href="/1/hall" style={{ fontWeight: 800, fontSize: 15, letterSpacing: 1, color: "#fff", textDecoration: "none" }}>Echo AI</Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+          {navItems.map((item, i) => (
+            <Link key={item.href} href={item.href}
               style={{ fontSize: 13, color: i === 0 ? accent : "rgba(255,255,255,.55)", textDecoration: "none", fontWeight: i === 0 ? 700 : 400, letterSpacing: .5, transition: "color .2s" }}
               onMouseEnter={e => { if (i !== 0) (e.target as HTMLElement).style.color = "#fff"; }}
               onMouseLeave={e => { if (i !== 0) (e.target as HTMLElement).style.color = "rgba(255,255,255,.55)"; }}>
-              {label}
+              {item.label}
             </Link>
           ))}
           <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")}
@@ -124,26 +143,21 @@ export default function HallPage() {
         {/* Centre */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
 
-        {/* Glow background */}
         <div style={{ position: "absolute", top: "30%", left: "50%", transform: "translate(-50%, -50%)", width: 600, height: 600, background: "radial-gradient(circle, rgba(0,200,255,.06) 0%, transparent 70%)", pointerEvents: "none" }} />
 
-        {/* Welcome */}
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 6, color: accent, marginBottom: 24, opacity: .8 }}>
           {t.welcome}
         </div>
 
-        {/* Image affinity */}
         <div style={{ width: 220, height: 220, marginBottom: 32, position: "relative" }}>
           <img src="/affinity.jpg" alt="Affinité de Projets"
             style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%", opacity: .9, border: `1px solid rgba(0,200,255,.2)`, boxShadow: "0 0 40px rgba(0,200,255,.15)" }} />
         </div>
 
-        {/* Titre */}
         <h1 style={{ fontSize: "clamp(42px, 8vw, 96px)", fontWeight: 900, lineHeight: .95, letterSpacing: -2, color: "#fff", marginBottom: 28, whiteSpace: "pre-line" }}>
           {lang === "fr" ? <>AFFINITÉ<br/><span style={{color: "#7fe8ff"}}>DE PROJETS</span></> : <>PROJECT<br/><span style={{color: "#7fe8ff"}}>AFFINITY</span></>}
         </h1>
 
-        {/* Tagline */}
         <p style={{ fontSize: 18, color: "rgba(255,255,255,.7)", marginBottom: 8, fontWeight: 300, maxWidth: 560 }}>
           {t.tagline}
         </p>
@@ -154,8 +168,7 @@ export default function HallPage() {
         {/* 3 Boutons */}
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", justifyContent: "center", maxWidth: 840, width: "100%" }}>
 
-          {/* Explorer */}
-          <Link href="/1/fiches" style={{ textDecoration: "none", flex: "1 1 240px", maxWidth: 280 }}>
+          <Link href="/1/fiche" style={{ textDecoration: "none", flex: "1 1 240px", maxWidth: 280 }}>
             <div style={{
               background: "linear-gradient(135deg, rgba(0,200,255,.12), rgba(0,200,255,.04))",
               border: "1px solid rgba(0,200,255,.25)",
@@ -172,7 +185,6 @@ export default function HallPage() {
             </div>
           </Link>
 
-          {/* Bureau */}
           <Link href="/1/desktop" style={{ textDecoration: "none", flex: "1 1 240px", maxWidth: 280 }}>
             <div style={{
               background: "linear-gradient(135deg, rgba(201,168,76,.1), rgba(201,168,76,.03))",
@@ -190,7 +202,6 @@ export default function HallPage() {
             </div>
           </Link>
 
-          {/* Dashboard */}
           <Link href="/1/dashboard" style={{ textDecoration: "none", flex: "1 1 240px", maxWidth: 280 }}>
             <div style={{
               background: "linear-gradient(135deg, rgba(139,92,246,.1), rgba(139,92,246,.03))",
@@ -209,13 +220,11 @@ export default function HallPage() {
           </Link>
         </div>
 
-        {/* Scroll indicator */}
         <div style={{ marginTop: 48, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, opacity: .3, animation: "bounce 2s infinite" }}>
           <div style={{ fontSize: 11, letterSpacing: 3, color: "#fff" }}>SCROLL</div>
           <div style={{ width: 1, height: 40, background: "linear-gradient(to bottom, rgba(255,255,255,.5), transparent)" }} />
         </div>
-        </div>{/* fin centre */}
-        {/* Colonne droite décorative */}
+        </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 120, gap: 24 }}>
           <div style={{ width: 1, flex: 1, background: "linear-gradient(to bottom, transparent, rgba(201,168,76,.15), transparent)" }} />
           <div style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(201,168,76,.3)" }} />
@@ -223,7 +232,6 @@ export default function HallPage() {
         </div>
       </section>
 
-      {/* ── SÉPARATEUR ───────────────────────────────────────────────────────── */}
       <div style={{ height: 1, background: "linear-gradient(to right, transparent, rgba(255,255,255,.08), transparent)", margin: "0 40px" }} />
 
       {/* ── COMMENT ÇA MARCHE ────────────────────────────────────────────────── */}
@@ -238,10 +246,6 @@ export default function HallPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 32 }}>
           {t.steps.map((step, i) => (
             <div key={i} style={{ position: "relative" }}>
-              {/* Ligne de connexion */}
-              {i < t.steps.length - 1 && (
-                <div style={{ position: "absolute", top: 22, left: "calc(100% + 16px)", width: 32, height: 1, background: "rgba(255,255,255,.1)", display: "none" }} className="step-line" />
-              )}
               <div style={{ fontSize: 36, fontWeight: 900, color: "rgba(255,255,255,.06)", lineHeight: 1, marginBottom: 16, fontVariantNumeric: "tabular-nums" }}>
                 {step.n}
               </div>
@@ -257,7 +261,6 @@ export default function HallPage() {
         </div>
       </section>
 
-      {/* ── SÉPARATEUR ───────────────────────────────────────────────────────── */}
       <div style={{ height: 1, background: "linear-gradient(to right, transparent, rgba(255,255,255,.08), transparent)", margin: "0 40px" }} />
 
       {/* ── CTA FINAL ────────────────────────────────────────────────────────── */}
@@ -283,13 +286,13 @@ export default function HallPage() {
       </section>
 
       {/* ── FOOTER ───────────────────────────────────────────────────────────── */}
-      <footer style={{ padding: "24px 40px", borderTop: "1px solid rgba(255,255,255,.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <footer style={{ padding: "24px 40px", borderTop: "1px solid rgba(255,255,255,.05)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,.2)" }}>{t.footer}</div>
-        <div style={{ display: "flex", gap: 20 }}>
-          {t.nav.slice(1).map((label, i) => (
-            <Link key={i} href={t.navHref[i + 1]}
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          {navItems.slice(1).map(item => (
+            <Link key={item.href} href={item.href}
               style={{ fontSize: 11, color: "rgba(255,255,255,.2)", textDecoration: "none" }}>
-              {label}
+              {item.label}
             </Link>
           ))}
         </div>
