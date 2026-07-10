@@ -1146,8 +1146,25 @@ export default function WorldPage() {
           )}
         </div>
 
-        {/* DROITE — Pseudo+drapeau · Premium · ⚙️ */}
+        {/* DROITE — Connexion/Email · Pseudo+drapeau · Premium · ⚙️ */}
         <div className="flex items-center gap-2 shrink-0">
+
+          {/* Bouton Se connecter (non connecté) ou Email (connecté) */}
+          {user ? (
+            <span className="hidden sm:block text-zinc-700 text-xs font-mono">
+              {user.email.split("@")[0].slice(0, 4)}xxxx@{user.email.split("@")[1]}
+            </span>
+          ) : (
+            <button onClick={() => { setShowAuthInPopup(true); setShowQuotaPopup(true); }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all shrink-0"
+              style={{
+                background: "rgba(6,182,212,0.1)",
+                border: "1px solid rgba(6,182,212,0.4)",
+                color: "#22d3ee",
+              }}>
+              {lang === "fr" ? "Se connecter" : lang === "en" ? "Sign in" : "登录"}
+            </button>
+          )}
 
           {/* Pseudo + drapeau */}
           {myC && (
