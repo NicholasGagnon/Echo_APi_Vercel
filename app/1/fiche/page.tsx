@@ -47,19 +47,6 @@ const TYPE_COLORS: Record<string, string> = {
   "Contenu": "bg-amber-500/10 text-amber-400 border-amber-500/20",
 };
 
-// ────────────────────────────────────────────────────────────────
-// UTILITAIRE: Générer une KEY auto de 3 caractères (A1K style)
-// ────────────────────────────────────────────────────────────────
-const generateKey = (): string => {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  const nums = "0123456789";
-  const l1 = chars[Math.floor(Math.random() * chars.length)];
-  const n1 = nums[Math.floor(Math.random() * nums.length)];
-  const l2 = chars[Math.floor(Math.random() * chars.length)];
-  const n2 = nums[Math.floor(Math.random() * nums.length)];
-  const l3 = chars[Math.floor(Math.random() * chars.length)];
-  return `${l1}${n1}${l2}${n2}${l3}`;
-};
 
 // ────────────────────────────────────────────────────────────────
 // TRADUCTIONS "HUMAINES" — reformulent les valeurs brutes stockées
@@ -132,7 +119,7 @@ export default function FichePage() {
       if (!error && data) {
         const fiches_with_keys = data.map((f: any) => ({
           ...f,
-          key: f.key || generateKey(),
+          key: f.key || "",
           email_prive: null, discord_prive: null, github_prive: null,
           linkedin_prive: null, site_web_prive: null, telephone_prive: null,
         }));
@@ -342,7 +329,8 @@ export default function FichePage() {
 
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
   const [keyErrors, setKeyErrors] = useState<Record<string, string>>({});
-  const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
+  const [keyVerifying, setKeyVerifying] = useState<Set<string>>(new Set());
+  const [showKeyBoxIds, setShowKeyBoxIds] = useState<Set<string>>(new Set());
 
   const [lostKeyFicheId, setLostKeyFicheId] = useState<string | null>(null);
   const [lostKeyEmail, setLostKeyEmail] = useState("");
@@ -377,19 +365,35 @@ export default function FichePage() {
     }
   };
 
-  const handleVerifyKey = (fiche: Fiche) => {
+  // La comparaison se fait maintenant 100% côté serveur (la vraie clé n'est
+  // jamais envoyée au navigateur). En cas de succès, ça crée un tunnel —
+  // exactement comme un paiement — donc un seul mécanisme de déblocage
+  // ensuite, pas de double vérification.
+  const handleVerifyKey = async (fiche: Fiche) => {
     const entered = (keyInputs[fiche.id] || "").trim();
     if (!entered) {
       setKeyErrors(prev => ({ ...prev, [fiche.id]: lang === "fr" ? "Entre une clé." : "Enter a key." }));
       return;
     }
-    if (entered.toUpperCase() !== fiche.key.toUpperCase()) {
-      setKeyErrors(prev => ({ ...prev, [fiche.id]: lang === "fr" ? "Clé incorrecte." : "Incorrect key." }));
-      return;
-    }
+    setKeyVerifying(prev => new Set([...prev, fiche.id]));
     setKeyErrors(prev => { const n = { ...prev }; delete n[fiche.id]; return n; });
-    setRevealedIds(prev => new Set([...prev, fiche.id]));
+    try {
+      const { data, error } = await supabase.rpc("redeem_fiche_key", { p_fiche_id: fiche.id, p_key: entered });
+      if (error) throw error;
+      if (!data) {
+        setKeyErrors(prev => ({ ...prev, [fiche.id]: lang === "fr" ? "Clé incorrecte." : "Incorrect key." }));
+        return;
+      }
+      setUnlockedIds(prev => new Set([...prev, fiche.id]));
+      if (userId) await loadPrivateFields(userId, new Set([...unlockedIds, fiche.id]));
+    } catch (e) {
+      console.error("[redeem_fiche_key]", e);
+      setKeyErrors(prev => ({ ...prev, [fiche.id]: lang === "fr" ? "Erreur réseau." : "Network error." }));
+    } finally {
+      setKeyVerifying(prev => { const n = new Set(prev); n.delete(fiche.id); return n; });
+    }
   };
+
 
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
@@ -760,34 +764,34 @@ export default function FichePage() {
                   <div className="h-px bg-zinc-100 dark:bg-zinc-800/60" />
 
                   {/* ── SECTION UNLOCK ── */}
-                  {isOwn ? (
+                  {isOwn || unlockedIds.has(fiche.id) ? (
                     renderContacts(fiche)
-                  ) : unlockedIds.has(fiche.id) ? (
-                    revealedIds.has(fiche.id) ? (
-                      renderContacts(fiche)
-                    ) : (
-                      <div className="flex flex-col gap-2 px-4 py-3 rounded-2xl bg-cyan-50/30 dark:bg-cyan-950/20 border border-cyan-400/50 dark:border-cyan-500/40">
+                  ) : showKeyBoxIds.has(fiche.id) ? (
+                    <div className="flex flex-col gap-2 px-4 py-3 rounded-2xl bg-cyan-50/30 dark:bg-cyan-950/20 border border-cyan-400/50 dark:border-cyan-500/40">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-base">🔓</span>
-                          <span className="text-sm font-semibold text-cyan-700 dark:text-cyan-400">{lang === "fr" ? "Clé requise" : "Key required"}</span>
+                          <span className="text-base">🔑</span>
+                          <span className="text-sm font-semibold text-cyan-700 dark:text-cyan-400">{lang === "fr" ? "J'ai une clé" : "I have a key"}</span>
                         </div>
-                        <div className="flex gap-2">
-                          <input type="text" value={keyInputs[fiche.id] || ""} placeholder="Ex: A1K"
-                            onChange={e => setKeyInputs(prev => ({ ...prev, [fiche.id]: e.target.value }))}
-                            onKeyDown={e => { if (e.key === "Enter") handleVerifyKey(fiche); }}
-                            className="flex-1 bg-white dark:bg-zinc-900 border border-cyan-400/50 dark:border-cyan-500/40 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all" />
-                          <button onClick={() => handleVerifyKey(fiche)}
-                            className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold transition-all hover:shadow-lg hover:shadow-cyan-500/30">
-                            {lang === "fr" ? "Voir" : "Show"}
-                          </button>
-                        </div>
-                        {keyErrors[fiche.id] && <p className="text-xs text-red-500">{keyErrors[fiche.id]}</p>}
-                        <button type="button" onClick={() => { setLostKeyFicheId(fiche.id); setLostKeyEmail(""); setLostKeyMsg(null); }}
-                          className="text-xs text-zinc-400 hover:text-cyan-400 transition-colors mt-1 underline underline-offset-2">
-                          {lang === "fr" ? "Clé perdue ?" : "Lost key?"}
+                        <button onClick={() => setShowKeyBoxIds(prev => { const n = new Set(prev); n.delete(fiche.id); return n; })}
+                          className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">✕</button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input type="text" value={keyInputs[fiche.id] || ""} placeholder="Ex: A1K"
+                          onChange={e => setKeyInputs(prev => ({ ...prev, [fiche.id]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === "Enter") handleVerifyKey(fiche); }}
+                          className="flex-1 bg-white dark:bg-zinc-900 border border-cyan-400/50 dark:border-cyan-500/40 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all" />
+                        <button onClick={() => handleVerifyKey(fiche)} disabled={keyVerifying.has(fiche.id)}
+                          className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold transition-all hover:shadow-lg hover:shadow-cyan-500/30 disabled:opacity-50">
+                          {keyVerifying.has(fiche.id) ? "…" : (lang === "fr" ? "Débloquer" : "Unlock")}
                         </button>
                       </div>
-                    )
+                      {keyErrors[fiche.id] && <p className="text-xs text-red-500">{keyErrors[fiche.id]}</p>}
+                      <button type="button" onClick={() => { setLostKeyFicheId(fiche.id); setLostKeyEmail(""); setLostKeyMsg(null); }}
+                        className="text-xs text-zinc-400 hover:text-cyan-400 transition-colors mt-1 underline underline-offset-2">
+                        {lang === "fr" ? "Clé perdue ?" : "Lost key?"}
+                      </button>
+                    </div>
                   ) : (
                     /* Un seul 🔒 (fix #8) + valeur ajoutée expliquée (#9) */
                     <div className="flex flex-col gap-1 px-4 py-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/30 border border-zinc-200 dark:border-zinc-700/40">
@@ -796,8 +800,13 @@ export default function FichePage() {
                         <span className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">{dict.lock}</span>
                       </div>
                       <p className="text-[11px] text-zinc-400 dark:text-zinc-500 pl-6">{dict.acheter_sub}</p>
+                      <button type="button" onClick={() => setShowKeyBoxIds(prev => new Set([...prev, fiche.id]))}
+                        className="text-[11px] text-cyan-600 dark:text-cyan-400 hover:underline underline-offset-2 pl-6 text-left mt-0.5">
+                        🔑 {lang === "fr" ? "J'ai déjà une clé" : "I already have a key"}
+                      </button>
                     </div>
                   )}
+
 
                   {/* ── ACTIONS ── */}
                   <div className="flex items-center gap-2 pt-1 flex-wrap">
