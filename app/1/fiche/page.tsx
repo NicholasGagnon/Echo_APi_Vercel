@@ -143,11 +143,20 @@ export default function FichePage() {
       if (data) {
         const ids = new Set(data.map((t: any) => t.fiche_id as string));
         setUnlockedIds(ids);
-        loadPrivateFields(userId, ids);
       }
     };
     checkUnlocks();
   }, [userId]);
+
+  // FIX : on déclenche le chargement des champs privés dans un effet séparé
+  // qui dépend explicitement de "fiches.length" — donc il se relance une fois
+  // que les fiches sont réellement arrivées, au lieu de dépendre d'une closure
+  // périmée qui voyait encore "fiches = []" au moment de sa création.
+  useEffect(() => {
+    if (!userId || fiches.length === 0) return;
+    loadPrivateFields(userId, unlockedIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, fiches.length, unlockedIds.size]);
 
   const loadPrivateFields = async (uid: string, unlockedSet: Set<string>) => {
     const fichesACharger = fiches.filter(f => f.user_id === uid || unlockedSet.has(f.id));
