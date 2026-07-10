@@ -6,6 +6,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16" as any,
 });
 
+const ALLOWED_CURRENCIES = ["CAD", "USD", "EUR"];
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -19,8 +21,6 @@ export async function POST(req: Request) {
         return NextResponse.json({ message: "userId requis" }, { status: 400 });
       }
 
-      // Prix par devise — tous créés dans Stripe sous le produit "world"
-      // Prix selon plan et devise
       const plan = body.plan as string;
       const isAdvantage = plan === "world_advantage";
 
@@ -66,8 +66,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ url: session.url });
     }
 
-    // ── PLAN UNLOCK FICHE (existant — inchangé) ───────────────────────────────
-    const { ficheId, acheteurId, acheteurEmail } = body;
+    // ── PLAN UNLOCK FICHE ──────────────────────────────────────────────────────
+    const { ficheId, acheteurId, acheteurEmail, currency = "CAD" } = body;
 
     if (!ficheId || !acheteurId) {
       return NextResponse.json(
@@ -76,7 +76,22 @@ export async function POST(req: Request) {
       );
     }
 
-    const priceId = process.env.STRIPE_FICHE_PRICE_ID!;
+    const selectedCurrency = ALLOWED_CURRENCIES.includes((currency || "").toUpperCase())
+      ? currency.toUpperCase()
+      : "CAD";
+
+    const basePriceId = process.env.STRIPE_FICHE_PRICE_ID!;
+
+    // On récupère le produit Stripe lié au price existant, pour rester
+    // rattaché au même produit dans le dashboard/rapports, peu importe
+    // la devise choisie. Le montant reste fixe (1,50$) dans les 3 devises
+    // — pas de conversion de taux, juste 150 (cents) tel quel.
+    const basePrice = await stripe.prices.retrieve(basePriceId);
+    const productId = typeof basePrice.product === "string" ? basePrice.product : basePrice.product?.id;
+
+    if (!productId) {
+      return NextResponse.json({ message: "Produit Stripe introuvable pour STRIPE_FICHE_PRICE_ID" }, { status: 500 });
+    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -84,12 +99,20 @@ export async function POST(req: Request) {
       allow_promotion_codes: true,
       customer_email: acheteurEmail || undefined,
 
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [{
+        price_data: {
+          currency: selectedCurrency.toLowerCase(),
+          product: productId,
+          unit_amount: 150, // toujours 1,50 — peu importe la devise choisie
+        },
+        quantity: 1,
+      }],
 
       metadata: {
         type:        "unlock_fiche",
         fiche_id:    ficheId,
         acheteur_id: acheteurId,
+        currency:    selectedCurrency,
       },
 
       success_url: `${origin}/1/fiche?success=true&fiche_id=${ficheId}`,

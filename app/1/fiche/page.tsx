@@ -421,13 +421,16 @@ export default function FichePage() {
   };
   const handleLogout = async () => { await supabase.auth.signOut(); setUserId(null); setUserEmail(null); };
 
-  const handleAcheter = async (id: string) => {
+  const [currencyModalFicheId, setCurrencyModalFicheId] = useState<string | null>(null);
+
+  const handleAcheter = async (id: string, currency: "CAD" | "USD" | "EUR") => {
     if (!userId) { setShowLoginModal(true); return; }
+    setCurrencyModalFicheId(null);
     try {
       const res = await fetch("/api/stripe/create-checkout-site2", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ficheId: id, acheteurId: userId, acheteurEmail: userEmail }),
+        body: JSON.stringify({ ficheId: id, acheteurId: userId, acheteurEmail: userEmail, currency }),
       });
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
@@ -827,9 +830,9 @@ export default function FichePage() {
                       </span>
                     ) : (
                       <div className="flex flex-col items-end gap-1">
-                        <button onClick={() => handleAcheter(fiche.id)}
+                        <button onClick={() => setCurrencyModalFicheId(fiche.id)}
                           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-cyan-600 hover:bg-cyan-500 text-white transition-all hover:shadow-lg hover:shadow-cyan-500/30">
-                          <span>🔒</span><span>{dict.acheter} — 1,50$</span>
+                          <span>🔒</span><span>{dict.acheter} — 1,50</span>
                         </button>
                         <span className="text-[10px] text-zinc-400 dark:text-zinc-500 max-w-[220px] text-right">{dict.acheter_sub}</span>
                       </div>
@@ -930,6 +933,40 @@ export default function FichePage() {
                 {lostKeySending ? (lang === "fr" ? "Envoi…" : "Sending…") : (lang === "fr" ? "Envoyer ma clé" : "Send my key")}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL SÉLECTION DEVISE ── */}
+      {currencyModalFicheId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setCurrencyModalFicheId(null)}>
+          <div className="bg-white dark:bg-zinc-900 border border-cyan-400/50 dark:border-cyan-500/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl shadow-cyan-500/10" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-5">
+              <div className="text-3xl mb-2">💳</div>
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-1">
+                {lang === "fr" ? "Choisis ta devise" : "Choose your currency"}
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {lang === "fr" ? "1,50 dans la devise de ton choix." : "1.50 in your chosen currency."}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              {([
+                { code: "CAD" as const, label: "CAD", symbol: "1,50 $ CAD" },
+                { code: "USD" as const, label: "USD", symbol: "1.50 $ USD" },
+                { code: "EUR" as const, label: "EUR", symbol: "1,50 € EUR" },
+              ]).map(c => (
+                <button key={c.code} onClick={() => handleAcheter(currencyModalFicheId, c.code)}
+                  className="flex items-center justify-between px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:border-cyan-400 dark:hover:border-cyan-500 hover:bg-cyan-50/50 dark:hover:bg-cyan-950/20 transition-all text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                  <span>{c.label}</span>
+                  <span className="text-cyan-600 dark:text-cyan-400">{c.symbol}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setCurrencyModalFicheId(null)}
+              className="w-full mt-4 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors underline underline-offset-2">
+              {lang === "fr" ? "Annuler" : "Cancel"}
+            </button>
           </div>
         </div>
       )}
