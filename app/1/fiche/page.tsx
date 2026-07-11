@@ -544,6 +544,7 @@ export default function FichePage() {
           <Link href="/1/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Conversation" : "Conversation"}</Link>
           <Link href="/1/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Formulaire" : "Form"}</Link>
           <Link href="/1/fiche" className="text-cyan-600 dark:text-cyan-400 font-semibold">{lang === "fr" ? "Fiches" : "Listings"}</Link>
+          <Link href="/1/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Talk</Link>
           <Link href="/1/desktop" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Bureau" : "Desktop"}</Link>
           <Link href="/1/account" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Compte" : "Account"}</Link>
           <button onClick={() => setLang(l => (l === "fr" ? "en" : "fr"))} className="text-xs text-zinc-400 border border-zinc-200 dark:border-zinc-800 px-2 py-1 rounded-lg hover:border-zinc-400 transition-colors">
