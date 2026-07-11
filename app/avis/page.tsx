@@ -20,7 +20,7 @@ const T = {
     neg: "5 Pires Défauts Cachés",
     amazon: "Trouver sur Amazon",
     amzBiz: "Offres du Jour Amazon",
-    amzAffiliate: "Produit recommandé",
+    amzAffiliate: "Nouveaux produits recommandés",
     chatPh: "Pose une question sur ce produit…",
     chatWelcome: "Analyse terminée pour",
     chatWelcome2: ". Pose-moi une question.",
@@ -61,7 +61,7 @@ const T = {
     neg: "5 Hidden Flaws",
     amazon: "Find on Amazon",
     amzBiz: "Amazon Daily Deals",
-    amzAffiliate: "Recommended product",
+    amzAffiliate: "Recommended new products",
     chatPh: "Ask a question about this product…",
     chatWelcome: "Analysis done for",
     chatWelcome2: ". Ask me anything.",
@@ -139,16 +139,13 @@ export default function AvisPage() {
   }, [chatMessages, chatLoading]);
 
   useEffect(() => {
-    // Session ID anonyme persistant
     let sid = localStorage.getItem("avis_session_id");
     if (!sid) { sid = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`; localStorage.setItem("avis_session_id", sid); }
     setSessionId(sid);
 
-    // Restaurer URL après OAuth
     const draftUrl = localStorage.getItem("avis_draft_url");
     if (draftUrl) { setUrl(draftUrl); localStorage.removeItem("avis_draft_url"); }
 
-    // Restaurer dernière analyse — user_id si connecté, session_id sinon
     const restoreAnalysis = async (currentUser: any) => {
       try {
         let query = supabase
@@ -178,7 +175,6 @@ export default function AvisPage() {
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_, session) => {
       setUser(session?.user ?? null);
-      // Rattacher analyses anonymes au compte
       if (session?.user) {
         const s = localStorage.getItem("avis_session_id");
         if (s) {
@@ -226,7 +222,6 @@ export default function AvisPage() {
       });
       setChatMessages([{ sender: "ia", text: `${t.chatWelcome} **${name}**${t.chatWelcome2}` }]);
 
-      // Sauvegarde automatique dans Supabase
       try {
         const sid = sessionId || localStorage.getItem("avis_session_id");
         await supabase.from("avis_analyses").upsert({
@@ -321,7 +316,7 @@ export default function AvisPage() {
     }
   };
 
-  // ── TOKENS ──────────────────────────────────────────────────────────────────
+  // ── TOKENS — couleurs Avis inchangées ───────────────────────────────────────
   const bg    = dark ? "#1a1917" : "#f0ece4";
   const surf  = dark ? "#242220" : "#fffdf9";
   const surf2 = dark ? "#2d2b28" : "#f5f1e8";
@@ -340,106 +335,78 @@ export default function AvisPage() {
   const AMAZON_GOLDBOX = "https://www.amazon.ca/-/fr/gp/goldbox?ie=UTF8&linkCode=ll2&tag=echoai-20&linkId=9642833136b9884646516fb24e8d1e73&ref_=as_li_ss_tl";
   const AMAZON_AFFILIATE = "https://amzn.to/3SJj8Gz";
 
+  // ── POSTERS VERTICAUX — même composant que sur /idea, couleurs par produit ──
+  const POSTER_ITEMS = [
+    { href:"https://echosai.ca/1/hall", src:"/talkmini.png", label:"Talk",  color:"#a78bfa" },
+    { href:"https://echosai.ca/idea",   src:"/ideamini.png", label:"Idea",  color:"#00c8ff" },
+    { href:"https://echosai.ca/fastbilling", src:"/facturemini.png", label:"FastBilling", color:"#c9a84c" },
+  ];
+  const WORLD_ITEM = { href:"https://echosai.ca/world", src:"/worldmini.png", label:"World", color:"#34d399" };
+
+  const PosterCard = ({ item, width=150 }: { item: { href:string; src:string; label:string; color:string }; width?: number }) => (
+    <a href={item.href} target="_blank" rel="noopener noreferrer"
+      style={{
+        display:"block", width, borderRadius:14, overflow:"hidden",
+        border:`2px solid ${item.color}`, boxShadow:`0 0 18px ${item.color}35`,
+        textDecoration:"none", background:surf,
+      }}>
+      <div style={{ overflow:"hidden", aspectRatio:"2 / 3" }}>
+        <img src={item.src} alt={item.label}
+          style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"transform .35s ease" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.1)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }} />
+      </div>
+    </a>
+  );
+
   return (
     <div style={{ background: bg, color: txt, minHeight: "100dvh", fontFamily: "'Inter', system-ui, sans-serif", transition: "background .3s, color .3s" }}>
 
-      {/* ══ LAYOUT 3 COLONNES ══════════════════════════════════════════════════ */}
-      <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "190px 1fr 190px", maxWidth: 1240, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
+      {/* ══ LAYOUT 3 COLONNES — même structure que /idea ═════════════════════ */}
+      <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "180px 1fr 180px", maxWidth: 1200, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
 
-        {/* ── COL GAUCHE : les deux pubs ──────────────────────────────────────── */}
-        <aside className="col-left" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 10, paddingRight: 10 }}>
-          <a href="https://echosai.ca/welcome" target="_blank" rel="noopener noreferrer"
-            style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}`, flexShrink: 0 }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = ".9")}
-            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
-            <img src="/pub.jpg" alt="Echo AI" style={{ width: "100%", display: "block" }} />
-            <div style={{ background: acc, color: "#fff", textAlign: "center", fontSize: 9, fontWeight: 800, padding: "5px 0", letterSpacing: 1 }}>
-              ESSAYER ECHO AI →
-            </div>
-          </a>
-
-          <a href="https://echosai.ca/1/hall" target="_blank" rel="noopener noreferrer"
-            style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}` }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = ".9")}
-            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
-            <img src="/affinity.jpg" alt="Affinity Hall" style={{ width: "100%", display: "block", objectFit: "cover", maxHeight: 80 }} />
-            <div style={{ background: surf2, color: muted, textAlign: "center", fontSize: 9, fontWeight: 600, padding: "4px 0", letterSpacing: .8 }}>
-              AFFINITY HALL →
-            </div>
-          </a>
-
-          <a href="https://echosai.ca/fastbilling" target="_blank" rel="noopener noreferrer"
-            style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}` }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = ".9")}
-            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
-            <img src="/facture.png" alt="Facture Rapide" style={{ width: "100%", display: "block", objectFit: "cover" }} />
-          </a>
-
-          <a href="https://echosai.ca/2/talk" target="_blank" rel="noopener noreferrer"
-            style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}` }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = ".9")}
-            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
-            <img src="/commun.png" alt="Commun" style={{ width: "100%", display: "block", objectFit: "cover" }} />
-          </a>
+        {/* ── COL GAUCHE — posters verticaux ──────────────────────────────────── */}
+        <aside className="col-left" style={{ paddingTop: 24, display: "flex", flexDirection: "column", gap: 32, paddingRight: 10, alignItems: "center" }}>
+          {POSTER_ITEMS.map((item, i) => <PosterCard key={i} item={item} />)}
         </aside>
 
         {/* ── CENTRE ──────────────────────────────────────────────────────────── */}
-        <div className="col-centre" style={{ display: "flex", flexDirection: "column", padding: "14px 14px 10px" }}>
+        <div className="col-centre" style={{ display: "flex", flexDirection: "column", padding: "24px 14px 60px" }}>
 
           {/* Accroche + barre */}
-          <div style={{ marginBottom: 12 }}>
-            <h1 style={{ fontWeight: 900, fontSize: 22, letterSpacing: -.5, lineHeight: 1.15, marginBottom: 3 }}>{t.tagline}</h1>
-            <p style={{ fontSize: 12, color: muted, lineHeight: 1.5, marginBottom: 10 }}>{t.sub1}<br />{t.sub2}</p>
-            <form onSubmit={handleSearch} style={{ display: "flex", gap: 8 }}>
-              <input type="url" required value={url} onChange={e => setUrl(e.target.value)} placeholder={t.placeholder}
-                style={{ flex: 1, background: surf, border: `1.5px solid ${bord}`, borderRadius: 11, padding: "9px 13px", fontSize: 12, color: txt, outline: "none", fontFamily: "monospace" }}
-                onFocus={async e => {
-                  e.target.style.borderColor = acc;
-                  if (!url) {
-                    try {
-                      const text = await navigator.clipboard.readText();
-                      if (text.startsWith("http")) setUrl(text);
-                    } catch {}
-                  }
-                }}
-                onBlur={e => (e.target.style.borderColor = bord)} />
-              <button type="submit" disabled={loading}
-                style={{ background: loading ? muted : acc, color: "#fff", border: "none", borderRadius: 11, padding: "9px 18px", fontWeight: 700, fontSize: 12, cursor: loading ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
-                {loading ? t.analysing : t.analyse}
-              </button>
-            </form>
-            {error && <div style={{ marginTop: 7, padding: "7px 11px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 9, fontSize: 11, color: "#b91c1c" }}>⚠️ {error}</div>}
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:8 }}>
+              <img src="/echo1.png" alt="Echo AI" style={{ width:30, height:30, borderRadius:8, objectFit:"cover" }} />
+              <h1 style={{ fontWeight: 900, fontSize: "clamp(20px,3.4vw,26px)", letterSpacing: -.5, lineHeight: 1.15 }}>{t.tagline}</h1>
+            </div>
+            <p style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>{t.sub1}<br />{t.sub2}</p>
           </div>
 
-          {/* ── PUBS MOBILE — visibles seulement sur mobile ──────────────────── */}
-          <div className="mobile-pubs" style={{ display: "none", gap: 8, marginBottom: 10 }}>
-            <a href="https://echosai.ca/welcome" target="_blank" rel="noopener noreferrer"
-              style={{ flex: 1, display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none" }}>
-              <img src="/pub.jpg" alt="Echo AI" style={{ width: "100%", display: "block", maxHeight: 80, objectFit: "cover", objectPosition: "top" }} />
-              <div style={{ background: acc, color: "#fff", textAlign: "center", fontSize: 9, fontWeight: 800, padding: "4px 0", letterSpacing: 1 }}>
-                ESSAYER ECHO AI →
-              </div>
-            </a>
-            <a href="https://echosai.ca/1/hall" target="_blank" rel="noopener noreferrer"
-              style={{ flex: 1, display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none" }}>
-              <img src="/affinity.jpg" alt="Affinity Hall" style={{ width: "100%", display: "block", maxHeight: 80, objectFit: "cover" }} />
-              <div style={{ background: surf2, color: muted, textAlign: "center", fontSize: 9, fontWeight: 600, padding: "4px 0" }}>
-                AFFINITY HALL →
-              </div>
-            </a>
-          </div>
+          <form onSubmit={handleSearch} style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+            <input type="url" required value={url} onChange={e => setUrl(e.target.value)} placeholder={t.placeholder}
+              style={{ flex: 1, background: surf, border: `1.5px solid ${bord}`, borderRadius: 11, padding: "10px 14px", fontSize: 12, color: txt, outline: "none", fontFamily: "monospace" }}
+              onFocus={async e => {
+                e.target.style.borderColor = acc;
+                if (!url) {
+                  try {
+                    const text = await navigator.clipboard.readText();
+                    if (text.startsWith("http")) setUrl(text);
+                  } catch {}
+                }
+              }}
+              onBlur={e => (e.target.style.borderColor = bord)} />
+            <button type="submit" disabled={loading}
+              style={{ background: loading ? muted : acc, color: "#fff", border: "none", borderRadius: 11, padding: "10px 20px", fontWeight: 700, fontSize: 12, cursor: loading ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
+              {loading ? t.analysing : t.analyse}
+            </button>
+          </form>
+          {error && <div style={{ marginTop: 8, padding: "8px 12px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 9, fontSize: 12, color: "#b91c1c" }}>⚠️ {error}</div>}
 
-          {/* Pubs pleine largeur mobile */}
-          <a href="https://echosai.ca/fastbilling" target="_blank" rel="noopener noreferrer"
-            className="mobile-pubs-full"
-            style={{ display: "none", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none", marginBottom: 6 }}>
-            <img src="/facture.png" alt="Facture Rapide" style={{ width: "100%", display: "block", objectFit: "cover", maxHeight: 60 }} />
-          </a>
-          <a href="https://echosai.ca/2/talk" target="_blank" rel="noopener noreferrer"
-            className="mobile-pubs-full"
-            style={{ display: "none", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none", marginBottom: 10 }}>
-            <img src="/commun.png" alt="Commun" style={{ width: "100%", display: "block", objectFit: "cover", maxHeight: 60 }} />
-          </a>
+          {/* Poster mobile — 2 items visibles */}
+          <div className="mobile-pubs" style={{ display: "none", gap: 14, marginTop: 16, marginBottom: 4, justifyContent: "center" }}>
+            <PosterCard item={POSTER_ITEMS[0]} width={100} />
+            <PosterCard item={POSTER_ITEMS[1]} width={100} />
+          </div>
 
           {/* Loader */}
           {loading && (
@@ -449,55 +416,55 @@ export default function AvisPage() {
             </div>
           )}
 
-          {/* Résultats */}
+          {/* Résultats — empilés de haut en bas */}
           {results && !loading && (
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "7px 11px", background: surf2, borderRadius: 9, border: `1px solid ${bord}` }}>
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "8px 12px", background: surf2, borderRadius: 9, border: `1px solid ${bord}` }}>
                 <span>📦</span>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>{results.productName}</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                {/* Positifs */}
-                <div style={{ background: surf, border: "1px solid #86efac", borderRadius: 11, padding: "11px 13px" }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: "#16a34a", letterSpacing: 1, textTransform: "uppercase", marginBottom: 7, display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />{t.pos}
-                  </div>
-                  <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 5 }}>
-                    {results.positives.map((p, i) => (
-                      <li key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: txt, lineHeight: 1.4, position: "relative",
-                        filter: !user && i >= 2 ? "blur(4px)" : "none",
-                        userSelect: !user && i >= 2 ? "none" : "auto",
-                        pointerEvents: !user && i >= 2 ? "none" : "auto",
-                      }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 3, padding: "1px 4px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>
-                        {!user && i >= 2 ? "●●●●●●●●●●●●●●●" : p}
-                      </li>
-                    ))}
-                  </ol>
+
+              {/* Positifs */}
+              <div style={{ background: surf, border: "1px solid #86efac", borderRadius: 11, padding: "12px 14px", marginBottom: 10 }}>
+                <div style={{ fontSize: 9, fontWeight: 800, color: "#16a34a", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />{t.pos}
                 </div>
-                {/* Négatifs */}
-                <div style={{ background: surf, border: "1px solid #fca5a5", borderRadius: 11, padding: "11px 13px" }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, color: "#dc2626", letterSpacing: 1, textTransform: "uppercase", marginBottom: 7, display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />{t.neg}
-                  </div>
-                  <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 5 }}>
-                    {results.negatives.map((n, i) => (
-                      <li key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: txt, lineHeight: 1.4,
-                        filter: !user && i >= 2 ? "blur(4px)" : "none",
-                        userSelect: !user && i >= 2 ? "none" : "auto",
-                        pointerEvents: !user && i >= 2 ? "none" : "auto",
-                      }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: "#dc2626", background: "#fee2e2", borderRadius: 3, padding: "1px 4px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>
-                        {!user && i >= 2 ? "●●●●●●●●●●●●●●●" : n}
-                      </li>
-                    ))}
-                  </ol>
+                <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+                  {results.positives.map((p, i) => (
+                    <li key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: txt, lineHeight: 1.5,
+                      filter: !user && i >= 2 ? "blur(4px)" : "none",
+                      userSelect: !user && i >= 2 ? "none" : "auto",
+                      pointerEvents: !user && i >= 2 ? "none" : "auto",
+                    }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 3, padding: "1px 5px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>
+                      {!user && i >= 2 ? "●●●●●●●●●●●●●●●" : p}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              {/* Négatifs */}
+              <div style={{ background: surf, border: "1px solid #fca5a5", borderRadius: 11, padding: "12px 14px", marginBottom: 10 }}>
+                <div style={{ fontSize: 9, fontWeight: 800, color: "#dc2626", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />{t.neg}
                 </div>
+                <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+                  {results.negatives.map((n, i) => (
+                    <li key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: txt, lineHeight: 1.5,
+                      filter: !user && i >= 2 ? "blur(4px)" : "none",
+                      userSelect: !user && i >= 2 ? "none" : "auto",
+                      pointerEvents: !user && i >= 2 ? "none" : "auto",
+                    }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: "#dc2626", background: "#fee2e2", borderRadius: 3, padding: "1px 5px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>
+                      {!user && i >= 2 ? "●●●●●●●●●●●●●●●" : n}
+                    </li>
+                  ))}
+                </ol>
               </div>
 
               {/* Bandeau unlock si pas connecté */}
-              {!user && results && (
-                <div style={{ margin: "8px 0", padding: "14px 16px", background: `linear-gradient(135deg, ${dark?"rgba(224,123,57,.15)":"rgba(224,123,57,.08)"}, ${dark?"rgba(224,123,57,.08)":"rgba(224,123,57,.04)"})`, border: `1px solid rgba(224,123,57,.3)`, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              {!user && (
+                <div style={{ margin: "10px 0", padding: "14px 16px", background: `linear-gradient(135deg, ${dark?"rgba(224,123,57,.15)":"rgba(224,123,57,.08)"}, ${dark?"rgba(224,123,57,.08)":"rgba(224,123,57,.04)"})`, border: `1px solid rgba(224,123,57,.3)`, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap:"wrap" }}>
                   <div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: acc, marginBottom: 2 }}>
                       {lang === "fr" ? "🔒 3 résultats cachés" : "🔒 3 results hidden"}
@@ -513,24 +480,36 @@ export default function AvisPage() {
                 </div>
               )}
 
-              {/* Liens affiliés Amazon */}
-              <div style={{ display: "flex", gap: 7, marginBottom: 8 }}>
+              {/* ── Liens Amazon — importants ici, on garde le format texte (pas de posters) ── */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10, marginBottom: 16 }}>
                 <a href={`https://www.amazon.ca/s?k=${encodeURIComponent(results.productName)}&tag=echoai-20`} target="_blank" rel="noopener noreferrer"
-                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 11px", background: surf2, border: `1px solid ${bord}`, borderRadius: 9, fontSize: 11, fontWeight: 600, color: txt, textDecoration: "none" }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: surf2, border: `1px solid ${bord}`, borderRadius: 10, fontSize: 12, fontWeight: 600, color: txt, textDecoration: "none" }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = acc)} onMouseLeave={e => (e.currentTarget.style.borderColor = bord)}>
                   <span>🛒 {t.amazon}</span><span style={{ color: muted }}>→</span>
                 </a>
                 <a href={AMAZON_GOLDBOX} target="_blank" rel="noopener noreferrer"
-                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 11px", background: surf2, border: `1px solid ${bord}`, borderRadius: 9, fontSize: 11, fontWeight: 600, color: txt, textDecoration: "none" }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: surf2, border: `1px solid ${bord}`, borderRadius: 10, fontSize: 12, fontWeight: 600, color: txt, textDecoration: "none" }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = acc)} onMouseLeave={e => (e.currentTarget.style.borderColor = bord)}>
                   <span>🏷 {t.amzBiz}</span><span style={{ color: muted }}>→</span>
                 </a>
                 <a href={AMAZON_AFFILIATE} target="_blank" rel="noopener noreferrer"
-                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 11px", background: "#fff8e1", border: "1px solid #fbbf24", borderRadius: 9, fontSize: 11, fontWeight: 600, color: "#92400e", textDecoration: "none" }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#fff8e1", border: "1px solid #fbbf24", borderRadius: 10, fontSize: 12, fontWeight: 600, color: "#92400e", textDecoration: "none" }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = acc)} onMouseLeave={e => (e.currentTarget.style.borderColor = "#fbbf24")}>
                   <span>⭐ {t.amzAffiliate}</span><span>→</span>
                 </a>
               </div>
+
+              {/* World — grande bannière finale, même traitement que sur /idea */}
+              <a href={WORLD_ITEM.href} target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none", marginBottom: 16 }}>
+                <div style={{
+                  borderRadius: 18, overflow: "hidden", border: `2px solid ${WORLD_ITEM.color}`,
+                  boxShadow: `0 0 24px ${WORLD_ITEM.color}30`, transition: "transform .25s, box-shadow .25s",
+                }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 40px ${WORLD_ITEM.color}45`; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 0 24px ${WORLD_ITEM.color}30`; }}>
+                  <img src={WORLD_ITEM.src} alt={WORLD_ITEM.label} style={{ width: "100%", display: "block", objectFit: "cover" }} />
+                </div>
+              </a>
             </div>
           )}
 
@@ -544,7 +523,7 @@ export default function AvisPage() {
 
           {/* Chat */}
           {results && (
-            <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, padding: "11px 13px", marginTop: 2 }}>
+            <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, padding: "11px 13px" }}>
               {chatMessages.length > 0 && (
                 <div style={{ maxHeight: 120, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
                   {chatMessages.map((m, i) => (
@@ -568,27 +547,24 @@ export default function AvisPage() {
           )}
 
           {/* Footer */}
-          <div style={{ marginTop: "auto", paddingTop: 10, fontSize: 10, color: muted, opacity: .5, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-          {t.footer}
-          <a href="mailto:support@echosai.ca" style={{ color: muted, textDecoration: "none", opacity: .6 }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-            onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-            ✉ support
-          </a> · {t.loading.split(",")[1]?.trim() || "GPT-4o Search"}</div>
+          <div style={{ marginTop: "auto", paddingTop: 14, fontSize: 10, color: muted, opacity: .5, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            {t.footer}
+            <a href="mailto:support@echosai.ca" style={{ color: muted, textDecoration: "none", opacity: .6 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+              onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+              ✉ support
+            </a>
+          </div>
         </div>
 
         {/* ── COL DROITE : contrôles + don + connexion ─────────────────────── */}
-        <aside className="col-right" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 8, paddingLeft: 10 }}>
+        <aside className="col-right" style={{ paddingTop: 16, display: "flex", flexDirection: "column", gap: 8, paddingLeft: 10 }}>
 
-          {/* Rangée dark + langue */}
           <div style={{ display: "flex", gap: 6 }}>
-            {/* Dark toggle */}
             <button onClick={() => setDark(d => !d)}
               style={{ flex: "none", background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 13, color: muted, fontWeight: 700 }}>
               {dark ? t.light : t.dark}
             </button>
-
-            {/* Lang dropdown */}
             <div style={{ position: "relative", flex: 1 }}>
               <button onClick={() => setShowLang(v => !v)}
                 style={{ width: "100%", background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 11, color: txt, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -608,7 +584,6 @@ export default function AvisPage() {
             </div>
           </div>
 
-          {/* Indicateur connecté */}
           {user && (
             <div style={{ position: "relative" }}>
               <button onClick={() => setShowUserMenu(v => !v)}
@@ -637,7 +612,6 @@ export default function AvisPage() {
             <div style={{ padding: "10px 12px 8px" }}>
               <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>☕ {t.donTitle}</div>
               <div style={{ fontSize: 11, color: muted, lineHeight: 1.5, marginBottom: 10 }}>{t.donDesc}</div>
-              {/* Sélecteur devise */}
               <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
                 {(["CAD", "USD", "EUR"] as const).map(c => (
                   <button key={c} type="button" onClick={() => { setDonCurrency(c); localStorage.setItem("echo-currency", c); }}
@@ -669,7 +643,6 @@ export default function AvisPage() {
             )}
           </div>
 
-          {/* CONNEXION */}
           {!user && (
             <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 1 }}>{t.accountTitle}</div>
@@ -696,13 +669,11 @@ export default function AvisPage() {
 
       {/* ── BARRE MOBILE FIXÉE EN BAS ──────────────────────────────────────── */}
       <div className="mobile-bar" style={{ "--surf": dark ? "#242220" : "#fffdf9", "--bord": dark ? "#3a3835" : "#e2ddd5" } as React.CSSProperties}>
-        {/* Dark toggle */}
         <button onClick={() => setDark(d => !d)}
           style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 13, color: muted, fontWeight: 700, cursor: "pointer" }}>
           {dark ? t.light : t.dark}
         </button>
 
-        {/* Lang */}
         <div style={{ position: "relative" }}>
           <button onClick={() => setShowLang(v => !v)}
             style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 11, color: txt, fontWeight: 700, cursor: "pointer" }}>
@@ -720,13 +691,11 @@ export default function AvisPage() {
           )}
         </div>
 
-        {/* Don rapide */}
         <button onClick={() => setDonOpen(d => !d)}
           style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
           ☕
         </button>
 
-        {/* Don dropdown mobile */}
         {donOpen && (
           <div style={{ position: "fixed", bottom: 60, left: 14, right: 14, background: surf, border: `1px solid ${bord}`, borderRadius: 12, padding: "12px", zIndex: 300, boxShadow: "0 -4px 24px rgba(0,0,0,.15)" }}>
             <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, display: "flex", justifyContent: "space-between" }}>
@@ -747,7 +716,6 @@ export default function AvisPage() {
           </div>
         )}
 
-        {/* Connexion / compte */}
         {user ? (
           <div style={{ position: "relative" }}>
             <button onClick={() => setShowUserMenu(v => !v)}
@@ -770,10 +738,10 @@ export default function AvisPage() {
         )}
       </div>
 
-      {/* ── POPUP AUTH — connexion requise ──────────────────────────────────── */}
+      {/* ── POPUP AUTH ──────────────────────────────────────────────────────── */}
       {showAuthPopup && (
         <div onClick={() => setShowAuthPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(6px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 20, padding: "28px 28px 22px", width: 320, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 20, padding: "28px 28px 22px", width: 320, display: "flex", flexDirection: "column", gap: 14, position: "relative" }}>
             <button onClick={() => setShowAuthPopup(false)} style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 18, lineHeight: 1 }}>✕</button>
             <div style={{ textAlign: "center", marginBottom: 4 }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>🔍</div>
@@ -844,24 +812,16 @@ export default function AvisPage() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: #c4bfb8; border-radius: 3px; }
 
-        /* ── MOBILE ──────────────────────────────────────────────────────── */
         @media (max-width: 768px) {
           .layout-grid { grid-template-columns: 1fr !important; }
           .col-left  { display: none !important; }
           .col-right { display: none !important; }
-          .col-centre { padding: 12px 14px 80px !important; }
-
-          /* Barre de contrôles mobile fixée en bas */
-          .mobile-bar {
-            display: flex !important;
-          }
+          .col-centre { padding: 16px 14px 80px !important; }
+          .mobile-bar { display: flex !important; }
+          .mobile-pubs { display: flex !important; }
         }
         @media (min-width: 769px) {
           .mobile-bar { display: none !important; }
-        }
-        @media (max-width: 768px) {
-          .mobile-pubs { display: flex !important; }
-          .mobile-pubs-full { display: block !important; }
         }
 
         .mobile-bar {
