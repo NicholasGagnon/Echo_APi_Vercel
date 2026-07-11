@@ -119,6 +119,7 @@ const T = {
 };
 
 const DONATION_PLANS = [
+  { name: "Petit geste",  nameEn: "Small gesture", amount: "$1.50",  plan: "micro",   desc: "Comme une fiche", descEn: "Like a listing unlock" },
   { name: "Avantage",  nameEn: "Advantage", amount: "$5.99",  plan: "basic",   desc: "Un café",          descEn: "A coffee" },
   { name: "Premium",   nameEn: "Premium",   amount: "$9.99",  plan: "premium", desc: "Vrai soutien",     descEn: "Real support" },
   { name: "Ultra",     nameEn: "Ultra",     amount: "$19.99", plan: "ultra",   desc: "Généreux 💛",      descEn: "Generous 💛" },
@@ -182,14 +183,12 @@ export default function FastBillingPage() {
   const api   = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
   useEffect(() => {
-    // Session ID anonyme persistant
     let sid = localStorage.getItem("fb_session_id");
     if (!sid) { sid = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`; localStorage.setItem("fb_session_id", sid); }
     setSessionId(sid);
 
     const { data: l } = supabase.auth.onAuthStateChange(async (_, s) => {
       setUser(s?.user ?? null);
-      // Rattacher les factures anonymes au compte connecté
       if (s?.user) {
         const sid = localStorage.getItem("fb_session_id");
         if (sid) {
@@ -201,11 +200,9 @@ export default function FastBillingPage() {
       }
     });
 
-    // Restaurer brouillon texte après OAuth
     const draft = localStorage.getItem("fb_draft");
     if (draft) { setFreeText(draft); localStorage.removeItem("fb_draft"); }
 
-    // Restaurer dernière facture — user_id si connecté, session_id sinon
     const restoreInvoice = async (currentUser: any) => {
       try {
         let query = supabase
@@ -274,7 +271,6 @@ export default function FastBillingPage() {
         notes: data.notes || "",
       };
       setInvoice(inv);
-      // Sauvegarde automatique dans Supabase
       try {
         await supabase.from("invoices").upsert({
           id: inv.numero,
@@ -314,7 +310,6 @@ export default function FastBillingPage() {
       return;
     }
 
-    // DOCX — reste via Flask
     if (!invoiceRef.current) return;
     try {
       const res = await fetch(`${api}/export`, {
@@ -331,7 +326,10 @@ export default function FastBillingPage() {
   const handleDon = async (plan: string) => {
     setDonLoading(plan);
     try {
-      const res = await fetch("/api/stripe/create-checkout", {
+      // Le palier "micro" (1,50$) passe par la même route que l'unlock fiche
+      // (price_data inline, montant fixe peu importe la devise).
+      const endpoint = plan === "micro" ? "/api/stripe/create-checkout-site2" : "/api/stripe/create-checkout";
+      const res = await fetch(endpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan, userId: user?.id || "guest_don", userEmail: user?.email || "don@echosai.ca", currency: donCurrency }),
       });
@@ -345,7 +343,6 @@ export default function FastBillingPage() {
   const handleMicrosoft = async () => { saveBeforeRedirect(); await supabase.auth.signInWithOAuth({ provider: "azure",   options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email User.Read" } }); };
   const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setShowUserMenu(false); };
 
-  // ── SAUVEGARDE SUPABASE ──────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!invoice) return;
     if (!user) {
@@ -424,6 +421,30 @@ export default function FastBillingPage() {
     borderRadius: 9, cursor: "pointer", fontSize: 11, fontWeight: 600,
     background: surf2, color: txt, ...extra,
   });
+
+  // ── POSTERS VERTICAUX — Talk / Avis / Idea (pas de Facture, ce serait de l'auto-promo) ──
+  const POSTER_ITEMS = [
+    { href:"https://echosai.ca/1/hall", src:"/talkmini.png", label:"Talk", color:"#a78bfa" },
+    { href:"https://echosai.ca/avis",   src:"/avismini.png", label:"Avis", color:"#f59e0b" },
+    { href:"https://echosai.ca/idea",   src:"/ideamini.png", label:"Idea", color:"#00c8ff" },
+  ];
+  const WORLD_ITEM = { href:"https://echosai.ca/world", src:"/worldmini.png", label:"World", color:"#34d399" };
+
+  const PosterCard = ({ item, width=175 }: { item: { href:string; src:string; label:string; color:string }; width?: number }) => (
+    <a href={item.href} target="_blank" rel="noopener noreferrer"
+      style={{
+        display:"block", width, borderRadius:14, overflow:"hidden",
+        border:`2px solid ${item.color}`, boxShadow:`0 0 18px ${item.color}35`,
+        textDecoration:"none", background:surf,
+      }}>
+      <div style={{ overflow:"hidden", aspectRatio:"2 / 3" }}>
+        <img src={item.src} alt={item.label}
+          style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"transform .35s ease" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.1)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }} />
+      </div>
+    </a>
+  );
 
   const renderInvoice = () => {
     if (!invoice) return null;
@@ -522,49 +543,33 @@ export default function FastBillingPage() {
     <div style={{ background: bg, color: txt, minHeight: "100dvh", fontFamily: "'Inter', system-ui, sans-serif", transition: "background .3s, color .3s" }}>
       <div className="fb-layout" style={{ display: "grid", gridTemplateColumns: "180px 1fr 180px", maxWidth: 1200, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
 
-        {/* COL GAUCHE */}
-        <aside className="fb-col-left" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 10, paddingRight: 10 }}>
-          {[
-            { href: "https://echosai.ca/avis",    src: "/avis.png",     label: "AVIS PRODUITS →", bg: acc, color: "#fff" },
-            { href: "https://echosai.ca/welcome", src: "/pub.jpg",      label: "ECHO AI →",       bg: "#18181b", color: "#fff" },
-            { href: "https://echosai.ca/1/hall",  src: "/affinity.jpg", label: "AFFINITY HALL →", bg: surf2, color: muted },
-            { href: "https://echosai.ca/2/talk",  src: "/commun.png",   label: "", bg: "transparent", color: "#fff" },
-          ].map((p, i) => (
-            <a key={i} href={p.href} target="_blank" rel="noopener noreferrer"
-              style={{ display: "block", borderRadius: 12, overflow: "hidden", border: `1px solid ${bord}` }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = ".9")} onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
-              <img src={p.src} alt="" style={{ width: "100%", display: "block", objectFit: "cover", maxHeight: i === 0 ? 999 : 70 }} />
-              {p.label && <div style={{ background: p.bg, color: p.color, textAlign: "center", fontSize: 9, fontWeight: 800, padding: "4px 0", letterSpacing: 1 }}>{p.label}</div>}
-            </a>
-          ))}
+        {/* COL GAUCHE — posters verticaux */}
+        <aside className="fb-col-left" style={{ paddingTop: 24, display: "flex", flexDirection: "column", gap: 32, paddingRight: 10, alignItems: "center" }}>
+          {POSTER_ITEMS.map((item, i) => <PosterCard key={i} item={item} />)}
         </aside>
 
         {/* CENTRE */}
-        <div className="fb-col-centre" style={{ display: "flex", flexDirection: "column", padding: "14px 14px 10px" }}>
-          <div style={{ marginBottom: 14 }}>
-            <h1 style={{ fontWeight: 900, fontSize: 22, letterSpacing: -.5, lineHeight: 1.15, marginBottom: 3 }}>{t.tagline}</h1>
+        <div className="fb-col-centre" style={{ display: "flex", flexDirection: "column", padding: "24px 14px 60px" }}>
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:8 }}>
+              <img src="/echo1.png" alt="Echo AI" style={{ width:30, height:30, borderRadius:8, objectFit:"cover" }} />
+              <h1 style={{ fontWeight: 900, fontSize: "clamp(20px,3.4vw,26px)", letterSpacing: -.5, lineHeight: 1.15 }}>{t.tagline}</h1>
+            </div>
             <p style={{ fontSize: 12, color: muted }}>{t.sub}</p>
           </div>
 
-          {/* Pubs mobile */}
-          <div className="fb-mobile-pubs" style={{ display: "none", gap: 8, marginBottom: 12 }}>
-            <a href="https://echosai.ca/avis" target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none" }}>
-              <img src="/avis.png" alt="" style={{ width: "100%", display: "block", maxHeight: 75, objectFit: "cover" }} />
-              <div style={{ background: acc, color: "#fff", textAlign: "center", fontSize: 9, fontWeight: 800, padding: "4px 0" }}>AVIS →</div>
-            </a>
-            <a href="https://echosai.ca/2/talk" target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none" }}>
-              <img src="/commun.png" alt="" style={{ width: "100%", display: "block", maxHeight: 75, objectFit: "cover" }} />
-            </a>
+          {/* Posters mobile */}
+          <div className="fb-mobile-pubs" style={{ display: "none", gap: 14, marginBottom: 16, justifyContent: "center" }}>
+            <PosterCard item={POSTER_ITEMS[0]} width={115} />
+            <PosterCard item={POSTER_ITEMS[1]} width={115} />
           </div>
 
           <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
 
-            {/* Hint */}
             <div style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 10, padding: "10px 13px", fontSize: 11, color: muted, lineHeight: 1.6 }}>
               {t.hint}
             </div>
 
-            {/* Champ unique */}
             <textarea
               value={freeText}
               onChange={e => setFreeText(e.target.value)}
@@ -576,7 +581,6 @@ export default function FastBillingPage() {
               onBlur={e => (e.target.style.borderColor = bord)}
             />
 
-            {/* Devise + Statut + Style */}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <select value={currency} onChange={e => setCurrency(e.target.value as Currency)}
                 style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 9, padding: "7px 10px", fontSize: 12, color: txt, cursor: "pointer", outline: "none" }}>
@@ -631,7 +635,6 @@ export default function FastBillingPage() {
               </div>
               <div style={{ position: "relative" }}>
               {renderInvoice()}
-              {/* Overlay freemium sur le bas */}
               {!user && (
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%", background: `linear-gradient(to bottom, transparent, ${dark?"rgba(26,25,23,.97)":"rgba(240,236,228,.97)"})`, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 20, borderRadius: "0 0 12px 12px" }}>
                   <div style={{ textAlign: "center" }}>
@@ -650,6 +653,20 @@ export default function FastBillingPage() {
               )}
             </div>
             </div>
+          )}
+
+          {/* World — grande bannière finale, après la facture */}
+          {invoice && (
+            <a href={WORLD_ITEM.href} target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none", marginBottom: 10 }}>
+              <div style={{
+                borderRadius: 18, overflow: "hidden", border: `2px solid ${WORLD_ITEM.color}`,
+                boxShadow: `0 0 24px ${WORLD_ITEM.color}30`, transition: "transform .25s, box-shadow .25s",
+              }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 40px ${WORLD_ITEM.color}45`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 0 24px ${WORLD_ITEM.color}30`; }}>
+                <img src={WORLD_ITEM.src} alt={WORLD_ITEM.label} style={{ width: "100%", display: "block", objectFit: "cover" }} />
+              </div>
+            </a>
           )}
 
           <div style={{ marginTop: "auto", paddingTop: 10, fontSize: 10, color: muted, opacity: .5, textAlign: "center" }}>© FastBilling · echosai.ca/fastbilling
@@ -700,7 +717,6 @@ export default function FastBillingPage() {
             <div style={{ padding: "10px 12px 8px" }}>
               <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>☕ {t.donTitle}</div>
               <div style={{ fontSize: 11, color: muted, lineHeight: 1.5, marginBottom: 10 }}>{t.donDesc}</div>
-              {/* Sélecteur devise */}
               <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
                 {(["CAD", "USD", "EUR"] as const).map(c => (
                   <button key={c} type="button" onClick={() => { setDonCurrency(c); localStorage.setItem("echo-currency", c); }}
@@ -741,7 +757,7 @@ export default function FastBillingPage() {
               <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }} style={{ ...btn() }}>✦ {t.signup}</button>
             </div>
           )}
-        {/* HISTORIQUE */}
+
           {user && (
             <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, overflow: "hidden" }}>
               <button onClick={() => { setShowHistory(h => !h); if (!showHistory) loadHistory(); }}
@@ -784,14 +800,11 @@ export default function FastBillingPage() {
 
       {/* BARRE MOBILE */}
       <div className="fb-mobile-bar" style={{ "--surf": dark ? "#242220" : "#fffdf9", "--bord": dark ? "#3a3835" : "#e2ddd5" } as React.CSSProperties}>
-
-        {/* Dark */}
         <button onClick={() => setDark(d => !d)}
           style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 14, color: muted, fontWeight: 700, cursor: "pointer" }}>
           {dark ? t.light : t.dark}
         </button>
 
-        {/* Langue */}
         <div style={{ position: "relative" }}>
           <button onClick={() => setShowLang(v => !v)}
             style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 12, color: txt, fontWeight: 700, cursor: "pointer" }}>
@@ -809,7 +822,6 @@ export default function FastBillingPage() {
           )}
         </div>
 
-        {/* Don café — gros bouton central */}
         <div style={{ position: "relative", flex: 1, display: "flex", justifyContent: "center" }}>
           <button onClick={() => setDonOpen(d => !d)}
             style={{ background: acc, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 8px rgba(224,123,57,.4)" }}>
@@ -836,7 +848,6 @@ export default function FastBillingPage() {
           )}
         </div>
 
-        {/* Connexion / Compte */}
         {user ? (
           <div style={{ position: "relative" }}>
             <button onClick={() => setShowUserMenu(v => !v)}
@@ -859,19 +870,16 @@ export default function FastBillingPage() {
             </button>
             {showUserMenu && (
               <div style={{ position: "absolute", bottom: "calc(100% + 6px)", right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 12, padding: "12px", zIndex: 200, minWidth: 200, boxShadow: "0 -4px 20px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", gap: 8 }}>
-                {/* Google */}
                 <button onClick={() => { handleGoogle(); setShowUserMenu(false); }}
                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#374151" }}>
                   <svg width="14" height="14" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
                   Google
                 </button>
-                {/* Microsoft */}
                 <button onClick={() => { handleMicrosoft(); setShowUserMenu(false); }}
                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "#1a1917", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#fff" }}>
                   <svg width="14" height="14" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
                   Microsoft
                 </button>
-                {/* Email */}
                 <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowUserMenu(false); }}
                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "#0ea5e9", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#fff" }}>
                   ✉ {t.signin}
@@ -886,7 +894,7 @@ export default function FastBillingPage() {
         )}
       </div>
 
-      {/* ── POPUP AUTH ──────────────────────────────────────────────────────── */}
+      {/* POPUP AUTH */}
       {showAuthPopup && (
         <div onClick={() => setShowAuthPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(6px)" }}>
           <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 20, padding: "28px 28px 22px", width: 320, display: "flex", flexDirection: "column", gap: 14, position: "relative" }}>
@@ -955,7 +963,7 @@ export default function FastBillingPage() {
         @media (max-width: 768px) {
           .fb-layout { grid-template-columns: 1fr !important; }
           .fb-col-left, .fb-col-right { display: none !important; }
-          .fb-col-centre { padding: 12px 14px 80px !important; }
+          .fb-col-centre { padding: 16px 14px 80px !important; }
           .fb-mobile-bar { display: flex !important; }
           .fb-mobile-pubs { display: flex !important; }
         }

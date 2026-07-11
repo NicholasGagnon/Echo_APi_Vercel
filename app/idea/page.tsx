@@ -157,6 +157,7 @@ const T = {
 };
 
 const DONATION_PLANS = [
+  { name:"Petit geste",  nameEn:"Small gesture", amount:"$1.50",  plan:"micro",   desc:"Comme une fiche", descEn:"Like a listing unlock" },
   { name:"Avantage",  nameEn:"Advantage", amount:"$5.99",  plan:"basic",   desc:"Un café",          descEn:"A coffee" },
   { name:"Premium",   nameEn:"Premium",   amount:"$9.99",  plan:"premium", desc:"Vrai soutien",     descEn:"Real support" },
   { name:"Ultra",     nameEn:"Ultra",     amount:"$19.99", plan:"ultra",   desc:"Généreux 💛",      descEn:"Generous 💛" },
@@ -279,7 +280,10 @@ export default function IdeaPage() {
   const handleDon = async (plan: string) => {
     setDonLoading(plan);
     try {
-      const res = await fetch("/api/stripe/create-checkout", {
+      // Le palier "micro" (1,50$) passe par la même route que l'unlock fiche
+      // (price_data inline, montant fixe peu importe la devise).
+      const endpoint = plan === "micro" ? "/api/stripe/create-checkout-site2" : "/api/stripe/create-checkout";
+      const res = await fetch(endpoint, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ plan, userId: user?.id||"guest_don", userEmail: user?.email||"don@echosai.ca", currency: donCurrency }),
       });
@@ -342,7 +346,7 @@ export default function IdeaPage() {
   ];
   const WORLD_ITEM = { href:"https://echosai.ca/world", src:"/worldmini.png", label:"World", color:"#34d399" };
 
-  const PosterCard = ({ item, width=150, ratio="2 / 3" }: { item: { href:string; src:string; label:string; color:string }; width?: number; ratio?: string }) => (
+  const PosterCard = ({ item, width=175, ratio="2 / 3" }: { item: { href:string; src:string; label:string; color:string }; width?: number; ratio?: string }) => (
     <a href={item.href} target="_blank" rel="noopener noreferrer"
       style={{
         display:"block", width, borderRadius:14, overflow:"hidden",
@@ -413,8 +417,8 @@ export default function IdeaPage() {
 
           {/* Pubs mobile — en anneau, 2 items */}
           <div className="idea-mobile-pubs" style={{ display:"none", gap:14, marginBottom:16, justifyContent:"center" }}>
-            <PosterCard item={POSTER_ITEMS[0]} width={100} />
-            <PosterCard item={POSTER_ITEMS[1]} width={100} />
+            <PosterCard item={POSTER_ITEMS[0]} width={115} />
+            <PosterCard item={POSTER_ITEMS[1]} width={115} />
           </div>
 
           {/* Formulaire */}

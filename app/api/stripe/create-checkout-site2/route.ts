@@ -13,6 +13,53 @@ export async function POST(req: Request) {
     const body = await req.json();
     const origin = req.headers.get("origin") ?? "http://localhost:3000";
 
+    // ── PLAN DON "PETIT GESTE" (1,50$) — même technique que l'unlock fiche ────
+    if (body.plan === "micro") {
+      const { userId, userEmail, currency = "CAD" } = body;
+
+      const selectedCurrency = ALLOWED_CURRENCIES.includes((currency || "").toUpperCase())
+        ? currency.toUpperCase()
+        : "CAD";
+
+      const basePriceId = process.env.STRIPE_FICHE_PRICE_ID!;
+      const basePrice = await stripe.prices.retrieve(basePriceId);
+      const productId = typeof basePrice.product === "string" ? basePrice.product : basePrice.product?.id;
+
+      if (!productId) {
+        return NextResponse.json({ message: "Produit Stripe introuvable pour STRIPE_FICHE_PRICE_ID" }, { status: 500 });
+      }
+
+      const referer = req.headers.get("referer");
+      const returnPath = referer ? new URL(referer).pathname : "/";
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "payment",
+        allow_promotion_codes: true,
+        customer_email: userEmail || undefined,
+
+        line_items: [{
+          price_data: {
+            currency: selectedCurrency.toLowerCase(),
+            product: productId,
+            unit_amount: 150, // toujours 1,50 — peu importe la devise choisie
+          },
+          quantity: 1,
+        }],
+
+        metadata: {
+          type:     "donation_micro",
+          user_id:  userId || "guest_don",
+          currency: selectedCurrency,
+        },
+
+        success_url: `${origin}${returnPath}?don=success`,
+        cancel_url:  `${origin}${returnPath}?don=canceled`,
+      });
+
+      return NextResponse.json({ url: session.url });
+    }
+
     // ── PLAN WORLD PREMIUM ────────────────────────────────────────────────────
     if (body.plan === "world" || body.plan === "world_advantage") {
       const { userId, userEmail, currency = "CAD" } = body;

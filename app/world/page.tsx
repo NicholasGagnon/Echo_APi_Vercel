@@ -103,13 +103,11 @@ const MANTRAS: Record<Continent, Record<Lang, string>> = {
 const copy = {
   fr: {
     navLinks: [
-      { label: "Echo AI",     href: "https://echosai.ca" },
-      { label: "Avis",        href: "https://echosai.ca/avis" },
-      { label: "Facturation", href: "https://echosai.ca/fastbilling" },
-      { label: "Idée",        href: "https://echosai.ca/idea" },
-      { label: "Chat",        href: "https://echosai.ca/chat" },
-      { label: "Talk",        href: "https://echosai.ca/2/talk" },
-      { label: "Hall",        href: "https://echosai.ca/1/Hall" },
+      { label: "Facture rapide vers PDF",                       href: "https://echosai.ca/fastbilling" },
+      { label: "Besoin d'un vrai avis avant achat ?",            href: "https://echosai.ca/avis" },
+      { label: "Analyse ton projet",                             href: "https://echosai.ca/idea" },
+      { label: "IA comportemental",                              href: "https://echosai.ca/chat" },
+      { label: "Découvrez ce que votre projet pourrait devenir", href: "https://echosai.ca/1/hall" },
     ],
     authTitle: "Connexion requise",
     authSub: "Accède au débat mondial",
@@ -139,13 +137,11 @@ const copy = {
   },
   en: {
     navLinks: [
-      { label: "Echo AI",     href: "https://echosai.ca" },
-      { label: "Reviews",     href: "https://echosai.ca/avis" },
-      { label: "Fast Billing",href: "https://echosai.ca/fastbilling" },
-      { label: "Idea",        href: "https://echosai.ca/idea" },
-      { label: "Chat",        href: "https://echosai.ca/chat" },
-      { label: "Talk",        href: "https://echosai.ca/2/talk" },
-      { label: "Hall",        href: "https://echosai.ca/1/Hall" },
+      { label: "Fast invoice to PDF",                href: "https://echosai.ca/fastbilling" },
+      { label: "Need a real review before buying?",  href: "https://echosai.ca/avis" },
+      { label: "Analyze your project",                href: "https://echosai.ca/idea" },
+      { label: "Behavioral AI chat",                  href: "https://echosai.ca/chat" },
+      { label: "Discover what your project could become", href: "https://echosai.ca/1/hall" },
     ],
     authTitle: "Sign in required",
     authSub: "Access the global debate",
@@ -175,13 +171,11 @@ const copy = {
   },
   zh: {
     navLinks: [
-      { label: "Echo AI",  href: "https://echosai.ca" },
-      { label: "评价",     href: "https://echosai.ca/avis" },
-      { label: "快速账单", href: "https://echosai.ca/fastbilling" },
-      { label: "创意",     href: "https://echosai.ca/idea" },
-      { label: "聊天",    href: "https://echosai.ca/chat" },
-      { label: "交流",    href: "https://echosai.ca/2/talk" },
-      { label: "大厅",     href: "https://echosai.ca/1/Hall" },
+      { label: "快速发票转PDF",           href: "https://echosai.ca/fastbilling" },
+      { label: "购买前需要真实评价？",     href: "https://echosai.ca/avis" },
+      { label: "分析你的项目",             href: "https://echosai.ca/idea" },
+      { label: "行为AI聊天",               href: "https://echosai.ca/chat" },
+      { label: "发现你的项目能成为什么",   href: "https://echosai.ca/1/hall" },
     ],
     authTitle: "需要登录",
     authSub: "进入全球辩论",
@@ -1133,12 +1127,19 @@ export default function WorldPage() {
           {/* WORLD sous l'image */}
           <span className="text-white font-black font-mono text-sm leading-none">WORLD</span>
 
-          {/* Nav links — desktop seulement, cachés Premium */}
+          {/* Nav tuiles style Hall — 1 ligne horizontale, contour cyan visible, cachées Premium */}
           {(worldTier === "free") && (
-            <div className="hidden md:flex items-center gap-0.5 ml-1">
+            <div className="hidden xl:flex items-center gap-1 ml-2">
               {t.navLinks.map((link: {label:string;href:string}) => (
                 <a key={link.href} href={link.href} target="_blank" rel="noopener noreferrer"
-                  className="px-2 py-1 rounded text-xs font-mono text-zinc-700 hover:text-white hover:bg-zinc-800/50 transition-all whitespace-nowrap">
+                  className="px-2 py-1 rounded-md text-[10px] font-medium text-zinc-400 hover:text-white transition-all whitespace-nowrap"
+                  style={{
+                    background: "rgba(6,182,212,0.06)",
+                    border: "1px solid rgba(6,182,212,0.3)",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(6,182,212,0.15)"; e.currentTarget.style.borderColor = "rgba(6,182,212,0.6)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(6,182,212,0.06)"; e.currentTarget.style.borderColor = "rgba(6,182,212,0.3)"; }}
+                >
                   {link.label}
                 </a>
               ))}
