@@ -97,6 +97,35 @@ const getTierTasks = (row: BadgeRow) => {
   return { tier, nextTier, nextTasks };
 };
 
+const TIER_RANK: Record<Tier, number> = { none: 0, bronze: 1, argent: 2, or: 3, vip: 4 };
+
+// Compare le palier fraîchement calculé au dernier palier connu (persisté en
+// base). S'il a progressé, on envoie le courriel et on met à jour la valeur
+// stockée — sinon on ne fait rien (évite les doublons de courriel).
+const checkAndNotifyBadgeUpgrade = async (userId: string, email: string | null, row: BadgeRow) => {
+  const newTier = getTierTasks(row).tier;
+  if (newTier === "none") return;
+
+  const { data: prof } = await supabase.from("profiles").select("current_tier,username").eq("id", userId).maybeSingle();
+  const storedTier = (prof?.current_tier || "none") as Tier;
+
+  if (TIER_RANK[newTier] <= TIER_RANK[storedTier]) return; // pas de progression
+
+  await supabase.from("profiles").update({ current_tier: newTier }).eq("id", userId);
+
+  if (email) {
+    try {
+      await fetch("/api/notifications/badge-upgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, pseudo: prof?.username || null, tier: newTier }),
+      });
+    } catch (e) {
+      console.error("[badge-upgrade email]", e);
+    }
+  }
+};
+
 export default function TalkPage() {
   const [lang, setLang] = useState<Lang>("fr");
   const [userId, setUserId] = useState<string | null>(null);
@@ -126,12 +155,12 @@ export default function TalkPage() {
 
         if (profile?.username) {
           setPseudo(profile.username);
-          const { data: badgeRow } = await supabase
-            .from("user_badges")
-            .select("username,reglement_lu,fiche_count,tunnel_count,talk_participation,comment_count,interets_sent,max_project_interest")
-            .eq("username", profile.username)
-            .maybeSingle();
-          if (badgeRow) setMyBadgeRow(badgeRow as BadgeRow);
+          const { data: badgeRows } = await supabase.rpc("get_user_badges", { p_usernames: [profile.username] });
+          const badgeRow = badgeRows?.[0];
+          if (badgeRow) {
+            setMyBadgeRow(badgeRow as BadgeRow);
+            await checkAndNotifyBadgeUpgrade(session.user.id, session.user.email || null, badgeRow as BadgeRow);
+          }
         }
 
         if (session.user.email === 'lafailleestouverte@gmail.com' || session.user.email === 'nicholas@echosai.ca') {
@@ -186,10 +215,7 @@ export default function TalkPage() {
     });
     if (pseudos.size === 0) return;
 
-    const { data } = await supabase
-      .from("user_badges")
-      .select("username,reglement_lu,fiche_count,tunnel_count,talk_participation,comment_count,interets_sent,max_project_interest")
-      .in("username", Array.from(pseudos));
+    const { data } = await supabase.rpc("get_user_badges", { p_usernames: Array.from(pseudos) });
 
     const map: Record<string, Tier> = {};
     (data || []).forEach((row: any) => { map[row.username] = getTierTasks(row).tier; });
@@ -210,10 +236,21 @@ export default function TalkPage() {
     }
   };
 
+  const refreshMyBadges = async () => {
+    if (!userId || !pseudo) return;
+    const { data: badgeRows } = await supabase.rpc("get_user_badges", { p_usernames: [pseudo] });
+    const badgeRow = badgeRows?.[0];
+    if (badgeRow) {
+      setMyBadgeRow(badgeRow as BadgeRow);
+      await checkAndNotifyBadgeUpgrade(userId, userEmail, badgeRow as BadgeRow);
+    }
+  };
+
   const handleMarkReglementLu = async () => {
     if (!userId) return;
     await supabase.from("profiles").update({ reglement_lu: true }).eq("id", userId);
     setMyBadgeRow(prev => prev ? { ...prev, reglement_lu: true } : prev);
+    await refreshMyBadges();
   };
 
   const handleModAction = async (actionType: string, targetPseudo: string, targetId: string, isComment: boolean) => {
@@ -280,6 +317,7 @@ export default function TalkPage() {
       });
     }
     await fetchFeed();
+    await refreshMyBadges();
   };
 
   return (

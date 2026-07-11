@@ -333,6 +333,48 @@ export default function IdeaPage() {
     borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:600, width:"100%", border:"none", ...extra,
   });
 
+  // ── HALL — reste en cercle (pas de nouvelle image fournie) ─────────────────
+  const HALL_ITEM = { href:"https://echosai.ca/1/hall", icon:"🏛️", label:"Affinity Hall", color:"#00c8ff" };
+
+  const HallBadge = ({ size=100 }: { size?: number }) => (
+    <a href={HALL_ITEM.href} target="_blank" rel="noopener noreferrer"
+      style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, textDecoration:"none" }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; }}>
+      <div style={{ position:"relative", width:size, height:size, transition:"transform .2s" }}>
+        <div style={{ position:"absolute", inset:0, borderRadius:"50%", background:`linear-gradient(135deg, ${HALL_ITEM.color}, ${HALL_ITEM.color}88)`, boxShadow:`0 0 20px ${HALL_ITEM.color}40` }} />
+        <div style={{ position:"absolute", inset: size*0.18, borderRadius:"50%", background:bg, display:"flex", alignItems:"center", justifyContent:"center", border:`1px solid ${bord}` }}>
+          <span style={{ fontSize: size*0.32 }}>{HALL_ITEM.icon}</span>
+        </div>
+      </div>
+      <span style={{ fontSize:10, fontWeight:800, color: dark?"#fff":"#1a1917", textAlign:"center", letterSpacing:.3 }}>{HALL_ITEM.label}</span>
+    </a>
+  );
+
+  // ── POSTERS VERTICAUX — bordure colorée, image qui zoom au survol ──────────
+  const POSTER_ITEMS = [
+    { href:"https://echosai.ca/1/talk",      src:"/talkmini.png",    label:"Talk",        color:"#a78bfa" },
+    { href:"https://echosai.ca/avis",        src:"/avismini.png",    label:"Avis Produits", color:"#f59e0b" },
+    { href:"https://echosai.ca/fastbilling", src:"/facturemini.png", label:"FastBilling", color:"#c9a84c" },
+  ];
+  const WORLD_ITEM = { href:"https://echosai.ca/world", src:"/worldmini.png", label:"World", color:"#34d399" };
+
+  const PosterCard = ({ item, width=150 }: { item: { href:string; src:string; label:string; color:string }; width?: number }) => (
+    <a href={item.href} target="_blank" rel="noopener noreferrer"
+      style={{
+        display:"block", width, borderRadius:14, overflow:"hidden",
+        border:`2px solid ${item.color}`, boxShadow:`0 0 18px ${item.color}35`,
+        textDecoration:"none", background:surf,
+      }}>
+      <div style={{ overflow:"hidden", aspectRatio:"2 / 3" }}>
+        <img src={item.src} alt={item.label}
+          style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"transform .35s ease" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.1)"; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }} />
+      </div>
+    </a>
+  );
+
   // ── RENDU ──────────────────────────────────────────────────────────────────
   return (
     <div style={{ background:bg, color:txt, minHeight:"100dvh", fontFamily:"'Inter', system-ui, sans-serif", transition:"background .3s" }}>
@@ -368,21 +410,10 @@ export default function IdeaPage() {
       {/* LAYOUT 3 COLONNES */}
       <div style={{ display:"grid", gridTemplateColumns:"180px 1fr 180px", maxWidth:1200, margin:"0 auto", padding:"0 10px", minHeight:"calc(100dvh - 52px)" }} className="idea-layout">
 
-        {/* COL GAUCHE — pubs */}
-        <aside className="idea-col-left" style={{ paddingTop:16, display:"flex", flexDirection:"column", gap:10, paddingRight:10 }}>
-          {[
-            { href:"https://echosai.ca/1/hall",  src:"/affinity.jpg", label:"AFFINITY HALL →", bg:surf2, color:muted },
-            { href:"https://echosai.ca/avis",    src:"/avis.png",     label:"AVIS PRODUITS →", bg:acc,   color:"#000" },
-            { href:"https://echosai.ca/fastbilling", src:"/facture.png", label:"FASTBILLING →", bg:"#1a1917", color:"#fff" },
-            { href:"https://echosai.ca/2/talk",  src:"/commun.png",   label:"", bg:"transparent", color:"#fff" },
-          ].map((p,i) => (
-            <a key={i} href={p.href} target="_blank" rel="noopener noreferrer"
-              style={{ display:"block", borderRadius:12, overflow:"hidden", border:`1px solid ${bord}` }}
-              onMouseEnter={e => (e.currentTarget.style.opacity=".9")} onMouseLeave={e => (e.currentTarget.style.opacity="1")}>
-              <img src={p.src} alt="" style={{ width:"100%", display:"block", objectFit:"cover", maxHeight: i===0?999:70 }} />
-              {p.label && <div style={{ background:p.bg, color:p.color, textAlign:"center", fontSize:9, fontWeight:800, padding:"4px 0", letterSpacing:1 }}>{p.label}</div>}
-            </a>
-          ))}
+        {/* COL GAUCHE — pubs en anneau */}
+        <aside className="idea-col-left" style={{ paddingTop:24, display:"flex", flexDirection:"column", gap:32, paddingRight:10, alignItems:"center" }}>
+          <HallBadge />
+          {POSTER_ITEMS.map((item, i) => <PosterCard key={i} item={item} />)}
         </aside>
 
         {/* CENTRE */}
@@ -395,16 +426,10 @@ export default function IdeaPage() {
             <p style={{ fontSize:13, color:muted }}>{t.sub}</p>
           </div>
 
-          {/* Pubs mobile */}
-          <div className="idea-mobile-pubs" style={{ display:"none", gap:8, marginBottom:12 }}>
-            <a href="https://echosai.ca/avis" target="_blank" rel="noopener noreferrer" style={{ flex:1, display:"block", borderRadius:10, overflow:"hidden", border:`1px solid ${bord}`, textDecoration:"none" }}>
-              <img src="/avis.png" alt="" style={{ width:"100%", display:"block", maxHeight:70, objectFit:"cover" }} />
-              <div style={{ background:acc, color:"#000", textAlign:"center", fontSize:9, fontWeight:800, padding:"4px 0" }}>AVIS →</div>
-            </a>
-            <a href="https://echosai.ca/fastbilling" target="_blank" rel="noopener noreferrer" style={{ flex:1, display:"block", borderRadius:10, overflow:"hidden", border:`1px solid ${bord}`, textDecoration:"none" }}>
-              <img src="/facture.png" alt="" style={{ width:"100%", display:"block", maxHeight:70, objectFit:"cover" }} />
-              <div style={{ background:"#1a1917", color:"#fff", textAlign:"center", fontSize:9, fontWeight:800, padding:"4px 0" }}>FASTBILLING →</div>
-            </a>
+          {/* Pubs mobile — en anneau, 2 items */}
+          <div className="idea-mobile-pubs" style={{ display:"none", gap:14, marginBottom:16, justifyContent:"center" }}>
+            <PosterCard item={POSTER_ITEMS[0]} width={100} />
+            <PosterCard item={POSTER_ITEMS[1]} width={100} />
           </div>
 
           {/* Formulaire */}
@@ -590,10 +615,35 @@ export default function IdeaPage() {
                 </Section>
               )}
 
+              {/* Bannière contextuelle Talk — apparaît seulement après un résultat */}
+              <a href="https://echosai.ca/1/talk" target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}>
+                <div style={{
+                  background: "linear-gradient(135deg, rgba(167,139,250,.16), rgba(139,92,246,.05))",
+                  border: "1px solid rgba(167,139,250,.4)", borderRadius: 16, padding: "20px 22px",
+                  marginBottom: 16, display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap",
+                  transition: "all .2s", cursor:"pointer",
+                }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 30px rgba(167,139,250,.2)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color: dark?"#fff":"#1a1917", marginBottom:4 }}>
+                      {lang==="fr" ? "🤖 L'IA a terminé son analyse." : "🤖 The AI finished its analysis."}
+                    </div>
+                    <div style={{ fontSize:12, color:muted }}>
+                      {lang==="fr" ? "Envie de voir comment de vraies personnes réagiraient à votre idée ?" : "Curious how real people would react to your idea?"}
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(167,139,250,.15)", padding:"8px 16px", borderRadius:10, whiteSpace:"nowrap" }}>
+                    <span style={{ fontSize:16 }}>💬</span>
+                    <span style={{ fontSize:12, fontWeight:800, color:"#a78bfa" }}>{lang==="fr" ? "Tester sur Talk →" : "Test on Talk →"}</span>
+                  </div>
+                </div>
+              </a>
+
               {/* Amazon */}
               <div style={{ background:surf, border:`1px solid ${bord}`, borderRadius:13, padding:"14px 18px", marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
                 <div style={{ fontSize:12, color:muted }}>{t.amazonTitle}</div>
-                <a href={`https://www.amazon.ca/s?k=${encodeURIComponent(idea.slice(0,80))}`} target="_blank" rel="noopener noreferrer"
+                <a href="https://amzn.to/3RyEK8l" target="_blank" rel="noopener noreferrer"
                   style={{ background:"#f90", color:"#111", border:"none", borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap" }}>
                   {t.amazonLink}
                 </a>
@@ -606,7 +656,11 @@ export default function IdeaPage() {
         </div>
 
         {/* COL DROITE */}
-        <aside className="idea-col-right" style={{ paddingTop:16, display:"flex", flexDirection:"column", gap:8, paddingLeft:10 }}>
+        <aside className="idea-col-right" style={{ paddingTop:16, display:"flex", flexDirection:"column", gap:12, paddingLeft:10 }}>
+          <div style={{ display:"flex", justifyContent:"center" }}>
+            <PosterCard item={WORLD_ITEM} width={150} />
+          </div>
+
           {/* Dark + Lang */}
           <div style={{ display:"flex", gap:6 }}>
             <button onClick={() => setDark(d => !d)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:13, color:muted, fontWeight:700 }}>{dark?t.light:t.dark}</button>
