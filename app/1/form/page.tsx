@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
 type Lang = "fr" | "en";
-const STEPS = 6;
+const STEPS = 7;
 
 // ── LOGOS ──────────────────────────────────────────────────────────────────
 const MicrosoftLogo = () => (
@@ -39,9 +39,25 @@ const D = {
   chargement:{ fr:"Création...",     en:"Creating..."          },
   erreur:   { fr:"Une erreur est survenue. Réessaie.", en:"An error occurred. Please try again." },
 
+  // ── ÉTAPE 7 — Choix des destinations ──────────────────────────────────────
+  pubTitle:      { fr:"Où veux-tu publier ?", en:"Where do you want to publish?" },
+  pubSub:        { fr:"Coche au moins une option. Tu peux en choisir plusieurs.", en:"Check at least one option. You can choose several." },
+  pubFicheLabel: { fr:"🔍 Explorer les projets", en:"🔍 Explore projects" },
+  pubFicheDesc:  { fr:"Ta fiche complète, visible publiquement — les gens t'envoient un intérêt.", en:"Your full listing, publicly visible — people send you interest." },
+  pubTalkLabel:  { fr:"💬 Avis de la communauté", en:"💬 Community feedback" },
+  pubTalkDesc:   { fr:"Obtiens des réactions rapides de la communauté sur ton pitch.", en:"Get quick community reactions to your pitch." },
+  pubAuditLabel: { fr:"🔎 Audition de site web", en:"🔎 Website audit" },
+  pubAuditDesc:  { fr:"Soumets ton site pour un vrai retour visuel — accueil, message, tunnel.", en:"Submit your site for real visual feedback — homepage, message, funnel." },
+  pubNone:       { fr:"Choisis au moins une destination avant de continuer.", en:"Choose at least one destination before continuing." },
+  pseudoNeeded:  { fr:"Un pseudo est nécessaire pour Talk et Audit.", en:"A nickname is required for Talk and Audit." },
+  auditUrlLabel: { fr:"URL du site à auditer *", en:"URL of the site to audit *" },
+  auditImgLabel: { fr:"Images de ton site (accueil, tunnel, etc.)", en:"Images of your site (homepage, funnel, etc.)" },
+  auditImgHint:  { fr:"Ajoute plusieurs captures pour créer une vraie cartographie de ton site.", en:"Add several screenshots to create a real map of your site." },
+  auditImgAdd:   { fr:"+ Ajouter une image", en:"+ Add an image" },
+
   etapes: {
-    fr: ["Projet","Avancement","Objectifs","Collaboration","Technologies","Profil"],
-    en: ["Project","Progress","Goals","Collaboration","Technologies","Profile"],
+    fr: ["Projet","Avancement","Objectifs","Collaboration","Technologies","Profil","Publier"],
+    en: ["Project","Progress","Goals","Collaboration","Technologies","Profile","Publish"],
   },
 
   nom_projet:   { fr:"Nom du projet *",    en:"Project name *"      },
@@ -177,6 +193,10 @@ type FormData = {
   photo_url: string;
   contacts_visibles: string[];
   email: string; discord: string; github: string; linkedin: string; site_web: string; telephone: string;
+  // Destinations de publication — au moins une obligatoire
+  pub_fiche: boolean; pub_talk: boolean; pub_audit: boolean;
+  // Spécifique Audit
+  audit_url: string; audit_images: string[];
 };
 
 const INITIAL: FormData = {
@@ -188,6 +208,8 @@ const INITIAL: FormData = {
   nom_complet:"", pays:"", langue:"", photo_url:"",
   contacts_visibles:["Email"],
   email:"", discord:"", github:"", linkedin:"", site_web:"", telephone:"",
+  pub_fiche: true, pub_talk: false, pub_audit: false,
+  audit_url: "", audit_images: [],
 };
 
 // ── COMPOSANTS UI ──────────────────────────────────────────────────────────
@@ -406,6 +428,7 @@ function InscriptionPageInner() {
   const [createdFicheId, setCreatedFicheId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const auditImageInputRef = useRef<HTMLInputElement>(null);
 
   // ── TALK CROSSPOST (choix sur l'écran de confirmation) ─────────────────
   const [pseudo, setPseudo] = useState<string>("");
@@ -495,6 +518,9 @@ function InscriptionPageInner() {
       linkedin: data.linkedin_prive || "",
       site_web: data.site_web_prive || "",
       telephone: data.telephone_prive || "",
+      // Pas utilisés en mode édition (étape 7 est sautée), mais requis par le type FormData
+      pub_fiche: true, pub_talk: false, pub_audit: false,
+      audit_url: "", audit_images: [],
     });
     setShowFichesMenu(false);
   };
@@ -531,53 +557,69 @@ function InscriptionPageInner() {
     }
   };
 
+  // Upload multi-images pour Audit — s'ajoute au tableau au lieu de remplacer
+  const [uploadingAudit, setUploadingAudit] = useState(false);
+  const handleAuditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingAudit(true);
+    try {
+      const ext      = file.name.split(".").pop();
+      const filename = `audit-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { data, error } = await supabase.storage
+        .from("fiche-photos")
+        .upload(filename, file, { contentType: file.type, upsert: false });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("fiche-photos").getPublicUrl(data.path);
+      set("audit_images", [...form.audit_images, urlData.publicUrl]);
+    } catch (e) {
+      console.error("Upload image audit:", e);
+    } finally {
+      setUploadingAudit(false);
+    }
+  };
+  const removeAuditImage = (url: string) => {
+    set("audit_images", form.audit_images.filter(u => u !== url));
+  };
+
   // ── SUBMIT ────────────────────────────────────────────────────────────────
+  const [published, setPublished] = useState<{ fiche: boolean; talk: boolean; audit: boolean }>({ fiche: false, talk: false, audit: false });
+
   const handleSubmit = async () => {
     setError(null);
 
-    // FIX: bloque toute création/modification si pas connecté.
-    // Avant ce fix, une fiche pouvait être insérée avec user_id: null,
-    // ce qui la faisait apparaître comme "possédée" par n'importe quel
-    // visiteur non connecté (null === null côté page /1/fiche).
     if (!userId) {
       setShowAuthRequired(true);
       return;
     }
 
-    if (!form.contacts_visibles.includes("Email") || !form.email.trim()) {
-      setError(t("email_missing", lang)); return;
+    // Au moins une destination obligatoire
+    if (!ficheActive && !form.pub_fiche && !form.pub_talk && !form.pub_audit) {
+      setError(t("pubNone", lang));
+      return;
     }
-    if (!validateEmail(form.email)) {
-      setError(t("email_invalid", lang)); return;
+    if ((form.pub_talk || form.pub_audit) && !pseudo) {
+      setError(t("pseudoNeeded", lang));
+      return;
     }
 
-    if (!ficheActive) {
-      const { data: existing } = await supabase
-        .from("fiches")
-        .select("id")
-        .eq("email_prive", form.email.trim())
-        .maybeSingle();
-      if (existing) {
-        setError(lang === "fr" ? "Ce courriel a déjà une fiche associée." : "This email already has a listing.");
-        return;
-      }
+    if (form.pub_audit && !form.audit_url.trim()) {
+      setError(lang === "fr" ? "Ajoute l'URL du site à auditer." : "Add the URL of the site to audit.");
+      return;
     }
 
     setLoading(true);
     try {
-      const { data: keyData, error: keyError } = await supabase.rpc("generate_fiche_key");
-      if (keyError) throw keyError;
-      const generatedKey = keyData as string;
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserId = session?.user?.id || null;
-
-      // Double sécurité : si la session a expiré entre-temps, on bloque aussi ici.
       if (!currentUserId) {
         setLoading(false);
         setShowAuthRequired(true);
         return;
       }
 
+      // ── ÉDITION D'UNE FICHE EXISTANTE — traite aussi Talk/Audit si cochés ──
       if (ficheActive) {
         const { error: updateError } = await supabase.from("fiches").update({
           nom_projet: form.nom_projet, description: form.description,
@@ -588,57 +630,120 @@ function InscriptionPageInner() {
           cherche: form.cherche, temps: form.temps, distance: form.distance, engagement: form.engagement,
           tech: form.tech, nom_complet: form.nom_complet, pays: form.pays, langue: form.langue,
           photo_urls: form.photo_url ? [form.photo_url] : null,
-          contacts_visibles: form.contacts_visibles,
-          email_prive: form.email.trim(), discord_prive: form.discord.trim(), github_prive: form.github.trim(),
-          linkedin_prive: form.linkedin.trim(), site_web_prive: form.site_web.trim(), telephone_prive: form.telephone.trim(),
+          // Coordonnées volontairement omises — plus de section Contacts dans le
+          // formulaire, donc on ne touche jamais aux valeurs déjà en base pour
+          // ne pas les écraser silencieusement avec des champs vides.
         }).eq("id", ficheActive);
         if (updateError) throw updateError;
 
         setCreatedFicheId(ficheActive);
         setTalkText(`${form.nom_projet} — ${form.description}`.slice(0, 500));
-        // Sécurité : on vérifie si cette fiche a déjà été postée sur Talk avant de proposer le bouton
-        const { data: existingTalkPost } = await supabase
-          .from("talk_posts").select("id").eq("fiche_id", ficheActive).maybeSingle();
-        setTalkPosted(!!existingTalkPost);
+        const { data: existingTalkPost } = await supabase.from("talk_posts").select("id").eq("fiche_id", ficheActive).maybeSingle();
+        const alreadyOnTalk = !!existingTalkPost;
+        setTalkPosted(alreadyOnTalk);
 
+        // Publie sur Talk maintenant seulement si coché ET pas déjà fait
+        let talkJustPublished = false;
+        if (form.pub_talk && !alreadyOnTalk && pseudo) {
+          await supabase.from("talk_posts").insert({
+            user_id: currentUserId,
+            text: `${form.nom_projet} — ${form.description}`.slice(0, 500),
+            user_pseudo: pseudo,
+            fiche_id: ficheActive,
+          });
+          talkJustPublished = true;
+          setTalkPosted(true);
+        }
+
+        // Publie sur Audit si coché
+        let auditJustPublished = false;
+        if (form.pub_audit && pseudo && form.audit_url.trim()) {
+          const { error: auditError } = await supabase.from("audit_posts").insert({
+            user_id: currentUserId,
+            user_pseudo: pseudo,
+            url: form.audit_url.trim(),
+            description: form.description || null,
+            images: form.audit_images.length ? form.audit_images : null,
+          });
+          if (auditError) {
+            console.error("[Audit insert]", auditError);
+            setError(lang === "fr"
+              ? `La fiche a été sauvegardée, mais l'envoi vers Audit a échoué : ${auditError.message}`
+              : `The listing was saved, but publishing to Audit failed: ${auditError.message}`);
+          } else {
+            auditJustPublished = true;
+          }
+        }
+
+        setPublished({ fiche: true, talk: talkJustPublished, audit: auditJustPublished });
         setMyKey("UPDATED");
         setLoading(false);
         return;
       }
 
-      const { data: insertedFiche, error: insertError } = await supabase.from("fiches").insert({
-        key: generatedKey, user_id: currentUserId,
-        creator_email: userEmail,
-        nom_projet: form.nom_projet, description: form.description,
-        type_projet: form.type_projet, type_profil: form.type_profil,
-        idee: form.idee, avancement: form.avancement, produit: form.produit,
-        utilisateurs: form.utilisateurs, revenus: form.revenus,
-        objectif_court: form.objectif_court, objectif_moyen: form.objectif_moyen, objectif_long: form.objectif_long,
-        cherche: form.cherche, temps: form.temps, distance: form.distance, engagement: form.engagement,
-        tech: form.tech,
-        nom_complet: form.nom_complet, pays: form.pays, langue: form.langue,
-        photo_urls: form.photo_url ? [form.photo_url] : [],
-        contacts_visibles: form.contacts_visibles,
-        email_prive: form.email || null, discord_prive: form.discord || null,
-        github_prive: form.github || null, linkedin_prive: form.linkedin || null,
-        site_web_prive: form.site_web || null, telephone_prive: form.telephone || null,
-      }).select("id").single();
-      if (insertError) throw insertError;
-      setCreatedFicheId(insertedFiche?.id || null);
-      setTalkText(`${form.nom_projet} — ${form.description}`.slice(0, 500));
+      // ── NOUVELLE PUBLICATION — branche selon les cases cochées ───────────
+      let newFicheId: string | null = null;
+      let generatedKey: string | null = null;
 
-      try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-        await fetch(`${API_URL}/1/envoyer-cle`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: form.email, key: generatedKey }),
-        });
-      } catch (e) {
-        console.error("Envoi courriel échoué:", e);
+      if (form.pub_fiche) {
+        const { data: keyData, error: keyError } = await supabase.rpc("generate_fiche_key");
+        if (keyError) throw keyError;
+        generatedKey = keyData as string;
+
+        const { data: insertedFiche, error: insertError } = await supabase.from("fiches").insert({
+          key: generatedKey, user_id: currentUserId,
+          creator_email: userEmail,
+          nom_projet: form.nom_projet, description: form.description,
+          type_projet: form.type_projet, type_profil: form.type_profil,
+          idee: form.idee, avancement: form.avancement, produit: form.produit,
+          utilisateurs: form.utilisateurs, revenus: form.revenus,
+          objectif_court: form.objectif_court, objectif_moyen: form.objectif_moyen, objectif_long: form.objectif_long,
+          cherche: form.cherche, temps: form.temps, distance: form.distance, engagement: form.engagement,
+          tech: form.tech,
+          nom_complet: form.nom_complet, pays: form.pays, langue: form.langue,
+          photo_urls: form.photo_url ? [form.photo_url] : [],
+          contacts_visibles: [],
+          email_prive: null, discord_prive: null,
+          github_prive: null, linkedin_prive: null,
+          site_web_prive: null, telephone_prive: null,
+        }).select("id").single();
+        if (insertError) throw insertError;
+        newFicheId = insertedFiche?.id || null;
+        setCreatedFicheId(newFicheId);
+        setTalkText(`${form.nom_projet} — ${form.description}`.slice(0, 500));
       }
 
-      setMyKey(generatedKey);
+      if (form.pub_talk) {
+        await supabase.from("talk_posts").insert({
+          user_id: currentUserId,
+          text: `${form.nom_projet} — ${form.description}`.slice(0, 500),
+          user_pseudo: pseudo,
+          fiche_id: newFicheId,
+        });
+      }
+      setTalkPosted(form.pub_talk);
+
+      let auditOk = false;
+      if (form.pub_audit) {
+        const { error: auditError } = await supabase.from("audit_posts").insert({
+          user_id: currentUserId,
+          user_pseudo: pseudo,
+          url: form.audit_url.trim(),
+          description: form.description || null,
+          images: form.audit_images.length ? form.audit_images : null,
+        });
+        if (auditError) {
+          console.error("[Audit insert]", auditError);
+          setError(lang === "fr"
+            ? `Publié ailleurs avec succès, mais l'envoi vers Audit a échoué : ${auditError.message}`
+            : `Published elsewhere successfully, but publishing to Audit failed: ${auditError.message}`);
+        } else {
+          auditOk = true;
+        }
+      }
+
+      setPublished({ fiche: form.pub_fiche, talk: form.pub_talk, audit: auditOk });
+      setMyKey(generatedKey || "PUBLISHED");
     } catch (e: any) {
       console.error(e);
       setError(t("erreur", lang));
@@ -692,14 +797,28 @@ function InscriptionPageInner() {
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
           {myKey === "UPDATED"
             ? (lang === "fr" ? "Fiche mise à jour !" : "Listing updated!")
+            : myKey === "PUBLISHED"
+            ? (lang === "fr" ? "Publié !" : "Published!")
             : t("confirme_titre", lang)}
         </h1>
         <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-4">
           {myKey === "UPDATED"
             ? (lang === "fr" ? "Vos modifications ont été sauvegardées." : "Your changes have been saved.")
+            : myKey === "PUBLISHED"
+            ? (lang === "fr" ? "Ta publication est en ligne." : "Your submission is live.")
             : t("confirme_texte", lang)}
         </p>
-        {myKey !== "UPDATED" && (
+
+        {/* Résumé de ce qui a été publié */}
+        {(published.talk || published.audit || (myKey !== "UPDATED" && published.fiche)) && (
+          <div className="flex flex-col gap-1.5 mb-6 text-left bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3">
+            {published.fiche && myKey !== "UPDATED" && <p className="text-xs text-zinc-600 dark:text-zinc-400">✓ {t("pubFicheLabel",lang)}</p>}
+            {published.talk  && <p className="text-xs text-zinc-600 dark:text-zinc-400">✓ {t("pubTalkLabel",lang)}</p>}
+            {published.audit && <p className="text-xs text-zinc-600 dark:text-zinc-400">✓ {t("pubAuditLabel",lang)}</p>}
+          </div>
+        )}
+
+        {myKey !== "UPDATED" && myKey !== "PUBLISHED" && (
           <>
             <div className="bg-zinc-900 dark:bg-zinc-800 text-white rounded-2xl px-6 py-4 mb-3 font-mono text-2xl font-bold tracking-wider">{myKey}</div>
             <p className="text-zinc-400 text-xs mb-8">{t("confirme_note", lang)}</p>
@@ -777,8 +896,8 @@ function InscriptionPageInner() {
         <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between">
           <span className="font-bold text-sm">Echo AI</span>
           <div className="flex items-center gap-5 text-sm">
-            <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).home}</Link>
-            <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).fiches}</Link>
+            <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
+            <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
             <LangDropdown lang={lang} setLang={setLang} />
           </div>
         </nav>
@@ -812,17 +931,39 @@ function InscriptionPageInner() {
     <main className="min-h-screen bg-white dark:bg-[#0f0f0f] text-zinc-900 dark:text-zinc-100 font-sans">
 
       {/* NAV */}
-      <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-10">
-        <span className="font-bold text-sm">Echo AI</span>
-        <div className="flex items-center gap-5 text-sm flex-wrap">
-          <Link href="/1/hall"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).home}</Link>
-          <Link href="/1/dashboard"     className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Dashboard</Link>
-          <Link href="/1/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).conv}</Link>
-          <Link href="/1/form"          className="text-zinc-900 dark:text-white font-semibold">{t("nav",lang).inscription}</Link>
-          <Link href="/1/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{t("nav",lang).fiches}</Link>
-          <Link href="/1/talk"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Talk</Link>
-          <Link href="/1/desktop"       className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Bureau" : "Desktop"}</Link>
-          <Link href="/1/account"       className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Compte" : "Account"}</Link>
+      <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-10 gap-4">
+        {/* ZONE 1 — logo + onglets */}
+        <div className="flex items-center gap-5 flex-wrap">
+          <span className="font-bold text-sm">Echo AI</span>
+          <div className="flex items-center gap-5 text-sm flex-wrap">
+            <Link href="/1/hall"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
+            <Link href="/1/dashboard"     className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Tous les outils" : "All tools"}</Link>
+            <Link href="/1/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
+            <Link href="/1/form"          className="text-zinc-900 dark:text-white font-semibold">{lang === "fr" ? "Créer un projet" : "Create project"}</Link>
+            <Link href="/1/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
+            <Link href="/1/talk"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de la communauté" : "Community feedback"}</Link>
+            <Link href="/1/audit"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Audition de site web" : "Website audit"}</Link>
+            <Link href="/idea"            className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de l'IA" : "AI feedback"}</Link>
+            <Link href="/1/account"       className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Mon compte" : "My account"}</Link>
+          </div>
+        </div>
+
+        {/* SÉPARATEUR + ZONE 2 — Bureau (premium) + langue + Mes fiches + pseudo */}
+        <div className="flex items-center gap-3.5 shrink-0 flex-wrap">
+          <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800" />
+
+          {/* BUREAU — verrouillé pour l'instant */}
+          <div className="relative group">
+            <button
+              onClick={() => { /* TODO: activer + ouvrir popup d'avantages une fois le premium prêt */ }}
+              className="flex items-center gap-1.5 bg-amber-500/5 border border-amber-500/25 rounded-lg px-3 py-1.5 cursor-not-allowed opacity-65">
+              <span className="text-xs">🔒</span>
+              <span className="text-xs font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">{lang === "fr" ? "Mon Bureau" : "My Desk"}</span>
+            </button>
+            <div className="absolute top-full right-0 mt-1.5 bg-zinc-900 border border-zinc-700 rounded-md px-2.5 py-1 text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+              {lang === "fr" ? "🚧 En construction" : "🚧 Under construction"}
+            </div>
+          </div>
 
           <LangDropdown lang={lang} setLang={setLang} />
 
@@ -830,7 +971,7 @@ function InscriptionPageInner() {
             <div className="flex items-center gap-2 relative">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-500 border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                {userEmail}
+                {pseudo || userEmail}
               </span>
               {mesFiches.length > 0 && (
                 <div className="relative">
@@ -889,7 +1030,7 @@ function InscriptionPageInner() {
                 }`}>{i + 1 < step ? "✓" : i + 1}</div>
                 <span className={`text-[10px] hidden sm:block text-center ${i + 1 === step ? "text-zinc-900 dark:text-white font-semibold" : "text-zinc-400"}`}>{label}</span>
               </div>
-              {i < STEPS - 1 && <div className={`flex-1 h-px mx-2 mt-[-10px] ${i + 1 < step ? "bg-zinc-900 dark:bg-white" : "bg-zinc-200 dark:bg-zinc-700"}`}/>}
+              {i < etapes.length - 1 && <div className={`flex-1 h-px mx-2 mt-[-10px] ${i + 1 < step ? "bg-zinc-900 dark:bg-white" : "bg-zinc-200 dark:bg-zinc-700"}`}/>}
             </div>
           ))}
         </div>
@@ -1018,50 +1159,80 @@ function InscriptionPageInner() {
                 </button>
               )}
             </div>
+          </>}
 
-            <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2"/>
+          {/* ÉTAPE 7 — Où publier ? */}
+          {step === 7 && <>
+            <div className="text-center mb-2">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{t("pubTitle",lang)}</h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                {ficheActive
+                  ? (lang === "fr" ? "Ta fiche est déjà publiée. Ajoute-la aussi ailleurs si tu veux." : "Your listing is already published. Add it elsewhere too if you want.")
+                  : t("pubSub",lang)}
+              </p>
+            </div>
 
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-1">🔒 {t("contacts_titre",lang)}</p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">{t("contacts_hint",lang)}</p>
-              <div className="flex flex-col gap-1.5 mb-4">
-                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("contacts_label",lang)}</label>
-                <p className="text-xs text-zinc-400">{t("email_required",lang)}</p>
-                <div className="flex flex-wrap gap-2">
-                  {CONTACTS_OPTIONS.map(opt => {
-                    const isEmail    = opt === "Email";
-                    const isSelected = form.contacts_visibles.includes(opt);
-                    return (
-                      <button key={opt} type="button"
-                        onClick={() => {
-                          if (isEmail) return;
-                          set("contacts_visibles", isSelected
-                            ? form.contacts_visibles.filter(v => v !== opt)
-                            : [...form.contacts_visibles, opt]);
-                        }}
-                        className={`px-3 py-2 rounded-xl text-sm border transition-all ${isSelected ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-medium" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"} ${isEmail?"cursor-default":""}`}>
-                        {opt}{isEmail?" *":""}
-                      </button>
-                    );
-                  })}
+            <div className="flex flex-col gap-3">
+              {([
+                { key:"pub_fiche" as const, label:t("pubFicheLabel",lang), desc:t("pubFicheDesc",lang), locked: ficheActive },
+                { key:"pub_talk" as const,  label:t("pubTalkLabel",lang),  desc: ficheActive && talkPosted ? (lang === "fr" ? "Déjà publié sur Talk." : "Already published on Talk.") : t("pubTalkDesc",lang), locked: ficheActive && talkPosted },
+                { key:"pub_audit" as const, label:t("pubAuditLabel",lang), desc:t("pubAuditDesc",lang) },
+              ]).map(opt => (
+                <div key={opt.key} onClick={() => !opt.locked && set(opt.key, !form[opt.key])}
+                  className={`flex items-start gap-3 px-4 py-3.5 rounded-xl border transition-all select-none ${opt.locked ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${form[opt.key] ? "border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-800" : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400"}`}>
+                  <div className={`w-5 h-5 rounded-md border-2 shrink-0 mt-0.5 flex items-center justify-center transition-all ${form[opt.key] ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white" : "border-zinc-300 dark:border-zinc-600"}`}>
+                    {form[opt.key] && <span className="text-white dark:text-zinc-900 text-xs">✓</span>}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{opt.label}{opt.locked ? " 🔒" : ""}</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{opt.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Pseudo requis pour Talk/Audit */}
+            {(form.pub_talk || form.pub_audit) && !pseudo && (
+              <div className="mt-2 flex flex-col gap-2 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">{lang === "fr" ? "Un pseudo est requis pour publier sur Talk/Audit :" : "A nickname is required to publish on Talk/Audit:"}</p>
+                <div className="flex gap-2">
+                  <input type="text" value={pseudoInput} onChange={e => setPseudoInput(e.target.value.replace(/[^a-zA-Z0-9_\s-]/g, ""))}
+                    placeholder={lang === "fr" ? "Pseudo" : "Nickname"}
+                    className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-cyan-500" />
+                  <button type="button" onClick={handleSaveTalkPseudo} className="px-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs rounded-lg font-semibold">{lang === "fr" ? "Valider" : "Save"}</button>
                 </div>
               </div>
-              <div className="flex flex-col gap-3">
-                {form.contacts_visibles.includes("Email") && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email *</label>
-                    <input type="email" value={form.email} onChange={e => set("email",e.target.value)} placeholder="toi@exemple.com"
-                      className={`bg-white dark:bg-zinc-900 border rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none transition-colors ${form.email && !validateEmail(form.email) ? "border-red-400" : "border-zinc-200 dark:border-zinc-700"}`}/>
-                    {form.email && !validateEmail(form.email) && <p className="text-xs text-red-400">{t("email_invalid",lang)}</p>}
-                  </div>
-                )}
-                {form.contacts_visibles.includes("Discord")   && <Field label="Discord"  value={form.discord}  onChange={v=>set("discord",v)}  placeholder="username"           />}
-                {form.contacts_visibles.includes("GitHub")    && <Field label="GitHub"   value={form.github}   onChange={v=>set("github",v)}   placeholder="github.com/toi"     />}
-                {form.contacts_visibles.includes("LinkedIn")  && <Field label="LinkedIn" value={form.linkedin} onChange={v=>set("linkedin",v)} placeholder="linkedin.com/in/toi"/>}
-                {form.contacts_visibles.includes("Site web")  && <Field label={lang==="fr"?"Site web":"Website"} value={form.site_web} onChange={v=>set("site_web",v)} placeholder="https://monsite.com"/>}
-                {form.contacts_visibles.includes("Téléphone") && <Field label={lang==="fr"?"Téléphone (optionnel)":"Phone (optional)"} value={form.telephone} onChange={v=>set("telephone",v)} placeholder="+1 555 000 0000"/>}
+            )}
+
+            {/* Champs spécifiques Audit */}
+            {form.pub_audit && (
+              <div className="mt-2 flex flex-col gap-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
+                <Field label={t("auditUrlLabel",lang)} value={form.audit_url} onChange={v => set("audit_url", v)} placeholder="https://tonsite.com" />
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("auditImgLabel",lang)}</label>
+                  <p className="text-xs text-zinc-400">{t("auditImgHint",lang)}</p>
+
+                  {form.audit_images.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {form.audit_images.map(url => (
+                        <div key={url} className="relative group aspect-video rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700">
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                          <button type="button" onClick={() => removeAuditImage(url)}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <input ref={auditImageInputRef} type="file" accept="image/*" onChange={handleAuditImageUpload} className="hidden" />
+                  <button type="button" onClick={() => auditImageInputRef.current?.click()} disabled={uploadingAudit}
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
+                    {uploadingAudit ? "…" : t("auditImgAdd",lang)}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>}
 
         </div>

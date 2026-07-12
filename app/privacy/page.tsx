@@ -13,7 +13,7 @@ export default function PrivacyPage() {
           </h1>
 
           <p className="text-zinc-400">
-            Last updated: June 2026
+            Last updated: July 2026
           </p>
         </div>
 
@@ -23,12 +23,10 @@ export default function PrivacyPage() {
             <h2 className="text-2xl font-bold text-cyan-400 mb-4">
               1. Introduction
             </h2>
-
             <p className="text-zinc-300 leading-8">
               Welcome to Echo AI ("Echo AI", "we", "our", or "us"),
               operated by Nicholas Gagnon.
             </p>
-
             <p className="text-zinc-300 leading-8 mt-4">
               This Privacy Policy explains how Echo AI collects,
               uses, stores, and protects information when you use
@@ -40,7 +38,6 @@ export default function PrivacyPage() {
             <h2 className="text-2xl font-bold text-cyan-400 mb-4">
               2. Information We Collect
             </h2>
-
             <ul className="space-y-3 text-zinc-300">
               <li>• Email address and account information</li>
               <li>• Authentication provider information</li>
@@ -52,9 +49,8 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-2xl font-bold text-cyan-400 mb-4">
-              3. Google Calendar Access
+              3. Google Calendar & Workspace Access
             </h2>
-
             <p className="text-zinc-300 leading-8">
               When you choose to connect your Google account,
               Echo AI may access calendar information that you
@@ -65,7 +61,6 @@ export default function PrivacyPage() {
               <p className="text-zinc-300 mb-4">
                 This access is used exclusively to:
               </p>
-
               <ul className="space-y-2 text-zinc-300">
                 <li>• Display calendar events</li>
                 <li>• Synchronize events with Google Calendar</li>
@@ -74,91 +69,103 @@ export default function PrivacyPage() {
                 <li>• Remove events when requested by the user</li>
               </ul>
             </div>
+          </section>
 
-            <p className="text-zinc-300 leading-8 mt-6">
-              Echo AI does not sell Google user data and does not
-              use Google Calendar data for advertising purposes.
-            </p>
+          {/* === NOUVELLE SECTION GOOGLE LIMITED USE === */}
+          <section>
+            <h2 className="text-2xl font-bold text-cyan-400 mb-4">
+              4. Google API Services User Data Policy & Limited Use Compliance
+            </h2>
+            
+            <div className="border border-cyan-500/30 bg-cyan-500/5 rounded-2xl p-8">
+              <p className="text-lg font-semibold text-white mb-4">
+                Limited Use Disclosure
+              </p>
+              <p className="text-zinc-300 leading-8">
+                The use and transfer of raw or derived user data received 
+                from Google Workspace APIs by <strong>Echo AI</strong> will 
+                adhere to the{" "}
+                <a 
+                  href="https://developers.google.com/terms/api-services-user-data-policy" 
+                  target="_blank"
+                  className="text-cyan-400 hover:underline"
+                >
+                  Google API Services User Data Policy
+                </a>, 
+                including the Limited Use requirements.
+              </p>
+              <p className="text-zinc-400 text-sm mt-6">
+                This disclosure is provided in accordance with Google’s 
+                verification requirements for third-party applications.
+              </p>
+            </div>
           </section>
 
           <section>
             <h2 className="text-2xl font-bold text-cyan-400 mb-4">
-              4. Data Storage
+              5. Data Storage
             </h2>
-
             <p className="text-zinc-300 leading-8">
-              User information is stored using Supabase
-              infrastructure and associated services required
-              for the operation of the platform.
+              User information is stored using Supabase infrastructure 
+              and associated services required for the operation of the platform.
             </p>
-
             <p className="text-zinc-300 leading-8 mt-4">
-              Authentication tokens and synchronization data may
-              be securely stored to maintain user sessions and
-              calendar synchronization features.
+              Authentication tokens and synchronization data may be 
+              securely stored to maintain user sessions and calendar 
+              synchronization features.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-bold text-cyan-400 mb-4">
-              5. Data Sharing
+              6. Data Sharing
             </h2>
-
             <p className="text-zinc-300 leading-8">
               Echo AI does not sell personal information.
             </p>
-
             <p className="text-zinc-300 leading-8 mt-4">
-              Information may only be shared with service providers
+              Information may only be shared with service providers 
               required to operate the platform or when legally required.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-bold text-cyan-400 mb-4">
-              6. Account & Data Deletion
+              7. Account & Data Deletion
             </h2>
-
             <p className="text-zinc-300 leading-8">
-              Users may request deletion of their account and
-              associated data at any time.
+              Users may request deletion of their account and associated 
+              data at any time.
             </p>
-
             <p className="text-zinc-300 leading-8 mt-4">
-              Once deletion is requested, Echo AI will make
-              reasonable efforts to permanently remove stored
-              information associated with the account unless
-              retention is required by law.
+              Once deletion is requested, Echo AI will make reasonable 
+              efforts to permanently remove stored information associated 
+              with the account unless retention is required by law.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-bold text-cyan-400 mb-4">
-              7. Security
+              8. Security
             </h2>
-
             <p className="text-zinc-300 leading-8">
-              We take reasonable technical and organizational
-              measures to protect user information against
-              unauthorized access, disclosure, alteration,
-              or destruction.
+              We take reasonable technical and organizational measures 
+              to protect user information against unauthorized access, 
+              disclosure, alteration, or destruction.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-bold text-cyan-400 mb-4">
-              8. Contact
+              9. Contact
             </h2>
-
             <div className="border border-zinc-800 rounded-2xl p-6 bg-zinc-950">
               <p className="text-zinc-300">
                 <strong>Operator:</strong> Nicholas Gagnon
               </p>
-
               <p className="text-zinc-300 mt-2">
                 <strong>Country:</strong> Canada
               </p>
-
               <p className="text-cyan-400 mt-2 font-semibold">
                 support@echosai.ca
               </p>

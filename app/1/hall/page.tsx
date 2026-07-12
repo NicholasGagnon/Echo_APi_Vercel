@@ -7,14 +7,14 @@ import { supabase } from "../../lib/supabase";
 type Lang = "fr" | "en";
 
 // ── NAV EN TUILES — texte seulement, pas d'emoji ──
-const NAV_TILES: { labelFr: string; labelEn: string; href: string }[] = [
+const NAV_TILES: { labelFr: string; labelEn: string; href: string; locked?: boolean }[] = [
   { labelFr: "Accueil",              labelEn: "Home",             href: "/1/hall" },
   { labelFr: "Tous les outils",      labelEn: "All tools",        href: "/1/dashboard" },
   { labelFr: "Créer un projet",      labelEn: "Create project",   href: "/1/form" },
   { labelFr: "Explorer les projets", labelEn: "Explore projects", href: "/1/fiche" },
   { labelFr: "Avis de la communauté",labelEn: "Community feedback", href: "/1/talk" },
+  { labelFr: "Audition de site web", labelEn: "Website audit",    href: "/1/audit" },
   { labelFr: "Avis de l'IA",         labelEn: "AI feedback",      href: "/idea" },
-  { labelFr: "Mon Bureau",           labelEn: "My Desk",          href: "/1/desktop" },
   { labelFr: "Mon compte",           labelEn: "My account",       href: "/1/account" },
 ];
 
@@ -103,21 +103,41 @@ export default function HallPage() {
   const [lang, setLang] = useState<Lang>("fr");
   const [scrolled, setScrolled] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [pseudo, setPseudo] = useState<string>("");
+  const [pseudoInput, setPseudoInput] = useState<string>("");
   const [showAuthPopup, setShowAuthPopup] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const t = T[lang];
 
+  const loadProfile = async (uid: string) => {
+    const { data } = await supabase.from("profiles").select("username").eq("id", uid).maybeSingle();
+    setPseudo(data?.username || "");
+  };
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => { if (data.user) setUser(data.user); });
-    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => setUser(session?.user ?? null));
+    supabase.auth.getUser().then(({ data }) => { if (data.user) { setUser(data.user); loadProfile(data.user.id); } });
+    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) loadProfile(session.user.id); else setPseudo("");
+    });
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  const savePseudo = async () => {
+    const clean = pseudoInput.trim();
+    if (!clean || !user) return;
+    await supabase.from("profiles").upsert({ id: user.id, username: clean, updated_at: new Date().toISOString() });
+    setPseudo(clean);
+  };
+
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/hall`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
   };
   const handleMicrosoft = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email User.Read" } });
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/hall`, scopes: "openid profile email User.Read" } });
   };
+  const handleLogout = async () => { await supabase.auth.signOut(); setUser(null); setPseudo(""); setShowUserMenu(false); };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -138,33 +158,135 @@ export default function HallPage() {
         backdropFilter: "blur(12px)",
         borderBottom: "1px solid rgba(255,255,255,.06)",
         padding: "12px 24px",
+        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16,
       }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, maxWidth: 1100, margin: "0 auto" }}>
+        {/* ZONE 1 — logo + onglets */}
+        <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
           <Link href="/1/hall" style={{ fontWeight: 800, fontSize: 14, letterSpacing: 1, color: "#fff", textDecoration: "none", flexShrink: 0 }}>Echo AI</Link>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
+
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {NAV_TILES.map(tile => {
               const isActive = tile.href === "/1/hall";
-              return (
-                <Link key={tile.href} href={tile.href} style={{ textDecoration: "none" }}>
-                  <div style={{
-                    padding: "6px 12px", borderRadius: 8,
-                    background: isActive ? "rgba(0,200,255,.12)" : "rgba(255,255,255,.03)",
-                    border: `1px solid ${isActive ? "rgba(0,200,255,.4)" : "rgba(255,255,255,.08)"}`,
-                    transition: "all .2s", cursor: "pointer",
-                  }}
-                    onMouseEnter={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,.07)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,.18)"; } }}
-                    onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,.03)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,.08)"; } }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? "#7fe8ff" : "rgba(255,255,255,.65)", whiteSpace: "nowrap" }}>
-                      {lang === "fr" ? tile.labelFr : tile.labelEn}
-                    </span>
-                  </div>
-                </Link>
+              const isLocked = !!tile.locked;
+              const tileContent = (
+                <div style={{
+                  position: "relative",
+                  padding: "6px 12px", borderRadius: 8,
+                  background: isActive ? "rgba(0,200,255,.12)" : "rgba(255,255,255,.03)",
+                  border: `1px solid ${isActive ? "rgba(0,200,255,.4)" : "rgba(255,255,255,.08)"}`,
+                  transition: "all .2s", cursor: isLocked ? "not-allowed" : "pointer",
+                  opacity: isLocked ? .55 : 1,
+                }}
+                  onMouseEnter={e => { if (!isActive && !isLocked) { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,.07)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,.18)"; } }}
+                  onMouseLeave={e => { if (!isActive && !isLocked) { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,.03)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,.08)"; } }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? "#7fe8ff" : "rgba(255,255,255,.65)", whiteSpace: "nowrap" }}>
+                    {isLocked && "🔒 "}{lang === "fr" ? tile.labelFr : tile.labelEn}
+                  </span>
+                  {isLocked && (
+                    <div className="lockTooltip" style={{
+                      position: "absolute", top: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+                      background: "#111", border: "1px solid rgba(255,255,255,.15)", borderRadius: 6, padding: "4px 10px",
+                      fontSize: 10, color: "#fff", whiteSpace: "nowrap", opacity: 0, pointerEvents: "none",
+                      transition: "opacity .15s", zIndex: 50,
+                    }}>
+                      {lang === "fr" ? "🚧 En construction" : "🚧 Under construction"}
+                    </div>
+                  )}
+                </div>
+              );
+              return isLocked ? (
+                <div key={tile.href} className="lockedTileWrap" style={{ position: "relative" }}>{tileContent}</div>
+              ) : (
+                <Link key={tile.href} href={tile.href} style={{ textDecoration: "none" }}>{tileContent}</Link>
               );
             })}
-            <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")}
-              style={{ background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 8, padding: "6px 10px", fontSize: 11, color: "rgba(255,255,255,.6)", cursor: "pointer", fontWeight: 700 }}>
-              {lang === "fr" ? "EN" : "FR"}
+          </div>
+        </div>
+
+        {/* SÉPARATEUR + ZONE 2 — Bureau (premium) + pseudo/email + langue + déconnexion, à l'extrême droite */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 1, height: 24, background: "rgba(255,255,255,.12)", flexShrink: 0 }} />
+
+          {/* BUREAU — verrouillé pour l'instant, deviendra cliquable/brillant + popup d'avantages */}
+          <div className="bureauLockedWrap" style={{ position: "relative" }}>
+            <button
+              onClick={() => { /* TODO: activer + ouvrir popup d'avantages une fois le premium prêt */ }}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                background: "rgba(201,168,76,.08)", border: "1px solid rgba(201,168,76,.25)",
+                borderRadius: 8, padding: "6px 12px", cursor: "not-allowed", opacity: .65,
+              }}>
+              <span style={{ fontSize: 12 }}>🔒</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: gold, whiteSpace: "nowrap" }}>
+                {lang === "fr" ? "Mon Bureau" : "My Desk"}
+              </span>
             </button>
+            <div className="lockTooltip" style={{
+              position: "absolute", top: "calc(100% + 6px)", right: 0,
+              background: "#111", border: "1px solid rgba(255,255,255,.15)", borderRadius: 6, padding: "4px 10px",
+              fontSize: 10, color: "#fff", whiteSpace: "nowrap", opacity: 0, pointerEvents: "none",
+              transition: "opacity .15s", zIndex: 50,
+            }}>
+              {lang === "fr" ? "🚧 En construction" : "🚧 Under construction"}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowLangMenu(v => !v)}
+                style={{ background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 8, padding: "6px 10px", fontSize: 11, color: "rgba(255,255,255,.6)", cursor: "pointer", fontWeight: 700 }}>
+                {lang === "fr" ? "FR" : "EN"}
+              </button>
+              {showLangMenu && (
+                <>
+                  <div onClick={() => setShowLangMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 90 }} />
+                  <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#111", border: "1px solid rgba(255,255,255,.15)", borderRadius: 10, overflow: "hidden", zIndex: 100, minWidth: 110 }}>
+                    {(["fr","en"] as Lang[]).map(l => (
+                      <button key={l} onClick={() => { setLang(l); setShowLangMenu(false); }}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 11, background: lang === l ? "rgba(0,200,255,.1)" : "transparent", color: lang === l ? "#7fe8ff" : "rgba(255,255,255,.7)", border: "none", cursor: "pointer", fontWeight: lang === l ? 700 : 500 }}>
+                        {l === "fr" ? "Français" : "English"}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {user ? (
+              <div style={{ position: "relative" }}>
+                <button onClick={() => setShowUserMenu(v => !v)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(0,200,255,.1)", border: "1px solid rgba(0,200,255,.3)", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22d3ee", display: "inline-block" }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#7fe8ff" }}>{pseudo || (lang === "fr" ? "Choisir un pseudo" : "Choose nickname")}</span>
+                </button>
+                {showUserMenu && (
+                  <>
+                    <div onClick={() => setShowUserMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 90 }} />
+                    <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#111", border: "1px solid rgba(255,255,255,.15)", borderRadius: 10, padding: 12, zIndex: 100, minWidth: 220 }}>
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,.4)", marginBottom: 8, wordBreak: "break-all" }}>{user.email}</div>
+                      {!pseudo && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                          <input type="text" value={pseudoInput} onChange={e => setPseudoInput(e.target.value.replace(/[^a-zA-Z0-9_\s-]/g, ""))}
+                            placeholder={lang === "fr" ? "Ton pseudo" : "Your nickname"}
+                            style={{ background: "#000", border: "1px solid rgba(255,255,255,.15)", borderRadius: 6, padding: "6px 10px", fontSize: 11, color: "#fff", outline: "none" }} />
+                          <button onClick={savePseudo} style={{ background: accent, color: "#000", border: "none", borderRadius: 6, padding: "6px 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                            {lang === "fr" ? "Valider" : "Save"}
+                          </button>
+                        </div>
+                      )}
+                      <button onClick={handleLogout} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: "#f87171", fontSize: 11, cursor: "pointer", padding: "4px 0" }}>
+                        ↩ {lang === "fr" ? "Se déconnecter" : "Sign out"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <button onClick={() => setShowAuthPopup(true)}
+                style={{ background: accent, color: "#000", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                {lang === "fr" ? "Se connecter" : "Sign in"}
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -383,6 +505,8 @@ export default function HallPage() {
         .bureau-grid { grid-template-columns: repeat(3, 1fr); }
         @media (max-width: 820px) { .bureau-grid { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 520px) { .bureau-grid { grid-template-columns: 1fr; } }
+        .lockedTileWrap:hover .lockTooltip { opacity: 1 !important; }
+        .bureauLockedWrap:hover .lockTooltip { opacity: 1 !important; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
