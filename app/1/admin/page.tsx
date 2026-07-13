@@ -171,26 +171,26 @@ export default function AdminConsole() {
     }
   };
 
-  // LOGIQUE REFAITE : on modifie le log au lieu de le delete pour garder la trace historique
+  // LOGIQUE SÉCURISÉE : On ne touche pas au action_type pour éviter le blocage Supabase
   const handleCancelSanction = async (logId: number, targetName: string, currentReason: string) => {
     const optionalReason = prompt(`Raison de la grâce pour @${targetName} (optionnel) :`);
-    if (optionalReason === null) return; // Annulation du prompt
+    if (optionalReason === null) return; 
 
+    const cleanReason = currentReason.replace(/^\[GRACIÉ\]\s*/, "");
     const graceReason = optionalReason.trim() ? `[GRACIÉ] ${optionalReason.trim()}` : `[GRACIÉ] (Sanction annulée par l'admin)`;
 
     try {
       const { error } = await supabase
         .from("moderation_logs")
         .update({ 
-          action_type: "gracié", 
-          reason: `${graceReason} — (Motif d'origine : ${currentReason})`,
-          expires_at: new Date().toISOString() // Devient immédiatement expiré
+          reason: `${graceReason} — (Origine : ${cleanReason})`,
+          expires_at: new Date().toISOString() // Expire la restriction immédiatement
         })
         .eq("id", logId);
 
       if (error) throw error;
 
-      alert(`La sanction de @${targetName} a été levée et enregistrée dans l'historique.`);
+      alert(`La sanction de @${targetName} a été levée.`);
       await fetchLogs();
     } catch (err) {
       console.error(err);
@@ -198,11 +198,11 @@ export default function AdminConsole() {
     }
   };
 
-  const formatActionName = (act: string) => {
+  const formatActionName = (act: string, reasonText: string) => {
+    if (reasonText.startsWith("[GRACIÉ]")) return "🟢 GRACIÉ";
     if (act.startsWith("mute")) return "🤐 MUTE";
     if (act.startsWith("kick")) return "🥾 KICK";
     if (act === "ban") return "💥 BAN";
-    if (act === "gracié") return "🟢 GRACIÉ";
     return act.toUpperCase();
   };
 
@@ -386,20 +386,20 @@ export default function AdminConsole() {
                 ) : (
                   logs.map((log) => {
                     const isDefinitif = !log.expires_at;
-                    const isExpired = log.expires_at ? new Date(log.expires_at) < new Date() : false;
-                    const isGrace = log.action_type === "gracié";
+                    const isGrace = log.reason.startsWith("[GRACIÉ]");
+                    const isExpired = log.expires_at && !isGrace ? new Date(log.expires_at) < new Date() : false;
 
                     return (
-                      <tr key={log.id} className={`transition-colors ${isGrace ? "bg-emerald-950/5 opacity-75" : "hover:bg-zinc-900/20"}`}>
+                      <tr key={log.id} className={`transition-colors ${isGrace ? "bg-emerald-950/10 opacity-75" : "hover:bg-zinc-900/20"}`}>
                         <td className="py-3.5 font-bold text-zinc-200">@{log.target_username}</td>
                         <td className="py-3.5">
                           <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                            isGrace ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' :
                             log.action_type === 'ban' ? 'bg-red-500/10 text-red-400 border border-red-500/10' :
-                            log.action_type === 'gracié' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' :
                             log.action_type.startsWith('kick') ? 'bg-amber-500/10 text-amber-400 border border-amber-500/10' :
                             'bg-zinc-800 text-zinc-300'
                           }`}>
-                            {formatActionName(log.action_type)}
+                            {formatActionName(log.action_type, log.reason)}
                           </span>
                         </td>
                         <td className="py-3.5 text-zinc-400 max-w-xs truncate" title={log.reason}>
@@ -410,7 +410,7 @@ export default function AdminConsole() {
                         </td>
                         <td className="py-3.5 font-mono text-[11px]">
                           {isGrace ? (
-                            <span className="text-zinc-600 italic">Levée</span>
+                            <span className="text-emerald-400 italic">Annulée</span>
                           ) : isDefinitif ? (
                             <span className="text-red-400/80 font-bold uppercase tracking-wide text-[9px] bg-red-500/5 px-1.5 py-0.5 rounded border border-red-500/10">Définitif</span>
                           ) : isExpired ? (
@@ -427,7 +427,7 @@ export default function AdminConsole() {
                             >
                               🟢 Gracier
                             </button>
-                      ) : (
+                          ) : (
                             <span className="text-[10px] text-zinc-600 italic font-mono pr-2">Archivé</span>
                           )}
                         </td>
