@@ -40,6 +40,10 @@ type Fiche = {
 
 type Comment = { id: string; user_pseudo: string; text: string; created_at: string };
 
+type Tier = "none" | "bronze" | "argent" | "or" | "vip";
+const TIER_LABEL: Record<Tier, string> = { none: "", bronze: "Bronze", argent: "Argent", or: "Or", vip: "VIP" };
+const TIER_IMG = (tier: Tier) => `/${tier}.png`;
+
 const TYPE_COLORS: Record<string, string> = {
   "Application ou site web":       "bg-blue-500/10 text-blue-400 border-blue-500/20",
   "Boutique en ligne":             "bg-amber-500/10 text-amber-400 border-amber-500/20",
@@ -125,6 +129,8 @@ export default function FichePage() {
   const [comments, setComments] = useState<Record<string, Comment[]>>({});
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [commentErrors, setCommentErrors] = useState<Record<string, string>>({});
+  const [ownerPseudos, setOwnerPseudos] = useState<Record<string, string>>({});
+  const [badgeMap, setBadgeMap] = useState<Record<string, Tier>>({});
 
   useEffect(() => {
     const load = async () => {
@@ -138,6 +144,15 @@ export default function FichePage() {
           linkedin_prive: null, site_web_prive: null, telephone_prive: null,
         }));
         setFiches(withDefaults as Fiche[]);
+
+        // Récupère le pseudo du créateur de chaque fiche
+        const uniqueUserIds = Array.from(new Set(withDefaults.map((f: any) => f.user_id).filter(Boolean)));
+        if (uniqueUserIds.length > 0) {
+          const { data: profilesData } = await supabase.from("profiles").select("id, username").in("id", uniqueUserIds);
+          const map: Record<string, string> = {};
+          (profilesData || []).forEach((p: any) => { if (p.username) map[p.id] = p.username; });
+          setOwnerPseudos(map);
+        }
       }
       setLoading(false);
     };
@@ -258,9 +273,25 @@ export default function FichePage() {
         const grouped: Record<string, Comment[]> = {};
         data.forEach((c: any) => { (grouped[c.fiche_id] ||= []).push(c); });
         setComments(grouped);
+
+        const pseudosSet = new Set<string>(Object.values(ownerPseudos));
+        data.forEach((c: any) => { if (c.user_pseudo) pseudosSet.add(c.user_pseudo); });
+        if (pseudosSet.size > 0) {
+          supabase.rpc("get_user_badges", { p_usernames: Array.from(pseudosSet) }).then(({ data: badgeRows }) => {
+            const map: Record<string, Tier> = {};
+            (badgeRows || []).forEach((row: any) => {
+              const bronzeDone = row.places_published >= 2 && row.comment_count >= 4 && row.talk_clicks >= 10;
+              const argentDone = bronzeDone && row.comment_count >= 20 && row.talk_clicks >= 20;
+              const orDone = argentDone && row.comment_count >= 150 && row.talk_clicks >= 50;
+              const vipDone = orDone && row.comment_count >= 500 && row.talk_clicks >= 100;
+              map[row.username] = vipDone ? "vip" : orDone ? "or" : argentDone ? "argent" : bronzeDone ? "bronze" : "none";
+            });
+            setBadgeMap(map);
+          });
+        }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fiches.length]);
+  }, [fiches.length, ownerPseudos]);
 
   const handleSendComment = async (ficheId: string) => {
     if (!canInteract()) return;
@@ -490,6 +521,14 @@ export default function FichePage() {
                   </div>
 
                   <div className="flex-1 min-w-0 sm:h-[400px] flex flex-col justify-start gap-2">
+                    {ownerPseudos[fiche.user_id] && (
+                      <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-cyan-600/80 dark:text-cyan-500/70">
+                        @{ownerPseudos[fiche.user_id]}
+                        {badgeMap[ownerPseudos[fiche.user_id]] && badgeMap[ownerPseudos[fiche.user_id]] !== "none" && (
+                          <img src={TIER_IMG(badgeMap[ownerPseudos[fiche.user_id]])} alt={TIER_LABEL[badgeMap[ownerPseudos[fiche.user_id]]]} title={TIER_LABEL[badgeMap[ownerPseudos[fiche.user_id]]]} className="w-4 h-4 object-contain" />
+                        )}
+                      </span>
+                    )}
                     <div className="flex items-start justify-between gap-2">
                       <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 leading-snug line-clamp-2">{fiche.nom_projet}</h2>
                       <span className="flex items-center gap-1 text-xs font-semibold text-cyan-600 bg-cyan-500/5 border border-cyan-500/20 px-2 py-0.5 rounded-lg shrink-0">
@@ -608,7 +647,12 @@ export default function FichePage() {
                       {(comments[fiche.id] || []).length === 0 && <p className="text-xs text-zinc-400 text-center py-3">{dict.chatEmpty}</p>}
                       {(comments[fiche.id] || []).map(c => (
                         <div key={c.id} className="text-xs text-zinc-600 dark:text-zinc-400 pl-3 border-l border-zinc-200 dark:border-zinc-800">
-                          <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">@{c.user_pseudo}</span>
+                          <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400 flex items-center gap-1">
+                            @{c.user_pseudo}
+                            {badgeMap[c.user_pseudo] && badgeMap[c.user_pseudo] !== "none" && (
+                              <img src={TIER_IMG(badgeMap[c.user_pseudo])} alt={TIER_LABEL[badgeMap[c.user_pseudo]]} title={TIER_LABEL[badgeMap[c.user_pseudo]]} className="w-3.5 h-3.5 object-contain" />
+                            )}
+                          </span>
                           <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">{c.text}</p>
                         </div>
                       ))}

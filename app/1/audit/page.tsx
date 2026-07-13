@@ -9,7 +9,7 @@ type Lang = "fr" | "en";
 const CONTACT_PATTERN = /[\w.+-]+@[\w-]+\.[a-z]{2,}|(\+?\d[\d\s.-]{8,}\d)/i;
 
 type Tier = "none" | "bronze" | "argent" | "or" | "vip";
-const TIER_EMOJI: Record<Tier, string> = { none: "", bronze: "🥉", argent: "🥈", or: "🥇", vip: "💎" };
+const TIER_IMG = (tier: Tier) => `/${tier}.png`;
 const TIER_LABEL: Record<Tier, string> = { none: "", bronze: "Bronze", argent: "Argent", or: "Or", vip: "VIP" };
 
 type Comment = { id: string; user_pseudo: string; text: string; created_at: string };
@@ -101,10 +101,10 @@ export default function AuditPage() {
     const { data } = await supabase.rpc("get_user_badges", { p_usernames: Array.from(pseudos) });
     const map: Record<string, Tier> = {};
     (data || []).forEach((row: any) => {
-      const bronzeDone = row.reglement_lu && row.talk_participation >= 1 && row.interets_sent >= 1;
-      const argentDone = bronzeDone && row.talk_participation >= 3 && row.tunnel_count >= 1;
-      const orDone = argentDone && row.talk_participation >= 5 && row.tunnel_count >= 2;
-      const vipDone = orDone && row.tunnel_count >= 5;
+      const bronzeDone = row.places_published >= 2 && row.comment_count >= 4 && row.talk_clicks >= 10;
+      const argentDone = bronzeDone && row.comment_count >= 20 && row.talk_clicks >= 20;
+      const orDone = argentDone && row.comment_count >= 150 && row.talk_clicks >= 50;
+      const vipDone = orDone && row.comment_count >= 500 && row.talk_clicks >= 100;
       map[row.username] = vipDone ? "vip" : orDone ? "or" : argentDone ? "argent" : bronzeDone ? "bronze" : "none";
     });
     setBadgeMap(map);
@@ -392,7 +392,7 @@ export default function AuditPage() {
                       <span>{lang === "fr" ? "AUTEUR:" : "AUTHOR:"}</span>
                       <span className="text-cyan-400 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-900/30">@{post.author_pseudo}</span>
                       {badgeMap[post.author_pseudo] && badgeMap[post.author_pseudo] !== "none" && (
-                        <span title={TIER_LABEL[badgeMap[post.author_pseudo]]}>{TIER_EMOJI[badgeMap[post.author_pseudo]]}</span>
+                        <img src={TIER_IMG(badgeMap[post.author_pseudo])} alt={TIER_LABEL[badgeMap[post.author_pseudo]]} title={TIER_LABEL[badgeMap[post.author_pseudo]]} className="w-4 h-4 object-contain inline-block" />
                       )}
                     </div>
 
@@ -497,7 +497,7 @@ export default function AuditPage() {
                         <div className="flex flex-col flex-1 min-w-0">
                           <span className="font-mono text-[10px] text-cyan-400 font-bold flex items-center gap-1.5 mb-1">
                             @{comment.user_pseudo}
-                            {badgeMap[comment.user_pseudo] && badgeMap[comment.user_pseudo] !== "none" && <span>{TIER_EMOJI[badgeMap[comment.user_pseudo]]}</span>}
+                            {badgeMap[comment.user_pseudo] && badgeMap[comment.user_pseudo] !== "none" && <img src={TIER_IMG(badgeMap[comment.user_pseudo])} alt={TIER_LABEL[badgeMap[comment.user_pseudo]]} title={TIER_LABEL[badgeMap[comment.user_pseudo]]} className="w-4 h-4 object-contain inline-block" />}
                           </span>
                           <p className="text-zinc-300 font-sans leading-relaxed break-words text-sm">{comment.text}</p>
                         </div>

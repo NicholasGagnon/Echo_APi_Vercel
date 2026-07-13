@@ -47,46 +47,43 @@ const CRITIQUES = [...RESSENTI, ...EXPLICATIONS]; // gardé pour totalVotes / lo
 // Détection basique de partage de coordonnées — même règle que sur Fiche/Audit
 const CONTACT_PATTERN = /[\w.+-]+@[\w-]+\.[a-z]{2,}|(\+?\d[\d\s.-]{8,}\d)/i;
 
-// ── PALIERS (Bronze/Argent/Or/VIP) — calculés à partir de public.user_badges ──
-type BadgeRow = {
-  reglement_lu: boolean; fiche_count: number; tunnel_count: number;
-  talk_participation: number; comment_count: number; interets_sent: number;
-  max_project_interest: number;
-};
+// ── PALIERS (Bronze/Argent/Or/VIP) — calculés à partir de get_user_badges() ──
+type BadgeRow = { comment_count: number; talk_clicks: number; places_published: number };
 
 type Tier = "none" | "bronze" | "argent" | "or" | "vip";
-const TIER_EMOJI: Record<Tier, string> = { none: "", bronze: "🥉", argent: "🥈", or: "🥇", vip: "💎" };
 const TIER_LABEL: Record<Tier, string> = { none: "", bronze: "Bronze", argent: "Argent", or: "Or", vip: "VIP" };
+const TIER_IMG = (tier: Tier) => `/${tier}.png`;
 
 type Task = { label: string; done: boolean };
 
 const getTierTasks = (row: BadgeRow) => {
   const bronze: Task[] = [
-    { label: "Lire le règlement", done: row.reglement_lu },
-    { label: "Voter sur 1 projet Talk", done: row.talk_participation >= 1 },
-    { label: "Envoyer 1 intérêt", done: row.interets_sent >= 1 },
+    { label: "Publier à 2 endroits (Fiche/Talk/Audit)", done: row.places_published >= 2 },
+    { label: "4 commentaires au total", done: row.comment_count >= 4 },
+    { label: "10 réactions cliquées sur Talk", done: row.talk_clicks >= 10 },
   ];
   const bronzeDone = bronze.every(t => t.done);
 
   const argent: Task[] = [
     { label: "Obtenir Bronze", done: bronzeDone },
-    { label: "Voter sur 3 projets Talk au total", done: row.talk_participation >= 3 },
-    { label: "Débloquer 1 contact", done: row.tunnel_count >= 1 },
+    { label: "20 commentaires au total", done: row.comment_count >= 20 },
+    { label: "20 réactions cliquées sur Talk", done: row.talk_clicks >= 20 },
   ];
-  const argentDone = bronzeDone && row.talk_participation >= 3 && row.tunnel_count >= 1;
+  const argentDone = bronzeDone && row.comment_count >= 20 && row.talk_clicks >= 20;
 
   const or: Task[] = [
     { label: "Obtenir Argent", done: argentDone },
-    { label: "Voter sur 5 projets Talk au total", done: row.talk_participation >= 5 },
-    { label: "Débloquer 2 contacts", done: row.tunnel_count >= 2 },
+    { label: "150 commentaires au total", done: row.comment_count >= 150 },
+    { label: "50 réactions cliquées sur Talk", done: row.talk_clicks >= 50 },
   ];
-  const orDone = argentDone && row.talk_participation >= 5 && row.tunnel_count >= 2;
+  const orDone = argentDone && row.comment_count >= 150 && row.talk_clicks >= 50;
 
   const vip: Task[] = [
     { label: "Obtenir Or", done: orDone },
-    { label: "Débloquer 5 contacts", done: row.tunnel_count >= 5 },
+    { label: "500 commentaires au total", done: row.comment_count >= 500 },
+    { label: "100 réactions cliquées sur Talk", done: row.talk_clicks >= 100 },
   ];
-  const vipDone = orDone && row.tunnel_count >= 5;
+  const vipDone = orDone && row.comment_count >= 500 && row.talk_clicks >= 100;
 
   let tier: Tier = "none";
   if (vipDone) tier = "vip";
@@ -280,13 +277,6 @@ export default function TalkPage() {
       setMyBadgeRow(badgeRow as BadgeRow);
       await checkAndNotifyBadgeUpgrade(userId, userEmail, badgeRow as BadgeRow);
     }
-  };
-
-  const handleMarkReglementLu = async () => {
-    if (!userId) return;
-    await supabase.from("profiles").update({ reglement_lu: true }).eq("id", userId);
-    setMyBadgeRow(prev => prev ? { ...prev, reglement_lu: true } : prev);
-    await refreshMyBadges();
   };
 
   const handleModAction = async (actionType: string, targetPseudo: string, targetId: string, isComment: boolean) => {
@@ -490,34 +480,11 @@ export default function TalkPage() {
                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shadow-[0_0_8px_#06b6d4]" />
                   <span className="font-bold text-cyan-600 dark:text-cyan-400 font-mono">{pseudo}</span>
                   {myBadgeRow && getTierTasks(myBadgeRow).tier !== "none" && (
-                    <span className="text-sm" title={TIER_LABEL[getTierTasks(myBadgeRow).tier]}>
-                      {TIER_EMOJI[getTierTasks(myBadgeRow).tier]} {TIER_LABEL[getTierTasks(myBadgeRow).tier]}
-                    </span>
+                    <img src={TIER_IMG(getTierTasks(myBadgeRow).tier)} alt={TIER_LABEL[getTierTasks(myBadgeRow).tier]} title={TIER_LABEL[getTierTasks(myBadgeRow).tier]} className="w-4 h-4 object-contain" />
                   )}
                 </div>
                 <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600">{userEmail}</span>
               </div>
-
-              {myBadgeRow && (
-                <div className="border-t border-zinc-100 dark:border-zinc-900 pt-2 mt-1">
-                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mb-1.5">
-                    {lang === "fr" ? "Prochain palier" : "Next tier"}: {TIER_EMOJI[getTierTasks(myBadgeRow).nextTier]} {TIER_LABEL[getTierTasks(myBadgeRow).nextTier]}
-                  </p>
-                  <div className="flex flex-col gap-1">
-                    {getTierTasks(myBadgeRow).nextTasks.map(task => (
-                      <div key={task.label} className="flex items-center gap-2 text-[11px]">
-                        <span className={task.done ? "text-emerald-500" : "text-zinc-400 dark:text-zinc-600"}>{task.done ? "☑" : "☐"}</span>
-                        <span className={task.done ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-600 dark:text-zinc-400"}>{task.label}</span>
-                        {task.label === "Lire le règlement" && !task.done && (
-                          <button onClick={handleMarkReglementLu} className="text-cyan-600 dark:text-cyan-400 underline underline-offset-2 ml-1">
-                            {lang === "fr" ? "marquer comme lu" : "mark as read"}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -553,7 +520,7 @@ export default function TalkPage() {
                       <span className="text-[10px] font-mono font-bold text-cyan-600/80 dark:text-cyan-500/70 mb-1 flex items-center gap-1.5">
                         @{post.author_pseudo}
                         {badgeMap[post.author_pseudo] && badgeMap[post.author_pseudo] !== "none" && (
-                          <span title={TIER_LABEL[badgeMap[post.author_pseudo]]}>{TIER_EMOJI[badgeMap[post.author_pseudo]]}</span>
+                          <img src={TIER_IMG(badgeMap[post.author_pseudo])} alt={TIER_LABEL[badgeMap[post.author_pseudo]]} title={TIER_LABEL[badgeMap[post.author_pseudo]]} className="w-4 h-4 object-contain inline-block" />
                         )}
                       </span>
                     )}
@@ -661,7 +628,7 @@ export default function TalkPage() {
                           <span className="font-mono text-[9px] text-cyan-600/80 dark:text-cyan-500/70 font-bold flex items-center gap-1">
                             @{comment.author}
                             {badgeMap[comment.author] && badgeMap[comment.author] !== "none" && (
-                              <span title={TIER_LABEL[badgeMap[comment.author]]}>{TIER_EMOJI[badgeMap[comment.author]]}</span>
+                              <img src={TIER_IMG(badgeMap[comment.author])} alt={TIER_LABEL[badgeMap[comment.author]]} title={TIER_LABEL[badgeMap[comment.author]]} className="w-4 h-4 object-contain inline-block" />
                             )}
                           </span>
                           <p className="font-normal text-zinc-700 dark:text-zinc-300 mt-0.5">{comment.text}</p>
