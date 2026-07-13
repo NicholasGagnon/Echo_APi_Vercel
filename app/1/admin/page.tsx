@@ -139,7 +139,8 @@ export default function AdminConsole() {
   };
 
   const applySanction = async (action: ModAction) => {
-    const target = targetUser.trim();
+    // Nettoie l'arobase au début du pseudo si l'admin l'a écrit par réflexe
+    const target = targetUser.trim().replace(/^@/, "");
     if (!target) return alert("Spécifiez un pseudo cible.");
 
     const targetProfile = profiles.find(p => p.username?.toLowerCase() === target.toLowerCase());
