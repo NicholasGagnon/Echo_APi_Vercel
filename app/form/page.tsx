@@ -50,7 +50,7 @@ const D = {
   pubAuditDesc:  { fr:"Des gens vont regarder et te donner leur opinion — accueil, message, présentation.", en:"People will look and give you their opinion — homepage, message, presentation." },
   pubNone:       { fr:"Choisis au moins une destination avant de continuer.", en:"Choose at least one destination before continuing." },
   pseudoNeeded:  { fr:"Un pseudo est nécessaire pour publier — il sera affiché sur ta fiche.", en:"A nickname is required to publish — it will be shown on your listing." },
-  auditUrlLabel: { fr:"URL du site sur lequel tu veux un avis *", en:"URL of the site you want feedback on *" },
+  auditUrlLabel: { fr:"Lien vers ce sur quoi tu veux un avis *", en:"Link to what you want feedback on *" },
   auditImgLabel: { fr:"Images de ton site (accueil, présentation, etc.)", en:"Images of your site (homepage, presentation, etc.)" },
   auditImgHint:  { fr:"Ajoute plusieurs captures pour créer une vraie cartographie de ton site.", en:"Add several screenshots to create a real map of your site." },
   auditImgAdd:   { fr:"+ Ajouter une image", en:"+ Add an image" },
@@ -199,6 +199,7 @@ type FormData = {
 
   structure: Record<string, string[]>;
   structure_manque: string; outil_manque: string;
+  lien_site: string; lien_produit: string; lien_portfolio: string;
 
   // Destinations de publication — au moins une obligatoire
   pub_fiche: boolean; pub_talk: boolean; pub_audit: boolean;
@@ -217,6 +218,7 @@ const INITIAL: FormData = {
   forces:[],
   structure:{},
   structure_manque:"", outil_manque:"",
+  lien_site:"", lien_produit:"", lien_portfolio:"",
   pub_fiche: true, pub_talk: false, pub_audit: false,
   audit_url: "", audit_images: [],
 };
@@ -786,11 +788,14 @@ function InscriptionPageInner() {
     const besoinsCommuns = chercheArr.filter(c => BESOINS_COMMUNS.includes(c));
     const besoinsSpecifiques = chercheArr.filter(c => specifiquesPossibles.includes(c));
 
-    // Sépare la structure dynamique des 2 champs "manque"
+    // Sépare la structure dynamique des 2 champs "manque" + 3 champs "lien"
     const techData: Record<string, string[]> = data.tech || {};
     const structureManque = techData["_manque_methode"]?.[0] || "";
     const outilManque = techData["_manque_outil"]?.[0] || "";
-    const { _manque_methode, _manque_outil, ...structurePure } = techData;
+    const lienProduit = techData["_lien_produit"]?.[0] || "";
+    const lienSite = techData["_lien_site"]?.[0] || "";
+    const lienPortfolio = techData["_lien_portfolio"]?.[0] || "";
+    const { _manque_methode, _manque_outil, _lien_produit, _lien_site, _lien_portfolio, ...structurePure } = techData;
 
     setForm({
       nom_projet: data.nom_projet || "",
@@ -812,6 +817,7 @@ function InscriptionPageInner() {
       structure: structurePure,
       structure_manque: structureManque,
       outil_manque: outilManque,
+      lien_produit: lienProduit, lien_site: lienSite, lien_portfolio: lienPortfolio,
       pub_fiche: true, pub_talk: false, pub_audit: false,
       audit_url: "", audit_images: [],
     });
@@ -825,6 +831,16 @@ function InscriptionPageInner() {
 
   const set = (key: keyof FormData, value: any) => setForm(f => ({ ...f, [key]: value }));
   const tr = (s: string) => lang === "fr" ? s : (EN_TR[s] || s);
+
+  // Préremplit l'URL d'Audit avec le lien le plus pertinent déjà fourni
+  // (livre/formation, site, portfolio) — reste modifiable par la suite.
+  useEffect(() => {
+    if (form.pub_audit && !form.audit_url.trim()) {
+      const best = form.lien_produit || form.lien_site || form.lien_portfolio;
+      if (best) set("audit_url", best);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.pub_audit]);
 
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -889,6 +905,9 @@ function InscriptionPageInner() {
     const structureAvecManques: Record<string, string[]> = { ...form.structure };
     if (form.structure_manque.trim()) structureAvecManques["_manque_methode"] = [form.structure_manque.trim()];
     if (form.outil_manque.trim()) structureAvecManques["_manque_outil"] = [form.outil_manque.trim()];
+    if (form.lien_produit.trim()) structureAvecManques["_lien_produit"] = [form.lien_produit.trim()];
+    if (form.lien_site.trim()) structureAvecManques["_lien_site"] = [form.lien_site.trim()];
+    if (form.lien_portfolio.trim()) structureAvecManques["_lien_portfolio"] = [form.lien_portfolio.trim()];
 
     return {
       nom_projet: form.nom_projet, description: form.description,
@@ -903,6 +922,18 @@ function InscriptionPageInner() {
       photo_urls: form.photo_url ? [form.photo_url] : [],
       objectif_court: form.objectif_court, objectif_moyen: form.objectif_moyen, objectif_long: form.objectif_long,
     };
+  };
+
+  // Construit le tableau de liens structurés envoyé à Audit — chacun avec son
+  // type, pour un affichage contextuel ("Voici le livre partagé", etc.)
+  const buildAuditLinks = (): { type: string; url: string }[] => {
+    const links: { type: string; url: string }[] = [];
+    if (form.lien_produit.trim()) {
+      links.push({ type: form.type_projet === "formation" ? "formation" : "livre", url: form.lien_produit.trim() });
+    }
+    if (form.lien_site.trim()) links.push({ type: "site", url: form.lien_site.trim() });
+    if (form.lien_portfolio.trim()) links.push({ type: "portfolio", url: form.lien_portfolio.trim() });
+    return links;
   };
 
   const handleSubmit = async () => {
@@ -976,6 +1007,7 @@ function InscriptionPageInner() {
             url: form.audit_url.trim(),
             description: form.description || null,
             images: form.audit_images.length ? form.audit_images : null,
+            links: buildAuditLinks(),
           });
           if (auditError) {
             console.error("[Audit insert]", auditError);
@@ -1035,6 +1067,7 @@ function InscriptionPageInner() {
           url: form.audit_url.trim(),
           description: form.description || null,
           images: form.audit_images.length ? form.audit_images : null,
+          links: buildAuditLinks(),
         });
         if (auditError) {
           console.error("[Audit insert]", auditError);
@@ -1465,6 +1498,18 @@ function InscriptionPageInner() {
 
             <Field label={lang==="fr" ? "💡 Quelque chose que j'aimerais ajouter à la fiche de mon projet ?" : "💡 Something I'd like to add to my project's listing?"} value={form.structure_manque} onChange={v => set("structure_manque",v)} multiline />
             <Field label={lang==="fr" ? "🛠️ Un outil que j'utilise et que j'aimerais ajouter ici ?" : "🛠️ A tool I use that I'd like to add here?"} value={form.outil_manque} onChange={v => set("outil_manque",v)} multiline />
+
+            {(form.type_projet === "livre" || form.type_projet === "formation") && (
+              <div className="flex flex-col gap-4 mt-2 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  {lang==="fr" ? "Où peut-on trouver ton projet ? (optionnel, mais recommandé)" : "Where can people find your project? (optional but recommended)"}
+                </p>
+                <Field label={form.type_projet==="livre" ? (lang==="fr" ? "📖 Lien pour lire ou acheter ton livre" : "📖 Link to read or buy your book") : (lang==="fr" ? "🎓 Lien vers ta formation" : "🎓 Link to your course")}
+                  value={form.lien_produit} onChange={v => set("lien_produit",v)} placeholder="https://..." />
+                <Field label={lang==="fr" ? "🌐 Site web (si tu en as un)" : "🌐 Website (if you have one)"} value={form.lien_site} onChange={v => set("lien_site",v)} placeholder="https://..." />
+                <Field label={lang==="fr" ? "💼 Portfolio (si pertinent)" : "💼 Portfolio (if relevant)"} value={form.lien_portfolio} onChange={v => set("lien_portfolio",v)} placeholder="https://..." />
+              </div>
+            )}
           </>}
 
           {/* ÉTAPE 7 — Où publier ? */}

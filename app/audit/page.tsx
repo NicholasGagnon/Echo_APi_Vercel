@@ -16,6 +16,7 @@ type Comment = { id: string; user_pseudo: string; text: string; created_at: stri
 type AuditPost = {
   id: string; url: string; description: string | null; created_at: string;
   images: string[] | null; user_id: string;
+  links: { type: string; url: string }[] | null;
   author_pseudo: string; votes: Record<string, string[]>; comments: Comment[];
 };
 
@@ -84,6 +85,7 @@ export default function AuditPage() {
       return {
         id: p.id, url: p.url, description: p.description, created_at: p.created_at,
         images: p.images || null,
+        links: p.links || null,
         author_pseudo: p.user_pseudo,
         user_id: p.user_id,
         votes: votesStructure,
@@ -454,6 +456,28 @@ export default function AuditPage() {
                           <p className="text-zinc-300 font-sans text-sm mt-4 leading-relaxed border-l-2 border-cyan-500/50 pl-4 bg-zinc-800/10 py-2 rounded-r-xl">
                             {post.description}
                           </p>
+                        )}
+
+                        {post.links && post.links.length > 0 && (
+                          <div className="flex flex-col gap-2 mt-4">
+                            {post.links.map((l, i) => {
+                              const meta: Record<string, { emoji: string; fr: string; en: string }> = {
+                                livre:     { emoji: "📖", fr: "Voici le livre que la personne a partagé", en: "Here's the book they shared" },
+                                formation: { emoji: "🎓", fr: "Voici la formation partagée", en: "Here's the course they shared" },
+                                site:      { emoji: "🌐", fr: "Voici le site web du projet", en: "Here's the project's website" },
+                                portfolio: { emoji: "💼", fr: "Voici le portfolio", en: "Here's the portfolio" },
+                              };
+                              const m = meta[l.type] || { emoji: "🔗", fr: "Autre lien partagé", en: "Other shared link" };
+                              return (
+                                <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-sm text-zinc-300 hover:text-cyan-400 transition-colors bg-zinc-800/20 border border-zinc-800 rounded-xl px-3 py-2">
+                                  <span className="text-base">{m.emoji}</span>
+                                  <span className="flex-1">{lang === "fr" ? m.fr : m.en}</span>
+                                  <span className="text-cyan-500 text-xs">→</span>
+                                </a>
+                              );
+                            })}
+                          </div>
                         )}
                       </>
                     )}
