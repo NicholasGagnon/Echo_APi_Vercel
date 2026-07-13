@@ -9,7 +9,6 @@ type ModAction = "kick_1d" | "kick_1w" | "mute_1d" | "mute_1w" | "ban";
 type ProfileRow = {
   id: string;
   username: string;
-  email: string;
   role: string;
 };
 
@@ -21,7 +20,7 @@ export default function AdminConsole() {
 
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [targetUser, setTargetUser] = useState("");
-  const [newModEmail, setNewModEmail] = useState("");
+  const [newModUid, setNewModUid] = useState("");
   const [selectedRole, setSelectedRole] = useState<"moderator" | "admin">("moderator");
   const [reason, setReason] = useState("");
   const [modError, setModError] = useState<string | null>(null);
@@ -62,18 +61,14 @@ export default function AdminConsole() {
   const fetchProfiles = async () => {
     const { data } = await supabase
       .from("profiles")
-      .select("id, username, email, role");
+      .select("id, username, role");
     if (data) setProfiles(data);
   };
 
-  const cleanInput = (input: string) => {
-    return input.trim().toLowerCase();
-  };
-
   const handleAssignRole = async () => {
-    const targetEmail = cleanInput(newModEmail);
+    const targetUid = newModUid.trim();
     setModError(null);
-    if (!targetEmail) return;
+    if (!targetUid) return;
 
     if (userRole !== "admin") {
       alert("Droits insuffisants. Seuls les administrateurs peuvent nommer le staff.");
@@ -81,46 +76,42 @@ export default function AdminConsole() {
     }
 
     try {
-      // 1. Chercher si le profil existe déjà dans la table publique
       const { data: existingProfile } = await supabase
         .from("profiles")
         .select("id")
-        .eq("email", targetEmail)
+        .eq("id", targetUid)
         .maybeSingle();
 
       if (existingProfile) {
-        // Mettre à jour si existant
         const { error } = await supabase
           .from("profiles")
           .update({ role: selectedRole })
-          .eq("email", targetEmail);
+          .eq("id", targetUid);
         if (error) throw error;
       } else {
-        // 2. Si absent de public.profiles, on l'ajoute proprement avec un ID temporaire ou via email
-        // Note: Idéalement l'user s'est connecté, sinon on l'insert pour lier le rôle dès sa prochaine synchro
         const { error } = await supabase
           .from("profiles")
           .insert({
-            email: targetEmail,
+            id: targetUid,
             role: selectedRole,
-            username: targetEmail.split("@")[0] // Pseudo par défaut temporaire
+            username: `Staff_${targetUid.substring(0, 5)}`
           });
         if (error) throw error;
       }
 
-      alert(`Le rôle [${selectedRole.toUpperCase()}] a été attribué avec succès à ${targetEmail}.`);
-      setNewModEmail("");
+      alert(`Le rôle [${selectedRole.toUpperCase()}] a été attribué avec succès.`);
+      setNewModUid("");
       await fetchProfiles();
     } catch (err) {
       console.error(err);
-      setModError("Erreur d'attribution. Assurez-vous que la colonne 'email' existe dans votre table 'profiles'.");
+      setModError("Erreur d'attribution. Vérifiez la validité de l'UID.");
     }
   };
 
-  const handleRevokeStaff = async (email: string, roleToRemove: string) => {
+  const handleRevokeStaff = async (uid: string) => {
     if (userRole !== "admin") return;
-    if (!confirm(`Retirer les droits de ${roleToRemove.toUpperCase()} du compte ${email} ?`)) return;
-    const { error } = await supabase.from("profiles").update({ role: "user" }).eq("email", email);
+    if (!confirm(`Retirer les droits du compte ayant l'UID ${uid} ?`)) return;
+    const { error } = await supabase.from("profiles").update({ role: "user" }).eq("id", uid);
     if (!error) await fetchProfiles();
   };
 
@@ -178,7 +169,6 @@ export default function AdminConsole() {
 
   return (
     <main className="min-h-screen bg-[#08070a] text-zinc-300 font-sans relative overflow-hidden">
-      
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[100%] h-[300px] bg-gradient-to-b from-cyan-500/5 to-transparent pointer-events-none" />
 
       <nav className="border-b border-zinc-900/60 px-6 h-16 flex items-center justify-between bg-[#0f0f0f]/90 backdrop-blur-sm relative z-10">
@@ -195,8 +185,7 @@ export default function AdminConsole() {
       </nav>
 
       <div className="max-w-4xl w-full mx-auto px-4 py-12 grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-
-        {/* SECTION 1 : MODÉRATION / SANCTIONS */}
+        {/* SECTION 1 : MODÉRATION */}
         <div className="bg-zinc-950/80 border border-zinc-900 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col gap-5">
           <div className="border-b border-zinc-900 pb-3">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">Sanctionner un profil</h2>
@@ -237,22 +226,22 @@ export default function AdminConsole() {
           </button>
         </div>
 
-        {/* SECTION 2 : GESTION DU STAFF (MODO / ADMIN) */}
+        {/* SECTION 2 : GESTION DU STAFF PAR UID */}
         <div className="bg-zinc-950/80 border border-zinc-900 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col gap-5">
           <div className="border-b border-zinc-900 pb-3">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">Équipe du site</h2>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Attribuez ou révoquez les privilèges par courriel.</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Attribuez ou révoquez les privilèges grâce à l'UID Supabase.</p>
           </div>
 
           {userRole === "admin" && (
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wide">Nommer un membre du staff</label>
+              <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wide">Nommer via l'UID de l'utilisateur</label>
               <div className="flex gap-2">
                 <input
-                  type="email"
-                  placeholder="adresse@email.com"
-                  value={newModEmail}
-                  onChange={e => { setNewModEmail(e.target.value); setModError(null); }}
+                  type="text"
+                  placeholder="Copier l'UID Supabase ici..."
+                  value={newModUid}
+                  onChange={e => { setNewModUid(e.target.value); setModError(null); }}
                   className="flex-1 bg-black/40 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
                 />
                 
@@ -269,11 +258,7 @@ export default function AdminConsole() {
                   Accorder
                 </button>
               </div>
-              {modError && (
-                <p className="text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-xl px-3 py-2 mt-1">
-                  {modError}
-                </p>
-              )}
+              {modError && <p className="text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-xl px-3 py-2 mt-1">{modError}</p>}
             </div>
           )}
 
@@ -283,23 +268,17 @@ export default function AdminConsole() {
             <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
               {profiles.filter(p => p.role !== "user" && p.role !== null && p.role !== "").map(p => (
                 <div key={p.id} className="flex justify-between items-center bg-black/30 p-3 rounded-xl border border-zinc-900/60">
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col gap-0.5 max-w-[70%]">
                     <span className="text-xs font-bold text-white">@{p.username || "Sans pseudo"}</span>
-                    <span className="text-[10px] font-mono text-zinc-500">{p.email || "aucun courriel relié"}</span>
+                    <span className="text-[9px] font-mono text-zinc-500 truncate" title={p.id}>ID: {p.id}</span>
                   </div>
                   
                   <div className="flex items-center gap-3">
                     <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${p.role === 'admin' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'}`}>
                       {p.role.toUpperCase()}
                     </span>
-                    {userRole === "admin" && (p.role === "moderator" || p.role === "admin") && (
-                      <button 
-                        onClick={() => handleRevokeStaff(p.email, p.role)} 
-                        className="text-zinc-600 hover:text-red-400 transition-colors text-xs px-1"
-                        title="Retirer les droits"
-                      >
-                        ✕
-                      </button>
+                    {userRole === "admin" && (
+                      <button onClick={() => handleRevokeStaff(p.id)} className="text-zinc-600 hover:text-red-400 transition-colors text-xs px-1">✕</button>
                     )}
                   </div>
                 </div>
@@ -307,7 +286,6 @@ export default function AdminConsole() {
             </div>
           </div>
         </div>
-
       </div>
     </main>
   );
