@@ -223,7 +223,13 @@ export default function AuditPage() {
     let expiresAt: Date | null = new Date();
     if (actionType === "mute_1d") expiresAt.setDate(expiresAt.getDate() + 1);
     else if (actionType === "ban") expiresAt = null;
-    await supabase.from("moderation_logs").insert({ target_username: targetPseudo, action_type: actionType, reason: "Modération Vaisseau", expires_at: expiresAt ? expiresAt.toISOString() : null });
+    const { error } = await supabase.from("moderation_logs").insert({ target_username: targetPseudo, action_type: actionType, reason: "Modération Vaisseau", expires_at: expiresAt ? expiresAt.toISOString() : null });
+    if (error) {
+      console.error("[Sanction]", error);
+      alert(lang === "fr" ? `Échec de la sanction : ${error.message}` : `Sanction failed: ${error.message}`);
+    } else {
+      alert(`Action [${actionType}] enregistrée pour @${targetPseudo}`);
+    }
   };
 
   return (

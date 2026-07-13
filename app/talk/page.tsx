@@ -310,7 +310,12 @@ export default function TalkPage() {
       expires_at: expiresAt ? expiresAt.toISOString() : null,
     });
 
-    if (!error) alert(`Action [${actionType}] enregistrée pour @${targetPseudo}`);
+    if (error) {
+      console.error("[Sanction]", error);
+      alert(lang === "fr" ? `Échec de la sanction : ${error.message}` : `Sanction failed: ${error.message}`);
+    } else {
+      alert(`Action [${actionType}] enregistrée pour @${targetPseudo}`);
+    }
   };
 
   const launchPost = async () => {
