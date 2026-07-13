@@ -138,7 +138,7 @@ const D = {
   pays_label:         { fr:"Pays",                en:"Country"            },
   langue_label:       { fr:"Langue principale",   en:"Primary language"   },
   photo_label:        { fr:"Une image pour ton projet",     en:"An image for your project"      },
-  photo_hint:         { fr:"N'importe quelle image qui représente ton projet — une capture d'écran, un logo, une photo de toi, un dessin, une mise en situation... ce que tu veux ! Ça rend ta fiche beaucoup plus vivante.", en:"Any image that represents your project — a screenshot, a logo, a photo of yourself, a drawing, anything... whatever you want! It makes your listing much more alive." },
+  photo_hint:         { fr:"N'importe quelle image qui représente ton projet — une capture d'écran, un logo, une photo de toi, un dessin, une mise en situation... ce que tu veux ! Ça rend ta fiche beaucoup plus vivante. (L'image sera recadrée en carré, comme tu la vois ci-dessous.)", en:"Any image that represents your project — a screenshot, a logo, a photo of yourself, a drawing, anything... whatever you want! It makes your listing much more alive. (The image will be cropped to a square, as shown below.)" },
   photo_btn:          { fr:"Ajouter une image",  en:"Add an image"     },
   photo_change:       { fr:"Changer l'image",    en:"Change image"       },
   contacts_titre:     { fr:"Contacts privés",     en:"Private contacts"   },
@@ -1375,7 +1375,7 @@ function InscriptionPageInner() {
               <p className="text-xs text-zinc-400">{t("photo_hint",lang)}</p>
               <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
               {form.photo_url ? (
-                <div className="relative w-full h-44 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
+                <div className="relative w-full max-w-xs mx-auto aspect-square rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
                   <img src={form.photo_url} alt="preview" className="w-full h-full object-cover"/>
                   <button type="button" onClick={() => photoInputRef.current?.click()}
                     className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/60 hover:bg-black/80 text-white text-xs font-medium rounded-xl backdrop-blur-sm transition-colors">
@@ -1384,7 +1384,7 @@ function InscriptionPageInner() {
                 </div>
               ) : (
                 <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading}
-                  className="w-full h-44 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+                  className="w-full max-w-xs mx-auto aspect-square rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
                   {uploading ? (
                     <span className="text-sm">Chargement...</span>
                   ) : (
