@@ -570,9 +570,9 @@ export default function TalkPage() {
                       {activeMenuId === post.id && (
                         <div className="absolute right-0 mt-1 w-36 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-2xl py-1 z-20 text-[11px] font-mono">
                           <button onClick={() => handleModAction("delete", "", post.id, false)} className="w-full text-left px-3 py-1.5 text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">✕ Supprimer</button>
-                          <button onClick={() => handleModAction("mute_1d", "Auteur", post.id, false)} className="w-full text-left px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">🤫 Mute 1j</button>
-                          <button onClick={() => handleModAction("mute_1w", "Auteur", post.id, false)} className="w-full text-left px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">🤫 Mute 1s</button>
-                          <button onClick={() => handleModAction("ban", "Auteur", post.id, false)} className="w-full text-left px-3 py-1.5 text-amber-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">💥 Ban Perm</button>
+                          <button onClick={() => handleModAction("mute_1d", post.author_pseudo, post.id, false)} className="w-full text-left px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">🤫 Mute 1j</button>
+                          <button onClick={() => handleModAction("mute_1w", post.author_pseudo, post.id, false)} className="w-full text-left px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">🤫 Mute 1s</button>
+                          <button onClick={() => handleModAction("ban", post.author_pseudo, post.id, false)} className="w-full text-left px-3 py-1.5 text-amber-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">💥 Ban Perm</button>
                         </div>
                       )}
                     </div>
