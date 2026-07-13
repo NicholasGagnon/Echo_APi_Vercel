@@ -13,12 +13,13 @@ type ProfileRow = {
 };
 
 type ModLogRow = {
-  id: number;
+  id: string; // UUID
   created_at: string;
   target_username: string;
   action_type: string;
   reason: string;
   expires_at: string | null;
+  revoked_at: string | null;
 };
 
 export default function AdminConsole() {
@@ -83,7 +84,7 @@ export default function AdminConsole() {
   const fetchLogs = async () => {
     const { data } = await supabase
       .from("moderation_logs")
-      .select("id, created_at, target_username, action_type, reason, expires_at")
+      .select("id, created_at, target_username, action_type, reason, expires_at, revoked_at")
       .order("created_at", { ascending: false });
     if (data) setLogs(data);
   };
@@ -122,7 +123,7 @@ export default function AdminConsole() {
         if (error) throw error;
       }
 
-      alert(`Le rôle [${selectedRole.toUpperCase()}] a été attribué avec succès.`);
+      alert("Le rôle a été attribué avec succès.");
       setNewModUid("");
       await fetchProfiles();
     } catch (err) {
@@ -171,35 +172,28 @@ export default function AdminConsole() {
     }
   };
 
-  // LOGIQUE SÉCURISÉE : On ne touche pas au action_type pour éviter le blocage Supabase
-  const handleCancelSanction = async (logId: number, targetName: string, currentReason: string) => {
-    const optionalReason = prompt(`Raison de la grâce pour @${targetName} (optionnel) :`);
-    if (optionalReason === null) return; 
-
-    const cleanReason = currentReason.replace(/^\[GRACIÉ\]\s*/, "");
-    const graceReason = optionalReason.trim() ? `[GRACIÉ] ${optionalReason.trim()}` : `[GRACIÉ] (Sanction annulée par l'admin)`;
+  // Grâce = UPDATE (revoked_at), plus jamais un DELETE — la sanction reste
+  // visible dans l'historique, juste marquée comme levée manuellement.
+  const handleCancelSanction = async (logId: string, targetName: string) => {
+    if (!confirm(`Voulez-vous gracier @${targetName} pour cette sanction ?`)) return;
 
     try {
       const { error } = await supabase
         .from("moderation_logs")
-        .update({ 
-          reason: `${graceReason} — (Origine : ${cleanReason})`,
-          expires_at: new Date().toISOString() // Expire la restriction immédiatement
-        })
+        .update({ revoked_at: new Date().toISOString() })
         .eq("id", logId);
 
       if (error) throw error;
 
-      alert(`La sanction de @${targetName} a été levée.`);
+      alert(`@${targetName} a été gracié. La sanction reste visible dans l'historique.`);
       await fetchLogs();
     } catch (err) {
       console.error(err);
-      alert("Erreur lors de la modification de la sanction.");
+      alert("Erreur lors de la grâce.");
     }
   };
 
-  const formatActionName = (act: string, reasonText: string) => {
-    if (reasonText.startsWith("[GRACIÉ]")) return "🟢 GRACIÉ";
+  const formatActionName = (act: string) => {
     if (act.startsWith("mute")) return "🤐 MUTE";
     if (act.startsWith("kick")) return "🥾 KICK";
     if (act === "ban") return "💥 BAN";
@@ -361,7 +355,7 @@ export default function AdminConsole() {
         <div className="bg-zinc-950/80 border border-zinc-900 rounded-2xl p-6 shadow-xl backdrop-blur-md">
           <div className="border-b border-zinc-900 pb-3 mb-4">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">Historique & Suivi des Sanctions</h2>
-            <p className="text-[11px] text-zinc-500 mt-0.5">Suivi en direct des restrictions de parole (Mute) et exclusions.</p>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Suivi en direct des restrictions de parole (Mute) et exclusions. Les sanctions graciées restent visibles.</p>
           </div>
 
           <div className="overflow-x-auto">
@@ -373,33 +367,34 @@ export default function AdminConsole() {
                   <th className="pb-3 font-normal">Motif / Raison (Suivi)</th>
                   <th className="pb-3 font-normal">Début (Créé le)</th>
                   <th className="pb-3 font-normal">Fin (Expire le)</th>
+                  <th className="pb-3 font-normal">Statut</th>
                   <th className="pb-3 font-normal text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900/40 text-xs">
                 {logs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-6 text-center text-zinc-600 italic">
+                    <td colSpan={7} className="py-6 text-center text-zinc-600 italic">
                       Aucune sanction répertoriée dans l'historique pour le moment.
                     </td>
                   </tr>
                 ) : (
                   logs.map((log) => {
                     const isDefinitif = !log.expires_at;
-                    const isGrace = log.reason.startsWith("[GRACIÉ]");
-                    const isExpired = log.expires_at && !isGrace ? new Date(log.expires_at) < new Date() : false;
+                    const isExpired = log.expires_at ? new Date(log.expires_at) < new Date() : false;
+                    const isRevoked = !!log.revoked_at;
+                    const isActive = !isRevoked && (isDefinitif || !isExpired);
 
                     return (
-                      <tr key={log.id} className={`transition-colors ${isGrace ? "bg-emerald-950/10 opacity-75" : "hover:bg-zinc-900/20"}`}>
+                      <tr key={log.id} className={`hover:bg-zinc-900/20 transition-colors ${isRevoked ? "opacity-50" : ""}`}>
                         <td className="py-3.5 font-bold text-zinc-200">@{log.target_username}</td>
                         <td className="py-3.5">
                           <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                            isGrace ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' :
                             log.action_type === 'ban' ? 'bg-red-500/10 text-red-400 border border-red-500/10' :
                             log.action_type.startsWith('kick') ? 'bg-amber-500/10 text-amber-400 border border-amber-500/10' :
                             'bg-zinc-800 text-zinc-300'
                           }`}>
-                            {formatActionName(log.action_type, log.reason)}
+                            {formatActionName(log.action_type)}
                           </span>
                         </td>
                         <td className="py-3.5 text-zinc-400 max-w-xs truncate" title={log.reason}>
@@ -409,9 +404,7 @@ export default function AdminConsole() {
                           {formatDate(log.created_at)}
                         </td>
                         <td className="py-3.5 font-mono text-[11px]">
-                          {isGrace ? (
-                            <span className="text-emerald-400 italic">Annulée</span>
-                          ) : isDefinitif ? (
+                          {isDefinitif ? (
                             <span className="text-red-400/80 font-bold uppercase tracking-wide text-[9px] bg-red-500/5 px-1.5 py-0.5 rounded border border-red-500/10">Définitif</span>
                           ) : isExpired ? (
                             <span className="text-zinc-600 line-through" title="La sanction est expirée">{formatDate(log.expires_at)}</span>
@@ -419,16 +412,23 @@ export default function AdminConsole() {
                             <span className="text-amber-400/90 font-semibold">{formatDate(log.expires_at)}</span>
                           )}
                         </td>
+                        <td className="py-3.5 font-mono text-[10px]">
+                          {isRevoked ? (
+                            <span className="text-emerald-400/90 font-bold" title={`Graciée le ${formatDate(log.revoked_at)}`}>🟢 Graciée</span>
+                          ) : isActive ? (
+                            <span className="text-red-400/90 font-bold">🔴 Active</span>
+                          ) : (
+                            <span className="text-zinc-600">⚪ Expirée</span>
+                          )}
+                        </td>
                         <td className="py-3.5 text-right">
-                          {!isGrace ? (
+                          {isActive && (
                             <button
-                              onClick={() => handleCancelSanction(log.id, log.target_username, log.reason)}
+                              onClick={() => handleCancelSanction(log.id, log.target_username)}
                               className="text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 font-bold px-2.5 py-1 rounded-lg transition-colors"
                             >
                               🟢 Gracier
                             </button>
-                          ) : (
-                            <span className="text-[10px] text-zinc-600 italic font-mono pr-2">Archivé</span>
                           )}
                         </td>
                       </tr>

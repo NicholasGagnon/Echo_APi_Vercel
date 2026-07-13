@@ -237,6 +237,18 @@ export default function FichePage() {
       return;
     }
 
+    if (pseudo) {
+      const { data } = await supabase.from("moderation_logs")
+        .select("action_type, expires_at, revoked_at")
+        .eq("target_username", pseudo)
+        .is("revoked_at", null);
+      const active = (data || []).filter((r: any) => !r.expires_at || new Date(r.expires_at) > new Date());
+      if (active.some((r: any) => r.action_type === "ban" || r.action_type.startsWith("kick"))) {
+        alert(lang === "fr" ? "🚫 Action impossible — ton compte est restreint." : "🚫 Action not possible — your account is restricted.");
+        return;
+      }
+    }
+
     const { error } = await supabase.from("interets_fiches").insert({ fiche_id: fiche.id, user_id: userId, type: "interesse" });
     if (error) {
       if ((error as any).code === "23505") setMyInteretIds(prev => new Set([...prev, fiche.id])); // déjà envoyé, on sync juste l'UI
@@ -293,11 +305,34 @@ export default function FichePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fiches.length, ownerPseudos]);
 
+  // Vérifie si le pseudo a une sanction ACTIVE (non graciée, non expirée)
+  const checkSanction = async (): Promise<string | null> => {
+    if (!pseudo) return null;
+    const { data } = await supabase.from("moderation_logs")
+      .select("action_type, expires_at, revoked_at")
+      .eq("target_username", pseudo)
+      .is("revoked_at", null);
+    const active = (data || []).filter(r => !r.expires_at || new Date(r.expires_at) > new Date());
+    if (active.some(r => r.action_type === "ban")) {
+      return lang === "fr" ? "🚫 Ton compte est banni — action impossible." : "🚫 Your account is banned — action not possible.";
+    }
+    if (active.some(r => r.action_type.startsWith("kick"))) {
+      return lang === "fr" ? "🚫 Tu es temporairement exclu — action impossible pour l'instant." : "🚫 You're temporarily kicked — action not possible right now.";
+    }
+    if (active.some(r => r.action_type.startsWith("mute"))) {
+      return lang === "fr" ? "🤐 Tu es muet temporairement — impossible de commenter." : "🤐 You're temporarily muted — can't comment.";
+    }
+    return null;
+  };
+
   const handleSendComment = async (ficheId: string) => {
     if (!canInteract()) return;
     if (!pseudo) { setCommentErrors(prev => ({ ...prev, [ficheId]: lang === "fr" ? "Choisis un pseudo d'abord." : "Choose a nickname first." })); return; }
     const text = (commentInputs[ficheId] || "").trim();
     if (!text) return;
+
+    const sanctionMsg = await checkSanction();
+    if (sanctionMsg) { setCommentErrors(prev => ({ ...prev, [ficheId]: sanctionMsg })); return; }
 
     if (CONTACT_PATTERN.test(text)) {
       setCommentErrors(prev => ({ ...prev, [ficheId]: dict.contactWarn }));
