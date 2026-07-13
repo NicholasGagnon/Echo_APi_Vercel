@@ -81,31 +81,39 @@ export default function AdminConsole() {
     }
 
     try {
+      // 1. Chercher si le profil existe déjà dans la table publique
       const { data: existingProfile } = await supabase
         .from("profiles")
         .select("id")
         .eq("email", targetEmail)
         .maybeSingle();
 
-      if (!existingProfile) {
-        setModError(
-          `L'adresse ${targetEmail} n'est liée à aucun compte de votre table 'profiles'. L'utilisateur doit s'être connecté au moins une fois et votre table doit posséder une colonne 'email'.`
-        );
-        return;
+      if (existingProfile) {
+        // Mettre à jour si existant
+        const { error } = await supabase
+          .from("profiles")
+          .update({ role: selectedRole })
+          .eq("email", targetEmail);
+        if (error) throw error;
+      } else {
+        // 2. Si absent de public.profiles, on l'ajoute proprement avec un ID temporaire ou via email
+        // Note: Idéalement l'user s'est connecté, sinon on l'insert pour lier le rôle dès sa prochaine synchro
+        const { error } = await supabase
+          .from("profiles")
+          .insert({
+            email: targetEmail,
+            role: selectedRole,
+            username: targetEmail.split("@")[0] // Pseudo par défaut temporaire
+          });
+        if (error) throw error;
       }
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({ role: selectedRole })
-        .eq("email", targetEmail);
-      if (error) throw error;
-
-      alert(`Le rôle [${selectedRole.toUpperCase()}] a été attribué à ${targetEmail}.`);
+      alert(`Le rôle [${selectedRole.toUpperCase()}] a été attribué avec succès à ${targetEmail}.`);
       setNewModEmail("");
       await fetchProfiles();
     } catch (err) {
       console.error(err);
-      setModError("Erreur lors de l'attribution du rôle. Vérifiez que la colonne 'email' existe bien dans votre table.");
+      setModError("Erreur d'attribution. Assurez-vous que la colonne 'email' existe dans votre table 'profiles'.");
     }
   };
 
@@ -251,7 +259,7 @@ export default function AdminConsole() {
                 <select 
                   value={selectedRole} 
                   onChange={e => setSelectedRole(e.target.value as "moderator" | "admin")}
-                  className="bg-zinc-900 border border-zinc-800 text-xs text-white rounded-xl px-2 outline-none focus:border-cyan-500/50 transition-colors"
+                  className="bg-zinc-900 border border-zinc-800 text-xs text-white rounded-xl px-2 outline-none focus:border-cyan-500/50 transition-colors cursor-pointer"
                 >
                   <option value="moderator">Modo</option>
                   <option value="admin">Admin</option>
@@ -273,7 +281,7 @@ export default function AdminConsole() {
             <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Membres du staff actifs :</span>
             
             <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
-              {profiles.filter(p => p.role !== "user" && p.role !== null).map(p => (
+              {profiles.filter(p => p.role !== "user" && p.role !== null && p.role !== "").map(p => (
                 <div key={p.id} className="flex justify-between items-center bg-black/30 p-3 rounded-xl border border-zinc-900/60">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-xs font-bold text-white">@{p.username || "Sans pseudo"}</span>
