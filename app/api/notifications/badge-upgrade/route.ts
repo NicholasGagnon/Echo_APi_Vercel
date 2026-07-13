@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
             </p>
           </div>
 
-          <a href="https://echosai.ca/1/talk" style="display:inline-block; background:#06b6d4; color:#000; font-weight:bold; font-size:13px; padding:10px 20px; border-radius:8px; text-decoration:none; margin-bottom:24px;">
+          <a href="https://echosai.ca/talk" style="display:inline-block; background:#06b6d4; color:#000; font-weight:bold; font-size:13px; padding:10px 20px; border-radius:8px; text-decoration:none; margin-bottom:24px;">
             Voir sur Talk →
           </a>
 

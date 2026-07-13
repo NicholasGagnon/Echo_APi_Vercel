@@ -353,7 +353,7 @@ export default function IdeaPage() {
   // ── POSTERS VERTICAUX — bordure colorée, image qui zoom au survol ──────────
   // Le poster "Talk" pointe vers Hall (c'est là qu'on obtient de vrais avis humains)
   const POSTER_ITEMS = [
-    { href:"https://echosai.ca/1/hall",      src:"/talkmini.png",    label:"Talk",        color:"#a78bfa" },
+    { href:"https://echosai.ca/",      src:"/talkmini.png",    label:"Talk",        color:"#a78bfa" },
     { href:"https://echosai.ca/avis",        src:"/avismini.png",    label:"Avis Produits", color:"#f59e0b" },
     { href:"https://echosai.ca/fastbilling", src:"/facturemini.png", label:"FastBilling", color:"#c9a84c" },
   ];
@@ -383,17 +383,17 @@ export default function IdeaPage() {
       <nav style={{ borderBottom:`1px solid ${bord}`, padding:"0 24px", minHeight:52, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background: dark?"rgba(8,7,10,.96)":"rgba(245,242,238,.96)", backdropFilter:"blur(12px)", zIndex:50, flexWrap:"wrap", gap:10 }}>
         {/* ZONE 1 — logo + onglets */}
         <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", padding:"8px 0" }}>
-          <a href="/1/hall" style={{ fontWeight:800, fontSize:14, color:txt, textDecoration:"none" }}>Echo AI</a>
+          <a href="/" style={{ fontWeight:800, fontSize:14, color:txt, textDecoration:"none" }}>Echo AI</a>
           <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:12, flexWrap:"wrap" }}>
-            <a href="/1/hall" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Accueil":"Home"}</a>
-            <a href="/1/dashboard" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Tous les outils":"All tools"}</a>
-            <a href="/1/conversation" style={{ color:muted, textDecoration:"none" }}>Conversation</a>
-            <a href="/1/form" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Créer un projet":"Create project"}</a>
-            <a href="/1/fiche" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Explorer les projets":"Explore projects"}</a>
-            <a href="/1/talk" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Avis de la communauté":"Community feedback"}</a>
-            <a href="/1/audit" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Audition de site web":"Website audit"}</a>
+            <a href="/" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Accueil":"Home"}</a>
+            <a href="/dashboard" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Tous les outils":"All tools"}</a>
+            <a href="/conversation" style={{ color:muted, textDecoration:"none" }}>AI Chat</a>
+            <a href="/form" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Créer un projet":"Create project"}</a>
+            <a href="/fiche" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Explorer les projets":"Explore projects"}</a>
+            <a href="/talk" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Avis de la communauté":"Community feedback"}</a>
+            <a href="/audit" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Audition de site web":"Website audit"}</a>
             <a href="/idea" style={{ color:acc, fontWeight:700, textDecoration:"none" }}>{lang==="fr"?"Avis de l'IA":"AI feedback"}</a>
-            <a href="/1/account" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Mon compte":"My account"}</a>
+            <a href="/account" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Mon compte":"My account"}</a>
           </div>
         </div>
 
@@ -679,7 +679,7 @@ export default function IdeaPage() {
               )}
 
               {/* Bannière contextuelle Talk — apparaît seulement après un résultat */}
-              <a href="https://echosai.ca/1/talk" target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}>
+              <a href="https://echosai.ca/talk" target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}>
                 <div style={{
                   background: "linear-gradient(135deg, rgba(167,139,250,.16), rgba(139,92,246,.05))",
                   border: "1px solid rgba(167,139,250,.4)", borderRadius: 16, padding: "20px 22px",

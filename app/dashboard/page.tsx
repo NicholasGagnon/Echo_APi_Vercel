@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../lib/supabase";
 
 type Lang = "fr" | "en";
 
@@ -150,10 +150,10 @@ export default function DashboardPage() {
   };
 
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/dashboard`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/dashboard`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
   };
   const handleMicrosoft = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/dashboard`, scopes: "openid profile email User.Read" } });
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/dashboard`, scopes: "openid profile email User.Read" } });
   };
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault(); setAuthError(null); setAuthSuccess(null); setAuthLoading(true);
@@ -161,7 +161,7 @@ export default function DashboardPage() {
       const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
       if (error) setAuthError(error.message); else setShowAuthPopup(false);
     } else {
-      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/1/dashboard` } });
+      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/dashboard` } });
       if (error) setAuthError(error.message);
       else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError("Compte existant.");
       else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
@@ -204,7 +204,7 @@ export default function DashboardPage() {
       tag: lang === "fr" ? "ESPACE ACCUEIL" : "WELCOME AREA",
       desc: lang === "fr" ? "Accédez au hall principal de la plateforme pour suivre le fil des interactions et découvrir les nouveautés de l'écosystème." : "Access the main platform hall to monitor interactions and discover new ecosystem arrivals.",
       actionText: lang === "fr" ? "ENTRER DANS LE HALL" : "ENTER HALL",
-      href: "/1/hall",
+      href: "/",
       toolImage: "/affinity.jpg",
       category: lang === "fr" ? "🏛 Affinité de Projets" : "🏛 Project Affinity",
     },
@@ -213,7 +213,7 @@ export default function DashboardPage() {
       tag: lang === "fr" ? "DIALOGUES INTERACTION" : "INTERACTIVE DIALOGUE",
       desc: lang === "fr" ? "Échangez de manière sécurisée et directe avec vos futurs collaborateurs et associés après mise en relation." : "Securely talk with your aligned partners and community peers directly inside your communication logs.",
       actionText: lang === "fr" ? "OUVRIR LA MESSAGERIE" : "OPEN CONVERSATION",
-      href: "/1/conversation",
+      href: "/conversation",
       toolImage: "/conv.png",
       category: lang === "fr" ? "🏛 Affinité de Projets" : "🏛 Project Affinity",
     },
@@ -231,7 +231,7 @@ export default function DashboardPage() {
       tag: lang === "fr" ? "RETROACTION CRITIQUE" : "COMMUNITY FEEDBACK",
       desc: lang === "fr" ? "Présentez votre projet à la communauté sous forme de pitch simple pour collecter des avis constructifs et des idées d'amélioration." : "Pitch your project layout directly to the community to collect fast and strategic objective insights.",
       actionText: lang === "fr" ? "OUVRIR LE SALON CRITIQUE" : "OPEN COMMUNITY TALK",
-      href: "/1/talk",
+      href: "/talk",
       toolImage: "/talk.png",
       category: lang === "fr" ? "🏗 Espaces métier" : "🏗 Business Spaces",
     },
@@ -359,20 +359,21 @@ export default function DashboardPage() {
       }}>
         {/* ZONE 1 — logo + onglets complets */}
         <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-          <Link href="/1/hall" style={{ fontWeight: 800, fontSize: 14, letterSpacing: 1, color: "#fff", textDecoration: "none", flexShrink: 0 }}>Echo AI</Link>
+          <Link href="/" style={{ fontWeight: 800, fontSize: 14, letterSpacing: 1, color: "#fff", textDecoration: "none", flexShrink: 0 }}>Echo AI</Link>
 
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {[
-              { labelFr: "Accueil",              labelEn: "Home",             href: "/1/hall" },
-              { labelFr: "Tous les outils",      labelEn: "All tools",        href: "/1/dashboard" },
-              { labelFr: "Créer un projet",      labelEn: "Create project",   href: "/1/form" },
-              { labelFr: "Explorer les projets", labelEn: "Explore projects", href: "/1/fiche" },
-              { labelFr: "Avis de la communauté",labelEn: "Community feedback", href: "/1/talk" },
-              { labelFr: "Audition de site web", labelEn: "Website audit",    href: "/1/audit" },
+              { labelFr: "Accueil",              labelEn: "Home",             href: "/" },
+              { labelFr: "Tous les outils",      labelEn: "All tools",        href: "/dashboard" },
+              { labelFr: "AI Chat",              labelEn: "AI Chat",          href: "/conversation" },
+              { labelFr: "Créer un projet",      labelEn: "Create project",   href: "/form" },
+              { labelFr: "Explorer les projets", labelEn: "Explore projects", href: "/fiche" },
+              { labelFr: "Avis de la communauté",labelEn: "Community feedback", href: "/talk" },
+              { labelFr: "Audition de site web", labelEn: "Website audit",    href: "/audit" },
               { labelFr: "Avis de l'IA",         labelEn: "AI feedback",      href: "/idea" },
-              { labelFr: "Mon compte",           labelEn: "My account",       href: "/1/account" },
+              { labelFr: "Mon compte",           labelEn: "My account",       href: "/account" },
             ].map(tile => {
-              const isActive = tile.href === "/1/dashboard";
+              const isActive = tile.href === "/dashboard";
               return (
                 <Link key={tile.href} href={tile.href} style={{ textDecoration: "none" }}>
                   <div style={{

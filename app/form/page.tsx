@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../lib/supabase";
 
 type Lang = "fr" | "en";
 const STEPS = 7;
@@ -49,7 +49,7 @@ const D = {
   pubAuditLabel: { fr:"🔎 Demander un avis sur mon site/projet", en:"🔎 Ask for feedback on my site/project" },
   pubAuditDesc:  { fr:"Des gens vont regarder et te donner leur opinion — accueil, message, présentation.", en:"People will look and give you their opinion — homepage, message, presentation." },
   pubNone:       { fr:"Choisis au moins une destination avant de continuer.", en:"Choose at least one destination before continuing." },
-  pseudoNeeded:  { fr:"Un pseudo est nécessaire pour Présenter mon projet et Demander un avis.", en:"A nickname is required to present your project and ask for feedback." },
+  pseudoNeeded:  { fr:"Un pseudo est nécessaire pour publier — il sera affiché sur ta fiche.", en:"A nickname is required to publish — it will be shown on your listing." },
   auditUrlLabel: { fr:"URL du site sur lequel tu veux un avis *", en:"URL of the site you want feedback on *" },
   auditImgLabel: { fr:"Images de ton site (accueil, présentation, etc.)", en:"Images of your site (homepage, presentation, etc.)" },
   auditImgHint:  { fr:"Ajoute plusieurs captures pour créer une vraie cartographie de ton site.", en:"Add several screenshots to create a real map of your site." },
@@ -137,10 +137,10 @@ const D = {
   nom_complet_label:  { fr:"Nom complet",         en:"Full name"          },
   pays_label:         { fr:"Pays",                en:"Country"            },
   langue_label:       { fr:"Langue principale",   en:"Primary language"   },
-  photo_label:        { fr:"Photo du projet",     en:"Project photo"      },
-  photo_hint:         { fr:"Panorama de ta fiche — photo du projet, de toi, ce que tu veux.", en:"Your listing banner — project screenshot, your photo, anything you want." },
-  photo_btn:          { fr:"Importer une photo",  en:"Import a photo"     },
-  photo_change:       { fr:"Changer la photo",    en:"Change photo"       },
+  photo_label:        { fr:"Une image pour ton projet",     en:"An image for your project"      },
+  photo_hint:         { fr:"N'importe quelle image qui représente ton projet — une capture d'écran, un logo, une photo de toi, un dessin, une mise en situation... ce que tu veux ! Ça rend ta fiche beaucoup plus vivante.", en:"Any image that represents your project — a screenshot, a logo, a photo of yourself, a drawing, anything... whatever you want! It makes your listing much more alive." },
+  photo_btn:          { fr:"Ajouter une image",  en:"Add an image"     },
+  photo_change:       { fr:"Changer l'image",    en:"Change image"       },
   contacts_titre:     { fr:"Contacts privés",     en:"Private contacts"   },
   contacts_hint:      { fr:"Visibles uniquement après achat. Tu choisis ce que tu rends disponible.", en:"Visible only after purchase. You choose what to share." },
   contacts_label:     { fr:"Que veux-tu rendre visible ?", en:"What do you want to make visible?" },
@@ -358,41 +358,151 @@ const STRUCTURE_BLOCKS: Record<string, StructureBlock[]> = {
   autre: [],
 };
 
+// ── TRADUCTION — les valeurs stockées restent en français (canonique),
+// seul l'affichage change selon la langue choisie. Voir tr() plus bas.
+const EN_TR: Record<string, string> = {
+  // Catégories (étape 1)
+  "Application ou site web":"Application or website", "Boutique en ligne":"Online store",
+  "Blog ou site d'articles":"Blog or articles site", "Vidéos ou podcast":"Videos or podcast",
+  "Livre numérique":"Digital book", "Formation et apprentissage":"Course or learning",
+  "Autre":"Other",
+  // État du projet (étape 2)
+  "Idée seulement":"Idea only", "En construction":"Under construction",
+  "En ligne":"Online", "Déjà utilisé par des clients":"Already used by clients",
+  // Besoins communs (étape 4)
+  "Des retours et avis":"Feedback and reviews",
+  "Trouver mes premiers utilisateurs ou clients":"Find my first users or clients",
+  "Faire connaître mon projet":"Get my project known",
+  "Trouver des personnes avec qui collaborer":"Find people to collaborate with",
+  "Trouver un associé sur le long terme":"Find a long-term partner",
+  "Être aidé sur un problème précis":"Get help with a specific problem",
+  // Besoins spécifiques (étape 4)
+  "Tester mon produit avec des utilisateurs":"Test my product with users",
+  "Trouver de l'aide technique":"Find technical help",
+  "Trouver des fournisseurs":"Find suppliers", "Améliorer mes ventes":"Improve my sales",
+  "Trouver des lecteurs et développer mon audience":"Find readers and grow my audience",
+  "Améliorer mes contenus ou ma ligne éditoriale":"Improve my content or editorial direction",
+  "Trouver des abonnés et développer mon audience":"Find subscribers and grow my audience",
+  "Améliorer mes contenus ou ma production":"Improve my content or production",
+  "Trouver des lecteurs test":"Find test readers",
+  "Trouver des personnes pour diffuser mon livre":"Find people to help distribute my book",
+  "Trouver des élèves ou participants":"Find students or participants",
+  "Améliorer mon contenu pédagogique":"Improve my educational content",
+  // Temps & collaboration (étape 4)
+  "Quelques heures par mois":"A few hours per month",
+  "Quelques heures par semaine":"A few hours per week",
+  "À plein temps":"Full time",
+  "À distance uniquement":"Remote only",
+  "Rencontre locale possible":"Local meetup possible",
+  "Peu importe":"Doesn't matter",
+  // Forces (étape 5)
+  "Le visuel et l'apparence":"Visuals and appearance",
+  "Créer des logos, choisir les couleurs, rendre le projet agréable à regarder":"Creating logos, picking colors, making the project pleasant to look at",
+  "La technique et la programmation":"Technical skills and programming",
+  "Créer du code, configurer des outils, faire fonctionner le projet":"Writing code, setting up tools, making the project work",
+  "L'écriture et la rédaction":"Writing and content",
+  "Écrire des textes, expliquer des idées, créer des scripts":"Writing text, explaining ideas, creating scripts",
+  "La communication et la visibilité":"Communication and visibility",
+  "Partager le projet, créer une communauté, faire connaître son travail":"Sharing the project, building a community, getting the word out",
+  "La gestion et l'organisation":"Management and organization",
+  "Planifier, structurer les idées, garder un cap":"Planning, structuring ideas, staying on course",
+  "J'apprends en avançant":"I'm learning as I go",
+  "Je découvre, je teste et je construis par moi-même":"I discover, test, and build things myself",
+  // Structure — Application/site web (étape 6)
+  "Comment est créé votre site ou application ?":"How is your site or app built?",
+  "Je code moi-même":"I code it myself", "HTML, CSS, JavaScript, langages de programmation...":"HTML, CSS, JavaScript, programming languages...",
+  "J'utilise un outil qui simplifie la création":"I use a tool that simplifies building it", "WordPress, Webflow, Bubble...":"WordPress, Webflow, Bubble...",
+  "Je fais développer par quelqu'un d'autre":"I have someone else develop it",
+  "Je combine plusieurs méthodes":"I combine several methods",
+  "Où fonctionne votre projet ?":"Where does your project run?",
+  "Hébergement simple":"Simple hosting", "Hostinger, OVH, Vercel...":"Hostinger, OVH, Vercel...",
+  "Serveur personnel":"Personal server", "VPS, Docker...":"VPS, Docker...",
+  "Je ne sais pas encore":"I don't know yet",
+  "Quelles fonctions utilisez-vous ?":"Which features do you use?",
+  "Paiement en ligne":"Online payment", "Stripe, PayPal...":"Stripe, PayPal...",
+  "Intelligence artificielle":"Artificial intelligence", "ChatGPT, assistants virtuels...":"ChatGPT, virtual assistants...",
+  "Automatisations":"Automations", "Relier des outils entre eux, Zapier, Make...":"Connecting tools together, Zapier, Make...",
+  // Structure — Boutique (étape 6)
+  "Où vendez-vous vos produits ?":"Where do you sell your products?",
+  "Ma propre boutique":"My own store", "Shopify, Wix, WooCommerce...":"Shopify, Wix, WooCommerce...",
+  "Une plateforme existante":"An existing platform", "Amazon, Etsy, eBay...":"Amazon, Etsy, eBay...",
+  "Mon propre site codé":"My own coded site",
+  "Comment gérez-vous les produits ?":"How do you handle your products?",
+  "Je fabrique et j'envoie moi-même":"I make and ship them myself",
+  "Impression à la demande":"Print on demand", "Printful, Printify...":"Printful, Printify...",
+  "Dropshipping":"Dropshipping",
+  "Produit numérique":"Digital product", "fichier, formation, abonnement...":"file, course, subscription...",
+  // Structure — Blog (étape 6)
+  "Où publiez-vous vos articles ?":"Where do you publish your articles?",
+  "Un outil de publication simple":"A simple publishing tool", "Substack, Medium...":"Substack, Medium...",
+  "Un site complet":"A full website", "WordPress, Ghost...":"WordPress, Ghost...",
+  "Comment développez-vous votre audience ?":"How do you grow your audience?",
+  "Infolettre / Newsletter":"Newsletter", "Mailchimp, Brevo...":"Mailchimp, Brevo...",
+  "Liens d'affiliation":"Affiliate links", "Publicités":"Ads",
+  "Dons ou soutien de la communauté":"Donations or community support", "Tipeee, Ko-fi...":"Tipeee, Ko-fi...",
+  // Structure — Vidéos/podcast (étape 6)
+  "Comment créez-vous votre contenu ?":"How do you create your content?",
+  "Montage vidéo":"Video editing", "CapCut, DaVinci, Premiere...":"CapCut, DaVinci, Premiere...",
+  "Enregistrement audio ou écran":"Audio or screen recording", "Audacity, Riverside, Loom...":"Audacity, Riverside, Loom...",
+  "Diffusion en direct":"Live streaming", "OBS, Twitch...":"OBS, Twitch...",
+  "Outils d'Intelligence Artificielle":"AI tools", "ChatGPT, ElevenLabs...":"ChatGPT, ElevenLabs...",
+  "Où partagez-vous principalement votre contenu ?":"Where do you mainly share your content?",
+  "YouTube ou TikTok":"YouTube or TikTok", "Spotify ou Apple Podcasts":"Spotify or Apple Podcasts",
+  "Twitch":"Twitch", "Mon propre site":"My own site",
+  // Structure — Livre numérique (étape 6)
+  "Comment distribuez-vous votre livre ?":"How do you distribute your book?",
+  "Librairies numériques":"Digital bookstores", "Amazon KDP, Draft2Digital...":"Amazon KDP, Draft2Digital...",
+  "Vente directe":"Direct sale", "Mon site, Gumroad...":"My own site, Gumroad...",
+  "Je le partage gratuitement":"I share it for free",
+  "Quel format utilisez-vous ?":"Which format do you use?",
+  // Structure — Formation (étape 6)
+  "Comment partagez-vous votre formation ?":"How do you share your course?",
+  "Plateforme de cours":"Course platform", "Udemy, Teachable, Podia...":"Udemy, Teachable, Podia...",
+  "Communauté privée":"Private community", "Discord, Skool...":"Discord, Skool...",
+  "Sessions en direct":"Live sessions", "Zoom, Google Meet...":"Zoom, Google Meet...",
+  "Comment créez-vous vos contenus ?":"How do you create your materials?",
+  "Présentations":"Presentations", "PowerPoint, Canva...":"PowerPoint, Canva...",
+  "Vidéos explicatives":"Explainer videos", "Loom, OBS...":"Loom, OBS...",
+  "Documents et exercices":"Documents and exercises",
+  "Quiz / évaluations":"Quizzes / assessments",
+};
+
 // ── COMPOSANTS UI ──────────────────────────────────────────────────────────
-function Radio({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+function Radio({ options, value, onChange, tr }: { options: string[]; value: string; onChange: (v: string) => void; tr?: (s: string) => string }) {
   return (
     <div className="flex flex-col gap-2">
       {options.map(opt => (
         <div key={opt} onClick={() => onChange(opt)}
           className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer border transition-all select-none ${value === opt ? "border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-800" : "border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
           <div className={`w-4 h-4 rounded-full border-2 shrink-0 transition-all ${value === opt ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white" : "border-zinc-300 dark:border-zinc-600"}`}/>
-          <span className="text-sm text-zinc-700 dark:text-zinc-300">{opt}</span>
+          <span className="text-sm text-zinc-700 dark:text-zinc-300">{tr ? tr(opt) : opt}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function MultiCheck({ options, values, onChange }: { options: string[]; values: string[]; onChange: (v: string[]) => void }) {
+function MultiCheck({ options, values, onChange, tr }: { options: string[]; values: string[]; onChange: (v: string[]) => void; tr?: (s: string) => string }) {
   const toggle = (opt: string) => onChange(values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]);
   return (
     <div className="flex flex-wrap gap-2">
       {options.map(opt => (
         <button key={opt} type="button" onClick={() => toggle(opt)}
           className={`px-3 py-2 rounded-xl text-sm border transition-all ${values.includes(opt) ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-medium" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"}`}>
-          {opt}
+          {tr ? tr(opt) : opt}
         </button>
       ))}
     </div>
   );
 }
 
-function CheckboxCard({ options, values, onChange }: { options: { label: string; desc?: string; hint?: string }[]; values: string[]; onChange: (v: string[]) => void }) {
+function CheckboxCard({ options, values, onChange, tr }: { options: { label: string; desc?: string; hint?: string }[]; values: string[]; onChange: (v: string[]) => void; tr?: (s: string) => string }) {
   const toggle = (label: string) => onChange(values.includes(label) ? values.filter(v => v !== label) : [...values, label]);
   return (
     <div className="flex flex-col gap-2">
       {options.map(opt => {
         const checked = values.includes(opt.label);
+        const descOrHint = opt.desc || opt.hint;
         return (
           <div key={opt.label} onClick={() => toggle(opt.label)}
             className={`flex items-start gap-3 px-4 py-3 rounded-xl cursor-pointer border transition-all select-none ${checked ? "border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-800" : "border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
@@ -400,8 +510,8 @@ function CheckboxCard({ options, values, onChange }: { options: { label: string;
               {checked && <span className="text-white dark:text-zinc-900 text-[10px]">✓</span>}
             </div>
             <div>
-              <p className="text-sm text-zinc-700 dark:text-zinc-300">{opt.label}</p>
-              {(opt.desc || opt.hint) && <p className="text-xs text-zinc-400 mt-0.5">{opt.desc || opt.hint}</p>}
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">{tr ? tr(opt.label) : opt.label}</p>
+              {descOrHint && <p className="text-xs text-zinc-400 mt-0.5">{tr ? tr(descOrHint) : descOrHint}</p>}
             </div>
           </div>
         );
@@ -469,10 +579,10 @@ function AuthPopup({ lang, onClose, onAuthed }: { lang: Lang; onClose: () => voi
   }, [cooldown]);
 
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/form`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
   };
   const handleMicrosoft = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/form`, scopes: "openid profile email User.Read" } });
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/form`, scopes: "openid profile email User.Read" } });
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -486,7 +596,7 @@ function AuthPopup({ lang, onClose, onAuthed }: { lang: Lang; onClose: () => voi
     e.preventDefault(); setError(null); setSuccess(null); setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(), password,
-      options: { emailRedirectTo: `${window.location.origin}/1/form` },
+      options: { emailRedirectTo: `${window.location.origin}/form` },
     });
     if (error) {
       setError(error.message);
@@ -714,6 +824,7 @@ function InscriptionPageInner() {
   }, [searchParams, userId]);
 
   const set = (key: keyof FormData, value: any) => setForm(f => ({ ...f, [key]: value }));
+  const tr = (s: string) => lang === "fr" ? s : (EN_TR[s] || s);
 
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -807,7 +918,7 @@ function InscriptionPageInner() {
       setError(t("pubNone", lang));
       return;
     }
-    if ((form.pub_talk || form.pub_audit) && !pseudo) {
+    if (!pseudo) {
       setError(t("pseudoNeeded", lang));
       return;
     }
@@ -1060,11 +1171,11 @@ function InscriptionPageInner() {
         {talkPosted && (
           <div className="mb-8 text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3">
             ✓ {lang === "fr" ? "Cette fiche est déjà publiée sur Talk." : "This listing is already posted on Talk."}{" "}
-            <Link href="/1/talk" className="underline underline-offset-2 font-semibold">{lang === "fr" ? "Voir" : "View"}</Link>
+            <Link href="/talk" className="underline underline-offset-2 font-semibold">{lang === "fr" ? "Voir" : "View"}</Link>
           </div>
         )}
 
-        <Link href="/1/fiche" className="inline-block w-full px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-semibold text-sm hover:bg-zinc-700 transition-colors text-center">
+        <Link href="/fiche" className="inline-block w-full px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-semibold text-sm hover:bg-zinc-700 transition-colors text-center">
           {t("voir_fiches", lang)}
         </Link>
       </div>
@@ -1089,8 +1200,8 @@ function InscriptionPageInner() {
         <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between">
           <span className="font-bold text-sm">Echo AI</span>
           <div className="flex items-center gap-5 text-sm">
-            <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
-            <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
+            <Link href="/" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
+            <Link href="/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
             <LangDropdown lang={lang} setLang={setLang} />
           </div>
         </nav>
@@ -1129,15 +1240,15 @@ function InscriptionPageInner() {
         <div className="flex items-center gap-5 flex-wrap">
           <span className="font-bold text-sm">Echo AI</span>
           <div className="flex items-center gap-5 text-sm flex-wrap">
-            <Link href="/1/hall"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
-            <Link href="/1/dashboard"     className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Tous les outils" : "All tools"}</Link>
-            <Link href="/1/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
-            <Link href="/1/form"          className="text-zinc-900 dark:text-white font-semibold">{lang === "fr" ? "Créer un projet" : "Create project"}</Link>
-            <Link href="/1/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
-            <Link href="/1/talk"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de la communauté" : "Community feedback"}</Link>
-            <Link href="/1/audit"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Audition de site web" : "Website audit"}</Link>
+            <Link href="/"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
+            <Link href="/dashboard"     className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Tous les outils" : "All tools"}</Link>
+            <Link href="/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
+            <Link href="/form"          className="text-zinc-900 dark:text-white font-semibold">{lang === "fr" ? "Créer un projet" : "Create project"}</Link>
+            <Link href="/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
+            <Link href="/talk"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de la communauté" : "Community feedback"}</Link>
+            <Link href="/audit"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Audition de site web" : "Website audit"}</Link>
             <Link href="/idea"            className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de l'IA" : "AI feedback"}</Link>
-            <Link href="/1/account"       className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Mon compte" : "My account"}</Link>
+            <Link href="/account"       className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Mon compte" : "My account"}</Link>
           </div>
         </div>
 
@@ -1247,7 +1358,7 @@ function InscriptionPageInner() {
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer border transition-all select-none ${form.type_projet===cat.key ? "border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-800" : "border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
                     <div className={`w-4 h-4 rounded-full border-2 shrink-0 transition-all ${form.type_projet===cat.key ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white" : "border-zinc-300 dark:border-zinc-600"}`}/>
                     <span className="text-lg">{cat.emoji}</span>
-                    <span className="text-sm text-zinc-700 dark:text-zinc-300">{cat.label}</span>
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">{tr(cat.label)}</span>
                   </div>
                 ))}
               </div>
@@ -1293,7 +1404,7 @@ function InscriptionPageInner() {
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Où en est ton projet ?" : "Where's your project at?"}</label>
               <Radio options={ETATS.map(e => e.label)} value={ETATS.find(e => e.key===form.etat_projet)?.label || ""}
-                onChange={v => set("etat_projet", ETATS.find(e => e.label===v)?.key || "")} />
+                onChange={v => set("etat_projet", ETATS.find(e => e.label===v)?.key || "")} tr={tr} />
             </div>
           </>}
 
@@ -1308,24 +1419,24 @@ function InscriptionPageInner() {
           {step === 4 && <>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "De quoi ton projet a-t-il le plus besoin ?" : "What does your project need the most?"}</label>
-              <MultiCheck options={BESOINS_COMMUNS} values={form.besoins} onChange={v => set("besoins",v)} />
+              <MultiCheck options={BESOINS_COMMUNS} values={form.besoins} onChange={v => set("besoins",v)} tr={tr} />
             </div>
 
             {form.type_projet && BESOINS_SPECIFIQUES[form.type_projet]?.length > 0 && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Besoins spécifiques à ton type de projet" : "Needs specific to your project type"}</label>
-                <MultiCheck options={BESOINS_SPECIFIQUES[form.type_projet]} values={form.besoins_specifiques} onChange={v => set("besoins_specifiques",v)} />
+                <MultiCheck options={BESOINS_SPECIFIQUES[form.type_projet]} values={form.besoins_specifiques} onChange={v => set("besoins_specifiques",v)} tr={tr} />
               </div>
             )}
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Combien de temps y consacres-tu ?" : "How much time do you spend on it?"}</label>
-              <Radio options={TEMPS_OPTIONS} value={form.temps} onChange={v => set("temps",v)} />
+              <Radio options={TEMPS_OPTIONS} value={form.temps} onChange={v => set("temps",v)} tr={tr} />
             </div>
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Type de collaboration souhaité" : "Type of collaboration wanted"}</label>
-              <Radio options={COLLAB_TYPE_OPTIONS} value={form.collaboration_type} onChange={v => set("collaboration_type",v)} />
+              <Radio options={COLLAB_TYPE_OPTIONS} value={form.collaboration_type} onChange={v => set("collaboration_type",v)} tr={tr} />
             </div>
           </>}
 
@@ -1334,7 +1445,7 @@ function InscriptionPageInner() {
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Quelles sont tes forces sur ce projet ?" : "What are your strengths on this project?"}</label>
               <p className="text-xs text-zinc-400 mb-1">{lang==="fr" ? "Tu peux choisir plusieurs réponses" : "You can pick several answers"}</p>
-              <CheckboxCard options={FORCES.map(f => ({ label:f.label, desc:f.desc }))} values={form.forces} onChange={v => set("forces",v)} />
+              <CheckboxCard options={FORCES.map(f => ({ label:f.label, desc:f.desc }))} values={form.forces} onChange={v => set("forces",v)} tr={tr} />
             </div>
           </>}
 
@@ -1343,9 +1454,9 @@ function InscriptionPageInner() {
             {form.type_projet && STRUCTURE_BLOCKS[form.type_projet]?.length > 0 ? (
               STRUCTURE_BLOCKS[form.type_projet].map(block => (
                 <div key={block.question} className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{block.question}</label>
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{tr(block.question)}</label>
                   <CheckboxCard options={block.options} values={form.structure[block.question] || []}
-                    onChange={v => set("structure", { ...form.structure, [block.question]: v })} />
+                    onChange={v => set("structure", { ...form.structure, [block.question]: v })} tr={tr} />
                 </div>
               ))
             ) : (
@@ -1387,9 +1498,9 @@ function InscriptionPageInner() {
             </div>
 
             {/* Pseudo requis pour Talk/Audit */}
-            {(form.pub_talk || form.pub_audit) && !pseudo && (
+            {!pseudo && (
               <div className="mt-2 flex flex-col gap-2 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">{lang === "fr" ? "Un pseudo est requis pour publier sur Talk/Audit :" : "A nickname is required to publish on Talk/Audit:"}</p>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">{lang === "fr" ? "Un pseudo est requis pour publier — il sera visible sur ta fiche :" : "A nickname is required to publish — it will be visible on your listing:"}</p>
                 <div className="flex gap-2">
                   <input type="text" value={pseudoInput} onChange={e => setPseudoInput(e.target.value.replace(/[^a-zA-Z0-9_\s-]/g, ""))}
                     placeholder={lang === "fr" ? "Pseudo" : "Nickname"}

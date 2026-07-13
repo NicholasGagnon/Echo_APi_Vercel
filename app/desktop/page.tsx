@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../lib/supabase";
 
 type Lang = "fr" | "en";
 
@@ -146,10 +146,10 @@ export default function BureauPage() {
     setPseudo(clean);
   };
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/desktop`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/desktop`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
   };
   const handleMicrosoft = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/desktop`, scopes: "openid profile email User.Read" } });
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/desktop`, scopes: "openid profile email User.Read" } });
   };
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault(); setAuthError(null); setAuthSuccess(null); setAuthLoading(true);
@@ -157,7 +157,7 @@ export default function BureauPage() {
       const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
       if (error) setAuthError(error.message); else setShowAuthPopup(false);
     } else {
-      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/1/desktop` } });
+      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/desktop` } });
       if (error) setAuthError(error.message);
       else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError("Compte existant.");
       else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
@@ -311,17 +311,17 @@ export default function BureauPage() {
       <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-50 gap-4">
         {/* ZONE 1 — logo + onglets */}
         <div className="flex items-center gap-5 flex-wrap">
-          <Link href="/1/hall" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">Echo AI</Link>
+          <Link href="/" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">Echo AI</Link>
           <div className="flex items-center gap-5 text-sm flex-wrap">
-            <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
-            <Link href="/1/dashboard" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Tous les outils" : "All tools"}</Link>
-            <Link href="/1/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
-            <Link href="/1/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Créer un projet" : "Create project"}</Link>
-            <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
-            <Link href="/1/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de la communauté" : "Community feedback"}</Link>
-            <Link href="/1/audit" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Audition de site web" : "Website audit"}</Link>
+            <Link href="/" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
+            <Link href="/dashboard" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Tous les outils" : "All tools"}</Link>
+            <Link href="/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">AI Chat</Link>
+            <Link href="/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Créer un projet" : "Create project"}</Link>
+            <Link href="/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
+            <Link href="/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de la communauté" : "Community feedback"}</Link>
+            <Link href="/audit" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Audition de site web" : "Website audit"}</Link>
             <Link href="/idea" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de l'IA" : "AI feedback"}</Link>
-            <Link href="/1/account" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Mon compte" : "My account"}</Link>
+            <Link href="/account" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Mon compte" : "My account"}</Link>
           </div>
         </div>
 
@@ -506,7 +506,7 @@ export default function BureauPage() {
                     {myFiches.length===0 ? (
                       <div className="text-center py-6">
                         <p className="text-sm text-zinc-500 mb-3">{lang==="fr"?"Aucune fiche créée.":"No listing created."}</p>
-                        <Link href="/1/form" className="text-xs text-cyan-400 hover:text-cyan-300">{lang==="fr"?"Créer ma fiche →":"Create my listing →"}</Link>
+                        <Link href="/form" className="text-xs text-cyan-400 hover:text-cyan-300">{lang==="fr"?"Créer ma fiche →":"Create my listing →"}</Link>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -544,7 +544,7 @@ export default function BureauPage() {
                     ) : !talkStats || talkStats.totalParticipants === 0 ? (
                       <div className="text-center py-6">
                         <p className="text-sm text-zinc-500 mb-3">{lang==="fr"?"Pas encore publiée sur Talk, ou aucune réaction reçue.":"Not posted on Talk yet, or no reactions received."}</p>
-                        <Link href="/1/talk" className="text-xs text-cyan-400 hover:text-cyan-300">Talk →</Link>
+                        <Link href="/talk" className="text-xs text-cyan-400 hover:text-cyan-300">Talk →</Link>
                       </div>
                     ) : (
                       <div>
@@ -591,7 +591,7 @@ export default function BureauPage() {
                     {unlocked.length===0 ? (
                       <div className="text-center py-6">
                         <p className="text-sm text-zinc-500 mb-3">{lang==="fr"?"Aucun contact débloqué.":"No contacts unlocked."}</p>
-                        <Link href="/1/fiche" className="text-xs text-cyan-400 hover:text-cyan-300">{lang==="fr"?"Parcourir les fiches →":"Browse listings →"}</Link>
+                        <Link href="/fiche" className="text-xs text-cyan-400 hover:text-cyan-300">{lang==="fr"?"Parcourir les fiches →":"Browse listings →"}</Link>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../lib/supabase";
 
 type ChatMessage  = { raw: string; imageB64?: string };
 type Conversation = { id: string; title: string; messages: string[]; summary: string; updatedAt: number };
@@ -12,11 +12,11 @@ const CONV_SOURCE = "echo";
 
 const NAV_ITEMS = [
   { href: "/1",               key: "hall"   },
-  { href: "/1/dashboard",     key: "dash"   },
-  { href: "/1/conversation",  key: "conv", active: true },
-  { href: "/1/form",          key: "form"   },
-  { href: "/1/fiche",         key: "fiches" },
-  { href: "/1/account",       key: "account" },
+  { href: "/dashboard",     key: "dash"   },
+  { href: "/conversation",  key: "conv", active: true },
+  { href: "/form",          key: "form"   },
+  { href: "/fiche",         key: "fiches" },
+  { href: "/account",       key: "account" },
 ];
 
 const LABELS: Record<string, { fr: string; en: string }> = {
@@ -225,10 +225,10 @@ export default function ConversationPage() {
     setPseudo(clean);
   };
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/conversation`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/conversation`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
   };
   const handleMicrosoft = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/conversation`, scopes: "openid profile email User.Read" } });
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/conversation`, scopes: "openid profile email User.Read" } });
   };
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault(); setAuthError(null); setAuthSuccess(null); setAuthLoading(true);
@@ -236,7 +236,7 @@ export default function ConversationPage() {
       const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
       if (error) setAuthError(error.message); else setShowAuthPopup(false);
     } else {
-      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/1/conversation` } });
+      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/conversation` } });
       if (error) setAuthError(error.message);
       else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError("Compte existant.");
       else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
@@ -328,7 +328,7 @@ export default function ConversationPage() {
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const response = await fetch(`${API_URL}/1/conversation`, {
+      const response = await fetch(`${API_URL}/conversation`, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
           message: userMessage, image: imageToSend,
@@ -399,17 +399,17 @@ export default function ConversationPage() {
       <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-50 gap-4">
         {/* ZONE 1 — logo + onglets */}
         <div className="flex items-center gap-5 flex-wrap">
-          <Link href="/1/hall" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">Echo AI</Link>
+          <Link href="/" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">Echo AI</Link>
           <div className="flex items-center gap-5 text-sm flex-wrap">
-            <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
-            <Link href="/1/dashboard" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Tous les outils" : "All tools"}</Link>
-            <Link href="/1/conversation" className="text-cyan-600 dark:text-cyan-400 font-semibold">Conversation</Link>
-            <Link href="/1/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Créer un projet" : "Create project"}</Link>
-            <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
-            <Link href="/1/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de la communauté" : "Community feedback"}</Link>
-            <Link href="/1/audit" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Audition de site web" : "Website audit"}</Link>
+            <Link href="/" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
+            <Link href="/dashboard" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Tous les outils" : "All tools"}</Link>
+            <Link href="/conversation" className="text-cyan-600 dark:text-cyan-400 font-semibold">AI Chat</Link>
+            <Link href="/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Créer un projet" : "Create project"}</Link>
+            <Link href="/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
+            <Link href="/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de la communauté" : "Community feedback"}</Link>
+            <Link href="/audit" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Audition de site web" : "Website audit"}</Link>
             <Link href="/idea" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de l'IA" : "AI feedback"}</Link>
-            <Link href="/1/account" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Mon compte" : "My account"}</Link>
+            <Link href="/account" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Mon compte" : "My account"}</Link>
           </div>
         </div>
 

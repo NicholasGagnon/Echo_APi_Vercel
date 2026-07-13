@@ -2,20 +2,21 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../lib/supabase";
 
 type Lang = "fr" | "en";
 
 // ── NAV EN TUILES — texte seulement, pas d'emoji ──
 const NAV_TILES: { labelFr: string; labelEn: string; href: string; locked?: boolean }[] = [
-  { labelFr: "Accueil",              labelEn: "Home",             href: "/1/hall" },
-  { labelFr: "Tous les outils",      labelEn: "All tools",        href: "/1/dashboard" },
-  { labelFr: "Créer un projet",      labelEn: "Create project",   href: "/1/form" },
-  { labelFr: "Explorer les projets", labelEn: "Explore projects", href: "/1/fiche" },
-  { labelFr: "Avis de la communauté",labelEn: "Community feedback", href: "/1/talk" },
-  { labelFr: "Audition de site web", labelEn: "Website audit",    href: "/1/audit" },
+  { labelFr: "Accueil",              labelEn: "Home",             href: "/" },
+  { labelFr: "Tous les outils",      labelEn: "All tools",        href: "/dashboard" },
+  { labelFr: "AI Chat",              labelEn: "AI Chat",          href: "/conversation" },
+  { labelFr: "Créer un projet",      labelEn: "Create project",   href: "/form" },
+  { labelFr: "Explorer les projets", labelEn: "Explore projects", href: "/fiche" },
+  { labelFr: "Avis de la communauté",labelEn: "Community feedback", href: "/talk" },
+  { labelFr: "Audition de site web", labelEn: "Website audit",    href: "/audit" },
   { labelFr: "Avis de l'IA",         labelEn: "AI feedback",      href: "/idea" },
-  { labelFr: "Mon compte",           labelEn: "My account",       href: "/1/account" },
+  { labelFr: "Mon compte",           labelEn: "My account",       href: "/account" },
 ];
 
 const T = {
@@ -132,10 +133,10 @@ export default function HallPage() {
   };
 
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/1/hall`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
   };
   const handleMicrosoft = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/1/hall`, scopes: "openid profile email User.Read" } });
+    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/`, scopes: "openid profile email User.Read" } });
   };
   const handleLogout = async () => { await supabase.auth.signOut(); setUser(null); setPseudo(""); setShowUserMenu(false); };
 
@@ -162,11 +163,11 @@ export default function HallPage() {
       }}>
         {/* ZONE 1 — logo + onglets */}
         <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-          <Link href="/1/hall" style={{ fontWeight: 800, fontSize: 14, letterSpacing: 1, color: "#fff", textDecoration: "none", flexShrink: 0 }}>Echo AI</Link>
+          <Link href="/" style={{ fontWeight: 800, fontSize: 14, letterSpacing: 1, color: "#fff", textDecoration: "none", flexShrink: 0 }}>Echo AI</Link>
 
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {NAV_TILES.map(tile => {
-              const isActive = tile.href === "/1/hall";
+              const isActive = tile.href === "/";
               const isLocked = !!tile.locked;
               const tileContent = (
                 <div style={{
@@ -317,7 +318,7 @@ export default function HallPage() {
         <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 2, color: "rgba(255,255,255,.4)", textTransform: "uppercase", textAlign: "center", marginBottom: 20 }}>
           {t.startLabel}
         </p>
-        <Link href="/1/form" style={{ textDecoration: "none" }}>
+        <Link href="/form" style={{ textDecoration: "none" }}>
           <div style={{
             background: "linear-gradient(135deg, rgba(0,200,255,.16), rgba(0,128,255,.06))",
             border: "1px solid rgba(0,200,255,.4)", borderRadius: 20, padding: "32px 36px",
@@ -345,7 +346,7 @@ export default function HallPage() {
         <p style={{ fontSize: 13, color: "rgba(255,255,255,.5)", textAlign: "center", marginBottom: 32 }}>{t.findSub}</p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-          <Link href="/1/talk" style={{ textDecoration: "none" }}>
+          <Link href="/talk" style={{ textDecoration: "none" }}>
             <div style={{
               background: "linear-gradient(150deg, rgba(0,220,255,.22), rgba(0,180,255,.08))",
               border: "1px solid rgba(0,220,255,.5)", borderRadius: 24, padding: 36, height: "100%",
@@ -359,7 +360,7 @@ export default function HallPage() {
             </div>
           </Link>
 
-          <Link href="/1/fiche" style={{ textDecoration: "none" }}>
+          <Link href="/fiche" style={{ textDecoration: "none" }}>
             <div style={{
               background: "linear-gradient(150deg, rgba(255,200,80,.2), rgba(255,180,60,.07))",
               border: "1px solid rgba(255,200,80,.5)", borderRadius: 24, padding: 36, height: "100%",
@@ -449,7 +450,7 @@ export default function HallPage() {
       {/* ── CTA FINAL ────────────────────────────────────────────────────────── */}
       <section style={{ padding: "50px 24px 90px", textAlign: "center" }}>
         <button
-          onClick={() => user ? window.location.href = "/1/form" : setShowAuthPopup(true)}
+          onClick={() => user ? window.location.href = "/form" : setShowAuthPopup(true)}
           style={{ display: "inline-block", background: `linear-gradient(135deg, ${accent}, #0080ff)`, color: "#000", fontWeight: 800, fontSize: 14, padding: "14px 40px", borderRadius: 12, border: "none", cursor: "pointer", letterSpacing: .5, boxShadow: `0 0 30px rgba(0,200,255,.2)`, transition: "transform .2s, box-shadow .2s" }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 40px rgba(0,200,255,.35)`; }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 0 30px rgba(0,200,255,.2)`; }}>
@@ -493,7 +494,7 @@ export default function HallPage() {
               <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
               {lang === "fr" ? "Continuer avec Microsoft" : "Continue with Microsoft"}
             </button>
-            <a href="/1/account"
+            <a href="/account"
               style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 14px", background: "rgba(0,200,255,.1)", border: "1px solid rgba(0,200,255,.25)", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#00c8ff", width: "100%", textDecoration: "none" }}>
               ✉ {lang === "fr" ? "Se connecter par email" : "Sign in with email"}
             </a>
