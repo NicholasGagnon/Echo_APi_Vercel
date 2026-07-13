@@ -139,7 +139,7 @@ export default function AdminConsole() {
   };
 
   const applySanction = async (action: ModAction) => {
-    // Nettoie l'arobase au début du pseudo si l'admin l'a écrit par réflexe
+    // Sécurité anti-double arobase : on nettoie les @ saisis par réflexe
     const target = targetUser.trim().replace(/^@/, "");
     if (!target) return alert("Spécifiez un pseudo cible.");
 
@@ -166,9 +166,29 @@ export default function AdminConsole() {
       alert(`Sanction [${action}] appliquée sur @${target}`);
       setTargetUser("");
       setReason("");
-      await fetchLogs(); // Rafraîchit le tableau du bas automatiquement
+      await fetchLogs();
     } else {
       alert("Erreur lors de l'envoi de la sanction.");
+    }
+  };
+
+  // NOUVELLE FONCTION POUR ANNULER UNE SANCTION (GRACIER)
+  const handleCancelSanction = async (logId: number, targetName: string) => {
+    if (!confirm(`Voulez-vous annuler la sanction en cours pour @${targetName} ?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from("moderation_logs")
+        .delete()
+        .eq("id", logId);
+
+      if (error) throw error;
+
+      alert(`La sanction de @${targetName} a été annulée.`);
+      await fetchLogs(); // Recharge les lignes automatiquement
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de l'annulation de la sanction.");
     }
   };
 
@@ -225,7 +245,6 @@ export default function AdminConsole() {
         </Link>
       </nav>
 
-      {/* BLOCS DU HAUT (SANCTIONS + STAFF) */}
       <div className="max-w-5xl w-full mx-auto px-4 pt-12 grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
         
         {/* MODÉRATION */}
@@ -330,7 +349,7 @@ export default function AdminConsole() {
 
       </div>
 
-      {/* ── NOUVEAU BLOC DU BAS : TABLEAU DES SANCTIONS HISTORIQUE & ACTIVES ── */}
+      {/* TABLEAU DES SANCTIONS HISTORIQUE & ACTIVES */}
       <div className="max-w-5xl w-full mx-auto px-4 mt-8 relative z-10">
         <div className="bg-zinc-950/80 border border-zinc-900 rounded-2xl p-6 shadow-xl backdrop-blur-md">
           <div className="border-b border-zinc-900 pb-3 mb-4">
@@ -346,13 +365,14 @@ export default function AdminConsole() {
                   <th className="pb-3 font-normal">Type</th>
                   <th className="pb-3 font-normal">Motif / Raison</th>
                   <th className="pb-3 font-normal">Début (Créé le)</th>
-                  <th className="pb-3 font-normal text-right">Fin (Expire le)</th>
+                  <th className="pb-3 font-normal">Fin (Expire le)</th>
+                  <th className="pb-3 font-normal text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900/40 text-xs">
                 {logs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-6 text-center text-zinc-600 italic">
+                    <td colSpan={6} className="py-6 text-center text-zinc-600 italic">
                       Aucune sanction répertoriée dans l'historique pour le moment.
                     </td>
                   </tr>
@@ -379,14 +399,23 @@ export default function AdminConsole() {
                         <td className="py-3.5 font-mono text-[11px] text-zinc-500">
                           {formatDate(log.created_at)}
                         </td>
-                        <td className="py-3.5 font-mono text-[11px] text-right">
+                        <td className="py-3.5 font-mono text-[11px]">
                           {isDefinitif ? (
                             <span className="text-red-400/80 font-bold uppercase tracking-wide text-[9px] bg-red-500/5 px-1.5 py-0.5 rounded border border-red-500/10">Définitif</span>
                           ) : isExpired ? (
-                            <span className="text-zinc-600 line-through" title="La sanction est levée">{formatDate(log.expires_at)}</span>
+                            <span className="text-zinc-600 line-through" title="La sanction est expirée">{formatDate(log.expires_at)}</span>
                           ) : (
                             <span className="text-amber-400/90 font-semibold">{formatDate(log.expires_at)}</span>
                           )}
+                        </td>
+                        {/* COLONNE D'ACTION POUR ANNULER */}
+                        <td className="py-3.5 text-right">
+                          <button
+                            onClick={() => handleCancelSanction(log.id, log.target_username)}
+                            className="text-[10px] bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 font-bold px-2.5 py-1 rounded-lg transition-colors"
+                          >
+                            🟢 Gracier
+                          </button>
                         </td>
                       </tr>
                     );
