@@ -189,13 +189,17 @@ export default function FichePage() {
 
   const getOutils = (fiche: Fiche) => {
     if (!fiche.tech) return [];
+    const EXCLUDED = ["_manque_methode", "_manque_outil", "_lien_produit", "_lien_site", "_lien_portfolio"];
     return Object.entries(fiche.tech)
-      .filter(([key]) => key !== "_manque_methode" && key !== "_manque_outil")
+      .filter(([key]) => !EXCLUDED.includes(key))
       .flatMap(([, vals]) => vals)
       .filter(Boolean).filter(v => !TECH_HIDE.has(v.trim().toLowerCase()));
   };
   const getManqueMethode = (fiche: Fiche) => fiche.tech?.["_manque_methode"]?.[0] || "";
   const getManqueOutil   = (fiche: Fiche) => fiche.tech?.["_manque_outil"]?.[0] || "";
+  const getLienProduit   = (fiche: Fiche) => fiche.tech?.["_lien_produit"]?.[0] || "";
+  const getLienSite      = (fiche: Fiche) => fiche.tech?.["_lien_site"]?.[0] || "";
+  const getLienPortfolio = (fiche: Fiche) => fiche.tech?.["_lien_portfolio"]?.[0] || "";
   const getCherche = (fiche: Fiche) => (fiche.cherche && fiche.cherche.length > 0 ? fiche.cherche.join(", ") : "");
   const isOwnFiche = (fiche: Fiche) => !!userId && userId === fiche.user_id;
 
@@ -620,6 +624,39 @@ export default function FichePage() {
                       {fiche.objectif_moyen && <div className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/50"><p className="text-[10px] text-zinc-400 mb-0.5">{lang === "fr" ? "Moyen terme" : "Medium"}</p><p className="text-[11px] text-zinc-700 dark:text-zinc-300">{fiche.objectif_moyen}</p></div>}
                       {fiche.objectif_long && <div className="px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/50"><p className="text-[10px] text-zinc-400 mb-0.5">{lang === "fr" ? "Long terme" : "Long"}</p><p className="text-[11px] text-zinc-700 dark:text-zinc-300">{fiche.objectif_long}</p></div>}
                     </div>
+                  </div>
+                )}
+
+                {(getLienProduit(fiche) || getLienSite(fiche) || getLienPortfolio(fiche)) && (
+                  <div className="flex flex-wrap gap-2">
+                    {getLienProduit(fiche) && (() => {
+                      const url = getLienProduit(fiche);
+                      const ext = url.split(".").pop()?.toLowerCase().split("?")[0] || "";
+                      const fileLabel =
+                        ext === "pdf" ? (lang === "fr" ? "📄 Voir le PDF" : "📄 View PDF") :
+                        ext === "epub" ? (lang === "fr" ? "📕 Télécharger l'EPUB" : "📕 Download EPUB") :
+                        ext === "docx" ? (lang === "fr" ? "📝 Télécharger le DOCX" : "📝 Download DOCX") :
+                        ["jpg","jpeg","png","webp","gif"].includes(ext) ? (lang === "fr" ? "🖼️ Voir l'image" : "🖼️ View image") :
+                        (lang === "fr" ? "📖 Voir le projet" : "📖 View project");
+                      return (
+                        <a href={url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-xs font-semibold text-cyan-600 dark:text-cyan-400 bg-cyan-500/5 border border-cyan-500/20 px-3 py-1.5 rounded-lg hover:bg-cyan-500/10 transition-colors">
+                          {fileLabel}
+                        </a>
+                      );
+                    })()}
+                    {getLienSite(fiche) && (
+                      <a href={getLienSite(fiche)} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 rounded-lg hover:border-zinc-400 transition-colors">
+                        🌐 {lang === "fr" ? "Site web" : "Website"}
+                      </a>
+                    )}
+                    {getLienPortfolio(fiche) && (
+                      <a href={getLienPortfolio(fiche)} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 rounded-lg hover:border-zinc-400 transition-colors">
+                        💼 Portfolio
+                      </a>
+                    )}
                   </div>
                 )}
 

@@ -710,6 +710,7 @@ function InscriptionPageInner() {
   const [uploading, setUploading] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const auditImageInputRef = useRef<HTMLInputElement>(null);
+  const produitFileInputRef = useRef<HTMLInputElement>(null);
 
   // ── TALK CROSSPOST (choix sur l'écran de confirmation) ─────────────────
   const [pseudo, setPseudo] = useState<string>("");
@@ -890,6 +891,31 @@ function InscriptionPageInner() {
   };
   const removeAuditImage = (url: string) => {
     set("audit_images", form.audit_images.filter(u => u !== url));
+  };
+
+  // Upload direct de fichier pour le livre/formation (PDF, EPUB, DOCX, image) —
+  // remplit lien_produit avec l'URL publique du fichier hébergé, exactement
+  // comme si la personne avait collé un lien externe.
+  const [uploadingProduit, setUploadingProduit] = useState(false);
+  const handleProduitFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingProduit(true);
+    try {
+      const ext      = file.name.split(".").pop();
+      const filename = `produit-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { data, error } = await supabase.storage
+        .from("fiche-files")
+        .upload(filename, file, { contentType: file.type, upsert: false });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("fiche-files").getPublicUrl(data.path);
+      set("lien_produit", urlData.publicUrl);
+    } catch (e) {
+      console.error("Upload fichier produit:", e);
+    } finally {
+      setUploadingProduit(false);
+    }
   };
 
   // ── SUBMIT ────────────────────────────────────────────────────────────────
@@ -1504,8 +1530,23 @@ function InscriptionPageInner() {
                 <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   {lang==="fr" ? "Où peut-on trouver ton projet ? (optionnel, mais recommandé)" : "Where can people find your project? (optional but recommended)"}
                 </p>
-                <Field label={form.type_projet==="livre" ? (lang==="fr" ? "📖 Lien pour lire ou acheter ton livre" : "📖 Link to read or buy your book") : (lang==="fr" ? "🎓 Lien vers ta formation" : "🎓 Link to your course")}
-                  value={form.lien_produit} onChange={v => set("lien_produit",v)} placeholder="https://..." />
+
+                <div className="flex flex-col gap-1.5">
+                  <Field label={form.type_projet==="livre" ? (lang==="fr" ? "📖 Lien pour lire ou acheter ton livre" : "📖 Link to read or buy your book") : (lang==="fr" ? "🎓 Lien vers ta formation" : "🎓 Link to your course")}
+                    value={form.lien_produit} onChange={v => set("lien_produit",v)} placeholder="https://..." />
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
+                    <span className="text-[11px] text-zinc-400">{lang==="fr" ? "ou" : "or"}</span>
+                    <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />
+                  </div>
+                  <input ref={produitFileInputRef} type="file" accept=".pdf,.epub,.docx,image/*" onChange={handleProduitFileUpload} className="hidden" />
+                  <button type="button" onClick={() => produitFileInputRef.current?.click()} disabled={uploadingProduit}
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
+                    {uploadingProduit ? "…" : (lang==="fr" ? "📎 Téléverser un fichier (PDF, EPUB, DOCX, image)" : "📎 Upload a file (PDF, EPUB, DOCX, image)")}
+                  </button>
+                  <p className="text-[11px] text-zinc-400">{lang==="fr" ? "Si tu uploades un fichier, il remplace le lien ci-dessus." : "If you upload a file, it replaces the link above."}</p>
+                </div>
+
                 <Field label={lang==="fr" ? "🌐 Site web (si tu en as un)" : "🌐 Website (if you have one)"} value={form.lien_site} onChange={v => set("lien_site",v)} placeholder="https://..." />
                 <Field label={lang==="fr" ? "💼 Portfolio (si pertinent)" : "💼 Portfolio (if relevant)"} value={form.lien_portfolio} onChange={v => set("lien_portfolio",v)} placeholder="https://..." />
               </div>

@@ -467,7 +467,12 @@ export default function AuditPage() {
                                 site:      { emoji: "🌐", fr: "Voici le site web du projet", en: "Here's the project's website" },
                                 portfolio: { emoji: "💼", fr: "Voici le portfolio", en: "Here's the portfolio" },
                               };
-                              const m = meta[l.type] || { emoji: "🔗", fr: "Autre lien partagé", en: "Other shared link" };
+                              let m = meta[l.type] || { emoji: "🔗", fr: "Autre lien partagé", en: "Other shared link" };
+                              const ext = l.url.split(".").pop()?.toLowerCase().split("?")[0] || "";
+                              if (ext === "pdf") m = { ...m, emoji: "📄" };
+                              else if (ext === "epub") m = { ...m, emoji: "📕" };
+                              else if (ext === "docx") m = { ...m, emoji: "📝" };
+                              else if (["jpg","jpeg","png","webp","gif"].includes(ext)) m = { ...m, emoji: "🖼️" };
                               return (
                                 <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
                                   className="flex items-center gap-2 text-sm text-zinc-300 hover:text-cyan-400 transition-colors bg-zinc-800/20 border border-zinc-800 rounded-xl px-3 py-2">
