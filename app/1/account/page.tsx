@@ -6,26 +6,7 @@ import { supabase } from "../../lib/supabase";
 
 type Lang = "fr" | "en";
 
-const NAV_FR = [
-  { label: "Hall",         href: "/1/hall" },
-  { label: "Dashboard",    href: "/1/dashboard" },
-  { label: "Conversation", href: "/1/conversation" },
-  { label: "Formulaire",   href: "/1/form" },
-  { label: "Fiches",       href: "/1/fiche" },
-  { label: "Talk",         href: "/1/talk" },
-  { label: "Bureau",       href: "/1/desktop" },
-  { label: "Compte",       href: "/1/account" },
-];
-const NAV_EN = [
-  { label: "Hall",         href: "/1/hall" },
-  { label: "Dashboard",    href: "/1/dashboard" },
-  { label: "Conversation", href: "/1/conversation" },
-  { label: "Form",         href: "/1/form" },
-  { label: "Listings",     href: "/1/fiche" },
-  { label: "Talk",         href: "/1/talk" },
-  { label: "Desk",         href: "/1/desktop" },
-  { label: "Account",      href: "/1/account" },
-];
+// Nav gérée directement dans le rendu (modèle Hall à 2 zones)
 
 // --- LOGOS ---
 const MicrosoftLogo = () => (
@@ -58,7 +39,10 @@ const UserPlusIcon = () => (
 export default function AccountPage() {
   const [lang, setLang] = useState<Lang>("fr");
   const fr = lang === "fr";
-  const navItems = fr ? NAV_FR : NAV_EN;
+  const [pseudo, setPseudo] = useState<string>("");
+  const [pseudoInput, setPseudoInput] = useState<string>("");
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
@@ -98,6 +82,7 @@ export default function AccountPage() {
       if (session?.user) {
         setUser(session.user);
         setActiveProvider(session.user.app_metadata?.provider || "email");
+        loadProfile(session.user.id);
       }
     });
 
@@ -110,14 +95,28 @@ export default function AccountPage() {
       if (session?.user) {
         setUser(session.user);
         setActiveProvider(session.user.app_metadata?.provider || "email");
+        loadProfile(session.user.id);
       } else {
         setUser(null);
         setActiveProvider(null);
+        setPseudo("");
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const loadProfile = async (uid: string) => {
+    const { data } = await supabase.from("profiles").select("username").eq("id", uid).maybeSingle();
+    setPseudo(data?.username || "");
+  };
+  const savePseudo = async () => {
+    const clean = pseudoInput.trim();
+    if (!clean || !user) return;
+    await supabase.from("profiles").upsert({ id: user.id, username: clean, updated_at: new Date().toISOString() });
+    setPseudo(clean);
+    showToast(fr ? "Pseudo enregistré." : "Nickname saved.", "success");
+  };
 
   const handleMicrosoftConnect = async () => {
     if (activeProvider === "azure") return;
@@ -308,22 +307,90 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* NAV — les 8 onglets fixes, identiques partout */}
-      <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-50">
-        <Link href="/1/hall" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
-          Echo AI
-        </Link>
-        <div className="flex items-center gap-5 text-sm flex-wrap">
-          {navItems.map(item => (
-            <Link key={item.href} href={item.href}
-              className={item.href === "/1/account" ? "text-cyan-600 dark:text-cyan-400 font-semibold" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"}>
-              {item.label}
-            </Link>
-          ))}
-          <button onClick={() => setLang(l => (l === "fr" ? "en" : "fr"))}
-            className="text-xs text-zinc-400 border border-zinc-200 dark:border-zinc-800 px-2 py-1 rounded-lg hover:border-zinc-400 transition-colors">
-            {fr ? "EN" : "FR"}
-          </button>
+      {/* NAV — modèle Hall à 2 zones */}
+      <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-50 gap-4">
+        {/* ZONE 1 — logo + onglets */}
+        <div className="flex items-center gap-5 flex-wrap">
+          <Link href="/1/hall" className="font-bold text-sm text-zinc-800 dark:text-zinc-200 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">Echo AI</Link>
+          <div className="flex items-center gap-5 text-sm flex-wrap">
+            <Link href="/1/hall" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{fr ? "Accueil" : "Home"}</Link>
+            <Link href="/1/dashboard" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{fr ? "Tous les outils" : "All tools"}</Link>
+            <Link href="/1/conversation" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
+            <Link href="/1/form" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{fr ? "Créer un projet" : "Create project"}</Link>
+            <Link href="/1/fiche" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{fr ? "Explorer les projets" : "Explore projects"}</Link>
+            <Link href="/1/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{fr ? "Avis de la communauté" : "Community feedback"}</Link>
+            <Link href="/1/audit" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{fr ? "Audition de site web" : "Website audit"}</Link>
+            <Link href="/idea" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{fr ? "Avis de l'IA" : "AI feedback"}</Link>
+            <Link href="/1/account" className="text-cyan-600 dark:text-cyan-400 font-semibold">{fr ? "Mon compte" : "My account"}</Link>
+          </div>
+        </div>
+
+        {/* SÉPARATEUR + ZONE 2 — Bureau (premium) + langue + pseudo */}
+        <div className="flex items-center gap-3.5 shrink-0">
+          <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800" />
+
+          <div className="relative group">
+            <button onClick={() => { /* TODO: activer + ouvrir popup d'avantages une fois le premium prêt */ }}
+              className="flex items-center gap-1.5 bg-amber-500/5 border border-amber-500/25 rounded-lg px-3 py-1.5 cursor-not-allowed opacity-65">
+              <span className="text-xs">🔒</span>
+              <span className="text-xs font-bold text-amber-600 dark:text-amber-500 whitespace-nowrap">{fr ? "Mon Bureau" : "My Desk"}</span>
+            </button>
+            <div className="absolute top-full right-0 mt-1.5 bg-zinc-900 border border-zinc-700 rounded-md px-2.5 py-1 text-[10px] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+              {fr ? "🚧 En construction" : "🚧 Under construction"}
+            </div>
+          </div>
+
+          <div className="relative">
+            <button onClick={() => setShowLangMenu(v => !v)}
+              className="text-xs text-zinc-400 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 rounded-lg hover:border-zinc-400 transition-colors font-bold">
+              {fr ? "FR" : "EN"}
+            </button>
+            {showLangMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowLangMenu(false)} />
+                <div className="absolute top-full right-0 mt-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl z-50 min-w-28 overflow-hidden">
+                  {(["fr","en"] as Lang[]).map(l => (
+                    <button key={l} onClick={() => { setLang(l); setShowLangMenu(false); }}
+                      className={`w-full text-left px-3 py-2 text-xs ${lang === l ? "bg-cyan-50 dark:bg-cyan-950/30 text-cyan-600 dark:text-cyan-400 font-bold" : "text-zinc-600 dark:text-zinc-400"}`}>
+                      {l === "fr" ? "Français" : "English"}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {user ? (
+            <div className="relative">
+              <button onClick={() => setShowUserMenu(v => !v)}
+                className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg px-3 py-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+                <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400">{pseudo || (fr ? "Choisir un pseudo" : "Choose nickname")}</span>
+              </button>
+              {showUserMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                  <div className="absolute top-full right-0 mt-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl z-50 min-w-52 p-3">
+                    <div className="text-[10px] text-zinc-400 mb-2 break-all">{user.email}</div>
+                    <div className="flex flex-col gap-2 mb-2">
+                      <input type="text" value={pseudoInput} onChange={e => setPseudoInput(e.target.value.replace(/[^a-zA-Z0-9_\s-]/g, ""))}
+                        placeholder={pseudo || (fr ? "Nouveau pseudo" : "New nickname")}
+                        className="bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-cyan-500" />
+                      <button onClick={savePseudo} className="bg-cyan-600 text-white text-xs font-bold rounded-lg py-1.5">{fr ? "Valider" : "Save"}</button>
+                    </div>
+                    <button onClick={handleSignOut} className="w-full text-left text-xs text-red-500 hover:text-red-400 py-1">
+                      ↩ {fr ? "Se déconnecter" : "Sign out"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <button onClick={() => setShowSignInModal(true)}
+              className="bg-cyan-600 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg hover:bg-cyan-500 transition-colors">
+              {fr ? "Se connecter" : "Sign in"}
+            </button>
+          )}
         </div>
       </nav>
 
@@ -348,6 +415,7 @@ export default function AccountPage() {
                     {fr ? "Session active" : "Active session"}
                   </span>
                   <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold font-mono">{user.email}</span>
+                  {pseudo && <span className="text-cyan-600 dark:text-cyan-400 text-xs font-semibold font-mono block">@{pseudo}</span>}
                 </div>
                 <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800" />
                 <button onClick={handleSignOut} className="text-xs text-red-500 hover:text-red-600 font-bold transition-colors">

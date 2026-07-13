@@ -180,6 +180,9 @@ const ScoreBar = ({ score, color }: { score: number; color: string }) => (
 
 export default function IdeaPage() {
   const [dark, setDark]                 = useState(true);
+  const [pseudo, setPseudo]             = useState<string>("");
+  const [pseudoInput, setPseudoInput]   = useState<string>("");
+  const [showLangMenu, setShowLangMenu] = useState(false);
   const [lang, setLang]                 = useState<Lang>("fr");
   const [user, setUser]                 = useState<any>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -217,12 +220,12 @@ export default function IdeaPage() {
     if (draft) { setIdea(draft); localStorage.removeItem("idea_draft"); }
 
     supabase.auth.getUser().then(({ data: authData }) => {
-      if (authData?.user) { setUser(authData.user); restoreAnalysis(authData.user.id); }
+      if (authData?.user) { setUser(authData.user); restoreAnalysis(authData.user.id); loadProfile(authData.user.id); }
     });
 
     const { data: l } = supabase.auth.onAuthStateChange(async (_, s) => {
       setUser(s?.user ?? null);
-      if (s?.user) restoreAnalysis(s.user.id);
+      if (s?.user) { restoreAnalysis(s.user.id); loadProfile(s.user.id); } else setPseudo("");
     });
     // Devise partagée avec le site principal
     const saved = localStorage.getItem("echo-currency") as "CAD"|"USD"|"EUR"|null;
@@ -262,7 +265,17 @@ export default function IdeaPage() {
   const saveBeforeRedirect = () => { if (idea.trim()) localStorage.setItem("idea_draft", idea); };
   const handleGoogle    = async () => { saveBeforeRedirect(); await supabase.auth.signInWithOAuth({ provider:"google",  options:{ redirectTo:`${window.location.origin}/idea`, scopes:"openid profile email", queryParams:{ prompt:"select_account" } } }); };
   const handleMicrosoft = async () => { saveBeforeRedirect(); await supabase.auth.signInWithOAuth({ provider:"azure",   options:{ redirectTo:`${window.location.origin}/idea`, scopes:"openid profile email User.Read" } }); };
-  const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setShowUserMenu(false); };
+  const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setPseudo(""); setShowUserMenu(false); };
+  const loadProfile = async (uid: string) => {
+    const { data } = await supabase.from("profiles").select("username").eq("id", uid).maybeSingle();
+    setPseudo(data?.username || "");
+  };
+  const savePseudo = async () => {
+    const clean = pseudoInput.trim();
+    if (!clean || !user) return;
+    await supabase.from("profiles").upsert({ id: user.id, username: clean, updated_at: new Date().toISOString() });
+    setPseudo(clean);
+  };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault(); setAuthError(null); setAuthSuccess(null);
@@ -366,24 +379,85 @@ export default function IdeaPage() {
   return (
     <div style={{ background:bg, color:txt, minHeight:"100dvh", fontFamily:"'Inter', system-ui, sans-serif", transition:"background .3s" }}>
 
-      {/* NAV */}
-      <nav style={{ borderBottom:`1px solid ${bord}`, padding:"0 24px", height:52, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background: dark?"rgba(8,7,10,.96)":"rgba(245,242,238,.96)", backdropFilter:"blur(12px)", zIndex:50 }}>
-        <div style={{ fontWeight:800, fontSize:14, color:txt }}><span style={{ color:acc }}>Idea</span>Analysis</div>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <button onClick={() => setShowHow(true)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"4px 10px", fontSize:11, color:acc, cursor:"pointer", fontWeight:700 }}>{t.howBtn}</button>
-          <button onClick={() => setLang(l => l==="fr"?"en":"fr")} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"4px 10px", fontSize:11, color:muted, cursor:"pointer", fontWeight:700 }}>
-            {lang==="fr"?"EN":"FR"}
-          </button>
-          <button onClick={() => setDark(d => !d)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"4px 10px", fontSize:12, color:muted, cursor:"pointer" }}>{dark?t.light:t.dark}</button>
+      {/* NAV — modèle Hall à 2 zones, adapté au style clair/sombre d'Idea */}
+      <nav style={{ borderBottom:`1px solid ${bord}`, padding:"0 24px", minHeight:52, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background: dark?"rgba(8,7,10,.96)":"rgba(245,242,238,.96)", backdropFilter:"blur(12px)", zIndex:50, flexWrap:"wrap", gap:10 }}>
+        {/* ZONE 1 — logo + onglets */}
+        <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", padding:"8px 0" }}>
+          <a href="/1/hall" style={{ fontWeight:800, fontSize:14, color:txt, textDecoration:"none" }}>Echo AI</a>
+          <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:12, flexWrap:"wrap" }}>
+            <a href="/1/hall" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Accueil":"Home"}</a>
+            <a href="/1/dashboard" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Tous les outils":"All tools"}</a>
+            <a href="/1/conversation" style={{ color:muted, textDecoration:"none" }}>Conversation</a>
+            <a href="/1/form" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Créer un projet":"Create project"}</a>
+            <a href="/1/fiche" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Explorer les projets":"Explore projects"}</a>
+            <a href="/1/talk" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Avis de la communauté":"Community feedback"}</a>
+            <a href="/1/audit" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Audition de site web":"Website audit"}</a>
+            <a href="/idea" style={{ color:acc, fontWeight:700, textDecoration:"none" }}>{lang==="fr"?"Avis de l'IA":"AI feedback"}</a>
+            <a href="/1/account" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Mon compte":"My account"}</a>
+          </div>
+        </div>
+
+        {/* SÉPARATEUR + ZONE 2 — Bureau (premium) + How it works + dark + langue + pseudo */}
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, padding:"8px 0" }}>
+          <div style={{ width:1, height:22, background:bord, flexShrink:0 }} />
+
+          <div style={{ position:"relative" }}
+            onMouseEnter={e => { const t = (e.currentTarget as HTMLElement).querySelector(".ideaLockTip") as HTMLElement; if (t) t.style.opacity = "1"; }}
+            onMouseLeave={e => { const t = (e.currentTarget as HTMLElement).querySelector(".ideaLockTip") as HTMLElement; if (t) t.style.opacity = "0"; }}>
+            <button onClick={() => { /* TODO: activer + ouvrir popup d'avantages une fois le premium prêt */ }}
+              style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(201,168,76,.08)", border:"1px solid rgba(201,168,76,.3)", borderRadius:7, padding:"5px 10px", cursor:"not-allowed", opacity:.65 }}>
+              <span style={{ fontSize:11 }}>🔒</span>
+              <span style={{ fontSize:11, fontWeight:700, color:"#c9a84c", whiteSpace:"nowrap" }}>{lang==="fr"?"Mon Bureau":"My Desk"}</span>
+            </button>
+            <div className="ideaLockTip" style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:"#111", border:"1px solid rgba(255,255,255,.15)", borderRadius:6, padding:"4px 10px", fontSize:10, color:"#fff", whiteSpace:"nowrap", opacity:0, pointerEvents:"none", transition:"opacity .15s", zIndex:50 }}>
+              {lang==="fr"?"🚧 En construction":"🚧 Under construction"}
+            </div>
+          </div>
+
+          <button onClick={() => setShowHow(true)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"5px 10px", fontSize:11, color:acc, cursor:"pointer", fontWeight:700, whiteSpace:"nowrap" }}>{t.howBtn}</button>
+          <button onClick={() => setDark(d => !d)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"5px 10px", fontSize:12, color:muted, cursor:"pointer" }}>{dark?t.light:t.dark}</button>
+
+          <div style={{ position:"relative" }}>
+            <button onClick={() => setShowLangMenu(v => !v)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"5px 10px", fontSize:11, color:muted, cursor:"pointer", fontWeight:700 }}>
+              {lang==="fr"?"FR":"EN"}
+            </button>
+            {showLangMenu && (
+              <>
+                <div onClick={() => setShowLangMenu(false)} style={{ position:"fixed", inset:0, zIndex:40 }} />
+                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:surf, border:`1px solid ${bord}`, borderRadius:10, overflow:"hidden", zIndex:100, minWidth:110 }}>
+                  {(["fr","en"] as Lang[]).map(l => (
+                    <button key={l} onClick={() => { setLang(l); setShowLangMenu(false); }}
+                      style={{ display:"block", width:"100%", textAlign:"left", padding:"8px 12px", fontSize:11, background: lang===l ? "rgba(0,200,255,.1)" : "transparent", color: lang===l ? acc : muted, border:"none", cursor:"pointer", fontWeight: lang===l?700:500 }}>
+                      {l==="fr"?"Français":"English"}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
           {user ? (
             <div style={{ position:"relative" }}>
-              <button onClick={() => setShowUserMenu(v => !v)} style={{ background:"#16a34a", border:"none", borderRadius:8, padding:"5px 12px", fontSize:11, color:"#fff", fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                <span style={{ width:6, height:6, borderRadius:"50%", background:"#86efac", display:"inline-block" }} />{t.connected}
+              <button onClick={() => setShowUserMenu(v => !v)} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(0,200,255,.1)", border:"1px solid rgba(0,200,255,.3)", borderRadius:8, padding:"5px 12px", cursor:"pointer" }}>
+                <span style={{ width:6, height:6, borderRadius:"50%", background:acc, display:"inline-block" }} />
+                <span style={{ fontSize:11, fontWeight:700, color:acc }}>{pseudo || (lang==="fr"?"Choisir un pseudo":"Choose nickname")}</span>
               </button>
               {showUserMenu && (
-                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:surf, border:`1px solid ${bord}`, borderRadius:10, overflow:"hidden", zIndex:100, minWidth:140 }}>
-                  <button onClick={handleLogout} style={{ width:"100%", padding:"9px 14px", fontSize:12, color:"#ef4444", background:"none", border:"none", cursor:"pointer", fontWeight:600, textAlign:"left" }}>↩ {t.logout}</button>
-                </div>
+                <>
+                  <div onClick={() => setShowUserMenu(false)} style={{ position:"fixed", inset:0, zIndex:40 }} />
+                  <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:surf, border:`1px solid ${bord}`, borderRadius:10, padding:12, zIndex:100, minWidth:200 }}>
+                    <div style={{ fontSize:10, color:muted, marginBottom:8, wordBreak:"break-all" }}>{user.email}</div>
+                    {!pseudo && (
+                      <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:8 }}>
+                        <input type="text" value={pseudoInput} onChange={e => setPseudoInput(e.target.value.replace(/[^a-zA-Z0-9_\s-]/g, ""))}
+                          placeholder={lang==="fr"?"Ton pseudo":"Your nickname"}
+                          style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:6, padding:"6px 10px", fontSize:11, color:txt, outline:"none" }} />
+                        <button onClick={savePseudo} style={{ background:acc, color:"#000", border:"none", borderRadius:6, padding:"6px 0", fontSize:11, fontWeight:700, cursor:"pointer" }}>{lang==="fr"?"Valider":"Save"}</button>
+                      </div>
+                    )}
+                    <button onClick={handleLogout} style={{ width:"100%", textAlign:"left", background:"none", border:"none", color:"#ef4444", fontSize:11, cursor:"pointer", padding:"4px 0" }}>↩ {t.logout}</button>
+                  </div>
+                </>
               )}
             </div>
           ) : (

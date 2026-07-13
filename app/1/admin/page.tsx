@@ -9,6 +9,7 @@ type ModAction = "kick_1d" | "kick_1w" | "mute_1d" | "mute_1w" | "ban";
 type ProfileRow = {
   id: string;
   username: string;
+  email: string;
   role: string;
 };
 
@@ -20,7 +21,8 @@ export default function AdminConsole() {
 
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [targetUser, setTargetUser] = useState("");
-  const [newModUsername, setNewModUsername] = useState("");
+  const [newModEmail, setNewModEmail] = useState("");
+  const [selectedRole, setSelectedRole] = useState<"moderator" | "admin">("moderator");
   const [reason, setReason] = useState("");
   const [modError, setModError] = useState<string | null>(null);
 
@@ -41,7 +43,7 @@ export default function AdminConsole() {
         if (session.user.email === 'lafailleestouverte@gmail.com' || session.user.email === 'nicholas@echosai.ca') {
           setIsAuthorized(true);
           setUserRole("admin");
-          setCurrentAdmin(profile?.username || "Finalsone");
+          setCurrentAdmin(profile?.username || "Admin Core");
           await fetchProfiles();
         } else if (profile && (profile.role === "admin" || profile.role === "moderator")) {
           setIsAuthorized(true);
@@ -60,26 +62,18 @@ export default function AdminConsole() {
   const fetchProfiles = async () => {
     const { data } = await supabase
       .from("profiles")
-      .select("id, username, role")
-      .not("username", "is", null)
-      .neq("username", "");
+      .select("id, username, email, role");
     if (data) setProfiles(data);
   };
 
-  const cleanUsernameInput = (input: string) => {
-    return input.trim().replace(/^@/, "");
+  const cleanInput = (input: string) => {
+    return input.trim().toLowerCase();
   };
 
-  // FIX: on ne crée plus jamais de faux profil avec un UUID inventé
-  // (gen_random_uuid_local générait des IDs invalides non liés à un vrai
-  // compte auth.users, ce qui cassait la contrainte FK / créait des lignes
-  // fantômes impossibles à connecter). On peut seulement PROMOUVOIR un
-  // profil qui existe déjà — c-à-d une personne qui s'est déjà connectée
-  // au moins une fois sur le site.
-  const handleAddModerator = async () => {
-    const target = cleanUsernameInput(newModUsername);
+  const handleAssignRole = async () => {
+    const targetEmail = cleanInput(newModEmail);
     setModError(null);
-    if (!target) return;
+    if (!targetEmail) return;
 
     if (userRole !== "admin") {
       alert("Droits insuffisants. Seuls les administrateurs peuvent nommer le staff.");
@@ -90,46 +84,46 @@ export default function AdminConsole() {
       const { data: existingProfile } = await supabase
         .from("profiles")
         .select("id")
-        .eq("username", target)
+        .eq("email", targetEmail)
         .maybeSingle();
 
       if (!existingProfile) {
         setModError(
-          `@${target} n'a pas de compte existant. La personne doit d'abord se connecter au moins une fois (via /1/account ou /1/talk) avant de pouvoir être promue.`
+          `L'adresse ${targetEmail} n'est liée à aucun compte de votre table 'profiles'. L'utilisateur doit s'être connecté au moins une fois et votre table doit posséder une colonne 'email'.`
         );
         return;
       }
 
       const { error } = await supabase
         .from("profiles")
-        .update({ role: "moderator" })
-        .eq("username", target);
+        .update({ role: selectedRole })
+        .eq("email", targetEmail);
       if (error) throw error;
 
-      alert(`@${target} est maintenant modérateur.`);
-      setNewModUsername("");
+      alert(`Le rôle [${selectedRole.toUpperCase()}] a été attribué à ${targetEmail}.`);
+      setNewModEmail("");
       await fetchProfiles();
     } catch (err) {
       console.error(err);
-      setModError("Erreur lors de l'attribution du rôle.");
+      setModError("Erreur lors de l'attribution du rôle. Vérifiez que la colonne 'email' existe bien dans votre table.");
     }
   };
 
-  const handleRevokeModerator = async (username: string) => {
+  const handleRevokeStaff = async (email: string, roleToRemove: string) => {
     if (userRole !== "admin") return;
-    if (!confirm(`Retirer les droits de modération de @${username} ?`)) return;
-    const { error } = await supabase.from("profiles").update({ role: "user" }).eq("username", username);
+    if (!confirm(`Retirer les droits de ${roleToRemove.toUpperCase()} du compte ${email} ?`)) return;
+    const { error } = await supabase.from("profiles").update({ role: "user" }).eq("email", email);
     if (!error) await fetchProfiles();
   };
 
   const applySanction = async (action: ModAction) => {
-    const target = cleanUsernameInput(targetUser);
-    if (!target) return alert("Spécifie un pseudo cible.");
+    const target = targetUser.trim();
+    if (!target) return alert("Spécifiez un pseudo cible.");
 
     const targetProfile = profiles.find(p => p.username?.toLowerCase() === target.toLowerCase());
 
     if (targetProfile && targetProfile.role === "admin") {
-      alert("Action refusée : Impossible de sanctionner un administrateur du système.");
+      alert("Action refusée : Impossible de sanctionner un administrateur.");
       return;
     }
 
@@ -146,7 +140,7 @@ export default function AdminConsole() {
     });
 
     if (!error) {
-      alert(`Sanction [${action}] appliquée avec succès sur @${target}`);
+      alert(`Sanction [${action}] appliquée sur @${target}`);
       setTargetUser("");
       setReason("");
     } else {
@@ -155,19 +149,19 @@ export default function AdminConsole() {
   };
 
   if (loading) return (
-    <main className="min-h-screen bg-white dark:bg-[#0f0f0f] flex items-center justify-center">
-      <p className="text-xs font-mono text-zinc-400">CHARGEMENT...</p>
+    <main className="min-h-screen bg-[#08070a] flex items-center justify-center">
+      <p className="text-xs font-mono text-zinc-500 tracking-widest animate-pulse">CHARGEMENT DE LA CONSOLE...</p>
     </main>
   );
 
   if (!isAuthorized) {
     return (
-      <main className="min-h-screen bg-white dark:bg-[#0f0f0f] flex flex-col items-center justify-center p-4">
-        <div className="bg-white dark:bg-zinc-950 border border-red-500/30 rounded-xl p-6 max-w-sm w-full text-center shadow-sm">
-          <span className="text-red-500 dark:text-red-400 text-xs font-mono font-bold tracking-widest uppercase">ACCÈS_INTERDIT</span>
-          <p className="text-zinc-500 dark:text-zinc-500 text-xs mt-2">Droits de modération insuffisants.</p>
-          <Link href="/1/hall" className="inline-block mt-4 text-xs text-cyan-600 dark:text-cyan-400 underline underline-offset-2">
-            ← Retour au hall
+      <main className="min-h-screen bg-[#08070a] flex flex-col items-center justify-center p-4">
+        <div className="bg-zinc-950 border border-red-500/20 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+          <span className="text-red-400 text-xs font-mono font-bold tracking-widest uppercase block mb-2">ACCÈS RESTREINT</span>
+          <p className="text-zinc-500 text-xs">Votre compte ne possède pas les autorisations nécessaires.</p>
+          <Link href="/1/hall" className="inline-block mt-5 text-xs text-cyan-400 hover:text-cyan-300 underline underline-offset-4 transition-colors">
+            ← Retourner à l'accueil
           </Link>
         </div>
       </main>
@@ -175,103 +169,134 @@ export default function AdminConsole() {
   }
 
   return (
-    <main className="min-h-screen bg-white dark:bg-[#0f0f0f] text-zinc-900 dark:text-zinc-100 font-sans">
-      {/* NAV réservée — pas dans les 8 onglets publics, juste un retour rapide */}
-      <nav className="border-b border-zinc-100 dark:border-zinc-800/60 px-6 h-14 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-sm z-50">
+    <main className="min-h-screen bg-[#08070a] text-zinc-300 font-sans relative overflow-hidden">
+      
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[100%] h-[300px] bg-gradient-to-b from-cyan-500/5 to-transparent pointer-events-none" />
+
+      <nav className="border-b border-zinc-900/60 px-6 h-16 flex items-center justify-between bg-[#0f0f0f]/90 backdrop-blur-sm relative z-10">
         <div className="flex items-center gap-6">
-          <span className="font-mono text-xs font-bold text-red-500 dark:text-red-400 tracking-wider">TALK_ADMIN_PANEL</span>
-          <div className="flex items-center gap-4 text-xs">
-            <Link href="/1/talk" className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">← Talk</Link>
-            <span className="text-zinc-300 dark:text-zinc-700">|</span>
-            <span className="text-zinc-500 dark:text-zinc-400">Admin: <strong className="text-cyan-600 dark:text-cyan-400 font-mono">@{currentAdmin} ({userRole})</strong></span>
-          </div>
+          <span className="font-bold text-sm tracking-wider text-white">Console de Contrôle</span>
+          <div className="h-4 w-px bg-zinc-800" />
+          <span className="text-xs text-zinc-500">
+            Session : <strong className="text-cyan-400 font-mono font-normal">{currentAdmin} ({userRole})</strong>
+          </span>
         </div>
+        <Link href="/1/hall" className="text-xs text-zinc-400 hover:text-white transition-colors">
+          Quitter la console →
+        </Link>
       </nav>
 
-      <div className="max-w-4xl w-full mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="max-w-4xl w-full mx-auto px-4 py-12 grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
 
-        {/* RESTRICTIONS */}
-        <div className="bg-white dark:bg-zinc-950 border border-cyan-500/20 dark:border-cyan-500/10 rounded-xl p-5 shadow-sm flex flex-col gap-4">
-          <h2 className="text-sm font-bold text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-zinc-900 pb-2">Appliquer une restriction</h2>
+        {/* SECTION 1 : MODÉRATION / SANCTIONS */}
+        <div className="bg-zinc-950/80 border border-zinc-900 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col gap-5">
+          <div className="border-b border-zinc-900 pb-3">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Sanctionner un profil</h2>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Appliquez des restrictions de parole ou des exclusions.</p>
+          </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono text-zinc-500 uppercase">Pseudo de la cible</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wide">Pseudo du membre</label>
             <input
               type="text"
-              placeholder="ex: Finalsone"
+              placeholder="Ex: Nicolas"
               value={targetUser}
               onChange={e => setTargetUser(e.target.value)}
-              className="bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-900 rounded-lg px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none focus:border-red-500/40"
+              className="bg-black/40 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-mono text-zinc-500 uppercase">Motif</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wide">Raison du signalement</label>
             <input
               type="text"
-              placeholder="Motif du rapport..."
+              placeholder="Indiquez le motif précis..."
               value={reason}
               onChange={e => setReason(e.target.value)}
-              className="bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-900 rounded-lg px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none"
+              className="bg-black/40 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-2">
-            <button onClick={() => applySanction("mute_1d")} className="py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium transition-colors">🤫 Mute 1 Jour</button>
-            <button onClick={() => applySanction("mute_1w")} className="py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs font-medium transition-colors">🤫 Mute 1 Semaine</button>
-            <button onClick={() => applySanction("kick_1d")} className="py-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 dark:hover:bg-amber-900/30 border border-amber-300 dark:border-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg text-xs font-medium transition-colors">🥾 Kick 1 Jour</button>
-            <button onClick={() => applySanction("kick_1w")} className="py-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 dark:hover:bg-amber-900/30 border border-amber-300 dark:border-amber-900/30 text-amber-600 dark:text-amber-400 rounded-lg text-xs font-medium transition-colors">🥾 Kick 1 Semaine</button>
+            <button onClick={() => applySanction("mute_1d")} className="py-2.5 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white transition-colors">Mute 1 Jour</button>
+            <button onClick={() => applySanction("mute_1w")} className="py-2.5 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white transition-colors">Mute 1 Semaine</button>
+            <button onClick={() => applySanction("kick_1d")} className="py-2.5 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl text-xs font-semibold transition-colors">Kick 1 Jour</button>
+            <button onClick={() => applySanction("kick_1w")} className="py-2.5 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl text-xs font-semibold transition-colors">Kick 1 Semaine</button>
           </div>
 
-          <button onClick={() => applySanction("ban")} className="w-full py-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/40 border border-red-300 dark:border-red-900/40 text-red-600 dark:text-red-400 rounded-lg text-xs font-bold transition-colors mt-2">
-            💥 Bannissement Définitif (BAN)
+          <button onClick={() => applySanction("ban")} className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-xs font-bold tracking-wider uppercase transition-colors mt-2">
+            Bannissement Définitif
           </button>
         </div>
 
-        {/* STAFF */}
-        <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-xl p-5 shadow-sm flex flex-col gap-4">
-          <h2 className="text-sm font-bold text-zinc-900 dark:text-white border-b border-zinc-100 dark:border-zinc-900 pb-2">Gestion de l'équipe (Staff)</h2>
+        {/* SECTION 2 : GESTION DU STAFF (MODO / ADMIN) */}
+        <div className="bg-zinc-950/80 border border-zinc-900 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col gap-5">
+          <div className="border-b border-zinc-900 pb-3">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Équipe du site</h2>
+            <p className="text-[11px] text-zinc-500 mt-0.5">Attribuez ou révoquez les privilèges par courriel.</p>
+          </div>
 
           {userRole === "admin" && (
             <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-wide">Nommer un membre du staff</label>
               <div className="flex gap-2">
                 <input
-                  type="text"
-                  placeholder="Pseudo à promouvoir..."
-                  value={newModUsername}
-                  onChange={e => { setNewModUsername(e.target.value); setModError(null); }}
-                  className="flex-1 bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-900 rounded-lg px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none focus:border-cyan-500"
+                  type="email"
+                  placeholder="adresse@email.com"
+                  value={newModEmail}
+                  onChange={e => { setNewModEmail(e.target.value); setModError(null); }}
+                  className="flex-1 bg-black/40 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
                 />
-                <button onClick={handleAddModerator} className="px-4 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs rounded-lg transition-colors">
-                  Ajouter Modo
+                
+                <select 
+                  value={selectedRole} 
+                  onChange={e => setSelectedRole(e.target.value as "moderator" | "admin")}
+                  className="bg-zinc-900 border border-zinc-800 text-xs text-white rounded-xl px-2 outline-none focus:border-cyan-500/50 transition-colors"
+                >
+                  <option value="moderator">Modo</option>
+                  <option value="admin">Admin</option>
+                </select>
+
+                <button onClick={handleAssignRole} className="px-4 bg-cyan-600 hover:bg-cyan-500 text-black font-bold text-xs rounded-xl transition-colors">
+                  Accorder
                 </button>
               </div>
               {modError && (
-                <p className="text-[11px] text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-lg px-3 py-2">
-                  ⚠️ {modError}
+                <p className="text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-xl px-3 py-2 mt-1">
+                  {modError}
                 </p>
               )}
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-600">
-                La personne doit s'être déjà connectée au moins une fois (compte existant) pour pouvoir être promue.
-              </p>
             </div>
           )}
 
-          <div className="flex flex-col gap-2 mt-2 max-h-56 overflow-y-auto">
-            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Membres actuels :</span>
-            {profiles.filter(p => p.role !== "user").map(p => (
-              <div key={p.id} className="flex justify-between items-center bg-zinc-50 dark:bg-[#121214] p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-900">
-                <span className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">@{p.username}</span>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[9px] font-mono px-2 py-0.5 rounded tracking-wide font-bold ${p.role === 'admin' ? 'bg-red-500/10 text-red-500 dark:text-red-400 border border-red-500/20' : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20'}`}>
-                    {p.role.toUpperCase()}
-                  </span>
-                  {userRole === "admin" && p.role === "moderator" && (
-                    <button onClick={() => handleRevokeModerator(p.username)} className="text-[10px] text-zinc-400 hover:text-red-500 transition-colors">✕</button>
-                  )}
+          <div className="flex flex-col gap-2 mt-2">
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">Membres du staff actifs :</span>
+            
+            <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+              {profiles.filter(p => p.role !== "user" && p.role !== null).map(p => (
+                <div key={p.id} className="flex justify-between items-center bg-black/30 p-3 rounded-xl border border-zinc-900/60">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-bold text-white">@{p.username || "Sans pseudo"}</span>
+                    <span className="text-[10px] font-mono text-zinc-500">{p.email || "aucun courriel relié"}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${p.role === 'admin' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'}`}>
+                      {p.role.toUpperCase()}
+                    </span>
+                    {userRole === "admin" && (p.role === "moderator" || p.role === "admin") && (
+                      <button 
+                        onClick={() => handleRevokeStaff(p.email, p.role)} 
+                        className="text-zinc-600 hover:text-red-400 transition-colors text-xs px-1"
+                        title="Retirer les droits"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 

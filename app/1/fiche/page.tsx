@@ -41,10 +41,12 @@ type Fiche = {
 type Comment = { id: string; user_pseudo: string; text: string; created_at: string };
 
 const TYPE_COLORS: Record<string, string> = {
-  "SaaS": "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  "App mobile": "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  "Outil SaaS": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  "Contenu": "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  "Application ou site web":       "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  "Boutique en ligne":             "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  "Blog ou site d'articles":       "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  "Vidéos ou podcast":             "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  "Livre numérique":               "bg-pink-500/10 text-pink-400 border-pink-500/20",
+  "Formation et apprentissage":    "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
 };
 
 // ────────────────────────────────────────────────────────────────
@@ -172,8 +174,13 @@ export default function FichePage() {
 
   const getOutils = (fiche: Fiche) => {
     if (!fiche.tech) return [];
-    return Object.values(fiche.tech).flat().filter(Boolean).filter(v => !TECH_HIDE.has(v.trim().toLowerCase()));
+    return Object.entries(fiche.tech)
+      .filter(([key]) => key !== "_manque_methode" && key !== "_manque_outil")
+      .flatMap(([, vals]) => vals)
+      .filter(Boolean).filter(v => !TECH_HIDE.has(v.trim().toLowerCase()));
   };
+  const getManqueMethode = (fiche: Fiche) => fiche.tech?.["_manque_methode"]?.[0] || "";
+  const getManqueOutil   = (fiche: Fiche) => fiche.tech?.["_manque_outil"]?.[0] || "";
   const getCherche = (fiche: Fiche) => (fiche.cherche && fiche.cherche.length > 0 ? fiche.cherche.join(", ") : "");
   const isOwnFiche = (fiche: Fiche) => !!userId && userId === fiche.user_id;
 
@@ -556,9 +563,16 @@ export default function FichePage() {
                   </div>
                 )}
 
+                {(getManqueMethode(fiche) || getManqueOutil(fiche)) && (
+                  <div className="flex flex-col gap-1">
+                    {getManqueMethode(fiche) && <p className="text-xs text-zinc-500 dark:text-zinc-400">💡 {getManqueMethode(fiche)}</p>}
+                    {getManqueOutil(fiche) && <p className="text-xs text-zinc-500 dark:text-zinc-400">🛠️ {getManqueOutil(fiche)}</p>}
+                  </div>
+                )}
+
                 {getCherche(fiche) && (
                   <div className="flex flex-col gap-1.5">
-                    <p className="text-[10px] text-zinc-400 uppercase font-medium">{dict.cherche}</p>
+                    <p className="text-[10px] text-zinc-400 uppercase font-medium">{lang === "fr" ? "Besoins" : "Needs"}</p>
                     <p className="text-sm text-zinc-700 dark:text-zinc-300">{getCherche(fiche)}</p>
                   </div>
                 )}

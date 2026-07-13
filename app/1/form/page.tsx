@@ -42,22 +42,22 @@ const D = {
   // ── ÉTAPE 7 — Choix des destinations ──────────────────────────────────────
   pubTitle:      { fr:"Où veux-tu publier ?", en:"Where do you want to publish?" },
   pubSub:        { fr:"Coche au moins une option. Tu peux en choisir plusieurs.", en:"Check at least one option. You can choose several." },
-  pubFicheLabel: { fr:"🔍 Explorer les projets", en:"🔍 Explore projects" },
+  pubFicheLabel: { fr:"👤 Publier ma fiche", en:"👤 Publish my listing" },
   pubFicheDesc:  { fr:"Ta fiche complète, visible publiquement — les gens t'envoient un intérêt.", en:"Your full listing, publicly visible — people send you interest." },
-  pubTalkLabel:  { fr:"💬 Avis de la communauté", en:"💬 Community feedback" },
+  pubTalkLabel:  { fr:"💬 Présenter mon projet", en:"💬 Present my project" },
   pubTalkDesc:   { fr:"Obtiens des réactions rapides de la communauté sur ton pitch.", en:"Get quick community reactions to your pitch." },
-  pubAuditLabel: { fr:"🔎 Audition de site web", en:"🔎 Website audit" },
-  pubAuditDesc:  { fr:"Soumets ton site pour un vrai retour visuel — accueil, message, tunnel.", en:"Submit your site for real visual feedback — homepage, message, funnel." },
+  pubAuditLabel: { fr:"🔎 Demander un avis sur mon site/projet", en:"🔎 Ask for feedback on my site/project" },
+  pubAuditDesc:  { fr:"Des gens vont regarder et te donner leur opinion — accueil, message, présentation.", en:"People will look and give you their opinion — homepage, message, presentation." },
   pubNone:       { fr:"Choisis au moins une destination avant de continuer.", en:"Choose at least one destination before continuing." },
-  pseudoNeeded:  { fr:"Un pseudo est nécessaire pour Talk et Audit.", en:"A nickname is required for Talk and Audit." },
-  auditUrlLabel: { fr:"URL du site à auditer *", en:"URL of the site to audit *" },
-  auditImgLabel: { fr:"Images de ton site (accueil, tunnel, etc.)", en:"Images of your site (homepage, funnel, etc.)" },
+  pseudoNeeded:  { fr:"Un pseudo est nécessaire pour Présenter mon projet et Demander un avis.", en:"A nickname is required to present your project and ask for feedback." },
+  auditUrlLabel: { fr:"URL du site sur lequel tu veux un avis *", en:"URL of the site you want feedback on *" },
+  auditImgLabel: { fr:"Images de ton site (accueil, présentation, etc.)", en:"Images of your site (homepage, presentation, etc.)" },
   auditImgHint:  { fr:"Ajoute plusieurs captures pour créer une vraie cartographie de ton site.", en:"Add several screenshots to create a real map of your site." },
   auditImgAdd:   { fr:"+ Ajouter une image", en:"+ Add an image" },
 
   etapes: {
-    fr: ["Projet","Avancement","Objectifs","Collaboration","Technologies","Profil","Publier"],
-    en: ["Project","Progress","Goals","Collaboration","Technologies","Profile","Publish"],
+    fr: ["Projet","État","Objectifs","Besoins","Forces","Structure","Publier"],
+    en: ["Project","Status","Goals","Needs","Strengths","Structure","Publish"],
   },
 
   nom_projet:   { fr:"Nom du projet *",    en:"Project name *"      },
@@ -184,15 +184,22 @@ const TECH: Record<string, string[]> = {
 const CONTACTS_OPTIONS = ["Email","Discord","GitHub","LinkedIn","Site web","Téléphone"];
 
 type FormData = {
-  nom_projet: string; description: string; type_projet: string; type_profil: string;
-  idee: string; avancement: string; produit: string; utilisateurs: string; revenus: string;
+  nom_projet: string; description: string;
+  type_projet: string; type_projet_autre: string;
+  pays: string; langue: string; photo_url: string;
+
+  etat_projet: string;
+
   objectif_court: string; objectif_moyen: string; objectif_long: string;
-  cherche: string[]; temps: string; distance: string; engagement: string;
-  tech: Record<string, string[]>;
-  nom_complet: string; pays: string; langue: string;
-  photo_url: string;
-  contacts_visibles: string[];
-  email: string; discord: string; github: string; linkedin: string; site_web: string; telephone: string;
+
+  besoins: string[]; besoins_specifiques: string[];
+  temps: string; collaboration_type: string;
+
+  forces: string[];
+
+  structure: Record<string, string[]>;
+  structure_manque: string; outil_manque: string;
+
   // Destinations de publication — au moins une obligatoire
   pub_fiche: boolean; pub_talk: boolean; pub_audit: boolean;
   // Spécifique Audit
@@ -200,16 +207,155 @@ type FormData = {
 };
 
 const INITIAL: FormData = {
-  nom_projet:"", description:"", type_projet:"", type_profil:"",
-  idee:"", avancement:"", produit:"", utilisateurs:"", revenus:"",
+  nom_projet:"", description:"",
+  type_projet:"", type_projet_autre:"",
+  pays:"", langue:"", photo_url:"",
+  etat_projet:"",
   objectif_court:"", objectif_moyen:"", objectif_long:"",
-  cherche:[], temps:"", distance:"", engagement:"",
-  tech:{ backend:[], frontend:[], paiement:[], ia:[], infra:[], automatisation:[] },
-  nom_complet:"", pays:"", langue:"", photo_url:"",
-  contacts_visibles:["Email"],
-  email:"", discord:"", github:"", linkedin:"", site_web:"", telephone:"",
+  besoins:[], besoins_specifiques:[],
+  temps:"", collaboration_type:"",
+  forces:[],
+  structure:{},
+  structure_manque:"", outil_manque:"",
   pub_fiche: true, pub_talk: false, pub_audit: false,
   audit_url: "", audit_images: [],
+};
+
+// ── CONTENU DE LA SPEC — figé après 10 rounds de discussion ─────────────────
+const CATEGORIES = [
+  { key:"app_web",   emoji:"🌐", label:"Application ou site web" },
+  { key:"boutique",  emoji:"🛒", label:"Boutique en ligne" },
+  { key:"blog",      emoji:"✍️", label:"Blog ou site d'articles" },
+  { key:"video",     emoji:"🎥", label:"Vidéos ou podcast" },
+  { key:"livre",     emoji:"📖", label:"Livre numérique" },
+  { key:"formation", emoji:"🎓", label:"Formation et apprentissage" },
+  { key:"autre",     emoji:"✨", label:"Autre" },
+];
+
+const ETATS = [
+  { key:"idee",         label:"Idée seulement" },
+  { key:"construction", label:"En construction" },
+  { key:"en_ligne",      label:"En ligne" },
+  { key:"clients",      label:"Déjà utilisé par des clients" },
+];
+
+const BESOINS_COMMUNS = [
+  "Des retours et avis",
+  "Trouver mes premiers utilisateurs ou clients",
+  "Faire connaître mon projet",
+  "Trouver des personnes avec qui collaborer",
+  "Trouver un associé sur le long terme",
+  "Être aidé sur un problème précis",
+];
+
+const BESOINS_SPECIFIQUES: Record<string, string[]> = {
+  app_web:   ["Tester mon produit avec des utilisateurs", "Trouver de l'aide technique"],
+  boutique:  ["Trouver des fournisseurs", "Améliorer mes ventes"],
+  blog:      ["Trouver des lecteurs et développer mon audience", "Améliorer mes contenus ou ma ligne éditoriale"],
+  video:     ["Trouver des abonnés et développer mon audience", "Améliorer mes contenus ou ma production"],
+  livre:     ["Trouver des lecteurs test", "Trouver des personnes pour diffuser mon livre"],
+  formation: ["Trouver des élèves ou participants", "Améliorer mon contenu pédagogique"],
+  autre: [],
+};
+
+const TEMPS_OPTIONS = ["Quelques heures par mois", "Quelques heures par semaine", "À plein temps"];
+const COLLAB_TYPE_OPTIONS = ["À distance uniquement", "Rencontre locale possible", "Peu importe"];
+
+const FORCES = [
+  { key:"visuel",        label:"Le visuel et l'apparence",              desc:"Créer des logos, choisir les couleurs, rendre le projet agréable à regarder" },
+  { key:"technique",     label:"La technique et la programmation",      desc:"Créer du code, configurer des outils, faire fonctionner le projet" },
+  { key:"ecriture",      label:"L'écriture et la rédaction",            desc:"Écrire des textes, expliquer des idées, créer des scripts" },
+  { key:"communication", label:"La communication et la visibilité",     desc:"Partager le projet, créer une communauté, faire connaître son travail" },
+  { key:"gestion",       label:"La gestion et l'organisation",          desc:"Planifier, structurer les idées, garder un cap" },
+  { key:"apprentissage", label:"J'apprends en avançant",                desc:"Je découvre, je teste et je construis par moi-même" },
+];
+
+type StructureBlock = { question: string; options: { label: string; hint?: string }[] };
+
+const STRUCTURE_BLOCKS: Record<string, StructureBlock[]> = {
+  app_web: [
+    { question:"Comment est créé votre site ou application ?", options:[
+      { label:"Je code moi-même", hint:"HTML, CSS, JavaScript, langages de programmation..." },
+      { label:"J'utilise un outil qui simplifie la création", hint:"WordPress, Webflow, Bubble..." },
+      { label:"Je fais développer par quelqu'un d'autre" },
+      { label:"Je combine plusieurs méthodes" },
+    ]},
+    { question:"Où fonctionne votre projet ?", options:[
+      { label:"Hébergement simple", hint:"Hostinger, OVH, Vercel..." },
+      { label:"Serveur personnel", hint:"VPS, Docker..." },
+      { label:"Je ne sais pas encore" },
+    ]},
+    { question:"Quelles fonctions utilisez-vous ?", options:[
+      { label:"Paiement en ligne", hint:"Stripe, PayPal..." },
+      { label:"Intelligence artificielle", hint:"ChatGPT, assistants virtuels..." },
+      { label:"Automatisations", hint:"Relier des outils entre eux, Zapier, Make..." },
+    ]},
+  ],
+  boutique: [
+    { question:"Où vendez-vous vos produits ?", options:[
+      { label:"Ma propre boutique", hint:"Shopify, Wix, WooCommerce..." },
+      { label:"Une plateforme existante", hint:"Amazon, Etsy, eBay..." },
+      { label:"Mon propre site codé" },
+    ]},
+    { question:"Comment gérez-vous les produits ?", options:[
+      { label:"Je fabrique et j'envoie moi-même" },
+      { label:"Impression à la demande", hint:"Printful, Printify..." },
+      { label:"Dropshipping" },
+      { label:"Produit numérique", hint:"fichier, formation, abonnement..." },
+    ]},
+  ],
+  blog: [
+    { question:"Où publiez-vous vos articles ?", options:[
+      { label:"Un outil de publication simple", hint:"Substack, Medium..." },
+      { label:"Un site complet", hint:"WordPress, Ghost..." },
+      { label:"Mon propre site codé" },
+    ]},
+    { question:"Comment développez-vous votre audience ?", options:[
+      { label:"Infolettre / Newsletter", hint:"Mailchimp, Brevo..." },
+      { label:"Liens d'affiliation" },
+      { label:"Publicités" },
+      { label:"Dons ou soutien de la communauté", hint:"Tipeee, Ko-fi..." },
+    ]},
+  ],
+  video: [
+    { question:"Comment créez-vous votre contenu ?", options:[
+      { label:"Montage vidéo", hint:"CapCut, DaVinci, Premiere..." },
+      { label:"Enregistrement audio ou écran", hint:"Audacity, Riverside, Loom..." },
+      { label:"Diffusion en direct", hint:"OBS, Twitch..." },
+      { label:"Outils d'Intelligence Artificielle", hint:"ChatGPT, ElevenLabs..." },
+    ]},
+    { question:"Où partagez-vous principalement votre contenu ?", options:[
+      { label:"YouTube ou TikTok" },
+      { label:"Spotify ou Apple Podcasts" },
+      { label:"Twitch" },
+      { label:"Mon propre site" },
+    ]},
+  ],
+  livre: [
+    { question:"Comment distribuez-vous votre livre ?", options:[
+      { label:"Librairies numériques", hint:"Amazon KDP, Draft2Digital..." },
+      { label:"Vente directe", hint:"Mon site, Gumroad..." },
+      { label:"Je le partage gratuitement" },
+    ]},
+    { question:"Quel format utilisez-vous ?", options:[
+      { label:"PDF" }, { label:"EPUB" },
+    ]},
+  ],
+  formation: [
+    { question:"Comment partagez-vous votre formation ?", options:[
+      { label:"Plateforme de cours", hint:"Udemy, Teachable, Podia..." },
+      { label:"Communauté privée", hint:"Discord, Skool..." },
+      { label:"Mon propre site" },
+      { label:"Sessions en direct", hint:"Zoom, Google Meet..." },
+    ]},
+    { question:"Comment créez-vous vos contenus ?", options:[
+      { label:"Présentations", hint:"PowerPoint, Canva..." },
+      { label:"Vidéos explicatives", hint:"Loom, OBS..." },
+      { label:"Documents et exercices" },
+      { label:"Quiz / évaluations" },
+    ]},
+  ],
+  autre: [],
 };
 
 // ── COMPOSANTS UI ──────────────────────────────────────────────────────────
@@ -237,6 +383,29 @@ function MultiCheck({ options, values, onChange }: { options: string[]; values: 
           {opt}
         </button>
       ))}
+    </div>
+  );
+}
+
+function CheckboxCard({ options, values, onChange }: { options: { label: string; desc?: string; hint?: string }[]; values: string[]; onChange: (v: string[]) => void }) {
+  const toggle = (label: string) => onChange(values.includes(label) ? values.filter(v => v !== label) : [...values, label]);
+  return (
+    <div className="flex flex-col gap-2">
+      {options.map(opt => {
+        const checked = values.includes(opt.label);
+        return (
+          <div key={opt.label} onClick={() => toggle(opt.label)}
+            className={`flex items-start gap-3 px-4 py-3 rounded-xl cursor-pointer border transition-all select-none ${checked ? "border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-800" : "border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
+            <div className={`w-4 h-4 rounded-md border-2 shrink-0 mt-0.5 flex items-center justify-center transition-all ${checked ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white" : "border-zinc-300 dark:border-zinc-600"}`}>
+              {checked && <span className="text-white dark:text-zinc-900 text-[10px]">✓</span>}
+            </div>
+            <div>
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">{opt.label}</p>
+              {(opt.desc || opt.hint) && <p className="text-xs text-zinc-400 mt-0.5">{opt.desc || opt.hint}</p>}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -489,36 +658,50 @@ function InscriptionPageInner() {
     setStep(1);
     setMyKey(null);
     setError(null);
+
+    // Reconstruit type_projet (clé) à partir du libellé stocké en base
+    const matchedCat = CATEGORIES.find(c => c.label === data.type_projet);
+    const typeProjetKey = matchedCat?.key || (data.type_projet ? "autre" : "");
+
+    // Reconstruit les forces à partir du texte joint "A, B, C"
+    const forcesFromDb = (data.type_profil || "").split(",").map((s: string) => s.trim()).filter(Boolean)
+      .filter((s: string) => FORCES.some(f => f.label === s));
+
+    // Reconstruit l'état du projet à partir du libellé
+    const etatKey = ETATS.find(e => e.label === data.avancement)?.key || "";
+
+    // Répartit "cherche" entre besoins communs et besoins spécifiques
+    const chercheArr: string[] = data.cherche || [];
+    const specifiquesPossibles = typeProjetKey ? (BESOINS_SPECIFIQUES[typeProjetKey] || []) : [];
+    const besoinsCommuns = chercheArr.filter(c => BESOINS_COMMUNS.includes(c));
+    const besoinsSpecifiques = chercheArr.filter(c => specifiquesPossibles.includes(c));
+
+    // Sépare la structure dynamique des 2 champs "manque"
+    const techData: Record<string, string[]> = data.tech || {};
+    const structureManque = techData["_manque_methode"]?.[0] || "";
+    const outilManque = techData["_manque_outil"]?.[0] || "";
+    const { _manque_methode, _manque_outil, ...structurePure } = techData;
+
     setForm({
       nom_projet: data.nom_projet || "",
       description: data.description || "",
-      type_projet: data.type_projet || "",
-      type_profil: data.type_profil || "",
-      idee: data.idee || "",
-      avancement: data.avancement || "",
-      produit: data.produit || "",
-      utilisateurs: data.utilisateurs || "",
-      revenus: data.revenus || "",
-      objectif_court: data.objectif_court || "",
-      objectif_moyen: data.objectif_moyen || "",
-      objectif_long: data.objectif_long || "",
-      cherche: data.cherche || [],
-      temps: data.temps || "",
-      distance: data.distance || "",
-      engagement: data.engagement || "",
-      tech: data.tech || { backend:[], frontend:[], paiement:[], ia:[], infra:[], automatisation:[] },
-      nom_complet: data.nom_complet || "",
+      type_projet: typeProjetKey,
+      type_projet_autre: typeProjetKey === "autre" ? (data.type_projet || "") : "",
       pays: data.pays || "",
       langue: data.langue || "",
       photo_url: data.photo_urls?.[0] || "",
-      contacts_visibles: data.contacts_visibles || ["Email"],
-      email: data.email_prive || "",
-      discord: data.discord_prive || "",
-      github: data.github_prive || "",
-      linkedin: data.linkedin_prive || "",
-      site_web: data.site_web_prive || "",
-      telephone: data.telephone_prive || "",
-      // Pas utilisés en mode édition (étape 7 est sautée), mais requis par le type FormData
+      etat_projet: etatKey,
+      objectif_court: data.objectif_court || "",
+      objectif_moyen: data.objectif_moyen || "",
+      objectif_long: data.objectif_long || "",
+      besoins: besoinsCommuns,
+      besoins_specifiques: besoinsSpecifiques,
+      temps: data.temps || "",
+      collaboration_type: data.distance || "",
+      forces: forcesFromDb,
+      structure: structurePure,
+      structure_manque: structureManque,
+      outil_manque: outilManque,
       pub_fiche: true, pub_talk: false, pub_audit: false,
       audit_url: "", audit_images: [],
     });
@@ -530,8 +713,7 @@ function InscriptionPageInner() {
     if (editId && userId) chargerFiche(editId);
   }, [searchParams, userId]);
 
-  const set     = (key: keyof FormData, value: any) => setForm(f => ({ ...f, [key]: value }));
-  const setTech = (cat: string, vals: string[])     => setForm(f => ({ ...f, tech: { ...f.tech, [cat]: vals } }));
+  const set = (key: keyof FormData, value: any) => setForm(f => ({ ...f, [key]: value }));
 
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -586,6 +768,32 @@ function InscriptionPageInner() {
   // ── SUBMIT ────────────────────────────────────────────────────────────────
   const [published, setPublished] = useState<{ fiche: boolean; talk: boolean; audit: boolean }>({ fiche: false, talk: false, audit: false });
 
+  // Convertit les nouveaux champs de la spec vers les colonnes DB existantes
+  // (réutilisation pragmatique — pas de migration SQL aujourd'hui, voir notes)
+  const buildFichePayload = () => {
+    const type_projet_final = form.type_projet === "autre"
+      ? (form.type_projet_autre.trim() || "Autre")
+      : (CATEGORIES.find(c => c.key === form.type_projet)?.label || form.type_projet);
+
+    const structureAvecManques: Record<string, string[]> = { ...form.structure };
+    if (form.structure_manque.trim()) structureAvecManques["_manque_methode"] = [form.structure_manque.trim()];
+    if (form.outil_manque.trim()) structureAvecManques["_manque_outil"] = [form.outil_manque.trim()];
+
+    return {
+      nom_projet: form.nom_projet, description: form.description,
+      type_projet: type_projet_final,
+      type_profil: form.forces.join(", "),
+      avancement: ETATS.find(e => e.key === form.etat_projet)?.label || "",
+      cherche: [...form.besoins, ...form.besoins_specifiques],
+      temps: form.temps,
+      distance: form.collaboration_type,
+      tech: structureAvecManques,
+      pays: form.pays, langue: form.langue,
+      photo_urls: form.photo_url ? [form.photo_url] : [],
+      objectif_court: form.objectif_court, objectif_moyen: form.objectif_moyen, objectif_long: form.objectif_long,
+    };
+  };
+
   const handleSubmit = async () => {
     setError(null);
 
@@ -622,14 +830,7 @@ function InscriptionPageInner() {
       // ── ÉDITION D'UNE FICHE EXISTANTE — traite aussi Talk/Audit si cochés ──
       if (ficheActive) {
         const { error: updateError } = await supabase.from("fiches").update({
-          nom_projet: form.nom_projet, description: form.description,
-          type_projet: form.type_projet, type_profil: form.type_profil,
-          idee: form.idee, avancement: form.avancement, produit: form.produit,
-          utilisateurs: form.utilisateurs, revenus: form.revenus,
-          objectif_court: form.objectif_court, objectif_moyen: form.objectif_moyen, objectif_long: form.objectif_long,
-          cherche: form.cherche, temps: form.temps, distance: form.distance, engagement: form.engagement,
-          tech: form.tech, nom_complet: form.nom_complet, pays: form.pays, langue: form.langue,
-          photo_urls: form.photo_url ? [form.photo_url] : null,
+          ...buildFichePayload(),
           // Coordonnées volontairement omises — plus de section Contacts dans le
           // formulaire, donc on ne touche jamais aux valeurs déjà en base pour
           // ne pas les écraser silencieusement avec des champs vides.
@@ -693,15 +894,7 @@ function InscriptionPageInner() {
         const { data: insertedFiche, error: insertError } = await supabase.from("fiches").insert({
           key: generatedKey, user_id: currentUserId,
           creator_email: userEmail,
-          nom_projet: form.nom_projet, description: form.description,
-          type_projet: form.type_projet, type_profil: form.type_profil,
-          idee: form.idee, avancement: form.avancement, produit: form.produit,
-          utilisateurs: form.utilisateurs, revenus: form.revenus,
-          objectif_court: form.objectif_court, objectif_moyen: form.objectif_moyen, objectif_long: form.objectif_long,
-          cherche: form.cherche, temps: form.temps, distance: form.distance, engagement: form.engagement,
-          tech: form.tech,
-          nom_complet: form.nom_complet, pays: form.pays, langue: form.langue,
-          photo_urls: form.photo_url ? [form.photo_url] : [],
+          ...buildFichePayload(),
           contacts_visibles: [],
           email_prive: null, discord_prive: null,
           github_prive: null, linkedin_prive: null,
@@ -1045,96 +1238,31 @@ function InscriptionPageInner() {
           {step === 1 && <>
             <Field label={t("nom_projet",lang)} value={form.nom_projet} onChange={v => set("nom_projet",v)} placeholder="Ex: EcoAI, NutriTrack..." />
             <Field label={t("description",lang)} value={form.description} onChange={v => set("description",v)} placeholder={t("desc_hint",lang)} multiline />
+
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("type_projet",lang)}</label>
-              <div className="flex flex-wrap gap-2">
-                {t("types_projet",lang).map((tp: string) => (
-                  <button key={tp} type="button" onClick={() => set("type_projet",tp)}
-                    className={`px-3 py-2 rounded-xl text-sm border transition-all ${form.type_projet===tp ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-medium" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"}`}>
-                    {tp}
-                  </button>
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Quel est le projet principal que tu veux faire avancer ?" : "What's the main project you want to move forward?"}</label>
+              <div className="flex flex-col gap-2">
+                {CATEGORIES.map(cat => (
+                  <div key={cat.key} onClick={() => set("type_projet", cat.key)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer border transition-all select-none ${form.type_projet===cat.key ? "border-zinc-900 dark:border-white bg-zinc-50 dark:bg-zinc-800" : "border-zinc-100 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
+                    <div className={`w-4 h-4 rounded-full border-2 shrink-0 transition-all ${form.type_projet===cat.key ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white" : "border-zinc-300 dark:border-zinc-600"}`}/>
+                    <span className="text-lg">{cat.emoji}</span>
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">{cat.label}</span>
+                  </div>
                 ))}
               </div>
+              {form.type_projet === "autre" && (
+                <Field label={lang==="fr" ? "Décrivez votre projet" : "Describe your project"} value={form.type_projet_autre} onChange={v => set("type_projet_autre",v)} multiline />
+              )}
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("type_profil",lang)}</label>
-              <Radio options={t("profil_options",lang)} value={form.type_profil} onChange={v => set("type_profil",v)} />
-            </div>
-          </>}
 
-          {/* ÉTAPE 2 */}
-          {step === 2 && <>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("idee_label",lang)}</label>
-              <Radio options={t("idee_options",lang)} value={form.idee} onChange={v => set("idee",v)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("avanc_label",lang)}</label>
-              <Radio options={t("avancement_options",lang)} value={form.avancement} onChange={v => set("avancement",v)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("produit_label",lang)}</label>
-              <Radio options={t("produit_options",lang)} value={form.produit} onChange={v => set("produit",v)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("users_label",lang)}</label>
-              <Radio options={t("utilisateurs_options",lang)} value={form.utilisateurs} onChange={v => set("utilisateurs",v)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("revenus_label",lang)}</label>
-              <Radio options={t("revenus_options",lang)} value={form.revenus} onChange={v => set("revenus",v)} />
-            </div>
-          </>}
-
-          {/* ÉTAPE 3 */}
-          {step === 3 && <>
-            <Field label={t("court_label",lang)} value={form.objectif_court} onChange={v => set("objectif_court",v)} placeholder={t("court_hint",lang)} multiline />
-            <Field label={t("moyen_label",lang)} value={form.objectif_moyen} onChange={v => set("objectif_moyen",v)} placeholder="" multiline />
-            <Field label={t("long_label",lang)}  value={form.objectif_long}  onChange={v => set("objectif_long",v)}  placeholder="" multiline />
-          </>}
-
-          {/* ÉTAPE 4 */}
-          {step === 4 && <>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("cherche_label",lang)}</label>
-              <MultiCheck options={t("cherche_options",lang)} values={form.cherche} onChange={v => set("cherche",v)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("temps_label",lang)}</label>
-              <Radio options={t("temps_options",lang)} value={form.temps} onChange={v => set("temps",v)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("distance_label",lang)}</label>
-              <Radio options={t("distance_options",lang)} value={form.distance} onChange={v => set("distance",v)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("engagement_label",lang)}</label>
-              <Radio options={t("engagement_options",lang)} value={form.engagement} onChange={v => set("engagement",v)} />
-            </div>
-          </>}
-
-          {/* ÉTAPE 5 */}
-          {step === 5 && <>
-            {Object.entries(TECH).map(([cat, opts]) => (
-              <div key={cat} className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{(t("tech_labels",lang) as any)[cat] || cat}</label>
-                <MultiCheck options={opts} values={form.tech[cat]||[]} onChange={v => setTech(cat,v)} />
-              </div>
-            ))}
-          </>}
-
-          {/* ÉTAPE 6 */}
-          {step === 6 && <>
-            <Field label={t("nom_complet_label",lang)} value={form.nom_complet} onChange={v => set("nom_complet",v)} />
-            <Field label={t("pays_label",lang)}        value={form.pays}        onChange={v => set("pays",v)}        />
-            <Field label={t("langue_label",lang)}      value={form.langue}      onChange={v => set("langue",v)}      />
+            <Field label={t("pays_label",lang)}   value={form.pays}   onChange={v => set("pays",v)}   />
+            <Field label={t("langue_label",lang)} value={form.langue} onChange={v => set("langue",v)} />
 
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t("photo_label",lang)}</label>
               <p className="text-xs text-zinc-400">{t("photo_hint",lang)}</p>
-
               <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-
               {form.photo_url ? (
                 <div className="relative w-full h-44 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
                   <img src={form.photo_url} alt="preview" className="w-full h-full object-cover"/>
@@ -1144,8 +1272,7 @@ function InscriptionPageInner() {
                   </button>
                 </div>
               ) : (
-                <button type="button" onClick={() => photoInputRef.current?.click()}
-                  disabled={uploading}
+                <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading}
                   className="w-full h-44 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
                   {uploading ? (
                     <span className="text-sm">Chargement...</span>
@@ -1159,6 +1286,74 @@ function InscriptionPageInner() {
                 </button>
               )}
             </div>
+          </>}
+
+          {/* ÉTAPE 2 — État du projet (choix unique) */}
+          {step === 2 && <>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Où en est ton projet ?" : "Where's your project at?"}</label>
+              <Radio options={ETATS.map(e => e.label)} value={ETATS.find(e => e.key===form.etat_projet)?.label || ""}
+                onChange={v => set("etat_projet", ETATS.find(e => e.label===v)?.key || "")} />
+            </div>
+          </>}
+
+          {/* ÉTAPE 3 */}
+          {step === 3 && <>
+            <Field label={t("court_label",lang)} value={form.objectif_court} onChange={v => set("objectif_court",v)} placeholder={t("court_hint",lang)} multiline />
+            <Field label={t("moyen_label",lang)} value={form.objectif_moyen} onChange={v => set("objectif_moyen",v)} placeholder="" multiline />
+            <Field label={t("long_label",lang)}  value={form.objectif_long}  onChange={v => set("objectif_long",v)}  placeholder="" multiline />
+          </>}
+
+          {/* ÉTAPE 4 — Besoins & collaboration */}
+          {step === 4 && <>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "De quoi ton projet a-t-il le plus besoin ?" : "What does your project need the most?"}</label>
+              <MultiCheck options={BESOINS_COMMUNS} values={form.besoins} onChange={v => set("besoins",v)} />
+            </div>
+
+            {form.type_projet && BESOINS_SPECIFIQUES[form.type_projet]?.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Besoins spécifiques à ton type de projet" : "Needs specific to your project type"}</label>
+                <MultiCheck options={BESOINS_SPECIFIQUES[form.type_projet]} values={form.besoins_specifiques} onChange={v => set("besoins_specifiques",v)} />
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Combien de temps y consacres-tu ?" : "How much time do you spend on it?"}</label>
+              <Radio options={TEMPS_OPTIONS} value={form.temps} onChange={v => set("temps",v)} />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Type de collaboration souhaité" : "Type of collaboration wanted"}</label>
+              <Radio options={COLLAB_TYPE_OPTIONS} value={form.collaboration_type} onChange={v => set("collaboration_type",v)} />
+            </div>
+          </>}
+
+          {/* ÉTAPE 5 — Forces (choix multiple) */}
+          {step === 5 && <>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{lang==="fr" ? "Quelles sont tes forces sur ce projet ?" : "What are your strengths on this project?"}</label>
+              <p className="text-xs text-zinc-400 mb-1">{lang==="fr" ? "Tu peux choisir plusieurs réponses" : "You can pick several answers"}</p>
+              <CheckboxCard options={FORCES.map(f => ({ label:f.label, desc:f.desc }))} values={form.forces} onChange={v => set("forces",v)} />
+            </div>
+          </>}
+
+          {/* ÉTAPE 6 — Structure du projet (dynamique par catégorie) */}
+          {step === 6 && <>
+            {form.type_projet && STRUCTURE_BLOCKS[form.type_projet]?.length > 0 ? (
+              STRUCTURE_BLOCKS[form.type_projet].map(block => (
+                <div key={block.question} className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{block.question}</label>
+                  <CheckboxCard options={block.options} values={form.structure[block.question] || []}
+                    onChange={v => set("structure", { ...form.structure, [block.question]: v })} />
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-zinc-400">{lang==="fr" ? "Pas de structure spécifique pour ce type de projet — utilise les champs ci-dessous pour décrire ton projet et tes outils." : "No specific structure for this project type — use the fields below to describe your project and your tools."}</p>
+            )}
+
+            <Field label={lang==="fr" ? "💡 Quelque chose que j'aimerais ajouter à la fiche de mon projet ?" : "💡 Something I'd like to add to my project's listing?"} value={form.structure_manque} onChange={v => set("structure_manque",v)} multiline />
+            <Field label={lang==="fr" ? "🛠️ Un outil que j'utilise et que j'aimerais ajouter ici ?" : "🛠️ A tool I use that I'd like to add here?"} value={form.outil_manque} onChange={v => set("outil_manque",v)} multiline />
           </>}
 
           {/* ÉTAPE 7 — Où publier ? */}
