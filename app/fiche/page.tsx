@@ -386,24 +386,17 @@ export default function FichePage() {
 
   // ── SUPPRESSION ───────────────────────────────────────────────────────────
   const [deleteModalId, setDeleteModalId] = useState<string | null>(null);
-  const [deleteKey, setDeleteKey] = useState("");
-  const [deleteEmail, setDeleteEmail] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const confirmDeleteFiche = async () => {
-    if (!deleteModalId) return;
+    if (!deleteModalId || !userId) return;
     setDeleteError(null); setDeleting(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const res = await fetch(`${API_URL}/1/supprimer-fiche`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: deleteEmail.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setDeleteError(data.error || (lang === "fr" ? "Erreur lors de la suppression." : "Error during deletion.")); return; }
+      const { error } = await supabase.from("fiches").delete().eq("id", deleteModalId).eq("user_id", userId);
+      if (error) { setDeleteError(lang === "fr" ? "Erreur lors de la suppression." : "Error during deletion."); return; }
       setFiches(prev => prev.filter(f => f.id !== deleteModalId));
-      setDeleteModalId(null); setDeleteEmail("");
+      setDeleteModalId(null);
     } catch { setDeleteError(lang === "fr" ? "Erreur réseau." : "Network error."); }
     finally { setDeleting(false); }
   };
@@ -778,15 +771,13 @@ export default function FichePage() {
 
       {deleteModalId && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDeleteModalId(null)}>
-          <div className="bg-white dark:bg-zinc-900 border border-cyan-400/50 dark:border-cyan-500/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-zinc-900 border border-red-400/50 dark:border-red-500/40 rounded-2xl p-6 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-zinc-900 dark:text-zinc-100 mb-1">{lang === "fr" ? "Supprimer ma fiche" : "Delete my listing"}</h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">{lang === "fr" ? "Entre ton courriel pour confirmer que cette fiche t'appartient." : "Enter your email to confirm this listing is yours."}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">{lang === "fr" ? "Cette action est définitive et ne peut pas être annulée." : "This action is permanent and cannot be undone."}</p>
             {deleteError && <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-600 dark:text-red-400">{deleteError}</div>}
-            <input type="email" value={deleteEmail} onChange={e => setDeleteEmail(e.target.value)} placeholder="toi@exemple.com"
-              className="w-full mb-5 bg-zinc-50 dark:bg-zinc-800 border border-cyan-400/50 dark:border-cyan-500/40 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-cyan-400" />
             <div className="flex gap-2">
               <button onClick={() => setDeleteModalId(null)} className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400">{lang === "fr" ? "Annuler" : "Cancel"}</button>
-              <button onClick={confirmDeleteFiche} disabled={deleting || !deleteEmail.trim()} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 text-white text-sm font-semibold disabled:opacity-50">
+              <button onClick={confirmDeleteFiche} disabled={deleting} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 text-white text-sm font-semibold disabled:opacity-50">
                 {deleting ? "…" : (lang === "fr" ? "Supprimer" : "Delete")}
               </button>
             </div>

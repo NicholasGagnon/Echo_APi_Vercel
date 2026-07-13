@@ -29,8 +29,8 @@ const GoogleLogo = () => (
 // ── DICTIONNAIRE ───────────────────────────────────────────────────────────
 const D = {
   nav: {
-    fr: { home:"Accueil", conv:"Conversation", fiches:"Fiches", inscription:"Inscription" },
-    en: { home:"Home",    conv:"Conversation", fiches:"Listings", inscription:"Register"  },
+    fr: { home:"Accueil", conv:"AI Chat", fiches:"Fiches", inscription:"Inscription" },
+    en: { home:"Home",    conv:"AI Chat", fiches:"Listings", inscription:"Register"  },
   },
   titre:    { fr:"Créer ma fiche",   en:"Create my listing"   },
   suivant:  { fr:"Suivant",          en:"Next"                 },
@@ -1242,7 +1242,7 @@ function InscriptionPageInner() {
           <div className="flex items-center gap-5 text-sm flex-wrap">
             <Link href="/"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
             <Link href="/dashboard"     className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Tous les outils" : "All tools"}</Link>
-            <Link href="/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">Conversation</Link>
+            <Link href="/conversation"  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">AI Chat</Link>
             <Link href="/form"          className="text-zinc-900 dark:text-white font-semibold">{lang === "fr" ? "Créer un projet" : "Create project"}</Link>
             <Link href="/fiche"         className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Explorer les projets" : "Explore projects"}</Link>
             <Link href="/talk"          className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors">{lang === "fr" ? "Avis de la communauté" : "Community feedback"}</Link>

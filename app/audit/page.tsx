@@ -253,7 +253,7 @@ export default function AuditPage() {
           <Link href="/" className="font-mono font-black text-sm tracking-[0.3em] text-white uppercase">
             ECHO<span className="text-cyan-500">.CORE</span>
           </Link>
-          <div className="flex items-center gap-5 text-xs font-mono flex-wrap">
+          <div className="flex items-center gap-5 text-sm font-mono flex-wrap">
             <Link href="/" className="text-zinc-500 hover:text-zinc-300 transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
             <Link href="/dashboard" className="text-zinc-500 hover:text-zinc-300 transition-colors">{lang === "fr" ? "Tous les outils" : "All tools"}</Link>
             <Link href="/conversation" className="text-zinc-500 hover:text-zinc-300 transition-colors">AI Chat</Link>

@@ -384,7 +384,7 @@ export default function IdeaPage() {
         {/* ZONE 1 — logo + onglets */}
         <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", padding:"8px 0" }}>
           <a href="/" style={{ fontWeight:800, fontSize:14, color:txt, textDecoration:"none" }}>Echo AI</a>
-          <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:12, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:14, flexWrap:"wrap" }}>
             <a href="/" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Accueil":"Home"}</a>
             <a href="/dashboard" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Tous les outils":"All tools"}</a>
             <a href="/conversation" style={{ color:muted, textDecoration:"none" }}>AI Chat</a>
