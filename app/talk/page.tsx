@@ -285,10 +285,13 @@ export default function TalkPage() {
 
     if (actionType === "delete") {
       if (confirm(lang === "fr" ? "Confirmer la suppression ?" : "Confirm deletion?")) {
-        if (isComment) {
-          await supabase.from("talk_comments").delete().eq("id", targetId);
-        } else {
-          await supabase.from("talk_posts").delete().eq("id", targetId);
+        const { error } = isComment
+          ? await supabase.from("talk_comments").delete().eq("id", targetId)
+          : await supabase.from("talk_posts").delete().eq("id", targetId);
+        if (error) {
+          console.error("[Suppression]", error);
+          alert(lang === "fr" ? `Échec de la suppression : ${error.message}` : `Deletion failed: ${error.message}`);
+          return;
         }
         await fetchFeed();
       }
