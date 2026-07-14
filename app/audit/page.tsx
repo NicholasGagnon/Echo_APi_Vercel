@@ -216,8 +216,14 @@ export default function AuditPage() {
     if (userRole !== "admin" && userRole !== "moderator") return;
     if (actionType === "delete") {
       if (confirm(lang === "fr" ? "Purger définitivement ?" : "Purge permanently?")) {
-        if (isComment) await supabase.from("audit_comments").delete().eq("id", targetId);
-        else await supabase.from("audit_posts").delete().eq("id", targetId);
+        const { error } = isComment
+          ? await supabase.from("audit_comments").delete().eq("id", targetId)
+          : await supabase.from("audit_posts").delete().eq("id", targetId);
+        if (error) {
+          console.error("[Suppression]", error);
+          alert(lang === "fr" ? `Échec de la suppression : ${error.message}` : `Deletion failed: ${error.message}`);
+          return;
+        }
         await fetchFeed();
       }
       return;
@@ -258,8 +264,8 @@ export default function AuditPage() {
       <nav className="border-b border-zinc-800 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between gap-4">
         {/* ZONE 1 — logo + onglets */}
         <div className="flex items-center gap-5 flex-wrap">
-          <Link href="/" className="font-mono font-black text-sm tracking-[0.3em] text-white uppercase">
-            ECHO<span className="text-cyan-500">.CORE</span>
+          <Link href="/" className="font-bold text-sm text-white">
+            Echo AI
           </Link>
           <div className="flex items-center gap-5 text-sm font-mono flex-wrap">
             <Link href="/" className="text-zinc-500 hover:text-zinc-300 transition-colors">{lang === "fr" ? "Accueil" : "Home"}</Link>
@@ -446,11 +452,27 @@ export default function AuditPage() {
                       </div>
                     ) : (
                       <>
-                        <a href={post.url} target="_blank" rel="noopener noreferrer"
-                          className="text-2xl md:text-3xl font-black text-white hover:text-cyan-400 transition-colors break-all tracking-tight block group">
-                          <span className="text-cyan-500 inline-block transition-transform group-hover:translate-x-1 mr-1">🔗</span>
-                          {post.url.replace(/^https?:\/\//i, "")}
-                        </a>
+                        {(() => {
+                          const ext = post.url.split(".").pop()?.toLowerCase().split("?")[0] || "";
+                          const isFile = ["pdf","epub","docx"].includes(ext);
+                          const fileLabel =
+                            ext === "pdf" ? (lang === "fr" ? "📖 Lire le livre" : "📖 Read the book") :
+                            ext === "epub" ? (lang === "fr" ? "📕 Télécharger le livre (EPUB)" : "📕 Download the book (EPUB)") :
+                            (lang === "fr" ? "📝 Voir le document" : "📝 View the document");
+                          return (
+                            <a href={post.url} target="_blank" rel="noopener noreferrer"
+                              className={`${isFile ? "text-sm" : "text-base"} font-semibold text-white hover:text-cyan-400 transition-colors break-all tracking-tight block group`}>
+                              {isFile ? (
+                                <span>{fileLabel}</span>
+                              ) : (
+                                <>
+                                  <span className="text-cyan-500 inline-block transition-transform group-hover:translate-x-1 mr-1">🔗</span>
+                                  {post.url.replace(/^https?:\/\//i, "")}
+                                </>
+                              )}
+                            </a>
+                          );
+                        })()}
 
                         {post.description && (
                           <p className="text-zinc-300 font-sans text-sm mt-4 leading-relaxed border-l-2 border-cyan-500/50 pl-4 bg-zinc-800/10 py-2 rounded-r-xl">
@@ -458,9 +480,9 @@ export default function AuditPage() {
                           </p>
                         )}
 
-                        {post.links && post.links.length > 0 && (
+                        {post.links && post.links.filter(l => l.url !== post.url).length > 0 && (
                           <div className="flex flex-col gap-2 mt-4">
-                            {post.links.map((l, i) => {
+                            {post.links.filter(l => l.url !== post.url).map((l, i) => {
                               const meta: Record<string, { emoji: string; fr: string; en: string }> = {
                                 livre:     { emoji: "📖", fr: "Voici le livre que la personne a partagé", en: "Here's the book they shared" },
                                 formation: { emoji: "🎓", fr: "Voici la formation partagée", en: "Here's the course they shared" },

@@ -30,6 +30,7 @@ const RESSENTI = [
   { key: "lost",     emoji: "🤔", text: "Je suis intrigué mais perdu." },
   { key: "spark",    emoji: "🧪", text: "Il y a quelque chose ici, continue de creuser" },
   { key: "big",      emoji: "🧨", text: "Cette idée pourrait devenir grosse" },
+  { key: "numb",     emoji: "💤", text: "Je ne ressens rien." },
 ];
 
 const EXPLICATIONS = [
@@ -39,7 +40,6 @@ const EXPLICATIONS = [
   { key: "clone",    emoji: "🥸", text: "Ça sent le clone" },
   { key: "exist",    emoji: "🧠", text: "Je comprends le projet, mais pas pourquoi il existe." },
   { key: "no_pay",   emoji: "💰", text: "Je l'utiliserais, mais je ne paierais jamais pour ça." },
-  { key: "numb",     emoji: "💤", text: "Je ne ressens rien." },
 ];
 
 const CRITIQUES = [...RESSENTI, ...EXPLICATIONS]; // gardé pour totalVotes / lookup pratique
@@ -549,7 +549,7 @@ export default function TalkPage() {
             const confidence = totalParticipants >= 100 ? "high" : totalParticipants >= 10 ? "medium" : "low";
 
             return (
-              <div key={post.id} className="bg-white dark:bg-zinc-950 border border-cyan-500/20 dark:border-cyan-500/10 rounded-xl overflow-hidden flex flex-col shadow-sm">
+              <div key={post.id} className="bg-white dark:bg-zinc-900 border border-cyan-500/20 dark:border-cyan-500/20 rounded-xl overflow-hidden flex flex-col shadow-sm">
 
                 <div className="p-4 border-b border-zinc-100 dark:border-zinc-900 bg-zinc-50/60 dark:bg-zinc-900/10 flex justify-between items-start relative">
                   <div className="flex-1 mr-4">
@@ -585,7 +585,7 @@ export default function TalkPage() {
                 </div>
 
                 {/* Indice de confiance — évite qu'un tout petit nombre de votes soit pris pour une vraie tendance */}
-                <div className="px-4 pt-3 pb-1 bg-white dark:bg-zinc-950 flex items-center gap-1.5">
+                <div className="px-4 pt-3 pb-1 bg-white dark:bg-zinc-900 flex items-center gap-1.5">
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                     confidence === "high" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                     : confidence === "medium" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
@@ -597,12 +597,9 @@ export default function TalkPage() {
                 </div>
 
                 {/* RÉACTIONS — 2 colonnes avec un rôle distinct chacune */}
-                <div className="p-4 border-b border-zinc-100 dark:border-zinc-900 bg-white dark:bg-zinc-950">
+                <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 mb-1">
-                        {lang === "fr" ? "Ce que les gens ressentent" : "What people feel"}
-                      </p>
                       {RESSENTI.map(crit => {
                         const voters = post.votes[crit.key] || [];
                         const count = voters.length;
@@ -610,12 +607,12 @@ export default function TalkPage() {
                         const ratio = Math.round((count / (totalParticipants || 1)) * 100);
                         return (
                           <button key={crit.key} onClick={() => handleVote(post.id, crit.key)}
-                            className={`w-full h-8 rounded-lg relative overflow-hidden text-left border transition-all ${hasVoted ? "border-cyan-500/40 bg-cyan-500/[0.04]" : "border-zinc-100 dark:border-zinc-900/40 bg-zinc-50/50 dark:bg-zinc-900/5 hover:border-zinc-300 dark:hover:border-zinc-800"}`}>
-                            <div className={`absolute left-0 top-0 bottom-0 ${hasVoted ? "bg-cyan-500/10" : "bg-zinc-200/40 dark:bg-zinc-900/20"}`} style={{ width: `${count > 0 ? ratio : 0}%` }} />
+                            className={`w-full h-8 rounded-lg relative overflow-hidden text-left border transition-all ${hasVoted ? "border-cyan-500/40 bg-cyan-500/[0.04]" : "border-zinc-200 dark:border-zinc-700/70 bg-zinc-50 dark:bg-zinc-800/50 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
+                            <div className={`absolute left-0 top-0 bottom-0 ${hasVoted ? "bg-cyan-500/10" : "bg-zinc-200/40 dark:bg-zinc-700/30"}`} style={{ width: `${count > 0 ? ratio : 0}%` }} />
                             <div className="absolute inset-0 flex items-center justify-between px-3 text-[11px]">
                               <div className="flex items-center gap-2 truncate">
                                 <span className="text-xs shrink-0">{crit.emoji}</span>
-                                <span className="truncate text-zinc-600 dark:text-zinc-400">{crit.text}</span>
+                                <span className="truncate text-zinc-700 dark:text-zinc-200">{crit.text}</span>
                               </div>
                               <span className="font-mono text-[10px] font-bold text-cyan-600 dark:text-cyan-400 shrink-0">{count === 0 ? "—" : showPercent ? `${ratio}%` : `${count} ${lang === "fr" ? (count > 1 ? "pers." : "pers.") : "ppl"}`}</span>
                             </div>
@@ -625,9 +622,6 @@ export default function TalkPage() {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-1">
-                        {lang === "fr" ? "Ce qu'ils expliquent" : "What they explain"}
-                      </p>
                       {EXPLICATIONS.map(crit => {
                         const voters = post.votes[crit.key] || [];
                         const count = voters.length;
@@ -635,12 +629,12 @@ export default function TalkPage() {
                         const ratio = Math.round((count / (totalParticipants || 1)) * 100);
                         return (
                           <button key={crit.key} onClick={() => handleVote(post.id, crit.key)}
-                            className={`w-full h-8 rounded-lg relative overflow-hidden text-left border transition-all ${hasVoted ? "border-amber-500/40 bg-amber-500/[0.04]" : "border-zinc-100 dark:border-zinc-900/40 bg-zinc-50/50 dark:bg-zinc-900/5 hover:border-zinc-300 dark:hover:border-zinc-800"}`}>
-                            <div className={`absolute left-0 top-0 bottom-0 ${hasVoted ? "bg-amber-500/10" : "bg-zinc-200/40 dark:bg-zinc-900/20"}`} style={{ width: `${count > 0 ? ratio : 0}%` }} />
+                            className={`w-full h-8 rounded-lg relative overflow-hidden text-left border transition-all ${hasVoted ? "border-amber-500/40 bg-amber-500/[0.04]" : "border-zinc-200 dark:border-zinc-700/70 bg-zinc-50 dark:bg-zinc-800/50 hover:border-zinc-300 dark:hover:border-zinc-600"}`}>
+                            <div className={`absolute left-0 top-0 bottom-0 ${hasVoted ? "bg-amber-500/10" : "bg-zinc-200/40 dark:bg-zinc-700/30"}`} style={{ width: `${count > 0 ? ratio : 0}%` }} />
                             <div className="absolute inset-0 flex items-center justify-between px-3 text-[11px]">
                               <div className="flex items-center gap-2 truncate">
                                 <span className="text-xs shrink-0">{crit.emoji}</span>
-                                <span className="truncate text-zinc-600 dark:text-zinc-400">{crit.text}</span>
+                                <span className="truncate text-zinc-700 dark:text-zinc-200">{crit.text}</span>
                               </div>
                               <span className="font-mono text-[10px] font-bold text-amber-600 dark:text-amber-500 shrink-0">{count === 0 ? "—" : showPercent ? `${ratio}%` : `${count} ${lang === "fr" ? (count > 1 ? "pers." : "pers.") : "ppl"}`}</span>
                             </div>
@@ -652,7 +646,7 @@ export default function TalkPage() {
                 </div>
 
                 {/* CONSEILS — chat actif */}
-                <div className="bg-white dark:bg-zinc-950 p-4 flex flex-col gap-2.5">
+                <div className="bg-white dark:bg-zinc-900 p-4 flex flex-col gap-2.5">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-600">
                     {lang === "fr" ? "Conseils" : "Advice"}
                   </p>

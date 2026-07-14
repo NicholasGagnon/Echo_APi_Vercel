@@ -149,8 +149,8 @@ const D = {
   email_missing:      { fr:"Un courriel est obligatoire pour créer une fiche.", en:"An email is required to create a listing." },
 
   confirme_titre: { fr:"Ta fiche est en ligne ! 🎉", en:"Your listing is live! 🎉"             },
-  confirme_texte: { fr:"Ta clé personnelle est :",   en:"Your personal key is:"                 },
-  confirme_note:  { fr:"Garde-la précieusement — elle t'identifie sur la plateforme.", en:"Keep it safe — it identifies you on the platform." },
+  confirme_texte: { fr:"Ta fiche est maintenant visible par la communauté.",   en:"Your listing is now visible to the community."                 },
+  confirme_note:  { fr:"", en:"" },
   voir_fiches:    { fr:"Voir les fiches",            en:"See listings"                          },
 
   auth_required_title: { fr:"Connexion requise", en:"Login required" },
@@ -522,16 +522,18 @@ function CheckboxCard({ options, values, onChange, tr }: { options: { label: str
   );
 }
 
-function Field({ label, value, onChange, placeholder, multiline, type="text" }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean; type?: string }) {
+function Field({ label, value, onChange, placeholder, multiline, type="text", large }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; multiline?: boolean; type?: string; large?: boolean }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</label>
+      <label className={large ? "text-base font-bold text-zinc-900 dark:text-white" : "text-sm font-medium text-zinc-700 dark:text-zinc-300"}>{label}</label>
       {multiline ? (
         <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={3}
           className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-500 resize-none transition-colors"/>
       ) : (
         <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-500 transition-colors"/>
+          className={large
+            ? "bg-white dark:bg-zinc-900 border-2 border-zinc-300 dark:border-zinc-600 rounded-xl px-4 py-3.5 text-lg font-semibold text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-cyan-500 transition-colors"
+            : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-500 transition-colors"}/>
       )}
     </div>
   );
@@ -869,10 +871,12 @@ function InscriptionPageInner() {
 
   // Upload multi-images pour Audit — s'ajoute au tableau au lieu de remplacer
   const [uploadingAudit, setUploadingAudit] = useState(false);
+  const AUDIT_IMAGES_MAX = 3;
   const handleAuditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    if (form.audit_images.length >= AUDIT_IMAGES_MAX) return;
     setUploadingAudit(true);
     try {
       const ext      = file.name.split(".").pop();
@@ -1053,15 +1057,16 @@ function InscriptionPageInner() {
 
       // ── NOUVELLE PUBLICATION — branche selon les cases cochées ───────────
       let newFicheId: string | null = null;
-      let generatedKey: string | null = null;
 
       if (form.pub_fiche) {
-        const { data: keyData, error: keyError } = await supabase.rpc("generate_fiche_key");
-        if (keyError) throw keyError;
-        generatedKey = keyData as string;
+        // Le système de clés n'existe plus (fiches gratuites, contact via chat).
+        // On garde une valeur aléatoire ici uniquement au cas où la colonne
+        // `key` serait encore NOT NULL en base — elle n'est jamais affichée
+        // ni utilisée nulle part ailleurs.
+        const throwawayKey = Math.random().toString(36).slice(2, 10).toUpperCase();
 
         const { data: insertedFiche, error: insertError } = await supabase.from("fiches").insert({
-          key: generatedKey, user_id: currentUserId,
+          key: throwawayKey, user_id: currentUserId,
           creator_email: userEmail,
           ...buildFichePayload(),
           contacts_visibles: [],
@@ -1106,7 +1111,7 @@ function InscriptionPageInner() {
       }
 
       setPublished({ fiche: form.pub_fiche, talk: form.pub_talk, audit: auditOk });
-      setMyKey(generatedKey || "PUBLISHED");
+      setMyKey("PUBLISHED");
     } catch (e: any) {
       console.error(e);
       setError(t("erreur", lang));
@@ -1179,13 +1184,6 @@ function InscriptionPageInner() {
             {published.talk  && <p className="text-xs text-zinc-600 dark:text-zinc-400">✓ {t("pubTalkLabel",lang)}</p>}
             {published.audit && <p className="text-xs text-zinc-600 dark:text-zinc-400">✓ {t("pubAuditLabel",lang)}</p>}
           </div>
-        )}
-
-        {myKey !== "UPDATED" && myKey !== "PUBLISHED" && (
-          <>
-            <div className="bg-zinc-900 dark:bg-zinc-800 text-white rounded-2xl px-6 py-4 mb-3 font-mono text-2xl font-bold tracking-wider">{myKey}</div>
-            <p className="text-zinc-400 text-xs mb-8">{t("confirme_note", lang)}</p>
-          </>
         )}
 
         {/* ── CROSSPOST TALK — optionnel, en plus de la fiche (création OU mise à jour) ── */}
@@ -1406,7 +1404,7 @@ function InscriptionPageInner() {
 
           {/* ÉTAPE 1 */}
           {step === 1 && <>
-            <Field label={t("nom_projet",lang)} value={form.nom_projet} onChange={v => set("nom_projet",v)} placeholder="Ex: EcoAI, NutriTrack..." />
+            <Field label={t("nom_projet",lang)} value={form.nom_projet} onChange={v => set("nom_projet",v)} placeholder="Ex: EcoAI, NutriTrack..." large />
             <Field label={t("description",lang)} value={form.description} onChange={v => set("description",v)} placeholder={t("desc_hint",lang)} multiline />
 
             <div className="flex flex-col gap-1.5">
@@ -1618,10 +1616,14 @@ function InscriptionPageInner() {
                   )}
 
                   <input ref={auditImageInputRef} type="file" accept="image/*" onChange={handleAuditImageUpload} className="hidden" />
-                  <button type="button" onClick={() => auditImageInputRef.current?.click()} disabled={uploadingAudit}
-                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
-                    {uploadingAudit ? "…" : t("auditImgAdd",lang)}
-                  </button>
+                  {form.audit_images.length < AUDIT_IMAGES_MAX ? (
+                    <button type="button" onClick={() => auditImageInputRef.current?.click()} disabled={uploadingAudit}
+                      className="w-full py-2.5 rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors">
+                      {uploadingAudit ? "…" : `${t("auditImgAdd",lang)} (${form.audit_images.length}/${AUDIT_IMAGES_MAX})`}
+                    </button>
+                  ) : (
+                    <p className="text-center text-xs text-zinc-400">{lang === "fr" ? `Maximum ${AUDIT_IMAGES_MAX} images atteint.` : `Maximum of ${AUDIT_IMAGES_MAX} images reached.`}</p>
+                  )}
                 </div>
               </div>
             )}

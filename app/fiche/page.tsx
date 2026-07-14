@@ -53,6 +53,17 @@ const TYPE_COLORS: Record<string, string> = {
   "Formation et apprentissage":    "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
 };
 
+// Catégories de filtrage — mêmes libellés que Form, pour matcher fiche.type_projet
+const CATEGORY_FILTERS = [
+  { emoji: "🌐", label: "Application ou site web" },
+  { emoji: "🛒", label: "Boutique en ligne" },
+  { emoji: "✍️", label: "Blog ou site d'articles" },
+  { emoji: "🎥", label: "Vidéos ou podcast" },
+  { emoji: "📖", label: "Livre numérique" },
+  { emoji: "🎓", label: "Formation et apprentissage" },
+  { emoji: "✨", label: "Autre" },
+];
+
 // ────────────────────────────────────────────────────────────────
 // TRADUCTIONS "HUMAINES"
 // ────────────────────────────────────────────────────────────────
@@ -87,6 +98,8 @@ const CONTACT_PATTERN = /[\w.+-]+@[\w-]+\.[a-z]{2,}|(\+?\d[\d\s.-]{8,}\d)/i;
 
 export default function FichePage() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [pseudo, setPseudo] = useState<string>("");
   const [pseudoInput, setPseudoInput] = useState<string>("");
@@ -96,10 +109,14 @@ export default function FichePage() {
       setUserId(uid);
       setUserEmail(email);
       if (uid) {
-        const { data } = await supabase.from("profiles").select("username").eq("id", uid).maybeSingle();
+        const { data } = await supabase.from("profiles").select("username, role").eq("id", uid).maybeSingle();
         if (data?.username) setPseudo(data.username);
+        if (email === "lafailleestouverte@gmail.com" || email === "nicholas@echosai.ca") setUserRole("admin");
+        else if (data?.role) setUserRole(data.role);
+        else setUserRole(null);
       } else {
         setPseudo("");
+        setUserRole(null);
       }
     };
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -121,6 +138,8 @@ export default function FichePage() {
   const [lang, setLang] = useState<"fr" | "en">("fr");
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [fiches, setFiches] = useState<Fiche[]>([]);
+  const [filterCategory, setFilterCategory] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [myInteretIds, setMyInteretIds] = useState<Set<string>>(new Set()); // fiches où j'ai déjà cliqué "Intérêt"
   const [sentNotif, setSentNotif] = useState<string | null>(null);
@@ -202,6 +221,16 @@ export default function FichePage() {
   const getLienPortfolio = (fiche: Fiche) => fiche.tech?.["_lien_portfolio"]?.[0] || "";
   const getCherche = (fiche: Fiche) => (fiche.cherche && fiche.cherche.length > 0 ? fiche.cherche.join(", ") : "");
   const isOwnFiche = (fiche: Fiche) => !!userId && userId === fiche.user_id;
+
+  // Filtre par catégorie + recherche par mot-clé (description ou outils)
+  const visibleFiches = fiches.filter(fiche => {
+    if (filterCategory && fiche.type_projet !== filterCategory) return false;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const inDescription = (fiche.description || "").toLowerCase().includes(q);
+    const inOutils = getOutils(fiche).some(o => o.toLowerCase().includes(q));
+    return inDescription || inOutils;
+  });
 
   const dict = {
     fr: {
@@ -327,6 +356,51 @@ export default function FichePage() {
       return lang === "fr" ? "🤐 Tu es muet temporairement — impossible de commenter." : "🤐 You're temporarily muted — can't comment.";
     }
     return null;
+  };
+
+  const handleModAction = async (actionType: string, targetPseudo: string, targetId: string, isComment: boolean) => {
+    setActiveMenuId(null);
+    if (userRole !== "admin" && userRole !== "moderator") return;
+
+    if (actionType === "delete") {
+      if (confirm(lang === "fr" ? "Confirmer la suppression ?" : "Confirm deletion?")) {
+        const { error } = isComment
+          ? await supabase.from("fiche_comments").delete().eq("id", targetId)
+          : await supabase.from("fiches").delete().eq("id", targetId);
+        if (error) {
+          console.error("[Suppression]", error);
+          alert(lang === "fr" ? `Échec de la suppression : ${error.message}` : `Deletion failed: ${error.message}`);
+          return;
+        }
+        if (isComment) {
+          setComments(prev => {
+            const next: Record<string, Comment[]> = {};
+            for (const [fid, arr] of Object.entries(prev)) next[fid] = arr.filter(c => c.id !== targetId);
+            return next;
+          });
+        } else {
+          setFiches(prev => prev.filter(f => f.id !== targetId));
+        }
+      }
+      return;
+    }
+
+    let expiresAt: Date | null = new Date();
+    if (actionType === "mute_1d") expiresAt.setDate(expiresAt.getDate() + 1);
+    else if (actionType === "mute_1w") expiresAt.setDate(expiresAt.getDate() + 7);
+    else if (actionType === "ban") expiresAt = null;
+
+    const { error } = await supabase.from("moderation_logs").insert({
+      target_username: targetPseudo, action_type: actionType,
+      reason: lang === "fr" ? "Action rapide depuis Fiche" : "Quick action from Fiche",
+      expires_at: expiresAt ? expiresAt.toISOString() : null,
+    });
+    if (error) {
+      console.error("[Sanction]", error);
+      alert(lang === "fr" ? `Échec de la sanction : ${error.message}` : `Sanction failed: ${error.message}`);
+    } else {
+      alert(`Action [${actionType}] enregistrée pour @${targetPseudo}`);
+    }
   };
 
   const handleSendComment = async (ficheId: string) => {
@@ -512,16 +586,41 @@ export default function FichePage() {
       )}
 
       <div className="max-w-4xl mx-auto px-6 pb-32 flex flex-col gap-5">
+        {/* FILTRES — catégorie + recherche par mot-clé */}
+        <div className="flex flex-col gap-3 mb-6">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setFilterCategory("")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${!filterCategory ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"}`}>
+              {lang === "fr" ? "Tous" : "All"}
+            </button>
+            {CATEGORY_FILTERS.map(cat => (
+              <button key={cat.label} onClick={() => setFilterCategory(cat.label === filterCategory ? "" : cat.label)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${filterCategory === cat.label ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-zinc-900" : "border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400"}`}>
+                {cat.emoji} {cat.label}
+              </button>
+            ))}
+          </div>
+          <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+            placeholder={lang === "fr" ? "Rechercher par mot-clé (description ou outils)..." : "Search by keyword (description or tools)..."}
+            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-cyan-500" />
+        </div>
+
         {loading && <div className="text-center py-20 text-zinc-400 text-sm">{lang === "fr" ? "Chargement des fiches..." : "Loading listings..."}</div>}
 
-        {!loading && fiches.length === 0 && (
+        {!loading && visibleFiches.length === 0 && (
           <div className="text-center py-20">
-            <p className="text-zinc-400 text-sm mb-4">{lang === "fr" ? "Aucune fiche pour le moment." : "No listings yet."}</p>
-            <Link href="/form" className="text-sm font-semibold text-zinc-900 dark:text-white underline underline-offset-4">{lang === "fr" ? "Créer la première →" : "Create the first one →"}</Link>
+            {fiches.length === 0 ? (
+              <>
+                <p className="text-zinc-400 text-sm mb-4">{lang === "fr" ? "Aucune fiche pour le moment." : "No listings yet."}</p>
+                <Link href="/form" className="text-sm font-semibold text-zinc-900 dark:text-white underline underline-offset-4">{lang === "fr" ? "Créer la première →" : "Create the first one →"}</Link>
+              </>
+            ) : (
+              <p className="text-zinc-400 text-sm">{lang === "fr" ? "Aucune fiche ne correspond à ta recherche." : "No listing matches your search."}</p>
+            )}
           </div>
         )}
 
-        {!loading && fiches.map(fiche => {
+        {!loading && visibleFiches.map(fiche => {
           const isOwn = isOwnFiche(fiche);
           const outils = getOutils(fiche);
 
@@ -554,12 +653,27 @@ export default function FichePage() {
 
                   <div className="flex-1 min-w-0 sm:h-[400px] flex flex-col justify-start gap-2">
                     {ownerPseudos[fiche.user_id] && (
-                      <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-cyan-600/80 dark:text-cyan-500/70">
-                        @{ownerPseudos[fiche.user_id]}
-                        {badgeMap[ownerPseudos[fiche.user_id]] && badgeMap[ownerPseudos[fiche.user_id]] !== "none" && (
-                          <img src={TIER_IMG(badgeMap[ownerPseudos[fiche.user_id]])} alt={TIER_LABEL[badgeMap[ownerPseudos[fiche.user_id]]]} title={TIER_LABEL[badgeMap[ownerPseudos[fiche.user_id]]]} className="w-4 h-4 object-contain" />
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-cyan-600/80 dark:text-cyan-500/70">
+                          @{ownerPseudos[fiche.user_id]}
+                          {badgeMap[ownerPseudos[fiche.user_id]] && badgeMap[ownerPseudos[fiche.user_id]] !== "none" && (
+                            <img src={TIER_IMG(badgeMap[ownerPseudos[fiche.user_id]])} alt={TIER_LABEL[badgeMap[ownerPseudos[fiche.user_id]]]} title={TIER_LABEL[badgeMap[ownerPseudos[fiche.user_id]]]} className="w-4 h-4 object-contain" />
+                          )}
+                        </span>
+                        {(userRole === "admin" || userRole === "moderator") && (
+                          <div className="relative shrink-0">
+                            <button onClick={() => setActiveMenuId(activeMenuId === fiche.id ? null : fiche.id)} className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400 font-bold text-xs px-1.5">⠇</button>
+                            {activeMenuId === fiche.id && (
+                              <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-2xl py-1 z-30 text-[11px] font-mono">
+                                <button onClick={() => handleModAction("delete", ownerPseudos[fiche.user_id], fiche.id, false)} className="w-full text-left px-3 py-1.5 text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">✕ Supprimer la fiche</button>
+                                <button onClick={() => handleModAction("mute_1d", ownerPseudos[fiche.user_id], fiche.id, false)} className="w-full text-left px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">🤫 Mute 1j</button>
+                                <button onClick={() => handleModAction("mute_1w", ownerPseudos[fiche.user_id], fiche.id, false)} className="w-full text-left px-3 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800">🤫 Mute 1s</button>
+                                <button onClick={() => handleModAction("ban", ownerPseudos[fiche.user_id], fiche.id, false)} className="w-full text-left px-3 py-1.5 text-amber-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">💥 Ban</button>
+                              </div>
+                            )}
+                          </div>
                         )}
-                      </span>
+                      </div>
                     )}
                     <div className="flex items-start justify-between gap-2">
                       <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 leading-snug line-clamp-2">{fiche.nom_projet}</h2>
@@ -711,14 +825,28 @@ export default function FichePage() {
                     <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                       {(comments[fiche.id] || []).length === 0 && <p className="text-xs text-zinc-400 text-center py-3">{dict.chatEmpty}</p>}
                       {(comments[fiche.id] || []).map(c => (
-                        <div key={c.id} className="text-xs text-zinc-600 dark:text-zinc-400 pl-3 border-l border-zinc-200 dark:border-zinc-800">
-                          <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400 flex items-center gap-1">
-                            @{c.user_pseudo}
-                            {badgeMap[c.user_pseudo] && badgeMap[c.user_pseudo] !== "none" && (
-                              <img src={TIER_IMG(badgeMap[c.user_pseudo])} alt={TIER_LABEL[badgeMap[c.user_pseudo]]} title={TIER_LABEL[badgeMap[c.user_pseudo]]} className="w-3.5 h-3.5 object-contain" />
-                            )}
-                          </span>
-                          <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">{c.text}</p>
+                        <div key={c.id} className="text-xs text-zinc-600 dark:text-zinc-400 pl-3 border-l border-zinc-200 dark:border-zinc-800 flex justify-between items-start relative">
+                          <div className="flex-1 mr-2">
+                            <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400 flex items-center gap-1">
+                              @{c.user_pseudo}
+                              {badgeMap[c.user_pseudo] && badgeMap[c.user_pseudo] !== "none" && (
+                                <img src={TIER_IMG(badgeMap[c.user_pseudo])} alt={TIER_LABEL[badgeMap[c.user_pseudo]]} title={TIER_LABEL[badgeMap[c.user_pseudo]]} className="w-3.5 h-3.5 object-contain" />
+                              )}
+                            </span>
+                            <p className="text-zinc-700 dark:text-zinc-300 mt-0.5">{c.text}</p>
+                          </div>
+                          {(userRole === "admin" || userRole === "moderator") && (
+                            <div className="relative shrink-0">
+                              <button onClick={() => setActiveMenuId(activeMenuId === c.id ? null : c.id)} className="text-zinc-400 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400 text-[10px] p-0.5 font-bold">⠇</button>
+                              {activeMenuId === c.id && (
+                                <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-2xl py-1 z-30 text-[10px] font-mono">
+                                  <button onClick={() => handleModAction("delete", c.user_pseudo, c.id, true)} className="w-full text-left px-2.5 py-1 text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">✕ Supprimer</button>
+                                  <button onClick={() => handleModAction("mute_1d", c.user_pseudo, c.id, true)} className="w-full text-left px-2.5 py-1 hover:bg-zinc-50 dark:hover:bg-zinc-800">🤫 Mute 1j</button>
+                                  <button onClick={() => handleModAction("ban", c.user_pseudo, c.id, true)} className="w-full text-left px-2.5 py-1 text-amber-500 hover:bg-zinc-50 dark:hover:bg-zinc-800">💥 Ban</button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
