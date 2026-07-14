@@ -328,7 +328,7 @@ export default function ConversationPage() {
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-      const response = await fetch(`${API_URL}/conversation`, {
+      const response = await fetch(`${API_URL}/chat`, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
           message: userMessage, image: imageToSend,
