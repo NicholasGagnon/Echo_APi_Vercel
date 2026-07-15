@@ -48,7 +48,7 @@ const T = {
       { icon: "📊", label: "Vos statistiques Talk", desc: "Ce que la communauté pense vraiment de vos projets." },
       { icon: "🔓", label: "Contacts débloqués",  desc: "Les personnes que vous avez contactées après avoir payé ou reçu une clé." },
       { icon: "🤝", label: "Intérêts envoyés",    desc: "Les projets pour lesquels vous avez manifesté de l'intérêt." },
-      { icon: "💌", label: "Intérêts reçus",      desc: "Qui s'intéresse à vos projets en ce moment." },
+      { icon: "💌", label: "Intérêts reçus",      desc: "Who s'intéresse à vos projets en ce moment." },
     ],
 
     badgesTitle: "Les badges",
@@ -131,12 +131,30 @@ export default function HallPage() {
     setPseudo(clean);
   };
 
+  // REDIRECTION FORCÉE ET EXPLICITE VERS LE FORMULAIRE (/form) APRES CONNEXION
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
+    const redirectUrl = `${window.location.origin}/form`;
+    await supabase.auth.signInWithOAuth({ 
+      provider: "google", 
+      options: { 
+        redirectTo: redirectUrl, 
+        scopes: "openid profile email", 
+        queryParams: { prompt: "select_account" } 
+      } 
+    });
   };
+
   const handleMicrosoft = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/`, scopes: "openid profile email User.Read" } });
+    const redirectUrl = `${window.location.origin}/form`;
+    await supabase.auth.signInWithOAuth({ 
+      provider: "azure", 
+      options: { 
+        redirectTo: redirectUrl, 
+        scopes: "openid profile email User.Read" 
+      } 
+    });
   };
+
   const handleLogout = async () => { await supabase.auth.signOut(); setUser(null); setPseudo(""); setShowUserMenu(false); };
 
   useEffect(() => {
@@ -203,14 +221,13 @@ export default function HallPage() {
           </div>
         </div>
 
-        {/* SÉPARATEUR + ZONE 2 — Bureau (premium) + pseudo/email + langue + déconnexion, à l'extrême droite */}
+        {/* SÉPARATEUR + ZONE 2 */}
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 1, height: 24, background: "rgba(255,255,255,.12)", flexShrink: 0 }} />
 
-          {/* BUREAU — verrouillé pour l'instant, deviendra cliquable/brillant + popup d'avantages */}
           <div className="bureauLockedWrap" style={{ position: "relative" }}>
             <button
-              onClick={() => { /* TODO: activer + ouvrir popup d'avantages une fois le premium prêt */ }}
+              onClick={() => {}}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 background: "rgba(201,168,76,.08)", border: "1px solid rgba(201,168,76,.25)",
@@ -291,7 +308,7 @@ export default function HallPage() {
         </div>
       </nav>
 
-      {/* ── HERO — formule d'origine, cercle agrandi ────────────────────────── */}
+      {/* ── HERO ────────────────────────────────────────────────────────────── */}
       <section style={{ padding: "80px 24px 60px", position: "relative", textAlign: "center" }}>
         <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translate(-50%, 0)", width: 600, height: 500, background: "radial-gradient(circle, rgba(0,200,255,.07) 0%, transparent 70%)", pointerEvents: "none" }} />
 
@@ -337,7 +354,7 @@ export default function HallPage() {
 
       <div style={{ height: 1, background: "linear-gradient(to right, transparent, rgba(255,255,255,.08), transparent)", margin: "0 40px" }} />
 
-      {/* ── TROUVEZ LES BONNES PERSONNES — 2 grosses cartes claires ─────────── */}
+      {/* ── TROUVEZ LES BONNES PERSONNES ────────────────────────────────────── */}
       <section style={{ padding: "70px 24px", maxWidth: 900, margin: "0 auto" }}>
         <h2 style={{ fontSize: "clamp(24px, 3.5vw, 36px)", fontWeight: 900, color: "#fff", marginBottom: 8, textAlign: "center", letterSpacing: -0.5 }}>
           {t.findTitle}
@@ -375,7 +392,7 @@ export default function HallPage() {
         </div>
       </section>
 
-      {/* ── ANALYSE IA — un seul gros rectangle ──────────────────────────────── */}
+      {/* ── ANALYSE IA ──────────────────────────────────────────────────────── */}
       <section style={{ padding: "20px 24px 70px", maxWidth: 800, margin: "0 auto" }}>
         <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: 2, color: "rgba(255,255,255,.4)", textTransform: "uppercase", textAlign: "center", marginBottom: 20 }}>
           {t.aiLabel}
@@ -397,7 +414,7 @@ export default function HallPage() {
 
       <div style={{ height: 1, background: "linear-gradient(to right, transparent, rgba(255,255,255,.08), transparent)", margin: "0 40px" }} />
 
-      {/* ── VOTRE BUREAU — pièce maîtresse, fond légèrement distinct + halo ──── */}
+      {/* ── VOTRE BUREAU ────────────────────────────────────────────────────── */}
       <div style={{ background: "rgba(255,255,255,.02)", position: "relative" }}>
         <section style={{ padding: "80px 24px", maxWidth: 1000, margin: "0 auto", textAlign: "center", position: "relative" }}>
           <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "#fff", marginBottom: 14, letterSpacing: -0.5 }}>{t.bureauTitle}</h2>
@@ -426,7 +443,7 @@ export default function HallPage() {
 
       <div style={{ height: 1, background: "linear-gradient(to right, transparent, rgba(255,255,255,.08), transparent)", margin: "0 40px" }} />
 
-      {/* ── LES BADGES — images bronze/argent/or/vip ─────────────────────────── */}
+      {/* ── LES BADGES ──────────────────────────────────────────────────────── */}
       <section style={{ padding: "70px 24px", maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
         <h2 style={{ fontSize: "clamp(24px, 3.5vw, 36px)", fontWeight: 900, color: "#fff", marginBottom: 12, letterSpacing: -0.5 }}>{t.badgesTitle}</h2>
         <p style={{ fontSize: 13, color: "rgba(255,255,255,.5)", marginBottom: 32 }}>{t.badgesSub}</p>
@@ -493,7 +510,8 @@ export default function HallPage() {
               <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
               {lang === "fr" ? "Continuer avec Microsoft" : "Continue with Microsoft"}
             </button>
-            <a href="/account"
+            {/* REDIRIGE DESORMAIS VERS /form AU LIEU DE /account POUR AVOIR L'ECRAN EMAIL DEBUTANT LE QUESTIONNAIRE */}
+            <a href="/form"
               style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 14px", background: "rgba(0,200,255,.1)", border: "1px solid rgba(0,200,255,.25)", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#00c8ff", width: "100%", textDecoration: "none" }}>
               ✉ {lang === "fr" ? "Se connecter par email" : "Sign in with email"}
             </a>
