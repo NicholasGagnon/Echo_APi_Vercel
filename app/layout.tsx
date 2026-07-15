@@ -4,25 +4,38 @@ import { AppProvider } from "../context/AppContext";
 import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
-  title: "Echo AI | Assistant IA personnel pour calendrier, budget et productivité",
+  title: "Echo AI | Affinité de projets",
   description:
-    "Echo AI est un assistant intelligent conçu pour gérer le calendrier, le budget, la nutrition, l'écriture, les projets et la productivité depuis une seule plateforme.",
-  // Ta clé de vérification Pinterest ajoutée proprement ici :
+    "Découvrez de nouvelles façons de propulser vos idées, d'explorer des projets complémentaires, d'obtenir les avis de la communauté ou de l'IA et de réaliser des auditions de sites web.",
+  
+  // Ta clé de vérification Pinterest conservée ici :
   verification: {
     pinterest: "b8c6e3722e58cd63a982307875f72ea7",
   },
+
+  // Open Graph optimisé pour l'affichage et les partages Facebook
+  openGraph: {
+    title: "Echo AI | Affinité de projets",
+    description: "Découvrez de nouvelles façons de propulser vos idées, d'explorer des projets complémentaires et de collaborer avec la communauté.",
+    url: "https://echosai.ca",
+    siteName: "Echo AI",
+    images: [
+      {
+        url: "https://echosai.ca/affinity.jpg", // Ton beau visuel avec le double cercle
+        width: 1200,
+        height: 630,
+        alt: "Affinité de projets",
+      },
+    ],
+    locale: "fr_CA",
+    type: "website",
+  },
+
+  // Mots-clés mis à jour sans les termes spammy d'assistant
   keywords: [
-    "Echo AI", "assistant IA", "assistant intelligent", "calendrier", "budget", "nutrition", "productivité",
-    "organisation", "écriture", "gestion de projets", "chatgpt", "chat gpt", "gemini", "gemini ai", "canva",
-    "deepseek", "google translate", "translate", "traductor", "speed test", "calculator", "google maps", "maps",
-    "gmail", "yahoo mail", "aol mail", "outlook", "youtube", "yt", "facebook", "fb", "instagram", "ig",
-    "tiktok", "tik tok", "twitter", "x", "pinterest", "whatsapp", "whatsapp web", "wsp web", "telegram",
-    "discord", "netflix", "spotify", "twitch", "weather", "weather tomorrow", "clima", "meteo", "hava durumu",
-    "погода", "restaurants", "restaurants near me", "food near me", "hotels", "walmart", "amazon", "ebay",
-    "shein", "temu", "craigslist", "etsy", "zillow", "usps tracking", "fedex tracking", "wordle", "roblox",
-    "poki", "blooket", "solitaire", "nba", "nfl", "premier league", "serie a", "real madrid", "fc barcelona",
-    "australian open", "cricbuzz", "ind vs nz", "india vs new zealand", "what is my ip", "what time is it",
-    "where am i", "what day is it", "how to tie a tie", "how to delete instagram account", "why am i so tired"
+    "Echo AI", "Affinité de projets", "gestion de projets", "collaboration", "entraide informatique", 
+    "audition de site web", "avis de la communauté", "analyse IA", "partenariat", "co-creation", "projets", 
+    "pinterest", "facebook", "fb", "communauté informatique"
   ]
 };
 
