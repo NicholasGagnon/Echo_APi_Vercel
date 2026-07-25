@@ -129,7 +129,7 @@ function CorrecteurContent() {
   const [stopAtStep] = useState<StepNum>(4);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+ 
   const t = I18N[lang];
 
   useEffect(() => {
@@ -208,16 +208,7 @@ function CorrecteurContent() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) setOriginalText(content);
-    };
-    reader.readAsText(file);
-  };
+
 
   const executeStep = async (step: StepNum): Promise<StepResult> => {
     const previous = versions.find(v => v.step === step - 1);
@@ -557,19 +548,7 @@ function CorrecteurContent() {
                   {t.originalTitle}
                 </span>
 
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-mono transition-colors cursor-pointer"
-                >
-                  {t.importBtn}
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept=".txt,.md,.doc,.docx"
-                  className="hidden"
-                />
+                
               </div>
 
               <textarea

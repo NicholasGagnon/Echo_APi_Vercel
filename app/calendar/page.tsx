@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
-import { checkQuota, UserTier } from "../../utils/quota";
-import LangDropdown from "../components/LangDropdown";
-import QuotaPopup from "../components/QuotaPopup";
+import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
+
+export const dynamic = "force-dynamic";
+
+type Currency = "CAD" | "USD" | "EUR";
 
 type EventData = {
   id: string;
@@ -19,12 +22,19 @@ type EventData = {
 };
 
 type CalendarEvents = Record<string, EventData[]>;
+type ChatMessage = { raw: string; imageB64?: string };
 
-const DAYS_LABELS_FR = ["D","L","M","M","J","V","S"];
-const DAYS_LABELS_EN = ["S","M","T","W","T","F","S"];
-const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAYS_LABELS_FR = ["D", "L", "M", "M", "J", "V", "S"];
+const DAYS_LABELS_EN = ["S", "M", "T", "W", "T", "F", "S"];
+const MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+const MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const GOOGLE_CALENDAR_SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly";
+
+const PRICES: Record<Currency, { amount: string; symbol: string }> = {
+  CAD: { amount: "3.99", symbol: "CA$" },
+  USD: { amount: "3.99", symbol: "US$" },
+  EUR: { amount: "3.99", symbol: "€" },
+};
 
 const extractProviderTokenFromHash = (): string | null => {
   if (typeof window === "undefined") return null;
@@ -40,7 +50,6 @@ const clearHash = () => {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
 };
 
-// ── TUTORIAL POPUP ────────────────────────────────────────────────────────────
 function CalendarTutorialPopup({ lang, onClose, onConnect }: {
   lang: string;
   onClose: () => void;
@@ -57,35 +66,32 @@ function CalendarTutorialPopup({ lang, onClose, onConnect }: {
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-500/70 mb-1">Echo AI — Calendrier</p>
             <h2 className="text-lg font-black text-zinc-100 leading-tight">
-              {fr ? "👑 Hola Roi du Calendrier !" : "👑 Hola, Calendar King!"}
+              {fr ? "👑 Synchronisation Google Calendar" : "👑 Google Calendar Sync"}
             </h2>
             <p className="text-zinc-400 text-[12px] mt-1 leading-relaxed">
               {fr
-                ? "C'est ici que tu peux synchroniser tes rendez-vous et activer ton calendrier connecté."
-                : "This is where you can sync your appointments and activate your connected calendar."}
+                ? "C'est ici que tu peux synchroniser tes rendez-vous et connecter ton agenda Google."
+                : "Sync your appointments and link your Google Calendar here."}
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <LangDropdown />
-            <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all text-sm font-mono">✕</button>
-          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all text-sm font-mono cursor-pointer">✕</button>
         </div>
 
         <div className="px-7 py-6 overflow-y-auto flex-1 space-y-5">
           <p className="text-zinc-300 text-[13px] leading-relaxed">
             {fr
-              ? "Pour commencer, clique sur \"Se connecter\" en bas et connecte ton compte Google. Google va t'envoyer des avertissements, c'est normal."
-              : "To get started, click \"Connect\" below and link your Google account. Google will show warnings — that's expected."}
+              ? "Pour commencer, clique sur \"Se connecter\" ci-dessous pour lier ton compte Google."
+              : "Click \"Connect\" below to link your Google account."}
           </p>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
             <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-black">
-              {fr ? "📋 Guide d'autorisation pas à pas" : "📋 Step-by-step authorization guide"}
+              {fr ? "📋 Guide d'autorisation" : "📋 Authorization Guide"}
             </p>
             {[
-              fr ? "Sélectionnez l'adresse du compte Google cible que vous désirez lier à vos matrices Echo." : "Select the Google account you want to link to your Echo ecosystem.",
-              fr ? 'Dès l\'apparition de l\'écran d\'avertissement de sécurité de Google, repérez et cliquez sur le petit lien textuel "Paramètres avancés" (Advanced) situé dans le coin inférieur gauche.' : 'When the Google security warning screen appears, find and click the small link "Advanced settings" in the lower left corner.',
-              fr ? 'Une section masquée va s\'étendre : cliquez fermement sur le lien de contournement "Accéder à echosai.ca (non sécurisé)" pour lier l\'agent.' : 'A hidden section will expand: click the bypass link "Go to echosai.ca (unsafe)" to bind the agent.',
-              fr ? "Sur l'écran final de consentement, cochez impérativement toutes les cases d'autorisations requises pour la lecture, la création et la modification de vos événements d'agenda, puis confirmez la validation." : "On the final consent screen, you must check all permission boxes for reading, creating, and modifying your calendar events, then confirm.",
+              fr ? "Sélectionnez le compte Google à lier à Echo." : "Select the Google account you wish to link.",
+              fr ? 'Sur l\'écran de sécurité, cliquez sur "Paramètres avancés" en bas à gauche.' : 'On the safety prompt, click "Advanced settings" in the lower left.',
+              fr ? 'Cliquez ensuite sur le lien "Accéder à echosai.ca (non sécurisé)".' : 'Click "Go to echosai.ca (unsafe)" to proceed.',
+              fr ? "Cochez toutes les cases d'autorisations pour votre agenda puis validez." : "Check all calendar permission boxes and confirm.",
             ].map((step, i) => (
               <div key={i} className="flex gap-3 items-start">
                 <div className="w-6 h-6 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-[10px] font-black font-mono flex items-center justify-center shrink-0 mt-0.5">{i + 1}</div>
@@ -93,19 +99,13 @@ function CalendarTutorialPopup({ lang, onClose, onConnect }: {
               </div>
             ))}
           </div>
-          <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl px-4 py-3">
-            <p className="text-zinc-300 text-[13px] leading-relaxed">
-              {fr ? "Une fois connecté, Echo pourra gérer et synchroniser tes événements automatiquement." : "Once connected, Echo will be able to manage and sync your events automatically."}
-            </p>
-            <p className="text-cyan-400 font-bold text-sm mt-1">Adiooo 😎</p>
-          </div>
         </div>
 
         <div className="px-7 py-5 border-t border-zinc-800 flex items-center justify-between gap-3 shrink-0">
-          <button onClick={onConnect} className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs px-6 py-3 rounded-xl uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] font-mono">
+          <button onClick={onConnect} className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-xs px-6 py-3 rounded-xl uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] font-mono cursor-pointer">
             {fr ? "Se connecter à Google Calendar" : "Connect to Google Calendar"}
           </button>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-[11px] font-mono transition-colors">
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-[11px] font-mono transition-colors cursor-pointer">
             {fr ? "Plus tard" : "Later"}
           </button>
         </div>
@@ -114,44 +114,52 @@ function CalendarTutorialPopup({ lang, onClose, onConnect }: {
   );
 }
 
-// ── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
-export default function CalendarPage() {
-  const { t, lang, userTier, triggerToast } = useApp();
-  const today    = new Date();
+function CalendarContent() {
+  const { lang, setLang, userTier, triggerToast } = useApp();
+  const fr = lang === "fr";
+  const today = new Date();
   const safeTier = (userTier || "connected_free") as UserTier;
 
-  const [currentYear,  setCurrentYear]  = useState(today.getFullYear());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-  const [events,       setEvents]       = useState<CalendarEvents>({});
-  const [isLoaded,     setIsLoaded]     = useState(false);
-  const [userId,       setUserId]       = useState<string|null>(null);
-  const [selectedDateKey, setSelectedDateKey] = useState<string|null>(null);
+  const [events, setEvents] = useState<CalendarEvents>({});
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
 
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [title,       setTitle]       = useState("");
-  const [start,       setStart]       = useState("");
-  const [end,         setEnd]         = useState("");
-  const [notes,       setNotes]       = useState("");
+  // Devises & Modales
+  const [currency, setCurrency] = useState<Currency>("CAD");
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showSignInModal, setShowSignInModal] = useState(false);
 
-  const [googleToken,          setGoogleToken]          = useState<string|null>(null);
-  const [isSyncing,            setIsSyncing]            = useState(false);
+  // Formulaire événement manuel
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [notes, setNotes] = useState("");
+
+  // Google Sync
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [needsGoogleReconnect, setNeedsGoogleReconnect] = useState(false);
 
-  // ── QUOTA POPUP ───────────────────────────────────────────────────────────
-  const [showQuotaPopup,  setShowQuotaPopup]  = useState(false);
-  const [quotaPopupLabel, setQuotaPopupLabel] = useState("");
-  const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
+  // Chat Echo Agentic à droite
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatState, setChatState] = useState<"idle" | "thinking" | "speaking">("idle");
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const icsInputRef    = useRef<HTMLInputElement>(null);
-  const isFetchingRef  = useRef(false);
-  const googleTokenRef = useRef<string|null>(null);
+  const icsInputRef = useRef<HTMLInputElement>(null);
+  const isFetchingRef = useRef(false);
+  const googleTokenRef = useRef<string | null>(null);
 
-  const getStorageKey     = (uid: string) => `echo-calendar-v2-${uid}`;
+  const getStorageKey = (uid: string) => `echo-calendar-v2-${uid}`;
   const getGoogleTokenKey = (uid: string) => `echo-google-token-${uid}`;
   const TUTO_KEY = "echo-calendar-tuto-seen-v1";
 
-  // ── CHARGER EVENTS SUPABASE ───────────────────────────────────────────────
+  // ── FETCH EVENTS SUPABASE ──
   const fetchSupabaseEvents = useCallback(async (uid: string) => {
     try {
       const { data: calRows, error } = await supabase.from("echo_calendar").select("*").eq("user_id", uid);
@@ -172,9 +180,9 @@ export default function CalendarPage() {
         const allKeys = new Set([...Object.keys(updated), ...Object.keys(rebuilt)]);
         allKeys.forEach(k => {
           const googleOnly = (updated[k] || []).filter(e => !!e.googleEventId);
-          const supaOnly   = rebuilt[k] || [];
-          const seen       = new Set(googleOnly.map(e => e.id));
-          updated[k]       = [...googleOnly, ...supaOnly.filter(e => !seen.has(e.id))];
+          const supaOnly = rebuilt[k] || [];
+          const seen = new Set(googleOnly.map(e => e.id));
+          updated[k] = [...googleOnly, ...supaOnly.filter(e => !seen.has(e.id))];
         });
         return updated;
       });
@@ -183,8 +191,7 @@ export default function CalendarPage() {
     }
   }, []);
 
-  // ── TOKEN HELPERS ─────────────────────────────────────────────────────────
-  const resolveToken = useCallback(async (uid: string): Promise<string|null> => {
+  const resolveToken = useCallback(async (uid: string): Promise<string | null> => {
     const ls = localStorage.getItem(getGoogleTokenKey(uid));
     if (ls) { googleTokenRef.current = ls; setGoogleToken(ls); return ls; }
     if (googleTokenRef.current) return googleTokenRef.current;
@@ -234,7 +241,6 @@ export default function CalendarPage() {
     });
   };
 
-  // ── FETCH GOOGLE EVENTS ───────────────────────────────────────────────────
   const fetchGoogleEvents = useCallback(async (token: string, uid: string, year?: number, month?: number) => {
     if (!token || !uid || isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -243,7 +249,7 @@ export default function CalendarPage() {
     const m = month ?? currentMonth;
     try {
       const timeMin = new Date(y, m, 1).toISOString();
-      const timeMax = new Date(y, m+1, 0, 23, 59, 59).toISOString();
+      const timeMax = new Date(y, m + 1, 0, 23, 59, 59).toISOString();
       const res = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -257,9 +263,9 @@ export default function CalendarPage() {
       data.items.forEach((item: any) => {
         const rawStart = item.start?.dateTime || item.start?.date;
         if (!rawStart) return;
-        const dateKey   = rawStart.split("T")[0];
-        const startTime = item.start?.dateTime ? rawStart.split("T")[1]?.substring(0,5) : "";
-        const endTime   = item.end?.dateTime   ? item.end.dateTime.split("T")[1]?.substring(0,5) : "";
+        const dateKey = rawStart.split("T")[0];
+        const startTime = item.start?.dateTime ? rawStart.split("T")[1]?.substring(0, 5) : "";
+        const endTime = item.end?.dateTime ? item.end.dateTime.split("T")[1]?.substring(0, 5) : "";
         if (!incoming[dateKey]) incoming[dateKey] = [];
         incoming[dateKey].push({
           id: item.id, title: item.summary || "Google Event",
@@ -269,11 +275,11 @@ export default function CalendarPage() {
       });
       setEvents(prev => {
         const updated = { ...prev };
-        const prefix  = `${y}-${String(m+1).padStart(2,"0")}`;
-        Object.keys(updated).forEach(k => { if (k.startsWith(prefix)) updated[k] = (updated[k]||[]).filter(e => !e.googleEventId); });
+        const prefix = `${y}-${String(m + 1).padStart(2, "0")}`;
+        Object.keys(updated).forEach(k => { if (k.startsWith(prefix)) updated[k] = (updated[k] || []).filter(e => !e.googleEventId); });
         Object.keys(incoming).forEach(k => {
-          const local = (updated[k]||[]).filter(e => !e.googleEventId);
-          updated[k]  = [...local, ...incoming[k]];
+          const local = (updated[k] || []).filter(e => !e.googleEventId);
+          updated[k] = [...local, ...incoming[k]];
         });
         return updated;
       });
@@ -285,14 +291,13 @@ export default function CalendarPage() {
     }
   }, [currentYear, currentMonth, clearToken]);
 
-  // ── PUSH EVENT VERS GOOGLE ────────────────────────────────────────────────
-  const pushEventToGoogle = useCallback(async (uid: string, dateKey: string, ev: EventData): Promise<string|null> => {
+  const pushEventToGoogle = useCallback(async (uid: string, dateKey: string, ev: EventData): Promise<string | null> => {
     const token = await resolveToken(uid);
     if (!token) { setNeedsGoogleReconnect(true); return null; }
     try {
-      const hasTime  = !!(ev.start || ev.end);
-      const startObj = hasTime ? { dateTime: new Date(`${dateKey}T${ev.start||"00:00"}:00`).toISOString() } : { date: dateKey };
-      const endObj   = hasTime ? { dateTime: new Date(`${dateKey}T${ev.end||"23:59"}:00`).toISOString() }   : { date: dateKey };
+      const hasTime = !!(ev.start || ev.end);
+      const startObj = hasTime ? { dateTime: new Date(`${dateKey}T${ev.start || "00:00"}:00`).toISOString() } : { date: dateKey };
+      const endObj = hasTime ? { dateTime: new Date(`${dateKey}T${ev.end || "23:59"}:00`).toISOString() } : { date: dateKey };
       const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -322,7 +327,6 @@ export default function CalendarPage() {
     } catch (err) { console.error("[Calendar] deleteFromGoogle:", err); }
   }, [resolveToken, clearToken]);
 
-  // ── BOOTSTRAP ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     if (!localStorage.getItem(TUTO_KEY)) setShowTutorial(true);
@@ -337,7 +341,7 @@ export default function CalendarPage() {
       if (savedEvents && !cancelled) { try { setEvents(JSON.parse(savedEvents)); } catch {} }
       if (!cancelled) await fetchSupabaseEvents(uid);
 
-      let activeToken: string|null = null;
+      let activeToken: string | null = null;
       const hashToken = extractProviderTokenFromHash();
       if (hashToken) { clearHash(); activeToken = hashToken; await storeToken(uid, hashToken); }
       else if (session.provider_token) { activeToken = session.provider_token; await storeToken(uid, session.provider_token); }
@@ -359,7 +363,7 @@ export default function CalendarPage() {
         const savedEvents = localStorage.getItem(getStorageKey(uid));
         setEvents(savedEvents ? JSON.parse(savedEvents) : {});
         await fetchSupabaseEvents(uid);
-        const hashToken     = extractProviderTokenFromHash();
+        const hashToken = extractProviderTokenFromHash();
         const providerToken = hashToken || session.provider_token;
         if (providerToken) { clearHash(); await storeToken(uid, providerToken); await fetchGoogleEvents(providerToken, uid, today.getFullYear(), today.getMonth()); }
         else { const token = await resolveToken(uid); if (token) await fetchGoogleEvents(token, uid, today.getFullYear(), today.getMonth()); }
@@ -372,154 +376,418 @@ export default function CalendarPage() {
   useEffect(() => { if (!isLoaded || !userId) return; localStorage.setItem(getStorageKey(userId), JSON.stringify(events)); }, [events, isLoaded, userId]);
   useEffect(() => { if (!isLoaded || !userId) return; const token = googleTokenRef.current; if (token) fetchGoogleEvents(token, userId, currentYear, currentMonth); }, [currentMonth, currentYear]);
 
-  // ── MANUAL SYNC ───────────────────────────────────────────────────────────
   const handleManualSync = async () => {
     if (!userId) return;
     await fetchSupabaseEvents(userId);
     const token = await resolveToken(userId);
     if (!token) { setNeedsGoogleReconnect(true); return; }
     await fetchGoogleEvents(token, userId, currentYear, currentMonth);
-    triggerToast("info", lang==="fr"?"Données synchronisées !":"Data synchronized!");
+    if (typeof triggerToast === "function") triggerToast("info", fr ? "Données synchronisées !" : "Data synchronized!");
   };
 
-  // ── ICS ───────────────────────────────────────────────────────────────────
-  const exportICS = () => {
-    let ics = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Echo Ecosystem//Calendar//EN\n";
-    Object.entries(events).forEach(([dateKey, dayEvents]) => {
-      dayEvents.forEach(ev => {
-        const d  = dateKey.replace(/-/g,"");
-        const tS = ev.start ? ev.start.replace(":","")+"00" : "000000";
-        const tE = ev.end   ? ev.end.replace(":","")+"00"   : "235900";
-        ics += `BEGIN:VEVENT\nUID:${ev.id}@echo.ai\nDTSTART:${d}T${tS}\nDTEND:${d}T${tE}\nSUMMARY:${ev.title}\nDESCRIPTION:${ev.notes.replace(/\n/g,"\\n")}\nEND:VEVENT\n`;
-      });
-    });
-    ics += "END:VCALENDAR";
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));
-    a.download = "echo-schedule.ics"; a.click();
-  };
-
-  const handleICSRawImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !userId) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const lines    = (reader.result as string).split(/\r?\n/);
-      const imported = { ...events };
-      let cur: Partial<EventData> & { dateKey?: string } = {};
-      lines.forEach(line => {
-        const cl = line.trim();
-        if (cl === "BEGIN:VEVENT") { cur = { id: Date.now().toString()+Math.random().toString(36).substring(2,5) }; }
-        else if (cl.startsWith("DTSTART:") || cl.startsWith("DTSTART;")) {
-          const match     = cl.match(/(\d{8})T(\d{4})/);
-          const matchDate = cl.match(/:(\d{8})$|;VALUE=DATE:(\d{8})/);
-          if (match) { cur.dateKey=`${match[1].substring(0,4)}-${match[1].substring(4,6)}-${match[1].substring(6,8)}`; cur.start=`${match[2].substring(0,2)}:${match[2].substring(2,4)}`; }
-          else if (matchDate) { const d=matchDate[1]||matchDate[2]; cur.dateKey=`${d.substring(0,4)}-${d.substring(4,6)}-${d.substring(6,8)}`; cur.start=""; }
-        }
-        else if (cl.startsWith("DTEND:") || cl.startsWith("DTEND;")) { const m=cl.match(/(\d{8})T(\d{4})/); if(m) cur.end=`${m[2].substring(0,2)}:${m[2].substring(2,4)}`; }
-        else if (cl.startsWith("SUMMARY:"))     { cur.title=cl.replace("SUMMARY:","").trim(); }
-        else if (cl.startsWith("DESCRIPTION:")) { cur.notes=cl.replace("DESCRIPTION:","").replace(/\\n/g,"\n").trim(); }
-        else if (cl === "END:VEVENT" && cur.dateKey && cur.title) {
-          if (!imported[cur.dateKey]) imported[cur.dateKey] = [];
-          if (!imported[cur.dateKey].some(e => e.title===cur.title && e.start===cur.start))
-            imported[cur.dateKey].push({ id:cur.id!, title:cur.title, start:cur.start||"", end:cur.end||"", notes:cur.notes||"" });
-        }
-      });
-      localStorage.setItem(getStorageKey(userId), JSON.stringify(imported));
-      setEvents(imported);
-    };
-    reader.readAsText(file); e.target.value="";
-  };
-
-  // ── NAVIGATION ────────────────────────────────────────────────────────────
-  const prevMonth = () => { if(currentMonth===0){setCurrentMonth(11);setCurrentYear(y=>y-1);}else setCurrentMonth(m=>m-1); };
-  const nextMonth = () => { if(currentMonth===11){setCurrentMonth(0);setCurrentYear(y=>y+1);}else setCurrentMonth(m=>m+1); };
-  const goToday   = () => { setCurrentMonth(today.getMonth()); setCurrentYear(today.getFullYear()); };
-
-  const firstDay    = new Date(currentYear, currentMonth, 1).getDay();
-  const daysInMonth = new Date(currentYear, currentMonth+1, 0).getDate();
-  const blanks      = Array.from({ length: firstDay });
-  const days        = Array.from({ length: daysInMonth }, (_,i) => i+1);
-
-  const makeDateKey = (day: number) => `${currentYear}-${String(currentMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-  const isToday     = (day: number) => day===today.getDate() && currentMonth===today.getMonth() && currentYear===today.getFullYear();
-
-  const openDay   = (day: number) => { setSelectedDateKey(makeDateKey(day)); setShowAddForm(false); resetForm(); };
-  const resetForm = () => { setTitle(""); setStart(""); setEnd(""); setNotes(""); };
-
-  // ── SAVE EVENT — avec quota calendar ─────────────────────────────────────
   const saveEvent = async () => {
     if (!selectedDateKey || !title.trim() || !userId) return;
-
-    const quotaStatus = checkQuota("calendar", safeTier, true, userId);
-    if (!quotaStatus.allowed) {
-      triggerQuotaPopup(lang === "fr" ? "Calendrier" : "Calendar");
-      return;
-    }
 
     const tempId = Date.now().toString();
     const ev: EventData = { id: tempId, title, start, end, notes };
 
-    setEvents(prev => ({ ...prev, [selectedDateKey]: [...(prev[selectedDateKey]||[]), ev] }));
-    setShowAddForm(false); resetForm();
+    setEvents(prev => ({ ...prev, [selectedDateKey]: [...(prev[selectedDateKey] || []), ev] }));
+    setShowAddForm(false);
+    setTitle(""); setStart(""); setEnd(""); setNotes("");
 
     try {
       const cloudId = await pushEventToGoogle(userId, selectedDateKey, ev);
       const finalId = cloudId || tempId;
 
-      const { error: supaErr } = await supabase.from("echo_calendar").insert({
-        id:           finalId,
-        user_id:      userId,
+      await supabase.from("echo_calendar").insert({
+        id: finalId,
+        user_id: userId,
         title,
-        start_date:   selectedDateKey,
-        end_date:     selectedDateKey,
-        start_time:   start || null,
-        end_time:     end   || null,
+        start_date: selectedDateKey,
+        end_date: selectedDateKey,
+        start_time: start || null,
+        end_time: end || null,
         notes,
         is_from_echo: false,
       });
 
-      if (supaErr) {
-        console.error("[Calendar] Supabase insert:", supaErr.message);
-        triggerToast("error", `Erreur: ${supaErr.message}`);
-      } else {
-        triggerToast("info", lang==="fr"?"Événement sauvegardé !":"Event saved!");
-      }
-
       if (cloudId) {
         setEvents(prev => ({
           ...prev,
-          [selectedDateKey]: (prev[selectedDateKey]||[]).map(e =>
-            e.id===tempId ? { ...e, id:cloudId, googleEventId:cloudId } : e
+          [selectedDateKey]: (prev[selectedDateKey] || []).map(e =>
+            e.id === tempId ? { ...e, id: cloudId, googleEventId: cloudId } : e
           ),
         }));
       }
     } catch (err) {
-      console.error("[Calendar] saveEvent crash:", err);
+      console.error("[Calendar] saveEvent error:", err);
     }
   };
 
   const deleteEvent = async (dateKey: string, id: string, googleId?: string) => {
     if (!userId) return;
     if (googleId) await deleteFromGoogle(userId, googleId);
-    const { error } = await supabase.from("echo_calendar").delete().eq("id",id).eq("user_id",userId);
-    if (error) console.error("[Calendar] delete:", error.message);
-    setEvents(prev => ({ ...prev, [dateKey]: (prev[dateKey]||[]).filter(e => e.id!==id) }));
-    triggerToast("info", lang==="fr"?"Événement supprimé.":"Event deleted.");
+    await supabase.from("echo_calendar").delete().eq("id", id).eq("user_id", userId);
+    setEvents(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).filter(e => e.id !== id) }));
   };
 
-  const selectedEvents   = selectedDateKey ? events[selectedDateKey]||[] : [];
-  const activeMonthLabel = lang==="fr" ? MONTHS_FR[currentMonth] : MONTHS_EN[currentMonth];
-  const activeDaysLabels = lang==="fr" ? DAYS_LABELS_FR : DAYS_LABELS_EN;
+  // ── ECHO CHAT AGENTIC INTÉGRÉ & SAUVEGARDE SUPABASE RÉPARÉE ──
+  const handleSendEcho = async () => {
+    if (!chatInput.trim()) return;
+    if (!userId) { setShowSignInModal(true); return; }
+
+    const userMsg = chatInput.trim();
+    const userEntry: ChatMessage = { raw: `${fr ? "Toi" : "You"}: ${userMsg}` };
+    const baseMessages = [...chatMessages, userEntry];
+
+    setChatState("thinking");
+    setChatMessages([...baseMessages, { raw: "Echo: ..." }]);
+    setChatInput("");
+
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const response = await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMsg,
+          history: baseMessages.map(m => m.raw),
+          userTier: safeTier,
+          calendarEvents: events,
+          source: "calendar",
+        }),
+      });
+
+      const data = await response.json();
+      setChatState("speaking");
+      setChatMessages([...baseMessages, { raw: `Echo: ${data.response || ""}` }]);
+
+      // 💥 FIX AGENTIC : INSERER DANS SUPABASE + GOOGLE CALENDAR
+      if (data.action?.type === "ADD_CALENDAR_EVENT") {
+        const payload = data.action.payload;
+        const eventTitle = payload.title || "Rendez-vous Echo";
+        const dateKey = payload.start?.split("T")[0] || new Date().toLocaleDateString("fr-CA");
+        const startTime = payload.start?.split("T")[1]?.slice(0, 5) || "";
+        const endTime = payload.end?.split("T")[1]?.slice(0, 5) || "";
+        const notesStr = payload.notes || "Ajouté par l'agent IA Echo";
+
+        const tempId = Date.now().toString();
+        const ev: EventData = { id: tempId, title: eventTitle, start: startTime, end: endTime, notes: notesStr, isFromEcho: true };
+
+        // 1. Pousser vers Google Calendar si disponible
+        const cloudId = await pushEventToGoogle(userId, dateKey, ev);
+        const finalId = cloudId || tempId;
+
+        // 2. Insérer formellement dans Supabase
+        await supabase.from("echo_calendar").insert({
+          id: finalId,
+          user_id: userId,
+          title: eventTitle,
+          start_date: dateKey,
+          end_date: dateKey,
+          start_time: startTime || null,
+          end_time: endTime || null,
+          notes: notesStr,
+          is_from_echo: true,
+        });
+
+        // 3. Mettre à jour l'affichage local
+        await fetchSupabaseEvents(userId);
+      }
+    } catch (err) {
+      console.error("[Calendar Agentic] Erreur:", err);
+      setChatMessages([...baseMessages, { raw: "Echo: Erreur lors de l'enregistrement de l'événement." }]);
+    } finally {
+      setTimeout(() => setChatState("idle"), 5000);
+    }
+  };
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  const prevMonth = () => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(y => y - 1); } else setCurrentMonth(m => m - 1); };
+  const nextMonth = () => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); } else setCurrentMonth(m => m + 1); };
+  const goToday = () => { setCurrentMonth(today.getMonth()); setCurrentYear(today.getFullYear()); };
+
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const blanks = Array.from({ length: firstDay });
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const makeDateKey = (day: number) => `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const isToday = (day: number) => day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear();
+  const selectedEvents = selectedDateKey ? events[selectedDateKey] || [] : [];
+  const activeMonthLabel = fr ? MONTHS_FR[currentMonth] : MONTHS_EN[currentMonth];
+  const activeDaysLabels = fr ? DAYS_LABELS_FR : DAYS_LABELS_EN;
+  const isPaidTier = userTier && userTier !== "connected_free";
 
   return (
-    <main className="h-[100dvh] bg-white dark:bg-black text-black dark:text-white flex overflow-hidden relative font-sans transition-colors duration-200 selection:bg-cyan-500/30">
-      <input type="file" ref={icsInputRef} accept=".ics" onChange={handleICSRawImport} className="hidden"/>
+    <main className="h-screen w-screen bg-black text-zinc-50 font-sans selection:bg-cyan-500/20 relative overflow-hidden flex flex-col">
 
-      {/* POPUP QUOTA */}
-      {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
+      {/* ── HEADER UNIFIÉ ÉCOSYSTÈME ── */}
+      <header className="border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-40 shrink-0">
+        <div className="max-w-[1600px] mx-auto px-6 py-3 flex justify-between items-center relative">
+          
+          <div className="flex items-center gap-6">
+            <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-white uppercase">
+              ECHOSAI
+            </Link>
 
-      {/* TUTORIAL */}
+            <Link
+              href="/outil"
+              className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all hover:scale-105 active:scale-95"
+            >
+              <span>⚡</span>
+              <span>{fr ? "RETOUR AUX OUTILS" : "BACK TO TOOLS"}</span>
+            </Link>
+          </div>
+          
+          <div className="flex items-center gap-4 text-xs font-mono relative">
+            <div className="flex border border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-900">
+              {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-2 py-1 font-bold transition-colors ${currency === c ? "bg-zinc-100 text-zinc-950" : "text-zinc-400 hover:text-white"}`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+
+            {isPaidTier ? (
+              <div className="flex items-center gap-2 px-3 py-1 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_12px_rgba(16,185,129,0.3)]">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="font-bold text-[10px] uppercase tracking-wider">
+                  {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
+                </span>
+              </div>
+            ) : (
+              <div 
+                onClick={() => setShowPremiumModal(true)} 
+                className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
+              >
+                <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
+                  ★ PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                </span>
+              </div>
+            )}
+
+            <div className="flex border border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px]">
+              <button onClick={() => setLang("fr")} className={`px-2 py-1 ${fr ? "bg-zinc-800 text-white font-bold" : "text-zinc-500 hover:text-zinc-300"}`}>FR</button>
+              <button onClick={() => setLang("en")} className={`px-2 py-1 ${!fr ? "bg-zinc-800 text-white font-bold" : "text-zinc-500 hover:text-zinc-300"}`}>EN</button>
+            </div>
+
+            {userId ? (
+              <button
+                onClick={() => supabase.auth.signOut()}
+                className="text-[11px] text-red-500 hover:text-red-400 transition-colors uppercase font-bold cursor-pointer"
+              >
+                [ {fr ? "Déconnexion" : "Sign Out"} ]
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowSignInModal(true)}
+                className="px-3 py-1.5 border border-zinc-800 text-zinc-300 hover:text-white rounded-xl hover:bg-zinc-900 transition-all font-bold tracking-tight shadow-sm cursor-pointer"
+              >
+                {fr ? "Connexion" : "Sign In"}
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* ── BANDEAU AVERTISSEMENT GOOGLE SYNC ── */}
+      {needsGoogleReconnect && (
+        <div className="bg-amber-950/40 border-b border-amber-500/40 px-6 py-2.5 flex items-center justify-between gap-4 text-xs font-mono text-amber-300 shrink-0">
+          <span>⚠️ {fr ? "Connexion Google Calendar expirée. Reconnecte ton compte pour réactiver la synchronisation." : "Google Calendar token expired. Reconnect your account to sync."}</span>
+          <button onClick={reconnectGoogle} className="px-4 py-1 rounded-xl bg-amber-500 text-zinc-950 font-black uppercase text-[10px] hover:bg-amber-400 transition-all cursor-pointer">
+            {fr ? "Reconnecter Google" : "Reconnect Google"}
+          </button>
+        </div>
+      )}
+
+      {/* ── SPLIT 2 COLONNES (GAUCHE CALENDRIER | DROITE CHAT AGENTIC) ── */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden min-h-0 bg-black">
+
+        {/* COLONNE GAUCHE — CALENDRIER ET GRILLE */}
+        <section className="lg:col-span-7 border-r border-zinc-900 p-6 flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
+          
+          {/* Navigation Mois & Boutons de Sync */}
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 shrink-0">
+            <div className="flex items-center gap-3">
+              <button onClick={prevMonth} className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 hover:border-cyan-500 text-xs font-mono cursor-pointer">◀</button>
+              <button onClick={goToday} className="text-xl font-black font-mono tracking-tight text-white hover:text-cyan-400 transition-colors cursor-pointer">
+                📅 {activeMonthLabel} {currentYear}
+              </button>
+              <button onClick={nextMonth} className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 hover:border-cyan-500 text-xs font-mono cursor-pointer">▶</button>
+            </div>
+
+            <div className="flex items-center gap-2 bg-zinc-900/80 border border-zinc-800 p-1.5 rounded-2xl">
+              <button
+                onClick={handleManualSync}
+                disabled={isSyncing}
+                className="px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs shadow-[0_0_12px_rgba(6,182,212,0.3)] transition-all cursor-pointer"
+              >
+                {isSyncing ? "..." : "Google Sync"}
+              </button>
+              <button onClick={() => icsInputRef.current?.click()} className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-black text-xs font-mono text-zinc-300 hover:text-white cursor-pointer">
+                {fr ? "Importer" : "Import"}
+              </button>
+              <button onClick={() => setShowTutorial(true)} className="w-8 h-8 rounded-xl border border-zinc-800 bg-black text-xs font-mono text-zinc-400 hover:text-white cursor-pointer">
+                ?
+              </button>
+              <input type="file" ref={icsInputRef} accept=".ics" className="hidden" />
+            </div>
+          </div>
+
+          {/* Grille du Calendrier */}
+          <div className="flex-1 flex flex-col justify-start">
+            <div className="grid grid-cols-7 gap-2 mb-2 text-center font-mono text-xs font-bold text-zinc-500 uppercase">
+              {activeDaysLabels.map((d, i) => <div key={i}>{d}</div>)}
+            </div>
+
+            <div className="grid grid-cols-7 gap-2 auto-rows-fr flex-1">
+              {blanks.map((_, i) => <div key={`b-${i}`} className="bg-zinc-950/40 rounded-2xl border border-zinc-900/40" />)}
+              {days.map(day => {
+                const key = makeDateKey(day);
+                const dayEvents = events[key] || [];
+                const mainToday = isToday(day);
+
+                return (
+                  <button
+                    key={day}
+                    onClick={() => { setSelectedDateKey(key); setShowAddForm(false); }}
+                    className={`min-h-[85px] border rounded-2xl p-2.5 text-left flex flex-col justify-between transition-all cursor-pointer overflow-hidden ${
+                      mainToday
+                        ? "border-cyan-400 bg-cyan-950/20 shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+                        : "border-zinc-900 bg-zinc-900/40 hover:border-zinc-700"
+                    }`}
+                  >
+                    <div className={`font-mono text-xs font-bold ${mainToday ? "text-cyan-400" : "text-zinc-500"}`}>{day}</div>
+                    <div className="space-y-1 w-full mt-1">
+                      {dayEvents.slice(0, 2).map(ev => (
+                        <div
+                          key={ev.id}
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-lg truncate border ${
+                            ev.isFromEcho
+                              ? "bg-purple-950/50 border-purple-500/40 text-purple-300"
+                              : ev.googleEventId
+                              ? "bg-blue-950/50 border-blue-500/40 text-blue-300"
+                              : "bg-zinc-800/80 border-zinc-700 text-zinc-200"
+                          }`}
+                        >
+                          {ev.title}
+                        </div>
+                      ))}
+                      {dayEvents.length > 2 && <div className="text-[9px] font-mono text-cyan-400 font-bold">+{dayEvents.length - 2}</div>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+        </section>
+
+        {/* COLONNE DROITE — ECHO COMPAGNON AGENTIC CHAT */}
+        <section className="lg:col-span-5 bg-black p-6 flex flex-col justify-between h-full overflow-hidden">
+          <div className="border-b border-zinc-900 pb-3 flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#06b6d4]" />
+            <span className="text-xs font-mono font-black uppercase tracking-widest text-cyan-400">AGENT CALENDRIER AGENTIC</span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto py-4 space-y-4 custom-scrollbar">
+            {chatMessages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+                <div className="w-12 h-12 rounded-full border border-cyan-500/30 bg-cyan-950/30 flex items-center justify-center text-cyan-400 font-mono text-lg">
+                  📅
+                </div>
+                <p className="text-xs font-mono text-zinc-500 italic">
+                  {fr ? "Dictez un rendez-vous (ex: 'Ajoute un médecin demain à 14h')..." : "Schedule an event (e.g. 'Add dentist tomorrow at 2 PM')..."}
+                </p>
+              </div>
+            ) : chatMessages.map((msg, idx) => (
+              <div key={idx} className={`text-xs font-mono ${msg.raw.startsWith("You:") || msg.raw.startsWith("Toi:") ? "text-right" : "text-left"}`}>
+                <div className={`inline-block p-3.5 rounded-2xl max-w-[85%] leading-relaxed ${
+                  msg.raw.startsWith("You:") || msg.raw.startsWith("Toi:")
+                    ? "bg-zinc-900 border border-zinc-800 text-zinc-200"
+                    : "bg-cyan-950/50 border border-cyan-500/40 text-cyan-200"
+                }`}>
+                  {msg.raw.replace(/^(Echo|You|Toi):\s*/i, "")}
+                </div>
+              </div>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+
+          <div className="space-y-3 pt-3 border-t border-zinc-900">
+            <textarea
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendEcho(); } }}
+              rows={3}
+              placeholder={fr ? "Parlez à votre agent calendrier..." : "Talk to your calendar agent..."}
+              className="w-full bg-zinc-900/90 border border-zinc-800 focus:border-cyan-400 rounded-2xl p-4 text-xs font-mono text-zinc-100 outline-none resize-none leading-relaxed"
+            />
+            <button
+              onClick={handleSendEcho}
+              className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] cursor-pointer"
+            >
+              {fr ? "ENVOYER À ECHO CALENDRIER" : "SEND TO ECHO CALENDAR"}
+            </button>
+          </div>
+        </section>
+
+      </div>
+
+      {/* ── MODAL DE GESTION DU JOUR ÉLÉMENTS ── */}
+      {selectedDateKey && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 backdrop-blur-md" onClick={() => setSelectedDateKey(null)}>
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
+              <h3 className="font-mono text-xs font-bold text-cyan-400 uppercase tracking-widest">📅 {selectedDateKey}</h3>
+              <button onClick={() => setSelectedDateKey(null)} className="text-zinc-500 hover:text-white font-mono text-xs">✕</button>
+            </div>
+
+            <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar">
+              {selectedEvents.length === 0 ? (
+                <p className="text-xs font-mono text-zinc-600 italic py-2">{fr ? "Aucun événement enregistré pour ce jour." : "No events recorded for this day."}</p>
+              ) : selectedEvents.map(ev => (
+                <div key={ev.id} className="bg-zinc-900/80 border border-zinc-800 p-3.5 rounded-2xl flex justify-between items-start">
+                  <div>
+                    <div className="text-xs font-mono font-bold text-zinc-200">{ev.title}</div>
+                    <div className="text-[10px] font-mono text-zinc-500">{ev.start} {ev.end ? `→ ${ev.end}` : ""}</div>
+                    {ev.notes && <p className="text-[10px] font-mono text-zinc-400 mt-1">{ev.notes}</p>}
+                  </div>
+                  <button onClick={() => deleteEvent(selectedDateKey, ev.id, ev.googleEventId)} className="text-zinc-600 hover:text-red-400 font-mono text-xs cursor-pointer">✕</button>
+                </div>
+              ))}
+            </div>
+
+            {!showAddForm ? (
+              <button onClick={() => setShowAddForm(true)} className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-mono text-zinc-300 font-bold rounded-xl cursor-pointer">
+                + {fr ? "Ajouter un événement" : "Add event"}
+              </button>
+            ) : (
+              <div className="space-y-3 pt-3 border-t border-zinc-900">
+                <input type="text" placeholder="Titre" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs font-mono" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="time" value={start} onChange={e => setStart(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs font-mono" />
+                  <input type="time" value={end} onChange={e => setEnd(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs font-mono" />
+                </div>
+                <textarea placeholder="Notes..." value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs font-mono resize-none" />
+                <div className="flex gap-2">
+                  <button onClick={() => setShowAddForm(false)} className="flex-1 py-2 bg-zinc-900 text-xs font-mono rounded-xl">{fr ? "Annuler" : "Cancel"}</button>
+                  <button onClick={saveEvent} className="flex-1 py-2 bg-cyan-600 text-white font-mono font-bold text-xs rounded-xl">{fr ? "Enregistrer" : "Save"}</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {showTutorial && (
         <CalendarTutorialPopup
           lang={lang}
@@ -528,203 +796,14 @@ export default function CalendarPage() {
         />
       )}
 
-      <div className="flex flex-1 overflow-hidden min-h-0">
-
-        {/* SIDEBAR */}
-        <aside className="w-55 shrink-0 border-r border-zinc-200 dark:border-zinc-800 p-8 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
-          <div className="space-y-20">
-            <h2 className="font-bold text-lg">
-              <Link href="/" className="hover:text-cyan-500 dark:hover:text-cyan-400">{t.sidebar.home}</Link>
-            </h2>
-            <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium">
-              <Link href="/chat"       className="block hover:text-cyan-500">{t.sidebar.chat}</Link>
-              <Link href="/books"      className="block hover:text-cyan-500">{t.sidebar.books}</Link>
-              <Link href="/calendar"   className="block text-cyan-600 dark:text-cyan-400 font-bold">📅 {lang==="fr"?"Calendrier":"Calendar"}</Link>
-              <Link href="/vitality"   className="block hover:text-cyan-500">📈 {lang==="fr"?"Vitalité":"Vitality"}</Link>
-              <Link href="/services"   className="block hover:text-cyan-500">💎 Services</Link>
-              <Link href="/account"    className="block hover:text-cyan-500">👤 {lang==="fr"?"Compte":"Account"}</Link>
-              <Link href="/horizonweb" className="block hover:text-cyan-500">📡 HorizonWeb</Link>
-              <hr className="border-zinc-200 dark:border-zinc-800 my-4"/>
-              <Link href="/history"    className="block hover:text-amber-500">⭐ {lang==="fr"?"Historique":"History"}</Link>
-            </div>
-          </div>
-          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500">
-            Status : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-bold block">{safeTier === "connected_free" ? (lang === "fr" ? "Accès libre" : "FreeConnect") : safeTier}</span>
-          </div>
-        </aside>
-
-        {/* MAIN */}
-        <section className="flex-1 flex flex-col px-4 sm:px-8 py-12 overflow-y-auto bg-white dark:bg-gradient-to-b dark:from-zinc-950 dark:via-black dark:to-black transition-colors duration-200 min-w-0">
-
-          {needsGoogleReconnect && (
-            <div className="w-full max-w-7xl mx-auto mb-6 flex items-center justify-between gap-3 flex-wrap bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-2xl px-4 py-3 text-xs">
-              <span className="text-amber-700 dark:text-amber-300 font-medium">
-                {lang==="fr" ? "Connexion Google Calendar expirée. Reconnecte ton compte pour réactiver la synchronisation." : "Google Calendar connection expired. Reconnect your account to resume syncing."}
-              </span>
-              <button onClick={reconnectGoogle} className="bg-amber-500 hover:bg-amber-400 text-white font-bold px-4 py-2 rounded-xl text-[11px] transition-colors shrink-0">
-                {lang==="fr"?"Reconnecter Google":"Reconnect Google"}
-              </button>
-            </div>
-          )}
-
-          {/* Header */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-start gap-4 mb-8 shrink-0 w-full max-w-7xl mx-auto border-b border-zinc-100 dark:border-zinc-900 pb-5">
-            <div className="flex items-center gap-3">
-              <button onClick={prevMonth} className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 hover:text-cyan-500 transition-colors text-xs">◀</button>
-              <button onClick={goToday} className="text-xl sm:text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-100 hover:text-cyan-500 transition-colors">
-                📅 {activeMonthLabel} {currentYear}
-              </button>
-              <button onClick={nextMonth} className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 hover:text-cyan-500 transition-colors text-xs">▶</button>
-            </div>
-
-            <div className="flex items-center gap-2 bg-zinc-50/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800/80 p-1.5 rounded-xl shadow-sm ml-0 lg:ml-6 overflow-x-auto max-w-full">
-              <button onClick={handleManualSync} disabled={isSyncing}
-                className={`text-[11px] font-bold px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 border ${isSyncing ? "bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed animate-pulse" : "bg-cyan-600 text-white border-transparent hover:bg-cyan-500 shadow-sm"}`}>
-                {isSyncing ? "..." : "Google Sync"}
-              </button>
-              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 mx-1 shrink-0"/>
-              <button onClick={() => icsInputRef.current?.click()} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
-                {lang==="fr"?"Importer":"Import"}
-              </button>
-              <button onClick={exportICS} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">
-                {lang==="fr"?"Exporter":"Export"}
-              </button>
-              <button onClick={() => setShowTutorial(true)} className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-500 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors text-zinc-700 dark:text-zinc-300 shadow-sm shrink-0">?</button>
-              {googleTokenRef.current && !needsGoogleReconnect && (
-                <div className="text-[10px] text-emerald-500 font-mono font-bold shrink-0 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"/>Google
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Grille calendrier */}
-          <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col">
-            <div className="overflow-x-auto">
-              <div className="min-w-[600px]">
-                <div className="grid grid-cols-7 gap-2 mb-2 text-center font-bold text-zinc-400 dark:text-zinc-500 text-[11px] uppercase tracking-widest font-mono">
-                  {activeDaysLabels.map((d,i) => <div key={i}>{d}</div>)}
-                </div>
-                <div className="grid grid-cols-7 gap-2 auto-rows-fr">
-                  {blanks.map((_,i) => <div key={"b"+i} className="bg-zinc-50/20 dark:bg-zinc-950/10 rounded-xl border border-transparent"/>)}
-                  {days.map(day => {
-                    const key       = makeDateKey(day);
-                    const dayEvents = events[key] || [];
-                    const mainToday = isToday(day);
-                    return (
-                      <button key={day} onClick={() => openDay(day)}
-                        className={`min-h-[90px] border rounded-xl p-2 text-left flex flex-col justify-between transition-all overflow-hidden ${
-                          mainToday
-                            ? "border-cyan-500 bg-cyan-50/5 dark:bg-zinc-900/60 shadow-md shadow-cyan-500/5 drop-shadow-[0_0_4px_rgba(6,182,212,0.15)]"
-                            : "border-zinc-200 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/20 hover:border-zinc-400 dark:hover:border-zinc-800"}`}>
-                        <div className={`font-mono text-xs font-bold ${mainToday?"text-cyan-500":"text-zinc-400 dark:text-zinc-500"}`}>{day}</div>
-                        <div className="flex-1 w-full space-y-1 mt-1 overflow-hidden flex flex-col justify-start">
-                          {dayEvents.slice(0,2).map(ev => (
-                            <div key={ev.id}
-                              className={`text-[10px] border rounded-lg px-1.5 py-0.5 truncate w-full tracking-wide ${
-                                ev.isFromEcho
-                                  ? "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-900/60 text-purple-700 dark:text-purple-400 font-medium"
-                                  : ev.googleEventId
-                                  ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40 text-blue-700 dark:text-blue-400"
-                                  : "bg-white dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300"}`}>
-                              <span className="font-bold">{ev.start?`${ev.start} `:""}</span>{ev.title}
-                            </div>
-                          ))}
-                          {dayEvents.length > 2 && <div className="text-[9px] text-cyan-600 dark:text-cyan-500 font-mono font-bold pl-1">+{dayEvents.length-2}</div>}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      {/* DAY MODAL */}
-      {selectedDateKey && (
-        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setSelectedDateKey(null)}>
-          <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl space-y-6 max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-900 pb-4">
-              <div>
-                <h2 className="text-base font-mono uppercase tracking-widest text-cyan-600 dark:text-cyan-400 font-bold">📅 {selectedDateKey}</h2>
-                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">
-                  {lang==="fr"?"Gestion des événements de cette journée.":"Event manager for this day."}
-                </p>
-              </div>
-              <button onClick={() => setSelectedDateKey(null)} className="text-zinc-400 hover:text-black dark:hover:text-white font-mono text-sm p-2 transition-colors">✕</button>
-            </div>
-
-            {selectedEvents.length > 0 && (
-              <div className="space-y-3">
-                {selectedEvents.map(ev => (
-                  <div key={ev.id} className="bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex justify-between items-start">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2 flex-wrap">
-                        {ev.title}
-                        {ev.isFromEcho && <span className="text-[9px] bg-purple-100 dark:bg-purple-950 px-2 py-0.5 rounded-md border border-purple-300 dark:border-purple-800 uppercase font-mono font-bold text-purple-700 dark:text-purple-400">Echo</span>}
-                        {ev.googleEventId && <span className="text-[9px] bg-blue-100 dark:bg-blue-950/50 px-2 py-0.5 rounded-md border border-blue-300 dark:border-blue-800 uppercase font-mono font-bold text-blue-600 dark:text-blue-400">Google</span>}
-                      </div>
-                      <div className="text-zinc-400 dark:text-zinc-500 text-xs font-mono">
-                        {ev.start?`${ev.start}${ev.end?` → ${ev.end}`:""}`:lang==="fr"?"Journée complète":"All Day"}
-                      </div>
-                      {ev.notes && (
-                        <p className="text-zinc-600 dark:text-zinc-400 text-xs bg-white dark:bg-black/40 border border-zinc-200 dark:border-zinc-900 rounded-xl p-2.5 mt-2 whitespace-pre-wrap leading-relaxed shadow-inner">{ev.notes}</p>
-                      )}
-                    </div>
-                    <button onClick={() => deleteEvent(selectedDateKey, ev.id, ev.googleEventId)} className="text-zinc-400 hover:text-red-500 font-mono text-sm ml-4 p-1 transition-colors">✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {selectedEvents.length===0 && !showAddForm && (
-              <div className="text-center py-6 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl text-zinc-400 dark:text-zinc-600 text-xs">
-                {lang==="fr"?"Aucun événement sur cette journée.":"No events on this day."}
-              </div>
-            )}
-
-            {!showAddForm && (
-              <button onClick={() => setShowAddForm(true)} className="w-full bg-zinc-100 dark:bg-zinc-900 hover:bg-cyan-500 hover:text-white dark:hover:bg-cyan-600 border border-transparent font-bold py-3 rounded-xl text-xs transition-colors">
-                + {lang==="fr"?"Ajouter un événement":"Add event"}
-              </button>
-            )}
-
-            {showAddForm && (
-              <div className="space-y-4 border-t border-zinc-200 dark:border-zinc-900 pt-4 animate-in fade-in duration-200">
-                <h3 className="font-mono text-xs uppercase tracking-wider text-cyan-600 dark:text-cyan-400 font-bold">
-                  + {lang==="fr"?"Nouvel événement":"New event"}
-                </h3>
-                <input type="text" placeholder={lang==="fr"?"Titre de l'événement":"Event title"} value={title} onChange={e => setTitle(e.target.value)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner"/>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang==="fr"?"Début":"Start"}</label>
-                    <input type="time" value={start} onChange={e => setStart(e.target.value)}
-                      className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner"/>
-                  </div>
-                  <div>
-                    <label className="text-[10px] uppercase font-mono tracking-wider text-zinc-500 block mb-1.5 font-bold">{lang==="fr"?"Fin":"End"}</label>
-                    <input type="time" value={end} onChange={e => setEnd(e.target.value)}
-                      className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner"/>
-                  </div>
-                </div>
-                <textarea placeholder="Notes..." value={notes} onChange={e => setNotes(e.target.value)} rows={3}
-                  className="w-full bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm text-black dark:text-zinc-100 focus:outline-none focus:border-cyan-500 transition-colors shadow-inner resize-none"/>
-                <div className="flex gap-2 pt-2">
-                  <button onClick={() => setShowAddForm(false)} className="flex-1 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 font-bold py-3 rounded-xl text-xs transition-colors hover:bg-zinc-200 dark:hover:bg-zinc-800">
-                    {lang==="fr"?"Annuler":"Cancel"}
-                  </button>
-                  <button onClick={saveEvent} className="flex-1 bg-cyan-600 text-white font-bold py-3 rounded-xl text-xs transition-all hover:bg-cyan-500 shadow-md">
-                    {lang==="fr"?"Enregistrer":"Save"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </main>
+  );
+}
+
+export default function CalendarPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-cyan-400 font-mono text-xs">Initialisation du Calendrier...</div>}>
+      <CalendarContent />
+    </Suspense>
   );
 }
