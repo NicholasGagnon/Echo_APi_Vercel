@@ -11,7 +11,6 @@ const supabaseAdmin = createClient(
 
 export const dynamic = "force-dynamic";
 
-// 🔑 METS TA VRAIE CLÉ STRIPE ICI
 const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "whsec_1U3vFgBHw5LMtvb0HSkCF7kdfOtJZLkl";
 
 export async function POST(req: Request) {
@@ -26,14 +25,12 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
 
   try {
-    // Validation officielle Stripe
     event = stripe.webhooks.constructEvent(payload, signature, ENDPOINT_SECRET);
   } catch (err: any) {
     console.error(`❌ Échec signature Webhook: ${err.message}`);
     return NextResponse.json({ error: `Signature invalide: ${err.message}` }, { status: 400 });
   }
 
-  // Si on arrive ici, l'événement est 100% valide
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const userId = session.metadata?.userId || session.metadata?.user_id;
@@ -41,24 +38,24 @@ export async function POST(req: Request) {
     console.log(`⚡ Traitement paiement pour userId: ${userId} / email: ${session.customer_email}`);
 
     try {
-      // 1. Recherche de l'utilisateur dans Supabase (par metadata ou par courriel)
       let targetUserId = userId;
 
+      // Recherche sécurisée par email si l'userId est manquant dans metadata
       if (!targetUserId && session.customer_email) {
-        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
-        const matched = usersData?.users.find(u => u.email === session.customer_email);
+        const { data } = await supabaseAdmin.auth.admin.listUsers();
+        const matched = data?.users?.find((u: any) => u.email === session.customer_email);
         if (matched) targetUserId = matched.id;
       }
 
       if (targetUserId) {
-        // 2. ÉCRITURE DANS PROFILES
+        // 1. ÉCRITURE DANS PROFILES
         await supabaseAdmin.from("profiles").upsert({
           id: targetUserId,
           user_tier: "premium",
           updated_at: new Date().toISOString()
         }, { onConflict: "id" });
 
-        // 3. ÉCRITURE DANS WORLD_QUOTAS
+        // 2. ÉCRITURE DANS WORLD_QUOTAS
         await supabaseAdmin.from("world_quotas").upsert({
           user_id: targetUserId,
           available: 9999,
@@ -66,7 +63,7 @@ export async function POST(req: Request) {
           updated_at: new Date().toISOString()
         }, { onConflict: "user_id" });
 
-        // 4. ÉCRITURE DANS CONTENU_QUOTAS
+        // 3. ÉCRITURE DANS CONTENU_QUOTAS
         await supabaseAdmin.from("contenu_quotas").upsert({
           user_id: targetUserId,
           tier: "advantage",
