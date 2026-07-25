@@ -1,6 +1,6 @@
 import { supabase } from "../app/lib/supabase";
 
-export type UserTier = "free" | "premium" | "connected_free" | "basic" | "ultra" | "founder";
+export type UserTier = "free" | "premium" | "connected_free" | "basic" | "ultra" | "founder" | "advantage";
 
 export interface QuotaResult {
   allowed: boolean;
@@ -12,26 +12,29 @@ export interface QuotaResult {
   error?: string;
 }
 
-/**
- * 🛠️ FONCTION DE SECOURS POUR LE CHAT :
- * Retourne la longueur max des messages selon le statut
- */
 export const getMessageMaxLength = (tier?: string): number => {
   if (tier === "premium") return 20000;
-  return 2000; // Limite par défaut
+  return 2000;
 };
 
-/**
- * Helper de compatibilité
- */
 export const isPremiumOrAbove = (tier?: string): boolean => {
   return tier === "premium";
 };
 
 /**
- * Vérifie si l'utilisateur possède l'abonnement actif (3,99$)
+ * 🛠️ signature ultra-souple :
+ * Accepte l'ancien format : checkQuota(feature, tier, isAnon, userId)
+ * ET le nouveau format  : checkQuota(userId)
  */
-export async function checkQuota(userId?: string | null): Promise<QuotaResult> {
+export async function checkQuota(
+  arg1?: any,
+  _arg2?: any,
+  _arg3?: any,
+  _arg4?: any
+): Promise<QuotaResult> {
+  // Récupère le userId peu importe la position dans les arguments
+  const userId = typeof arg1 === "string" && arg1.length > 20 ? arg1 : _arg4;
+
   if (!userId) {
     return { allowed: false, isUnlimited: false, tier: "free", remaining: 0, current: 0, max: 0 };
   }
@@ -58,10 +61,6 @@ export async function checkQuota(userId?: string | null): Promise<QuotaResult> {
   }
 }
 
-/**
- * Fonction de consommation (neutralisée pour l'illimité)
- */
-export async function consumeQuota(userId?: string | null): Promise<{ allowed: boolean }> {
-  const result = await checkQuota(userId);
-  return { allowed: result.isUnlimited };
+export async function consumeQuota(..._args: any[]): Promise<{ allowed: boolean }> {
+  return { allowed: true };
 }
