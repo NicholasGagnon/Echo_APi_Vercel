@@ -62,7 +62,7 @@ export const translations = {
 
 type LangType = "fr" | "en";
 type ThemeType = "dark" | "light";
-export type UserTierType = "free" | "premium";
+export type UserTierType = "free" | "premium" | "connected_free" | "basic" | "ultra" | "founder" | "advantage";
 
 type AppContextType = {
   lang: LangType;
