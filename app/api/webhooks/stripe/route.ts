@@ -11,10 +11,13 @@ const supabaseAdmin = createClient(
 
 export const dynamic = "force-dynamic";
 
-const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "whsec_1U3vFgBHw5LMtvb0HSkCF7kdfOtJZLkl";
+const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "whsec_1U3vFgBHw5LMtvb0HSkCF7kdfOtJZLk1";
 
 export async function POST(req: Request) {
-  const payload = await req.text();
+  // 🎯 LECTURE DIRECTE DU BUFFER POUR ÉVITER QUE NEXT.JS N'ALTÈRE LE PAYLOAD
+  const arrayBuffer = await req.arrayBuffer();
+  const rawPayload = Buffer.from(arrayBuffer);
+  
   const signature = req.headers.get("stripe-signature");
 
   if (!signature) {
@@ -25,12 +28,14 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(payload, signature, ENDPOINT_SECRET);
+    // On passe directement le Buffer à Stripe
+    event = stripe.webhooks.constructEvent(rawPayload, signature, ENDPOINT_SECRET);
   } catch (err: any) {
     console.error(`❌ Échec signature Webhook: ${err.message}`);
     return NextResponse.json({ error: `Signature invalide: ${err.message}` }, { status: 400 });
   }
 
+  // ── TRAITEMENT DE L'ÉVÉNEMENT ──────────────────────────────────────────────
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const userId = session.metadata?.userId || session.metadata?.user_id;
@@ -40,7 +45,6 @@ export async function POST(req: Request) {
     try {
       let targetUserId = userId;
 
-      // Recherche sécurisée par email si l'userId est manquant dans metadata
       if (!targetUserId && session.customer_email) {
         const { data } = await supabaseAdmin.auth.admin.listUsers();
         const matched = data?.users?.find((u: any) => u.email === session.customer_email);
@@ -48,14 +52,14 @@ export async function POST(req: Request) {
       }
 
       if (targetUserId) {
-        // 1. ÉCRITURE DANS PROFILES
+        // 1. ÉCRITURE PROFILES
         await supabaseAdmin.from("profiles").upsert({
           id: targetUserId,
           user_tier: "premium",
           updated_at: new Date().toISOString()
         }, { onConflict: "id" });
 
-        // 2. ÉCRITURE DANS WORLD_QUOTAS
+        // 2. ÉCRITURE WORLD_QUOTAS
         await supabaseAdmin.from("world_quotas").upsert({
           user_id: targetUserId,
           available: 9999,
@@ -63,7 +67,7 @@ export async function POST(req: Request) {
           updated_at: new Date().toISOString()
         }, { onConflict: "user_id" });
 
-        // 3. ÉCRITURE DANS CONTENU_QUOTAS
+        // 3. ÉCRITURE CONTENU_QUOTAS
         await supabaseAdmin.from("contenu_quotas").upsert({
           user_id: targetUserId,
           tier: "advantage",
