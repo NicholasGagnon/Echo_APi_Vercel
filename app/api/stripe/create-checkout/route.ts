@@ -3,75 +3,61 @@ import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-// ── TON MAPPING PARFAIT (5 VARIABLES INTACTES) ──
-const PRICE_IDS = {
-  basic: process.env.STRIPE_BASIC_PRICE_ID!,
-  premium: process.env.STRIPE_PREMIUM_PRICE_ID!,
-  ultra: process.env.STRIPE_ULTRA_PRICE_ID!,
-  founder: process.env.STRIPE_FOUNDER_PRICE_ID!,
-  treasure: process.env.STRIPE_TREASURE_PRICE_ID!, 
-} as const;
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    // 🛠️ ON RÉCUPÈRE LE PLAN ET LA DEVISE SOUHAITÉE (CAD PAR DÉFAUT SI RIEN N'EST ENVOYÉ)
-    const { plan, userId, userEmail, currency = "CAD" } = body;
+    const { userId, userEmail } = body;
 
-    // --- SÉCURITÉ #1 : Validation des données reçues ---
-    if (!plan || !PRICE_IDS[plan as keyof typeof PRICE_IDS]) {
-      return NextResponse.json({ message: "Invalid or missing plan parameter" }, { status: 400 });
-    }
     if (!userId || !userEmail) {
-      return NextResponse.json({ message: "User authentication missing" }, { status: 401 });
+      return NextResponse.json(
+        { message: "Utilisateur non authentifié" },
+        { status: 401 }
+      );
     }
 
-    const priceId = PRICE_IDS[plan as keyof typeof PRICE_IDS];
+    // ID du tarif à 3,99$ (World Advantage / Basic)
+    const priceId = process.env.STRIPE_WORLDBASIC_PRICE_ID || process.env.STRIPE_BASIC_PRICE_ID;
+
+    if (!priceId) {
+      return NextResponse.json(
+        { message: "Identifiant de prix 3.99$ manquant dans le .env" },
+        { status: 500 }
+      );
+    }
 
     const origin = req.headers.get("origin") ?? "http://localhost:3000";
-    const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {};
 
-    // --- CONFIGURATION DYNAMIQUE DES MOYENS DE PAIEMENT ---
-    let paymentMethodTypes: string[] = ["card"];
-    if (currency.toUpperCase() === "EUR") {
-      paymentMethodTypes = ["card", "sepa_debit", "bancontact"]; // Active les banques d'Europe
-    } else if (currency.toUpperCase() === "USD") {
-      paymentMethodTypes = ["card", "link"]; // Active Link pour les USA
-    }
-
-    // --- CRÉATION DE LA SESSION CHECKOUT ---
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: paymentMethodTypes as any,
+      payment_method_types: ["card"],
       mode: "subscription",
-      allow_promotion_codes: true,
       customer_email: userEmail,
+      
+      // 🎟️ AJOUT DE LA CASE CODE PROMO DANS STRIPE
+      allow_promotion_codes: true,
+
       line_items: [
         {
-          price: priceId, // C'est ton ID unique qui contient tes 3 devises
+          price: priceId,
           quantity: 1,
         },
       ],
-
-      // ── 🛠️ LA SEULE LIGNE CRITIQUE AJOUTÉE ──
-      // C'est ça qui force Stripe à aller lire la ligne EUR ou USD de ton produit !
-      currency: currency.toLowerCase(), 
-
-      subscription_data: subscriptionData,
-      success_url: `${origin}/services?success=true`,
-      cancel_url: `${origin}/services?canceled=true`,
-      
+      success_url: `${origin}/contratachat?subscription=success`,
+      cancel_url: `${origin}/contratachat?subscription=canceled`,
       metadata: {
         userId: userId,
-        planName: plan,
+      },
+      subscription_data: {
+        metadata: {
+          userId: userId,
+        },
       },
     });
 
     return NextResponse.json({ url: session.url });
-
   } catch (error: any) {
-    console.error("Stripe Route Error:", error);
+    console.error("Stripe Checkout Error:", error);
     return NextResponse.json(
-      { message: error.message || "Internal Server Error" },
+      { message: error.message || "Erreur interne" },
       { status: 500 }
     );
   }

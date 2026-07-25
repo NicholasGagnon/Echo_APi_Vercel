@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
 
@@ -23,13 +24,31 @@ const GoogleLogo = () => (
   </svg>
 );
 
+type CurrencyCode = "CAD" | "USD" | "EUR";
+
+const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
+const PRICES: Record<CurrencyCode, { amount: string; symbol: string }> = {
+  CAD: { amount: "3.99", symbol: "CA$" },
+  USD: { amount: "3.99", symbol: "US$" },
+  EUR: { amount: "3.99", symbol: "€" },
+};
+
 export default function OutilTotemPage() {
-  const { userTier, lang, setLang } = useApp();
+  const { lang, setLang } = useApp();
   const fr = lang === "fr";
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [user, setUser] = useState<any>(null);
+  const [userTier, setUserTier] = useState<string>("free");
 
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [targetHref, setTargetHref] = useState<string | null>(null);
+
+  const [currency, setCurrency] = useState<CurrencyCode>("CAD");
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,27 +63,123 @@ export default function OutilTotemPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) setUser(session.user);
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user || null);
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+      } else {
+        setUser(null);
+        setUserTier("free");
+      }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
+  // Détection du retour Stripe (?premium=success)
+  useEffect(() => {
+    if (searchParams.get("premium") === "success" && user) {
+      // Force un petit délai pour laisser le webhook Stripe finir d'écrire en DB
+      const timer = setTimeout(() => {
+        verifierStatutUser(user.id);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, user]);
+
+  // VÉRIFICATION Élargie et robuste de tous les statuts payants possibles
+  const verifierStatutUser = async (uid: string) => {
+    try {
+      // 1. Vérifie contenu_quotas
+      const { data: cData, error: cErr } = await supabase
+        .from("contenu_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (!cErr && cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
+        setUserTier(cData.tier);
+        return;
+      }
+
+      // 2. Vérifie world_quotas en recours
+      const { data: wData, error: wErr } = await supabase
+        .from("world_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (!wErr && wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
+        setUserTier(wData.tier);
+        return;
+      }
+
+      setUserTier("free");
+    } catch (e) {
+      console.warn("Erreur verif statut:", e);
+    }
+  };
+
+  const handleToolClick = (e: React.MouseEvent, href: string) => {
+    if (!user) {
+      e.preventDefault();
+      setTargetHref(href);
+      setShowSignInModal(true);
+    }
+  };
+
   const handleGoogleConnect = async () => {
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/outil`;
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/outil`, scopes: "openid profile email", queryParams: { prompt: "select_account" } },
+      options: { redirectTo: redirectUrl, scopes: "openid profile email", queryParams: { prompt: "select_account" } },
     });
   };
 
   const handleMicrosoftConnect = async () => {
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/outil`;
     await supabase.auth.signInWithOAuth({
       provider: "azure",
-      options: { redirectTo: `${window.location.origin}/outil`, scopes: "openid profile email User.Read" },
+      options: { redirectTo: redirectUrl, scopes: "openid profile email User.Read" },
     });
+  };
+
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      setShowPremiumModal(false);
+      setShowSignInModal(true);
+      return;
+    }
+
+    setIsCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/create-checkout-site2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: "world_advantage",
+          currency: currency.toUpperCase(),
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
+      }
+    } catch {
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
+    } finally {
+      setIsCheckoutLoading(false);
+    }
   };
 
   const handleEmailSignIn = async (e?: React.FormEvent) => {
@@ -81,6 +196,9 @@ export default function OutilTotemPage() {
     } else {
       setShowSignInModal(false);
       clearInputs();
+      if (targetHref) {
+        router.push(targetHref);
+      }
     }
   };
 
@@ -106,10 +224,11 @@ export default function OutilTotemPage() {
       return;
     }
     const trimmedEmail = email.trim();
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/outil`;
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/outil` },
+      options: { emailRedirectTo: redirectUrl },
     });
 
     if (error) {
@@ -138,10 +257,11 @@ export default function OutilTotemPage() {
   const handleResendEmail = async () => {
     if (resendCountdown > 0 || !resendEmail) return;
     setSignUpError(null);
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/outil`;
     const { error } = await supabase.auth.resend({
       type: "signup",
       email: resendEmail,
-      options: { emailRedirectTo: `${window.location.origin}/outil` },
+      options: { emailRedirectTo: redirectUrl },
     });
     if (error) {
       setSignUpError(error.message);
@@ -162,8 +282,9 @@ export default function OutilTotemPage() {
       setSignInError(fr ? "Veuillez entrer votre courriel d'abord." : "Please enter your email address first.");
       return;
     }
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/outil`;
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/outil`,
+      redirectTo: redirectUrl,
     });
     if (error) {
       setSignInError(error.message);
@@ -186,24 +307,99 @@ export default function OutilTotemPage() {
   };
 
   const tools = [
-    { id: "01", text: fr ? "Générez 200 pages rédigées en 2 minutes." : "Generate 200 written pages in 2 minutes.", side: "left", href: "/content-creator", badge: "200 PGS" },
-    { id: "02", text: fr ? "Confrontez 3 IA mondiales sur votre sujet." : "Confront 3 global AIs on your topic.", side: "right", href: "/world", badge: "GEO-AI" },
-    { id: "03", text: fr ? "Détectez les faux avis avant d'acheter." : "Detect fake reviews before buying.", side: "left", href: "/avis", badge: "AVIS" },
-    { id: "04", text: fr ? "Exportez une facture PDF en un prompt." : "Export a PDF invoice in one prompt.", side: "right", href: "/fastbilling", badge: "PDF" },
-    { id: "05", text: fr ? "Synchronisez et pilotez votre Google Calendar." : "Synchronize and manage your Google Calendar.", side: "left", href: "/chat", badge: "SYNC" },
-    { id: "06", text: fr ? "Un agent IA ajuste vos finances quotidiennes." : "An AI agent adjusts your daily finances.", side: "right", href: "/vitality", badge: "BUDGET" },
-    { id: "07", text: fr ? "Pilotez votre déficit calorique en direct." : "Manage your daily caloric deficit live.", side: "left", href: "/vitality#caloric", badge: "HEALTH" },
-    { id: "08", text: fr ? "Un moteur qui creuse sans liens publicitaires." : "A search engine with zero ad clutter.", side: "right", href: "/horizonweb", badge: "SEARCH" },
-    { id: "09", text: fr ? "Rendez vos documents impeccables en 2 min." : "Make your documents flawless in 2 min.", side: "left", href: "/fixer", badge: "EXPRESS" },
-    { id: "10", text: fr ? "Rédigez votre livre avec un compagnon IA." : "Write your book with an AI companion.", side: "right", href: "/books", badge: "LIVRE" },
-    { id: "11", text: fr ? "Testez le vrai potentiel de votre concept." : "Test the real potential of your idea.", side: "left", href: "/idea", badge: "CORE" },
-    { id: "12", text: fr ? "Discutez avec une IA rapide sans limites." : "Chat with a fast AI without limits.", side: "right", href: "/chat", badge: "CHAT" }
+    { 
+      id: "01", 
+      text: fr ? "📖 Créer un nouveau livre de 200 pages à partir d'une simple idée, prêt pour l'impression." : "📖 Create a new 200-page book from a simple idea, print-ready.", 
+      side: "left", 
+      href: "/contenu", 
+      badge: "CRÉATION" 
+    },
+    { 
+      id: "02", 
+      text: fr ? "🌍 Créez un débat entre 3 IA représentant la Chine, les États-Unis et l'Europe, puis choisissez votre allégeance, qui aura le dernier mot." : "🌍 Create a debate between 3 AIs representing China, the US, and Europe, then choose your allegiance.", 
+      side: "right", 
+      href: "/world", 
+      badge: "DÉBAT" 
+    },
+    { 
+      id: "03", 
+      text: fr ? "⭐ Découvrez les vrais avis cachés de votre prochain achat derrière le marketing, en collant simplement une URL." : "⭐ Discover real hidden reviews behind marketing before your next purchase, simply by pasting a URL.", 
+      side: "left", 
+      href: "/avis", 
+      badge: "ACHAT" 
+    },
+    { 
+      id: "04", 
+      text: fr ? "📄 Créez une facture professionnelle en 30 secondes avec un simple prompt, prête à être exportée en PDF." : "📄 Create a professional invoice in 30 seconds with a simple prompt, ready to export as PDF.", 
+      side: "right", 
+      href: "/fastbilling", 
+      badge: "FACTURE" 
+    },
+    { 
+      id: "05", 
+      text: fr ? "📅 Gérez votre calendrier et ajoutez automatiquement vos rendez-vous grâce à un agent IA." : "📅 Manage your calendar and automatically add appointments using an AI agent.", 
+      side: "left", 
+      href: "/calendar", 
+      badge: "CALENDRIER" 
+    },
+    { 
+      id: "06", 
+      text: fr ? "💰 Gérez votre budget et laissez un agent IA enregistrer vos dépenses, organiser vos finances et suivre votre évolution." : "💰 Manage your budget and let an AI agent log expenses, organize finances, and track your progress.", 
+      side: "right", 
+      href: "/budget", 
+      badge: "BUDGET" 
+    },
+    { 
+      id: "07", 
+      text: fr ? "🔥 Suivez facilement vos apports caloriques, vos repas et votre déficit pour atteindre vos objectifs de perte de poids." : "🔥 Easily track your caloric intake, meals, and deficit to reach your weight loss goals.", 
+      side: "left", 
+      href: "/vitality", 
+      badge: "FITNESS" 
+    },
+    { 
+      id: "08", 
+      text: fr ? "🔎 Effectuez des recherches intelligentes qui analysent le web au lieu de simplement afficher des liens." : "🔎 Perform smart searches that analyze the web instead of simply displaying links.", 
+      side: "right", 
+      href: "/horizonweb", 
+      badge: "MOTEUR WEB" 
+    },
+    { 
+      id: "09", 
+      text: fr ? "✨ Corrigez et améliorez vos documents pour les rendre prêts à l'impression en moins de 2 minutes." : "✨ Fix and improve your documents to make them print-ready in under 2 minutes.", 
+      side: "left", 
+      href: "/correcteur", 
+      badge: "CORRIGER" 
+    },
+    { 
+      id: "10", 
+      text: fr ? "📚 Écrivez votre livre avec un compagnon IA dans un espace calme, conçu pour rester concentré et créatif." : "📚 Write your book with an AI companion in a quiet space designed to stay focused and creative.", 
+      side: "right", 
+      href: "/books", 
+      badge: "AUTEUR" 
+    },
+    { 
+      id: "11", 
+      text: fr ? "💡 Faites analyser votre idée et obtenez un premier avis sur son potentiel en moins de 30 secondes." : "💡 Get your idea analyzed and receive an initial opinion on its potential in under 30 seconds.", 
+      side: "left", 
+      href: "/idea", 
+      badge: "ANALYSE" 
+    },
+    { 
+      id: "12", 
+      text: fr ? "💬 Discutez avec une IA rapide plus libre dans ses échanges." : "💬 Chat with a fast AI that is more unconstrained in dialogue.", 
+      side: "right", 
+      href: "/chat", 
+      badge: "CHAT" 
+    }
   ];
+
+  // Condition élargie pour le badge vert (prend en compte advantage, premium, ultra, founder, basic...)
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
       
-      {/* ── HEADER BLANC ── */}
+      {/* ── HEADER BLANC UNIFIÉ ── */}
       <section className="bg-white text-zinc-900 relative z-30">
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
@@ -211,13 +407,47 @@ export default function OutilTotemPage() {
               <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-zinc-900 uppercase">
                 ECHOSAI
               </Link>
+            </div>
+            
+            <div className="flex items-center gap-4 text-xs font-mono relative">
+              
+              {/* SÉLECTEUR DE DEVISE */}
+              <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
+                {CURRENCIES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCurrency(c)}
+                    className={`px-2 py-1 font-bold transition-colors ${currency === c ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"}`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+
+              {/* DÉTECTION ÉLARGIE : SI TIER ACTIF -> VERT NÉON */}
+              {isPaidTier ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="font-bold text-[11px] uppercase tracking-wider">
+                    {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
+                  </span>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setShowPremiumModal(true)} 
+                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+                >
+                  <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                    ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  </span>
+                </div>
+              )}
+
               <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
                 <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
                 <button onClick={() => setLang("en")} className={`px-2 py-1 ${lang === "en" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>EN</button>
               </div>
-            </div>
-            
-            <div className="flex items-center gap-4 text-xs font-mono relative">
+
               {user ? (
                 <div className="flex items-center gap-4">
                   <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200">
@@ -237,9 +467,6 @@ export default function OutilTotemPage() {
                   </button>
                 </div>
               )}
-              <div className="ml-2 px-2.5 py-1 bg-zinc-100 text-zinc-600 rounded-md text-[10px] uppercase font-bold">
-                {userTier === "connected_free" ? (fr ? "ACCÈS LIBRE" : "FREE TIER") : userTier?.toUpperCase() || (fr ? "VISITEUR" : "GUEST")}
-              </div>
             </div>
           </div>
         </header>
@@ -263,7 +490,7 @@ export default function OutilTotemPage() {
         </div>
       </section>
 
-      {/* ── COURBE BLANCHE AVEC LISERÉ CYAN ÉPAISSI ── */}
+      {/* ── COURBE BLANCHE ── */}
       <div className="relative w-full h-24 bg-zinc-950 overflow-hidden -mt-1 z-20">
         <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
@@ -278,12 +505,10 @@ export default function OutilTotemPage() {
       <section className="bg-zinc-950 text-zinc-50 pb-12 pt-0 relative z-10 -mt-8">
         <div className="max-w-7xl mx-auto px-4 relative">
           
-          {/* TRONC CENTRAL PROLONGÉ */}
           <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-6 bg-cyan-950/80 border-x-2 border-cyan-400 shadow-[0_0_35px_rgba(6,182,212,0.6)] hidden md:block z-0 rounded-b-full">
             <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-2 bg-cyan-300 shadow-[0_0_15px_#06b6d4]" />
           </div>
 
-          {/* LISTE DES OUTILS ET BRANCHES COURBES */}
           <div className="space-y-12 relative z-10 pt-12">
             {tools.map((tool) => {
               const isLeft = tool.side === "left";
@@ -292,11 +517,11 @@ export default function OutilTotemPage() {
                   key={tool.id} 
                   className={`flex items-center w-full ${isLeft ? "md:flex-row" : "md:flex-row-reverse"} flex-col justify-center group`}
                 >
-                  {/* MODULE D'OUTIL */}
                   <div className="w-full md:w-[47%] z-10">
                     <Link 
                       href={tool.href} 
-                      className="block relative p-6 rounded-2xl border-2 border-cyan-500/40 bg-black/95 transition-all duration-300 ease-out shadow-[0_0_20px_rgba(6,182,212,0.18)] group-hover:border-cyan-300 group-hover:shadow-[0_0_45px_rgba(6,182,212,0.95)] group-hover:scale-[1.03] group-hover:bg-cyan-950/60 overflow-hidden min-h-[90px] flex items-center"
+                      onClick={(e) => handleToolClick(e, tool.href)}
+                      className="block relative p-6 rounded-2xl border-2 border-cyan-500/40 bg-black/95 transition-all duration-300 ease-out shadow-[0_0_20px_rgba(6,182,212,0.18)] group-hover:border-cyan-300 group-hover:shadow-[0_0_45px_rgba(6,182,212,0.95)] group-hover:scale-[1.03] group-hover:bg-cyan-950/60 overflow-hidden min-h-[90px] flex items-center cursor-pointer"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-cyan-300/25 to-cyan-500/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none" />
 
@@ -311,7 +536,6 @@ export default function OutilTotemPage() {
                     </Link>
                   </div>
 
-                  {/* BRANCHE EN COURBE */}
                   <div className="hidden md:flex w-[6%] h-12 items-center justify-center relative">
                     <div 
                       className={`w-full h-full border-b-2 border-cyan-400 group-hover:border-cyan-200 shadow-[0_2px_12px_#06b6d4] transition-all duration-300 ${
@@ -329,21 +553,84 @@ export default function OutilTotemPage() {
 
         </div>
 
-        {/* PIED DE PAGE SYNCHRONISATION */}
         <div className="mt-20 max-w-7xl mx-auto px-6">
           <div className="border border-zinc-900 bg-zinc-900/40 rounded-2xl p-6 font-mono text-[11px] text-zinc-500 text-center">
-            <span className="text-cyan-400 font-bold">ECHO_TOTEM_NETWORK // ACTIVE_LINK</span> — Vos modules sont interconnectés et synchronisent votre contexte en temps réel.
+            <span className="text-cyan-400 font-bold">ECHO_TOTEM_NETWORK // ACTIVE_LINK</span> — Plateforme d’agents IA interconnectés. Vos outils, vos données et vos modules évoluent dans un environnement synchronisé en temps réel. © 2026 Echo Totem Network — Tous droits réservés.
           </div>
         </div>
       </section>
 
-      {/* ── SIGN IN MODAL ── */}
+      {/* ── MODALE OFFRE UNIFIÉE ECHOAI PREMIUM (3,99$) ── */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr
+                ? "Débloquez l'accès illimité à l'ensemble des modules d'intelligence artificielle."
+                : "Unlock unlimited access to all artificial intelligence modules."}
+            </p>
+
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c
+                      ? "bg-amber-500 text-zinc-950 border-amber-400"
+                      : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
+              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ Sauvegarde permanente de vos projets</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
+            >
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
+                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mo)`)}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE CONNEXION ── */}
       {showSignInModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
             <form onSubmit={handleEmailSignIn} className="space-y-5">
               <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
-                <h2 className="text-base font-bold">{fr ? "Connexion" : "Log in"}</h2>
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Connectez-vous pour déployer cet outil." : "Sign in to deploy this tool."}
+                  </p>
+                </div>
                 <button type="button" onClick={() => { setShowSignInModal(false); clearInputs(); }} className="text-zinc-400 hover:text-white text-sm p-1">✕</button>
               </div>
 
@@ -372,7 +659,7 @@ export default function OutilTotemPage() {
               </div>
 
               <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors">
-                {fr ? "Se connecter" : "Log in"}
+                {fr ? "Se connecter & Accéder" : "Log in & Deploy"}
               </button>
 
               <p className="text-center text-zinc-500 text-xs pt-1">
@@ -386,13 +673,18 @@ export default function OutilTotemPage() {
         </div>
       )}
 
-      {/* ── SIGN UP MODAL ── */}
+      {/* ── MODALE INSCRIPTION ── */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
             <form onSubmit={handleEmailSignUp} className="space-y-5">
               <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
-                <h2 className="text-base font-bold">{fr ? "Créer un compte" : "Create account"}</h2>
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Créer un compte" : "Create account"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Inscrivez-vous pour débloquer les modules." : "Sign up to unlock modules."}
+                  </p>
+                </div>
                 <button type="button" onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-white text-sm p-1">✕</button>
               </div>
 

@@ -2,35 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "../app/lib/supabase";
-import { loadQuotasFromSupabase, UserTier } from "../utils/quota";
 
-export const translations: Record<"fr" | "en", {
-  sidebar: {
-    home: string;
-    chat: string;
-    books: string;
-    calendar: string;
-    vitality: string;
-    services: string;
-    account: string;
-    history: string;
-  };
-  chat: { placeholder: string; send: string };
-  settings: {
-    title: string;
-    lightMode: string;
-    darkMode: string;
-    tutorial: string;
-    lang: string;
-  };
-  tutorial: {
-    title: string;
-    text1: string;
-    text2: string;
-    next: string;
-    finish: string;
-  };
-}> = {
+export const translations = {
   fr: {
     sidebar: {
       home:     "🏢 Accueil",
@@ -52,7 +25,7 @@ export const translations: Record<"fr" | "en", {
     },
     tutorial: {
       title:  "Configuration d'Echo",
-      text1:  "Voici vos modes comportementaux. Sans aucun bouton activé, vous faites face à la personnalité brute, authentique et profonde d'Echo. (Le Double Regard vous permet d'en combiner deux).",
+      text1:  "Voici vos modes comportementaux. Sans aucun bouton activé, vous faites face à la personnalité brute, authentique et profonde d'Echo.",
       text2:  "Cliquez ici sur l'icône de Paramètres pour ajuster la langue, alterner entre le mode clair et sombre, ou relancer ce guide à tout moment !",
       next:   "Suivant ➔",
       finish: "C'est parti ! 🚀",
@@ -79,36 +52,37 @@ export const translations: Record<"fr" | "en", {
     },
     tutorial: {
       title:  "Echo Configuration",
-      text1:  "Here are your behavioral modes. With no button active, you face Echo's raw, authentic, deep personality. (Double Regard lets you combine two).",
+      text1:  "Here are your behavioral modes. With no button active, you face Echo's raw, authentic, deep personality.",
       text2:  "Click here on the Settings icon to adjust language, switch between light and dark mode, or replay this guide anytime!",
       next:   "Next ➔",
       finish: "Let's go! 🚀",
     },
   },
-};
+} as const;
 
-type LangType     = "fr" | "en";
-type ThemeType    = "dark" | "light";
-type UserTierType = "connected_free" | "basic" | "premium" | "ultra" | "founder";
+type LangType = "fr" | "en";
+type ThemeType = "dark" | "light";
+export type UserTierType = "free" | "premium";
 
 type AppContextType = {
-  lang:         LangType;
-  setLang:      (lang: LangType) => void;
-  toggleLang:   () => void;
-  theme:        ThemeType;
-  toggleTheme:  () => void;
-  t:            typeof translations.fr;
-  userTier:     UserTierType;
-  setUserTier:  (tier: UserTierType) => void;
+  lang: LangType;
+  setLang: (lang: LangType) => void;
+  toggleLang: () => void;
+  theme: ThemeType;
+  toggleTheme: () => void;
+  t: (typeof translations)[LangType]; // 👈 Type dynamique (FR ou EN)
+  userTier: UserTierType;
+  isPremium: boolean;
+  setUserTier: (tier: UserTierType) => void;
   triggerToast: (type: "error" | "warning" | "info", message: string) => void;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [lang,     setLangState]     = useState<LangType>("fr");
-  const [theme,    setThemeState]    = useState<ThemeType>("dark");
-  const [userTier, setUserTierState] = useState<UserTierType>("connected_free");
+  const [lang, setLangState] = useState<LangType>("fr");
+  const [theme, setThemeState] = useState<ThemeType>("dark");
+  const [userTier, setUserTierState] = useState<UserTierType>("free");
 
   const applyTheme = (target: ThemeType) => {
     if (typeof window === "undefined") return;
@@ -117,36 +91,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.classList.add(target);
   };
 
-  const normalizeTier = (raw: string): UserTierType => {
-    const cleaned = (raw || "").toLowerCase().trim();
-    if (cleaned === "free") return "connected_free";
-    const valid: UserTierType[] = ["connected_free", "basic", "premium", "ultra", "founder"];
-    return valid.includes(cleaned as UserTierType) ? (cleaned as UserTierType) : "connected_free";
-  };
-
-  const fetchAndSyncTier = async (userId: string) => {
-    let tier: UserTierType = "connected_free";
+  const syncUserTier = async (userId: string) => {
     try {
-      // ✅ maybeSingle() au lieu de single() — ne crash pas si le profil n'existe pas encore
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
         .select("user_tier")
         .eq("id", userId)
         .maybeSingle();
 
-      if (!error && profile?.user_tier) {
-        tier = normalizeTier(profile.user_tier);
-        setUserTierState(tier);
+      if (profile?.user_tier === "premium") {
+        setUserTierState("premium");
+      } else {
+        setUserTierState("free");
       }
-    } catch (err) {
-      // Silencieux — tier reste "connected_free" par défaut
+    } catch {
+      setUserTierState("free");
     }
-
-    loadQuotasFromSupabase(userId, tier as UserTier).catch(() => {});
   };
 
   useEffect(() => {
-    const savedLang  = localStorage.getItem("echo-lang")  as LangType  | null;
+    const savedLang = localStorage.getItem("echo-lang") as LangType | null;
     const savedTheme = localStorage.getItem("echo-theme") as ThemeType | null;
 
     if (savedLang) setLangState(savedLang);
@@ -156,14 +120,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     applyTheme(activeTheme);
 
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) fetchAndSyncTier(data.user.id);
+      if (data.user) syncUserTier(data.user.id);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        fetchAndSyncTier(session.user.id);
+        syncUserTier(session.user.id);
       } else {
-        setUserTierState("connected_free");
+        setUserTierState("free");
       }
     });
 
@@ -175,7 +139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem("echo-lang", newLang);
   };
 
-  const toggleLang  = () => setLang(lang === "fr" ? "en" : "fr");
+  const toggleLang = () => setLang(lang === "fr" ? "en" : "fr");
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -189,9 +153,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const triggerToast = (_type: "error" | "warning" | "info", _message: string) => {};
 
   const t = translations[lang];
+  const isPremium = userTier === "premium";
 
   return (
-    <AppContext.Provider value={{ lang, setLang, toggleLang, theme, toggleTheme, t, userTier, setUserTier, triggerToast }}>
+    <AppContext.Provider
+      value={{
+        lang,
+        setLang,
+        toggleLang,
+        theme,
+        toggleTheme,
+        t,
+        userTier,
+        isPremium,
+        setUserTier,
+        triggerToast,
+      }}
+    >
       {children}
     </AppContext.Provider>
   );

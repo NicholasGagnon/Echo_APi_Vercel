@@ -8,12 +8,10 @@ export const metadata = {
   description:
     "Découvrez de nouvelles façons de propulser vos idées, d'explorer des projets complémentaires, d'obtenir les avis de la communauté ou de l'IA et de réaliser des auditions de sites web.",
   
-  // Ta clé de vérification Pinterest conservée ici :
   verification: {
     pinterest: "b8c6e3722e58cd63a982307875f72ea7",
   },
 
-  // Open Graph optimisé pour l'affichage et les partages Facebook
   openGraph: {
     title: "Echo AI | Affinité de projets",
     description: "Découvrez de nouvelles façons de propulser vos idées, d'explorer des projets complémentaires et de collaborer avec la communauté.",
@@ -21,7 +19,7 @@ export const metadata = {
     siteName: "Echo AI",
     images: [
       {
-        url: "https://echosai.ca/affinity.jpg", // Ton beau visuel avec le double cercle
+        url: "https://echosai.ca/affinity.jpg",
         width: 1200,
         height: 630,
         alt: "Affinité de projets",
@@ -31,7 +29,6 @@ export const metadata = {
     type: "website",
   },
 
-  // Mots-clés mis à jour sans les termes spammy d'assistant
   keywords: [
     "Echo AI", "Affinité de projets", "gestion de projets", "collaboration", "entraide informatique", 
     "audition de site web", "avis de la communauté", "analyse IA", "partenariat", "co-creation", "projets", 
@@ -61,11 +58,12 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-white dark:bg-black text-black dark:text-white transition-colors duration-200">
         
+        {/* Un seul Provider global propre pour l'état de l'application */}
         <AppProvider>
           {children}
         </AppProvider>
 
-        {/* 📊 Suivi d'audience Vercel Analytics */}
+        {/* 📊 Suivi d'audience Vercel */}
         <Analytics />
 
       </body>

@@ -7,19 +7,12 @@ type Lang = "fr" | "en";
 type TypeBien = "vehicule" | "bijoux" | "electro" | "animal" | "autre";
 
 const TYPE_BIEN: Record<TypeBien, { icon: string; labelFr: string; labelEn: string }> = {
-  vehicule: { icon: "🚗", labelFr: "Véhicule",    labelEn: "Vehicle" },
-  bijoux:   { icon: "💎", labelFr: "Bijoux",       labelEn: "Jewelry" },
-  electro:  { icon: "📺", labelFr: "Électro",      labelEn: "Electronics" },
-  animal:   { icon: "🐾", labelFr: "Animal",       labelEn: "Pet" },
-  autre:    { icon: "📦", labelFr: "Autre",         labelEn: "Other" },
+  vehicule: { icon: "🚗", labelFr: "Véhicule",   labelEn: "Vehicle" },
+  bijoux:   { icon: "💎", labelFr: "Bijoux",     labelEn: "Jewelry" },
+  electro:  { icon: "📺", labelFr: "Électro",    labelEn: "Electronics" },
+  animal:   { icon: "🐾", labelFr: "Animal",     labelEn: "Pet" },
+  autre:    { icon: "📦", labelFr: "Autre",      labelEn: "Other" },
 };
-
-const DONATION_PLANS = [
-  { name: "Avantage",  nameEn: "Advantage", amount: "$5.99",  plan: "basic",   desc: "Un café",          descEn: "A coffee" },
-  { name: "Premium",   nameEn: "Premium",   amount: "$9.99",  plan: "premium", desc: "Vrai soutien",     descEn: "Real support" },
-  { name: "Ultra",     nameEn: "Ultra",     amount: "$19.99", plan: "ultra",   desc: "Généreux 💛",      descEn: "Generous 💛" },
-  { name: "Fondateur", nameEn: "Founder",   amount: "$99",    plan: "founder", desc: "Tu crois en nous", descEn: "You believe in us" },
-];
 
 const T = {
   fr: {
@@ -38,12 +31,12 @@ const T = {
     preview: "Prévisualiser",
     connected: "Connecté", logout: "Se déconnecter",
     signin: "Se connecter",
-    donTitle: "Soutenir l'outil", donDesc: "Outil gratuit. Un don maintient le service en ligne.",
-    donBtn: "Faire un don ▼", donClose: "Fermer ▲",
     dark: "☾", light: "☀",
     modalSignin: "🛸 Connexion", modalSignup: "🛸 Créer un compte",
     submitSignin: "Se connecter", submitSignup: "Créer mon compte",
     switchToSignup: "Pas de compte ? Créer", switchToSignin: "Déjà un compte ?",
+    subscribeBtn: "⚡ Passer Premium (3.99$/m)",
+    subscribedActive: "✓ Abonnement Premium Actif",
   },
   en: {
     tagline: "📄 A bill of sale in 30 seconds.",
@@ -61,12 +54,12 @@ const T = {
     preview: "Preview",
     connected: "Connected", logout: "Sign out",
     signin: "Sign in",
-    donTitle: "Support the tool", donDesc: "Free tool. A donation keeps it running.",
-    donBtn: "Donate ▼", donClose: "Close ▲",
     dark: "☾", light: "☀",
     modalSignin: "🛸 Sign In", modalSignup: "🛸 Create Account",
     submitSignin: "Sign in", submitSignup: "Create my account",
     switchToSignup: "No account? Create one", switchToSignin: "Already have an account?",
+    subscribeBtn: "⚡ Upgrade to Premium ($3.99/m)",
+    subscribedActive: "✓ Premium Subscription Active",
   },
 };
 
@@ -82,30 +75,31 @@ export default function ContratPage() {
   const [dark, setDark]                 = useState(false);
   const [lang, setLang]                 = useState<Lang>("fr");
   const [user, setUser]                 = useState<any>(null);
+  const [isPremium, setIsPremium]       = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [donOpen, setDonOpen]           = useState(false);
-  const [donLoading, setDonLoading]     = useState<string | null>(null);
-  const [donCurrency, setDonCurrency]   = useState<"CAD"|"USD"|"EUR">("CAD");
-  const [showAuthPopup, setShowAuthPopup] = useState(false);
+  const [subLoading, setSubLoading]     = useState(false);
+
+  const [showAuthPopup, setShowAuthPopup]   = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailMode, setEmailMode]       = useState<"signin"|"signup">("signin");
-  const [authEmail, setAuthEmail]       = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError]       = useState<string|null>(null);
-  const [authSuccess, setAuthSuccess]   = useState<string|null>(null);
-  const [loading, setLoading]           = useState(false);
-  const [contrat, setContrat]           = useState<ContratData | null>(null);
-  const [error, setError]               = useState<string | null>(null);
-  const contratRef = useRef<HTMLDivElement>(null);
+  const [emailMode, setEmailMode]         = useState<"signin"|"signup">("signin");
+  const [authEmail, setAuthEmail]         = useState("");
+  const [authPassword, setAuthPassword]   = useState("");
+  const [authError, setAuthError]         = useState<string|null>(null);
+  const [authSuccess, setAuthSuccess]     = useState<string|null>(null);
+
+  const [loading, setLoading] = useState(false);
+  const [contrat, setContrat] = useState<ContratData | null>(null);
+  const [error, setError]     = useState<string | null>(null);
+  const contratRef            = useRef<HTMLDivElement>(null);
 
   // Champs
-  const [vendeurNom, setVendeurNom]       = useState("");
-  const [vendeurAdresse, setVendeurAdresse] = useState("");
-  const [acheteurNom, setAcheteurNom]     = useState("");
+  const [vendeurNom, setVendeurNom]           = useState("");
+  const [vendeurAdresse, setVendeurAdresse]   = useState("");
+  const [acheteurNom, setAcheteurNom]         = useState("");
   const [acheteurAdresse, setAcheteurAdresse] = useState("");
-  const [description, setDescription]    = useState("");
-  const [prixModalites, setPrixModalites] = useState("");
-  const [typeBien, setTypeBien]           = useState<TypeBien>("vehicule");
+  const [description, setDescription]        = useState("");
+  const [prixModalites, setPrixModalites]     = useState("");
+  const [typeBien, setTypeBien]               = useState<TypeBien>("vehicule");
 
   const t = T[lang];
   const bg    = dark ? "#1a1917" : "#f0ece4";
@@ -118,21 +112,49 @@ export default function ContratPage() {
 
   const api = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
+  // Vérifier le statut Premium dans Supabase
+  const checkSubscriptionStatus = async (uid: string) => {
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_tier")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (data && data.user_tier === "premium") {
+        setIsPremium(true);
+      } else {
+        setIsPremium(false);
+      }
+    } catch {
+      setIsPremium(false);
+    }
+  };
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => { if (data.user) setUser(data.user); });
-    const { data: l } = supabase.auth.onAuthStateChange((_, s) => setUser(s?.user ?? null));
-    const saved = localStorage.getItem("echo-currency") as "CAD"|"USD"|"EUR"|null;
-    if (saved) setDonCurrency(saved);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "echo-currency" && e.newValue) setDonCurrency(e.newValue as "CAD"|"USD"|"EUR");
-    };
-    window.addEventListener("storage", onStorage);
-    return () => { l.subscription.unsubscribe(); window.removeEventListener("storage", onStorage); };
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUser(data.user);
+        checkSubscriptionStatus(data.user.id);
+      }
+    });
+
+    const { data: l } = supabase.auth.onAuthStateChange((_, s) => {
+      const currentUser = s?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        checkSubscriptionStatus(currentUser.id);
+      } else {
+        setIsPremium(false);
+      }
+    });
+
+    return () => { l.subscription.unsubscribe(); };
   }, []);
 
   const handleGoogle    = async () => { await supabase.auth.signInWithOAuth({ provider: "google",  options: { redirectTo: `${window.location.origin}/contratachat`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } }); };
   const handleMicrosoft = async () => { await supabase.auth.signInWithOAuth({ provider: "azure",   options: { redirectTo: `${window.location.origin}/contratachat`, scopes: "openid profile email User.Read" } }); };
-  const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setShowUserMenu(false); };
+  const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setIsPremium(false); setShowUserMenu(false); };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault(); setAuthError(null); setAuthSuccess(null);
@@ -147,16 +169,37 @@ export default function ContratPage() {
     }
   };
 
-  const handleDon = async (plan: string) => {
-    setDonLoading(plan);
+  // 🛠️ FONCTION DE PAIEMENT CORRIGÉE AVEC AFFICHEUR D'ERREUR DÉTAILLÉ
+  const handleSubscribe = async () => {
+    if (!user) {
+      setShowAuthPopup(true);
+      return;
+    }
+    setSubLoading(true);
     try {
-      const res = await fetch("/api/stripe/create-checkout", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, userId: user?.id || "guest_don", userEmail: user?.email || "don@echosai.ca", currency: donCurrency }),
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, userEmail: user.email }),
       });
+
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch {} finally { setDonLoading(null); }
+
+      if (!res.ok) {
+        alert(`Erreur Stripe (${res.status}) : ${data.message || "Problème de configuration"}`);
+        return;
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert("Aucune URL de paiement renvoyée par le serveur.");
+      }
+    } catch (err: any) {
+      alert(`Erreur réseau : ${err.message || "Impossible de contacter l'API"}`);
+    } finally {
+      setSubLoading(false);
+    }
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -203,7 +246,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
     const tb = TYPE_BIEN[contrat.type_bien || typeBien];
     return (
       <div ref={contratRef} style={{ background: "#fff", color: "#18181b", fontFamily: "'Georgia', serif", borderRadius: 12, overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 4px 24px rgba(0,0,0,.08)", padding: "40px 48px", lineHeight: 1.8 }}>
-        {/* En-tête */}
         <div style={{ textAlign: "center", marginBottom: 32, borderBottom: "2px solid #1a1917", paddingBottom: 20 }}>
           <div style={{ fontSize: 11, letterSpacing: 4, textTransform: "uppercase", color: "#6b7280", marginBottom: 8 }}>Québec, Canada</div>
           <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>
@@ -214,7 +256,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
           </div>
         </div>
 
-        {/* Parties */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 28 }}>
           <div style={{ background: "#f9fafb", borderRadius: 10, padding: "16px 20px", border: "1px solid #e5e7eb" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>{lang === "fr" ? "Vendeur" : "Seller"}</div>
@@ -228,7 +269,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
           </div>
         </div>
 
-        {/* Description du bien */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>{lang === "fr" ? "Description du bien" : "Item description"}</div>
           <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "16px 20px", fontSize: 13, lineHeight: 1.8 }}>
@@ -236,14 +276,12 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
           </div>
         </div>
 
-        {/* Prix */}
         <div style={{ marginBottom: 28, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "16px 20px" }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#065f46", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>{lang === "fr" ? "Prix et modalités de paiement" : "Price & payment terms"}</div>
           <div style={{ fontSize: 16, fontWeight: 900, color: "#065f46", marginBottom: 6 }}>{contrat.prix_total}</div>
           <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.7 }}>{contrat.modalites_paiement || prixModalites}</div>
         </div>
 
-        {/* Notes IA */}
         {contrat.notes && (
           <div style={{ marginBottom: 28, padding: "14px 20px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, fontSize: 12, color: "#92400e", lineHeight: 1.7 }}>
             <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Notes</div>
@@ -251,7 +289,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
           </div>
         )}
 
-        {/* Clauses génériques */}
         <div style={{ marginBottom: 28, borderTop: "1px solid #e5e7eb", paddingTop: 24 }}>
           <div style={{ fontSize: 12, lineHeight: 1.9, color: "#374151" }}>
             <p style={{ marginBottom: 12 }}>
@@ -269,7 +306,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
           </div>
         </div>
 
-        {/* Signatures */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, marginTop: 32, paddingTop: 24, borderTop: "1px solid #e5e7eb" }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", letterSpacing: 2, textTransform: "uppercase", marginBottom: 20 }}>{lang === "fr" ? "Signature vendeur" : "Seller signature"}</div>
@@ -283,7 +319,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
           </div>
         </div>
 
-        {/* Footer */}
         <div style={{ marginTop: 32, paddingTop: 16, borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between" }}>
           <div style={{ fontSize: 10, color: "#9ca3af" }}>Généré par echosai.ca/contratachat</div>
           <div style={{ fontSize: 10, color: "#9ca3af" }}>{contrat.date}</div>
@@ -300,7 +335,7 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
 
   return (
     <div style={{ background: bg, color: txt, minHeight: "100dvh", fontFamily: "'Inter', system-ui, sans-serif", transition: "background .3s" }}>
-      <div className="ct-layout" style={{ display: "grid", gridTemplateColumns: "180px 1fr 180px", maxWidth: 1200, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
+      <div className="ct-layout" style={{ display: "grid", gridTemplateColumns: "180px 1fr 220px", maxWidth: 1200, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
 
         {/* COL GAUCHE */}
         <aside className="ct-col-left" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 12, paddingRight: 10, alignItems: "center" }}>
@@ -330,21 +365,9 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
             <p style={{ fontSize: 12, color: muted }}>{t.sub}</p>
           </div>
 
-          {/* Pubs mobile */}
-          <div className="ct-mobile-pubs" style={{ display: "none", gap: 8, marginBottom: 12 }}>
-            <a href="https://echosai.ca/avis" target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none" }}>
-              <img src="/avis.png" alt="" style={{ width: "100%", display: "block", maxHeight: 75, objectFit: "cover" }} />
-              <div style={{ background: acc, color: "#fff", textAlign: "center", fontSize: 9, fontWeight: 800, padding: "4px 0" }}>AVIS →</div>
-            </a>
-            <a href="https://echosai.ca/2/talk" target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: "block", borderRadius: 10, overflow: "hidden", border: `1px solid ${bord}`, textDecoration: "none" }}>
-              <img src="/commun.png" alt="" style={{ width: "100%", display: "block", maxHeight: 75, objectFit: "cover" }} />
-            </a>
-          </div>
-
           {/* Formulaire */}
           <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
 
-            {/* Type de bien */}
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>{t.typeBien}</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -360,7 +383,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
               </div>
             </div>
 
-            {/* Vendeur */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{t.vendeur}</div>
@@ -382,7 +404,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
               </div>
             </div>
 
-            {/* Description */}
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{t.description}</div>
               <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={t.descHint} rows={4} required
@@ -390,7 +411,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
                 onFocus={e => (e.target.style.borderColor = acc)} onBlur={e => (e.target.style.borderColor = bord)} />
             </div>
 
-            {/* Prix + modalités */}
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{t.prixModalites}</div>
               <textarea value={prixModalites} onChange={e => setPrixModalites(e.target.value)} placeholder={t.prixHint} rows={3} required
@@ -414,14 +434,12 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
           {/* CONTRAT PREVIEW */}
           {contrat && (
             <div style={{ animation: "fadeIn .4s ease" }}>
-              {/* Bouton export */}
               <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
                 <button onClick={handleExportPdf}
                   style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 9, padding: "8px 18px", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                   {t.exportPdf}
                 </button>
               </div>
-              {/* Overlay freemium si pas connecté */}
               <div style={{ position: "relative" }}>
                 {renderContrat()}
                 {!user && (
@@ -444,15 +462,30 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
 
           <div style={{ marginTop: "auto", paddingTop: 10, fontSize: 10, color: muted, opacity: .4, textAlign: "center" }}>
             © Contrat de vente · echosai.ca ·{" "}
-            <a href="mailto:support@echosai.ca" style={{ color: muted, textDecoration: "none", opacity: .6 }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+            <a href="mailto:support@echosai.ca" style={{ color: muted, textDecoration: "none", opacity: .6 }}>
               ✉ support
             </a>
           </div>
         </div>
 
         {/* COL DROITE */}
-        <aside className="ct-col-right" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 8, paddingLeft: 10 }}>
+        <aside className="ct-col-right" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 10, paddingLeft: 10 }}>
+          
+          {/* BOUTON PREMIUM UNIQUE */}
+          <div style={{ background: surf, border: `1px solid ${isPremium ? "#16a34a" : bord}`, borderRadius: 12, padding: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+            {isPremium ? (
+              <button disabled style={{ width: "100%", background: "#16a34a", color: "#fff", border: "none", borderRadius: 9, padding: "11px 0", fontWeight: 800, fontSize: 12, cursor: "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#86efac" }} />
+                {t.subscribedActive}
+              </button>
+            ) : (
+              <button onClick={handleSubscribe} disabled={subLoading}
+                style={{ width: "100%", background: `linear-gradient(135deg, ${acc}, #c4632a)`, color: "#fff", border: "none", borderRadius: 9, padding: "11px 0", fontWeight: 800, fontSize: 12, cursor: "pointer", transition: "transform .1s ease" }}>
+                {subLoading ? "Paiement en cours..." : t.subscribeBtn}
+              </button>
+            )}
+          </div>
+
           {/* Thème + langue */}
           <div style={{ display: "flex", gap: 5 }}>
             <button onClick={() => setDark(d => !d)} style={{ flex: 1, background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "6px 8px", cursor: "pointer", fontSize: 13, color: muted }}>{dark ? t.light : t.dark}</button>
@@ -464,8 +497,8 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
           {/* Connecté */}
           {user ? (
             <div style={{ position: "relative" }}>
-              <button onClick={() => setShowUserMenu(v => !v)} style={{ width: "100%", background: "#16a34a", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 11, color: "#fff", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#86efac" }} />
+              <button onClick={() => setShowUserMenu(v => !v)} style={{ width: "100%", background: isPremium ? "#16a34a" : surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 11, color: isPremium ? "#fff" : txt, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: isPremium ? "#86efac" : acc }} />
                 {t.connected}
                 <span style={{ marginLeft: "auto", fontSize: 8, opacity: .7 }}>{showUserMenu ? "▲" : "▼"}</span>
               </button>
@@ -476,45 +509,11 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
               )}
             </div>
           ) : (
-            <button onClick={() => setShowAuthPopup(true)} style={{ width: "100%", background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "7px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
+            <button onClick={() => setShowAuthPopup(true)} style={{ width: "100%", background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
               {t.signin}
             </button>
           )}
 
-          {/* Don */}
-          <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, overflow: "hidden" }}>
-            <div style={{ padding: "10px 12px 8px" }}>
-              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4 }}>☕ {t.donTitle}</div>
-              <div style={{ fontSize: 11, color: muted, lineHeight: 1.5, marginBottom: 8 }}>{t.donDesc}</div>
-              {/* Sélecteur devise */}
-              <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-                {(["CAD", "USD", "EUR"] as const).map(c => (
-                  <button key={c} type="button" onClick={() => { setDonCurrency(c); localStorage.setItem("echo-currency", c); }}
-                    style={{ flex: 1, padding: "4px 0", fontSize: 10, fontWeight: 700, borderRadius: 7, border: `1px solid ${donCurrency === c ? acc : bord}`, background: donCurrency === c ? (dark ? "rgba(224,123,57,.15)" : "rgba(224,123,57,.1)") : surf2, color: donCurrency === c ? acc : muted, cursor: "pointer" }}>
-                    {c}
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => setDonOpen(d => !d)} style={{ width: "100%", background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "9px 0", fontWeight: 800, fontSize: 12, cursor: "pointer" }}>
-                {donOpen ? t.donClose : t.donBtn}
-              </button>
-            </div>
-            {donOpen && (
-              <div style={{ borderTop: `1px solid ${bord}`, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 5 }}>
-                {DONATION_PLANS.map(d => (
-                  <button key={d.plan} onClick={() => handleDon(d.plan)} disabled={donLoading === d.plan}
-                    style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 7, padding: "7px 9px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", opacity: donLoading === d.plan ? .6 : 1, color: txt }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div>
-                      <div style={{ fontSize: 10, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div>
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 900, color: acc }}>{d.amount}</div>
-                  </button>
-                ))}
-                <div style={{ fontSize: 9, color: muted, textAlign: "center" }}>🔒 Stripe</div>
-              </div>
-            )}
-          </div>
         </aside>
       </div>
 
@@ -524,27 +523,19 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
         <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")} style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 11, color: txt, fontWeight: 700, cursor: "pointer" }}>
           {lang === "fr" ? "EN" : "FR"}
         </button>
-        <div style={{ position: "relative", flex: 1, display: "flex", justifyContent: "center" }}>
-          <button onClick={() => setDonOpen(d => !d)} style={{ background: acc, color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-            ☕ {lang === "fr" ? "Don café" : "Buy coffee"}
+        
+        {isPremium ? (
+          <button disabled style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 11, fontWeight: 800 }}>
+            ✓ Premium
           </button>
-          {donOpen && (
-            <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", background: surf, border: `1px solid ${bord}`, borderRadius: 14, padding: "14px", zIndex: 300, minWidth: 250, boxShadow: "0 -4px 28px rgba(0,0,0,.2)" }}>
-              <div style={{ fontWeight: 800, fontSize: 12, marginBottom: 10, display: "flex", justifyContent: "space-between", color: txt }}>
-                ☕ {lang === "fr" ? "Soutenir l'outil" : "Support the tool"}
-                <button onClick={() => setDonOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 16 }}>✕</button>
-              </div>
-              {DONATION_PLANS.map(d => (
-                <button key={d.plan} onClick={() => handleDon(d.plan)} style={{ width: "100%", background: surf2, border: `1px solid ${bord}`, borderRadius: 9, padding: "8px 12px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, color: txt }}>
-                  <div><div style={{ fontSize: 12, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div><div style={{ fontSize: 10, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div></div>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: acc }}>{d.amount}</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        ) : (
+          <button onClick={handleSubscribe} disabled={subLoading} style={{ background: acc, color: "#fff", border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>
+            ⚡ Premium (3.99$)
+          </button>
+        )}
+
         {user
-          ? <button onClick={handleLogout} style={{ background: "#16a34a", border: "none", borderRadius: 8, padding: "7px 11px", fontSize: 11, color: "#fff", fontWeight: 700, cursor: "pointer" }}>{t.connected}</button>
+          ? <button onClick={handleLogout} style={{ background: isPremium ? "#16a34a" : surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 11, color: isPremium ? "#fff" : txt, fontWeight: 700, cursor: "pointer" }}>{t.connected}</button>
           : <button onClick={() => setShowAuthPopup(true)} style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.signin}</button>
         }
       </div>
@@ -556,7 +547,7 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
             <button onClick={() => setShowAuthPopup(false)} style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 18 }}>✕</button>
             <div style={{ textAlign: "center", marginBottom: 4 }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: txt, marginBottom: 4 }}>{lang === "fr" ? "Connecte-toi pour exporter" : "Sign in to export"}</div>
+              <div style={{ fontWeight: 800, fontSize: 15, color: txt, marginBottom: 4 }}>{lang === "fr" ? "Connecte-toi pour continuer" : "Sign in to continue"}</div>
               <div style={{ fontSize: 12, color: muted }}>{lang === "fr" ? "Gratuit · Aucune carte requise" : "Free · No card required"}</div>
             </div>
             <button onClick={() => { handleGoogle(); setShowAuthPopup(false); }} style={{ ...oauthBtn({ background: "#fff", color: "#374151" }) }}>
@@ -612,7 +603,6 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
           .ct-col-left, .ct-col-right { display: none !important; }
           .ct-col-centre { padding: 14px 14px 80px !important; }
           .ct-mobile-bar { display: flex !important; }
-          .ct-mobile-pubs { display: flex !important; }
         }
         @media (min-width: 769px) { .ct-mobile-bar { display: none !important; } }
         .ct-mobile-bar {
