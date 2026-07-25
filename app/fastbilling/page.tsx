@@ -1,13 +1,33 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
 
 type Lang = "fr" | "en";
 type Currency = "CAD" | "USD" | "EUR";
 type Status = "pending" | "paid" | "late";
 type FontTemplate = "modern" | "classic" | "minimal" | "bold" | "elegant";
+
+const MicrosoftLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
+    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
+  </svg>
+);
+
+const GoogleLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+  </svg>
+);
 
 const TAX_RULES: Record<Currency, { label: string; lines: { name: string; rate: number }[] }> = {
   CAD: { label: "Canada (QC)", lines: [{ name: "TPS/GST", rate: 0.05 }, { name: "TVQ/QST", rate: 0.09975 }] },
@@ -57,13 +77,8 @@ const T = {
     sub: "Décris ta situation en langage naturel. L'IA génère la facture complète.",
     placeholder: EXAMPLE_FR,
     hint: "💡 Inclus : nom & adresse de ton entreprise, nom & adresse du client, description du service, montant, statut (payée / en attente / en retard). L'IA s'occupe du reste.",
-    devise: "Devise",
-    status: "Statut",
-    template: "Style",
     generate: "Générer la facture",
     generating: "L'IA prépare ta facture…",
-    exportDocx: "⬇ DOCX",
-    exportPdf: "⬇ PDF",
     invoiceNum: "Facture N°",
     date: "Date",
     dueDate: "Échéance",
@@ -75,13 +90,6 @@ const T = {
     total: "Total TTC",
     paymentTerms: "Conditions de paiement",
     lateWarning: "⚠️ Facture en retard. Des pénalités peuvent s'appliquer.",
-    connected: "Connecté", myAccount: "Mon compte", logout: "Se déconnecter",
-    signin: "Se connecter", signup: "Créer un compte",
-    modalSignin: "🛸 Connexion", modalSignup: "🛸 Créer un compte",
-    submitSignin: "Se connecter", submitSignup: "Créer mon compte",
-    switchToSignup: "Pas de compte ? Créer", switchToSignin: "Déjà un compte ?",
-    donTitle: "Soutenir FastBilling", donDesc: "Outil gratuit. Un don maintient le service en ligne.",
-    donBtn: "Faire un don ▼", donClose: "Fermer ▲",
     dark: "☾", light: "☀",
   },
   en: {
@@ -89,13 +97,8 @@ const T = {
     sub: "Describe your situation in plain language. AI generates the full invoice.",
     placeholder: EXAMPLE_EN,
     hint: "💡 Include: your company name & address, client name & address, service description, amount, status (paid / pending / overdue). AI handles the rest.",
-    devise: "Currency",
-    status: "Status",
-    template: "Style",
     generate: "Generate invoice",
     generating: "AI is preparing your invoice…",
-    exportDocx: "⬇ DOCX",
-    exportPdf: "⬇ PDF",
     invoiceNum: "Invoice No.",
     date: "Date",
     dueDate: "Due date",
@@ -107,24 +110,15 @@ const T = {
     total: "Total (incl. tax)",
     paymentTerms: "Payment terms",
     lateWarning: "⚠️ This invoice is overdue. Late fees may apply.",
-    connected: "Connected", myAccount: "My account", logout: "Sign out",
-    signin: "Sign in", signup: "Create account",
-    modalSignin: "🛸 Sign In", modalSignup: "🛸 Create Account",
-    submitSignin: "Sign in", submitSignup: "Create my account",
-    switchToSignup: "No account? Create one", switchToSignin: "Already have an account?",
-    donTitle: "Support FastBilling", donDesc: "Free tool. A donation keeps it running.",
-    donBtn: "Donate ▼", donClose: "Close ▲",
     dark: "☾", light: "☀",
   },
 };
 
-const DONATION_PLANS = [
-  { name: "Petit geste",  nameEn: "Small gesture", amount: "$1.50",  plan: "micro",   desc: "Comme une fiche", descEn: "Like a listing unlock" },
-  { name: "Avantage",  nameEn: "Advantage", amount: "$5.99",  plan: "basic",   desc: "Un café",          descEn: "A coffee" },
-  { name: "Premium",   nameEn: "Premium",   amount: "$9.99",  plan: "premium", desc: "Vrai soutien",     descEn: "Real support" },
-  { name: "Ultra",     nameEn: "Ultra",     amount: "$19.99", plan: "ultra",   desc: "Généreux 💛",      descEn: "Generous 💛" },
-  { name: "Fondateur", nameEn: "Founder",   amount: "$99",    plan: "founder", desc: "Tu crois en nous", descEn: "You believe in us" },
-];
+const PRICES: Record<Currency, { amount: string; symbol: string }> = {
+  CAD: { amount: "3.99", symbol: "CA$" },
+  USD: { amount: "3.99", symbol: "US$" },
+  EUR: { amount: "3.99", symbol: "€" },
+};
 
 interface InvoiceData {
   numero: string; date: string; echeance: string;
@@ -137,24 +131,28 @@ interface InvoiceData {
 }
 
 export default function FastBillingPage() {
+  const { lang: globalLang, setLang: setGlobalLang } = useApp();
+  const fr = globalLang === "fr";
+  const router = useRouter();
+
   const [dark, setDark] = useState(false);
-  const [lang, setLang] = useState<Lang>("fr");
-  const [showLang, setShowLang] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailMode, setEmailMode] = useState<"signin" | "signup">("signin");
+  const [userTier, setUserTier] = useState<string>("free");
+
+  // Devise & Stripe Premium
+  const [currency, setCurrency] = useState<Currency>("CAD");
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  // Auth Modals
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
-  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
-  const [donOpen, setDonOpen] = useState(false);
-  const [donLoading, setDonLoading] = useState<string | null>(null);
-  const [donCurrency, setDonCurrency] = useState<"CAD"|"USD"|"EUR">("CAD");
-  const [showAuthPopup, setShowAuthPopup] = useState(false);
 
+  // FastBilling Core
   const [freeText, setFreeText] = useState("");
-  const [currency, setCurrency] = useState<Currency>("CAD");
   const [status, setStatus] = useState<Status>("pending");
   const [fontTemplate, setFontTemplate] = useState<FontTemplate>("modern");
   const [loading, setLoading] = useState(false);
@@ -165,9 +163,9 @@ export default function FastBillingPage() {
   const [history, setHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
   const invoiceRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const t = T[lang];
+  const t = T[globalLang];
   const tmpl = FONT_TEMPLATES[fontTemplate];
   const taxRule = TAX_RULES[currency];
 
@@ -187,48 +185,74 @@ export default function FastBillingPage() {
     if (!sid) { sid = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`; localStorage.setItem("fb_session_id", sid); }
     setSessionId(sid);
 
-    const { data: l } = supabase.auth.onAuthStateChange(async (_, s) => {
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        const sid = localStorage.getItem("fb_session_id");
-        if (sid) {
-          await supabase.from("invoices")
-            .update({ user_id: s.user.id })
-            .eq("session_id", sid)
-            .is("user_id", null);
-        }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+      } else {
+        setUser(null);
+        setUserTier("free");
       }
     });
 
     const draft = localStorage.getItem("fb_draft");
     if (draft) { setFreeText(draft); localStorage.removeItem("fb_draft"); }
 
-    const restoreInvoice = async (currentUser: any) => {
-      try {
-        let query = supabase
-          .from("invoices")
-          .select("data")
-          .order("updated_at", { ascending: false })
-          .limit(1);
-        if (currentUser) {
-          query = (query as any).eq("user_id", currentUser.id);
-        } else {
-          query = (query as any).eq("session_id", sid);
-        }
-        const { data, error } = await (query as any).maybeSingle();
-        if (!error && data?.data) setInvoice(data.data as InvoiceData);
-      } catch (e) {
-        console.log("[FastBilling] Pas de facture à restaurer");
-      }
-    };
-
-    supabase.auth.getUser().then(({ data: authData }) => {
-      if (authData?.user) setUser(authData.user);
-      restoreInvoice(authData?.user ?? null);
-    });
-
-    return () => l.subscription.unsubscribe();
+    return () => subscription.unsubscribe();
   }, []);
+
+  const verifierStatutUser = async (uid: string) => {
+    try {
+      const { data: cData } = await supabase.from("contenu_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
+        setUserTier(cData.tier); return;
+      }
+      const { data: wData } = await supabase.from("world_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
+        setUserTier(wData.tier); return;
+      }
+      setUserTier("free");
+    } catch { setUserTier("free"); }
+  };
+
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      setShowPremiumModal(false);
+      setShowSignInModal(true);
+      return;
+    }
+
+    setIsCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/create-checkout-site2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: "world_advantage",
+          currency: currency.toUpperCase(),
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
+      }
+    } catch {
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
+    } finally {
+      setIsCheckoutLoading(false);
+    }
+  };
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,15 +261,15 @@ export default function FastBillingPage() {
     setLoading(true); setInvoice(null);
 
     const now = new Date();
-    const dateStr = now.toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA");
+    const dateStr = now.toLocaleDateString(fr ? "fr-CA" : "en-CA");
     const due = new Date(now); due.setDate(due.getDate() + 30);
-    const dueStr = due.toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA");
+    const dueStr = due.toLocaleDateString(fr ? "fr-CA" : "en-CA");
     const numero = `INV-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${String(Math.floor(Math.random()*9000)+1000)}`;
 
     try {
       const res = await fetch(`${api}/1/generate-invoice`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ freeText, currency, status, lang, numero, dateStr, dueStr }),
+        body: JSON.stringify({ freeText, currency, status, lang: globalLang, numero, dateStr, dueStr }),
       });
       const data = await res.json();
 
@@ -323,35 +347,10 @@ export default function FastBillingPage() {
     } catch { alert("Erreur export DOCX."); }
   };
 
-  const handleDon = async (plan: string) => {
-    setDonLoading(plan);
-    try {
-      // Le palier "micro" (1,50$) passe par la même route que l'unlock fiche
-      // (price_data inline, montant fixe peu importe la devise).
-      const endpoint = plan === "micro" ? "/api/stripe/create-checkout-site2" : "/api/stripe/create-checkout";
-      const res = await fetch(endpoint, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, userId: user?.id || "guest_don", userEmail: user?.email || "don@echosai.ca", currency: donCurrency }),
-      });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch { alert("Erreur Stripe."); } finally { setDonLoading(null); }
-  };
-
-  const saveBeforeRedirect = () => { if (freeText.trim()) localStorage.setItem("fb_draft", freeText); };
-  const handleGoogle    = async () => { saveBeforeRedirect(); await supabase.auth.signInWithOAuth({ provider: "google",  options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } }); };
-  const handleMicrosoft = async () => { saveBeforeRedirect(); await supabase.auth.signInWithOAuth({ provider: "azure",   options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email User.Read" } }); };
-  const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setShowUserMenu(false); };
-
   const handleSave = async () => {
     if (!invoice) return;
     if (!user) {
-      setEmailMode("signin");
-      setAuthError(null);
-      setAuthSuccess(lang === "fr"
-        ? "Connecte-toi pour sauvegarder tes factures."
-        : "Sign in to save your invoices.");
-      setShowEmailModal(true);
+      setShowSignInModal(true);
       return;
     }
     setSaving(true); setSavedMsg(null);
@@ -364,11 +363,11 @@ export default function FastBillingPage() {
         updated_at: new Date().toISOString(),
       }, { onConflict: "id" });
       if (error) throw error;
-      setSavedMsg(lang === "fr" ? "✅ Facture sauvegardée !" : "✅ Invoice saved!");
+      setSavedMsg(fr ? "✅ Facture sauvegardée !" : "✅ Invoice saved!");
       setTimeout(() => setSavedMsg(null), 3000);
       loadHistory();
-    } catch (e: any) {
-      setSavedMsg(lang === "fr" ? "❌ Erreur de sauvegarde." : "❌ Save failed.");
+    } catch {
+      setSavedMsg(fr ? "❌ Erreur de sauvegarde." : "❌ Save failed.");
     } finally { setSaving(false); }
   };
 
@@ -387,64 +386,23 @@ export default function FastBillingPage() {
     setLoadingHistory(false);
   };
 
-  const handleLoadInvoice = (row: any) => {
-    setInvoice(row.data);
-    setShowHistory(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const handleDeleteInvoice = async (id: string) => {
-    await supabase.from("invoices").delete().eq("id", id).eq("user_id", user?.id);
-    loadHistory();
-  };
-
   useEffect(() => {
     if (user) loadHistory();
   }, [user]);
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault(); setAuthError(null); setAuthSuccess(null);
-    if (emailMode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
-      if (error) setAuthError(error.message); else { setShowEmailModal(false); router.push("/fastbilling"); }
-    } else {
-      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/fastbilling` } });
-      if (error) setAuthError(error.message);
-      else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError("Compte existant.");
-      else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
-    }
+  const handleGoogleConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email", queryParams: { prompt: "select_account" } },
+    });
   };
 
-  const btn = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-    width: "100%", padding: "8px 10px", border: `1px solid ${bord}`,
-    borderRadius: 9, cursor: "pointer", fontSize: 11, fontWeight: 600,
-    background: surf2, color: txt, ...extra,
-  });
-
-  // ── POSTERS VERTICAUX — Talk / Avis / Idea (pas de Facture, ce serait de l'auto-promo) ──
-  const POSTER_ITEMS = [
-    { href:"https://echosai.ca/1/hall", src:"/talkmini.png", label:"Talk", color:"#a78bfa" },
-    { href:"https://echosai.ca/avis",   src:"/avismini.png", label:"Avis", color:"#f59e0b" },
-    { href:"https://echosai.ca/idea",   src:"/ideamini.png", label:"Idea", color:"#00c8ff" },
-  ];
-  const WORLD_ITEM = { href:"https://echosai.ca/world", src:"/worldmini.png", label:"World", color:"#34d399" };
-
-  const PosterCard = ({ item, width=175 }: { item: { href:string; src:string; label:string; color:string }; width?: number }) => (
-    <a href={item.href} target="_blank" rel="noopener noreferrer"
-      style={{
-        display:"block", width, borderRadius:14, overflow:"hidden",
-        border:`2px solid ${item.color}`, boxShadow:`0 0 18px ${item.color}35`,
-        textDecoration:"none", background:surf,
-      }}>
-      <div style={{ overflow:"hidden", aspectRatio:"2 / 3" }}>
-        <img src={item.src} alt={item.label}
-          style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"transform .35s ease" }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.1)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }} />
-      </div>
-    </a>
-  );
+  const handleMicrosoftConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: { redirectTo: `${window.location.origin}/fastbilling`, scopes: "openid profile email User.Read" },
+    });
+  };
 
   const renderInvoice = () => {
     if (!invoice) return null;
@@ -459,7 +417,7 @@ export default function FastBillingPage() {
             {invoice.telEmetteur && <div style={{ fontSize: 11, opacity: .75 }}>📞 {invoice.telEmetteur}</div>}
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ background: st.bg, color: st.color, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700, display: "inline-block", marginBottom: 8 }}>{lang === "fr" ? st.label : st.labelEn}</div>
+            <div style={{ background: st.bg, color: st.color, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700, display: "inline-block", marginBottom: 8 }}>{fr ? st.label : st.labelEn}</div>
             <div style={{ fontSize: 12, fontWeight: 700, opacity: .9, marginBottom: 4 }}>{t.invoiceNum} {invoice.numero}</div>
             <div style={{ fontSize: 11, opacity: .7 }}>{t.date} : {invoice.date}</div>
             <div style={{ fontSize: 11, opacity: .7 }}>{t.dueDate} : {invoice.echeance}</div>
@@ -539,418 +497,353 @@ export default function FastBillingPage() {
     );
   };
 
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
+
   return (
-    <div style={{ background: bg, color: txt, minHeight: "100dvh", fontFamily: "'Inter', system-ui, sans-serif", transition: "background .3s, color .3s" }}>
-      <div className="fb-layout" style={{ display: "grid", gridTemplateColumns: "180px 1fr 180px", maxWidth: 1200, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
-
-        {/* COL GAUCHE — posters verticaux */}
-        <aside className="fb-col-left" style={{ paddingTop: 24, display: "flex", flexDirection: "column", gap: 32, paddingRight: 10, alignItems: "center" }}>
-          {POSTER_ITEMS.map((item, i) => <PosterCard key={i} item={item} />)}
-        </aside>
-
-        {/* CENTRE */}
-        <div className="fb-col-centre" style={{ display: "flex", flexDirection: "column", padding: "24px 14px 60px" }}>
-          <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:8 }}>
-              <img src="/echo1.png" alt="Echo AI" style={{ width:30, height:30, borderRadius:8, objectFit:"cover" }} />
-              <h1 style={{ fontWeight: 900, fontSize: "clamp(20px,3.4vw,26px)", letterSpacing: -.5, lineHeight: 1.15 }}>{t.tagline}</h1>
-            </div>
-            <p style={{ fontSize: 12, color: muted }}>{t.sub}</p>
+    <div style={{ background: bg, color: txt, minHeight: "100dvh", fontFamily: "'Inter', system-ui, sans-serif" }}>
+      
+      {/* ── HEADER BLANC UNIFIÉ AVEC BOUTON RETOUR AUX OUTILS BRILLANT ── */}
+      <header className="border-b border-zinc-100 bg-white text-zinc-900 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center relative">
+          
+          <div className="flex items-center gap-6">
+            <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-zinc-900 uppercase">
+              ECHOSAI
+            </Link>
+            
+            <Link
+              href="/outil"
+              className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all hover:scale-105 active:scale-95"
+            >
+              <span>⚡</span>
+              <span>{fr ? "RETOUR AUX OUTILS" : "BACK TO TOOLS"}</span>
+            </Link>
           </div>
-
-          {/* Posters mobile */}
-          <div className="fb-mobile-pubs" style={{ display: "none", gap: 14, marginBottom: 16, justifyContent: "center" }}>
-            <PosterCard item={POSTER_ITEMS[0]} width={115} />
-            <PosterCard item={POSTER_ITEMS[1]} width={115} />
-          </div>
-
-          <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
-
-            <div style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 10, padding: "10px 13px", fontSize: 11, color: muted, lineHeight: 1.6 }}>
-              {t.hint}
-            </div>
-
-            <textarea
-              value={freeText}
-              onChange={e => setFreeText(e.target.value)}
-              required
-              rows={10}
-              placeholder={t.placeholder}
-              style={{ width: "100%", background: surf, border: `1.5px solid ${bord}`, borderRadius: 11, padding: "12px 14px", fontSize: 12, color: txt, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.7 }}
-              onFocus={e => (e.target.style.borderColor = acc)}
-              onBlur={e => (e.target.style.borderColor = bord)}
-            />
-
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <select value={currency} onChange={e => setCurrency(e.target.value as Currency)}
-                style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 9, padding: "7px 10px", fontSize: 12, color: txt, cursor: "pointer", outline: "none" }}>
-                <option value="CAD">🇨🇦 CAD</option>
-                <option value="USD">🇺🇸 USD</option>
-                <option value="EUR">🇪🇺 EUR</option>
-              </select>
-
-              <select value={status} onChange={e => setStatus(e.target.value as Status)}
-                style={{ background: STATUS_CONFIG[status].bg, border: `1px solid ${bord}`, borderRadius: 9, padding: "7px 10px", fontSize: 12, color: STATUS_CONFIG[status].color, cursor: "pointer", outline: "none", fontWeight: 700 }}>
-                <option value="pending">{lang === "fr" ? "En attente" : "Pending"}</option>
-                <option value="paid">{lang === "fr" ? "Payée" : "Paid"}</option>
-                <option value="late">{lang === "fr" ? "En retard" : "Overdue"}</option>
-              </select>
-
-              {(Object.entries(FONT_TEMPLATES) as [FontTemplate, typeof FONT_TEMPLATES[FontTemplate]][]).map(([key, val]) => (
-                <button key={key} type="button" onClick={() => setFontTemplate(key)}
-                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 8, border: `2px solid ${fontTemplate === key ? acc : bord}`, background: fontTemplate === key ? (dark ? "#2d2b28" : "#fff8f2") : surf2, cursor: "pointer", fontSize: 11, fontWeight: fontTemplate === key ? 700 : 500, color: fontTemplate === key ? acc : txt }}>
-                  <span style={{ fontFamily: val.fontFamily, fontSize: 13, fontWeight: 900, color: val.accentColor }}>{val.preview}</span>
-                  {val.label}
+          
+          <div className="flex items-center gap-4 text-xs font-mono relative">
+            
+            {/* SÉLECTEUR DE DEVISE */}
+            <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
+              {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-2 py-1 font-bold transition-colors ${currency === c ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"}`}
+                >
+                  {c}
                 </button>
               ))}
             </div>
 
-            <button type="submit" disabled={loading}
-              style={{ background: loading ? muted : acc, color: "#fff", border: "none", borderRadius: 11, padding: "12px 0", fontWeight: 800, fontSize: 14, cursor: loading ? "not-allowed" : "pointer" }}>
-              {loading
-                ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                    <span style={{ width: 16, height: 16, border: "2px solid #fff4", borderTopColor: "#fff", borderRadius: "50%", animation: "spin .7s linear infinite", display: "inline-block" }} />
-                    {t.generating}
-                  </span>
-                : t.generate}
-            </button>
-          </form>
-
-          {invoice && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: .8 }}>Aperçu — {invoice.numero}</div>
-                <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-                  <button onClick={() => user ? handleExport("pdf") : setShowAuthPopup(true)}
-                    style={{ background: user ? "#dc2626" : muted, color: "#fff", border: "none", borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: user ? 1 : .7 }}
-                    title={!user ? (lang === "fr" ? "Connexion requise" : "Sign in required") : ""}>
-                    {user ? "⬇ PDF" : `🔒 PDF`}
-                  </button>
-                  <button onClick={handleSave} disabled={saving}
-                    style={{ background: saving ? muted : "#16a34a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 11, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
-                    {saving ? "…" : "💾"}
-                  </button>
-                  {savedMsg && <span style={{ fontSize: 11, color: savedMsg.startsWith("✅") ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{savedMsg}</span>}
-                </div>
+            {/* BADGE PREMIUM OU BOUTON DE VENTE */}
+            {isPaidTier ? (
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="font-bold text-[11px] uppercase tracking-wider">
+                  {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
+                </span>
               </div>
-              <div style={{ position: "relative" }}>
+            ) : (
+              <div 
+                onClick={() => setShowPremiumModal(true)} 
+                className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+              >
+                <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                  ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                </span>
+              </div>
+            )}
+
+            {/* LANGUES */}
+            <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
+              <button onClick={() => setGlobalLang("fr")} className={`px-2 py-1 ${fr ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400"}`}>FR</button>
+              <button onClick={() => setGlobalLang("en")} className={`px-2 py-1 ${!fr ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400"}`}>EN</button>
+            </div>
+
+            {/* THEME TOGGLE */}
+            <button onClick={() => setDark(d => !d)} className="px-2.5 py-1 border border-zinc-300 rounded-lg text-zinc-700 font-bold bg-zinc-100 hover:bg-zinc-200">
+              {dark ? "☀" : "☾"}
+            </button>
+
+            {/* PROFIL & CONNEXION */}
+            {user ? (
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200 font-mono">
+                  🟢 {user.email}
+                </span>
+                <button
+                  onClick={() => supabase.auth.signOut()}
+                  className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold"
+                >
+                  [ {fr ? "Déconnexion" : "Sign Out"} ]
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSignInModal(true)}
+                className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm"
+              >
+                {fr ? "Connexion" : "Sign In"}
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* ── ZONE CENTRALE FASTBILLING ── */}
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 16px 60px" }}>
+        
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:8 }}>
+            <img src="/echo1.png" alt="Echo AI" style={{ width:32, height:32, borderRadius:8, objectFit:"cover" }} />
+            <h1 style={{ fontWeight: 900, fontSize: "clamp(22px,3.8vw,30px)", letterSpacing: -.5, lineHeight: 1.15 }}>{t.tagline}</h1>
+          </div>
+          <p style={{ fontSize: 13, color: muted }}>{t.sub}</p>
+        </div>
+
+        {/* FORMULAIRE DE CRÉATION DE FACTURE */}
+        <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+
+          <div style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 10, padding: "10px 14px", fontSize: 12, color: muted, lineHeight: 1.6 }}>
+            {t.hint}
+          </div>
+
+          <textarea
+            value={freeText}
+            onChange={e => setFreeText(e.target.value)}
+            required
+            rows={9}
+            placeholder={t.placeholder}
+            style={{ width: "100%", background: surf, border: `1.5px solid ${bord}`, borderRadius: 12, padding: "14px", fontSize: 12, color: txt, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.7 }}
+            onFocus={e => (e.target.style.borderColor = acc)}
+            onBlur={e => (e.target.style.borderColor = bord)}
+          />
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <select value={currency} onChange={e => setCurrency(e.target.value as Currency)}
+              style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 9, padding: "8px 12px", fontSize: 12, color: txt, cursor: "pointer", outline: "none", fontWeight: 700 }}>
+              <option value="CAD">🇨🇦 CAD</option>
+              <option value="USD">🇺🇸 USD</option>
+              <option value="EUR">🇪🇺 EUR</option>
+            </select>
+
+            <select value={status} onChange={e => setStatus(e.target.value as Status)}
+              style={{ background: STATUS_CONFIG[status].bg, border: `1px solid ${bord}`, borderRadius: 9, padding: "8px 12px", fontSize: 12, color: STATUS_CONFIG[status].color, cursor: "pointer", outline: "none", fontWeight: 700 }}>
+              <option value="pending">{fr ? "En attente" : "Pending"}</option>
+              <option value="paid">{fr ? "Payée" : "Paid"}</option>
+              <option value="late">{fr ? "En retard" : "Overdue"}</option>
+            </select>
+
+            {(Object.entries(FONT_TEMPLATES) as [FontTemplate, typeof FONT_TEMPLATES[FontTemplate]][]).map(([key, val]) => (
+              <button key={key} type="button" onClick={() => setFontTemplate(key)}
+                style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 8, border: `2px solid ${fontTemplate === key ? acc : bord}`, background: fontTemplate === key ? (dark ? "#2d2b28" : "#fff8f2") : surf2, cursor: "pointer", fontSize: 11, fontWeight: fontTemplate === key ? 700 : 500, color: fontTemplate === key ? acc : txt }}>
+                <span style={{ fontFamily: val.fontFamily, fontSize: 13, fontWeight: 900, color: val.accentColor }}>{val.preview}</span>
+                {val.label}
+              </button>
+            ))}
+          </div>
+
+          <button type="submit" disabled={loading}
+            style={{ background: loading ? muted : acc, color: "#fff", border: "none", borderRadius: 12, padding: "14px 0", fontWeight: 800, fontSize: 15, cursor: loading ? "not-allowed" : "pointer", boxShadow: "0 4px 15px rgba(224,123,57,.3)" }}>
+            {loading
+              ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <span style={{ width: 16, height: 16, border: "2px solid #fff4", borderTopColor: "#fff", borderRadius: "50%", animation: "spin .7s linear infinite", display: "inline-block" }} />
+                  {t.generating}
+                </span>
+              : t.generate}
+          </button>
+        </form>
+
+        {/* FACTURE GÉNÉRÉE */}
+        {invoice && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: .8 }}>Aperçu — {invoice.numero}</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button onClick={() => user ? handleExport("pdf") : setShowSignInModal(true)}
+                  style={{ background: user ? "#dc2626" : muted, color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  {user ? "⬇ PDF" : `🔒 PDF`}
+                </button>
+                <button onClick={handleSave} disabled={saving}
+                  style={{ background: saving ? muted : "#16a34a", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
+                  {saving ? "…" : "💾 Sauvegarder"}
+                </button>
+                {savedMsg && <span style={{ fontSize: 12, color: savedMsg.startsWith("✅") ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{savedMsg}</span>}
+              </div>
+            </div>
+
+            <div style={{ position: "relative" }}>
               {renderInvoice()}
               {!user && (
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%", background: `linear-gradient(to bottom, transparent, ${dark?"rgba(26,25,23,.97)":"rgba(240,236,228,.97)"})`, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 20, borderRadius: "0 0 12px 12px" }}>
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%", background: `linear-gradient(to bottom, transparent, ${dark?"rgba(26,25,23,.97)":"rgba(240,236,228,.97)"})`, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 24, borderRadius: "0 0 12px 12px" }}>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: acc, marginBottom: 4 }}>
-                      🔒 {lang === "fr" ? "Connecte-toi pour exporter" : "Sign in to export"}
+                    <div style={{ fontSize: 14, fontWeight: 800, color: acc, marginBottom: 4 }}>
+                      🔒 {fr ? "Connecte-toi pour exporter" : "Sign in to export"}
                     </div>
-                    <div style={{ fontSize: 11, color: muted, marginBottom: 10 }}>
-                      {lang === "fr" ? "PDF · DOCX · Sauvegarde automatique" : "PDF · DOCX · Auto-save"}
+                    <div style={{ fontSize: 12, color: muted, marginBottom: 12 }}>
+                      {fr ? "PDF · DOCX · Sauvegarde automatique" : "PDF · DOCX · Auto-save"}
                     </div>
-                    <button onClick={() => setShowAuthPopup(true)}
-                      style={{ background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "9px 22px", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 12px rgba(224,123,57,.4)" }}>
-                      {lang === "fr" ? "Créer un compte gratuit →" : "Create a free account →"}
+                    <button onClick={() => setShowSignInModal(true)}
+                      style={{ background: acc, color: "#fff", border: "none", borderRadius: 10, padding: "10px 24px", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 12px rgba(224,123,57,.4)" }}>
+                      {fr ? "Créer un compte gratuit →" : "Create a free account →"}
                     </button>
                   </div>
                 </div>
               )}
             </div>
-            </div>
-          )}
-
-          {/* World — grande bannière finale, après la facture */}
-          {invoice && (
-            <a href={WORLD_ITEM.href} target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none", marginBottom: 10 }}>
-              <div style={{
-                borderRadius: 18, overflow: "hidden", border: `2px solid ${WORLD_ITEM.color}`,
-                boxShadow: `0 0 24px ${WORLD_ITEM.color}30`, transition: "transform .25s, box-shadow .25s",
-              }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 40px ${WORLD_ITEM.color}45`; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 0 24px ${WORLD_ITEM.color}30`; }}>
-                <img src={WORLD_ITEM.src} alt={WORLD_ITEM.label} style={{ width: "100%", display: "block", objectFit: "cover" }} />
-              </div>
-            </a>
-          )}
-
-          <div style={{ marginTop: "auto", paddingTop: 10, fontSize: 10, color: muted, opacity: .5, textAlign: "center" }}>© FastBilling · echosai.ca/fastbilling
-          <a href="mailto:support@echosai.ca"
-            style={{ color: muted, textDecoration: "none", fontSize: 10, opacity: .6, display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 12 }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-            onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-            ✉ support
-          </a></div>
-        </div>
-
-        {/* COL DROITE */}
-        <aside className="fb-col-right" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 8, paddingLeft: 10 }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => setDark(d => !d)} style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 13, color: muted, fontWeight: 700 }}>{dark ? t.light : t.dark}</button>
-            <div style={{ position: "relative", flex: 1 }}>
-              <button onClick={() => setShowLang(v => !v)} style={{ width: "100%", background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "6px 8px", cursor: "pointer", fontSize: 11, color: txt, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span>{lang === "fr" ? "🇫🇷 FR" : "🇬🇧 EN"}</span><span style={{ fontSize: 8, opacity: .6 }}>{showLang ? "▲" : "▼"}</span>
-              </button>
-              {showLang && (
-                <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, left: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 100, boxShadow: "0 4px 16px rgba(0,0,0,.12)" }}>
-                  {(["fr", "en"] as Lang[]).map(l => (
-                    <button key={l} onClick={() => { setLang(l); setShowLang(false); }} style={{ width: "100%", padding: "8px 10px", fontSize: 11, background: lang === l ? surf2 : "transparent", color: lang === l ? acc : txt, border: "none", cursor: "pointer", fontWeight: lang === l ? 700 : 500, textAlign: "left" }}>
-                      {l === "fr" ? "🇫🇷 Français" : "🇬🇧 English"}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
+        )}
 
-          {user && (
-            <div style={{ position: "relative" }}>
-              <button onClick={() => setShowUserMenu(v => !v)} style={{ width: "100%", background: "#16a34a", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 11, color: "#fff", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#86efac", display: "inline-block" }} />
-                {t.connected}<span style={{ marginLeft: "auto", fontSize: 8, opacity: .7 }}>{showUserMenu ? "▲" : "▼"}</span>
-              </button>
-              {showUserMenu && (
-                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 100, boxShadow: "0 4px 16px rgba(0,0,0,.12)" }}>
-                  <a href="/account" style={{ display: "block", padding: "8px 12px", fontSize: 11, color: txt, textDecoration: "none", fontWeight: 600, borderBottom: `1px solid ${bord}` }} onMouseEnter={e => (e.currentTarget.style.background = surf2)} onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>👤 {t.myAccount}</a>
-                  <button onClick={handleLogout} style={{ width: "100%", padding: "8px 12px", fontSize: 11, color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontWeight: 600, textAlign: "left" }} onMouseEnter={e => (e.currentTarget.style.background = surf2)} onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>↩ {t.logout}</button>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, overflow: "hidden" }}>
-            <div style={{ padding: "10px 12px 8px" }}>
-              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>☕ {t.donTitle}</div>
-              <div style={{ fontSize: 11, color: muted, lineHeight: 1.5, marginBottom: 10 }}>{t.donDesc}</div>
-              <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-                {(["CAD", "USD", "EUR"] as const).map(c => (
-                  <button key={c} type="button" onClick={() => { setDonCurrency(c); localStorage.setItem("echo-currency", c); }}
-                    style={{ flex: 1, padding: "4px 0", fontSize: 10, fontWeight: 700, borderRadius: 7, border: `1px solid ${donCurrency === c ? acc : bord}`, background: donCurrency === c ? (dark ? "rgba(224,123,57,.15)" : "rgba(224,123,57,.1)") : surf2, color: donCurrency === c ? acc : muted, cursor: "pointer" }}>
-                    {c}
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => setDonOpen(d => !d)} style={{ width: "100%", background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "10px 0", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>{donOpen ? t.donClose : t.donBtn}</button>
-            </div>
-            {donOpen && (
-              <div style={{ borderTop: `1px solid ${bord}`, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 5 }}>
-                {DONATION_PLANS.map(d => (
-                  <button key={d.plan} onClick={() => handleDon(d.plan)} disabled={donLoading === d.plan}
-                    style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 7, padding: "7px 9px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", opacity: donLoading === d.plan ? .6 : 1, color: txt }}
-                    onMouseEnter={e => (e.currentTarget.style.borderColor = acc)} onMouseLeave={e => (e.currentTarget.style.borderColor = bord)}>
-                    <div><div style={{ fontSize: 13, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div><div style={{ fontSize: 10, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div></div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: acc }}>{d.amount}</div>
-                  </button>
-                ))}
-                <div style={{ fontSize: 9, color: muted, textAlign: "center" }}>🔒 Stripe</div>
-              </div>
-            )}
-          </div>
-
-          {!user && (
-            <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 1 }}>Compte Echo</div>
-              <button onClick={handleGoogle} style={{ ...btn({ background: "#fff", border: "1px solid #e5e7eb", color: "#374151" }) }}>
-                <svg width="13" height="13" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
-                Google
-              </button>
-              <button onClick={handleMicrosoft} style={{ ...btn({ background: dark ? "#2d2b28" : "#1a1917", border: "none", color: "#fff" }) }}>
-                <svg width="13" height="13" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
-                Microsoft
-              </button>
-              <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }} style={{ ...btn({ background: "#0ea5e9", border: "none", color: "#fff" }) }}>✉ {t.signin}</button>
-              <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }} style={{ ...btn() }}>✦ {t.signup}</button>
-            </div>
-          )}
-
-          {user && (
-            <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, overflow: "hidden" }}>
-              <button onClick={() => { setShowHistory(h => !h); if (!showHistory) loadHistory(); }}
-                style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", color: txt, fontWeight: 700, fontSize: 12 }}>
-                <span>📋 {lang === "fr" ? "Mes factures" : "My invoices"}</span>
-                <span style={{ fontSize: 9, color: muted }}>{showHistory ? "▲" : "▼"}</span>
-              </button>
-              {showHistory && (
-                <div style={{ borderTop: `1px solid ${bord}`, maxHeight: 280, overflowY: "auto" }}>
-                  {loadingHistory && <div style={{ padding: "10px 12px", fontSize: 11, color: muted }}>Chargement…</div>}
-                  {!loadingHistory && history.length === 0 && (
-                    <div style={{ padding: "10px 12px", fontSize: 11, color: muted }}>{lang === "fr" ? "Aucune facture sauvegardée." : "No saved invoices."}</div>
-                  )}
-                  {history.map((row) => (
-                    <div key={row.id} style={{ padding: "8px 12px", borderBottom: `1px solid ${bord}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: txt, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {row.data?.emetteur || row.id}
-                        </div>
-                        <div style={{ fontSize: 10, color: muted }}>{row.id}</div>
+        {/* HISTORIQUE DE FACTURES */}
+        {user && (
+          <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 12, overflow: "hidden", marginTop: 24 }}>
+            <button onClick={() => { setShowHistory(h => !h); if (!showHistory) loadHistory(); }}
+              style={{ width: "100%", padding: "12px 16px", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", color: txt, fontWeight: 700, fontSize: 13 }}>
+              <span>📋 {fr ? "Mes factures enregistrées" : "My saved invoices"}</span>
+              <span style={{ fontSize: 10, color: muted }}>{showHistory ? "▲" : "▼"}</span>
+            </button>
+            {showHistory && (
+              <div style={{ borderTop: `1px solid ${bord}`, maxHeight: 300, overflowY: "auto" }}>
+                {loadingHistory && <div style={{ padding: "12px", fontSize: 12, color: muted }}>Chargement…</div>}
+                {!loadingHistory && history.length === 0 && (
+                  <div style={{ padding: "12px", fontSize: 12, color: muted }}>{fr ? "Aucune facture sauvegardée." : "No saved invoices."}</div>
+                )}
+                {history.map((row) => (
+                  <div key={row.id} style={{ padding: "10px 16px", borderBottom: `1px solid ${bord}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: txt, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {row.data?.emetteur || row.id}
                       </div>
-                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                        <button onClick={() => handleLoadInvoice(row)}
-                          style={{ background: acc, color: "#fff", border: "none", borderRadius: 6, padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
-                          ↩
-                        </button>
-                        <button onClick={() => handleDeleteInvoice(row.id)}
-                          style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "3px 8px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
-                          ✕
-                        </button>
-                      </div>
+                      <div style={{ fontSize: 10, color: muted }}>{row.id}</div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </aside>
-      </div>
-
-      {/* BARRE MOBILE */}
-      <div className="fb-mobile-bar" style={{ "--surf": dark ? "#242220" : "#fffdf9", "--bord": dark ? "#3a3835" : "#e2ddd5" } as React.CSSProperties}>
-        <button onClick={() => setDark(d => !d)}
-          style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 14, color: muted, fontWeight: 700, cursor: "pointer" }}>
-          {dark ? t.light : t.dark}
-        </button>
-
-        <div style={{ position: "relative" }}>
-          <button onClick={() => setShowLang(v => !v)}
-            style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 12, color: txt, fontWeight: 700, cursor: "pointer" }}>
-            {lang === "fr" ? "🇫🇷" : "🇬🇧"} {showLang ? "▲" : "▼"}
-          </button>
-          {showLang && (
-            <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 200, minWidth: 130, boxShadow: "0 -4px 16px rgba(0,0,0,.15)" }}>
-              {(["fr", "en"] as Lang[]).map(l => (
-                <button key={l} onClick={() => { setLang(l); setShowLang(false); }}
-                  style={{ width: "100%", padding: "10px 13px", fontSize: 12, background: lang === l ? surf2 : "transparent", color: lang === l ? acc : txt, border: "none", cursor: "pointer", fontWeight: lang === l ? 700 : 500, textAlign: "left" }}>
-                  {l === "fr" ? "🇫🇷 Français" : "🇬🇧 English"}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div style={{ position: "relative", flex: 1, display: "flex", justifyContent: "center" }}>
-          <button onClick={() => setDonOpen(d => !d)}
-            style={{ background: acc, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 13, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 8px rgba(224,123,57,.4)" }}>
-            ☕ {lang === "fr" ? "Don café" : "Buy coffee"}
-          </button>
-          {donOpen && (
-            <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", background: surf, border: `1px solid ${bord}`, borderRadius: 14, padding: "14px", zIndex: 300, boxShadow: "0 -4px 28px rgba(0,0,0,.18)", minWidth: 260 }}>
-              <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", color: txt }}>
-                ☕ {lang === "fr" ? "Soutenir FastBilling" : "Support FastBilling"}
-                <button onClick={() => setDonOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 16, lineHeight: 1 }}>✕</button>
-              </div>
-              {DONATION_PLANS.map(d => (
-                <button key={d.plan} onClick={() => { handleDon(d.plan); setDonOpen(false); }} disabled={donLoading === d.plan}
-                  style={{ width: "100%", background: surf2, border: `1px solid ${bord}`, borderRadius: 9, padding: "9px 12px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7, color: txt, opacity: donLoading === d.plan ? .6 : 1 }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div>
-                    <div style={{ fontSize: 10, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button onClick={() => { setInvoice(row.data); setShowHistory(false); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        style={{ background: acc, color: "#fff", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                        ↩ Voir
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: acc }}>{d.amount}</div>
-                </button>
-              ))}
-              <div style={{ fontSize: 10, color: muted, textAlign: "center", marginTop: 4 }}>🔒 Stripe</div>
-            </div>
-          )}
-        </div>
-
-        {user ? (
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setShowUserMenu(v => !v)}
-              style={{ background: "#16a34a", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 11, color: "#fff", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#86efac", display: "inline-block" }} />
-              {t.connected}
-            </button>
-            {showUserMenu && (
-              <div style={{ position: "absolute", bottom: "calc(100% + 6px)", right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 10, overflow: "hidden", zIndex: 200, minWidth: 150, boxShadow: "0 -4px 16px rgba(0,0,0,.15)" }}>
-                <a href="/account" style={{ display: "block", padding: "9px 13px", fontSize: 12, color: txt, textDecoration: "none", fontWeight: 600, borderBottom: `1px solid ${bord}` }}>👤 {t.myAccount}</a>
-                <button onClick={handleLogout} style={{ width: "100%", padding: "9px 13px", fontSize: 12, color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontWeight: 600, textAlign: "left" }}>↩ {t.logout}</button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setShowUserMenu(v => !v)}
-              style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: txt, fontWeight: 700, cursor: "pointer" }}>
-              {t.signin} {showUserMenu ? "▲" : "▼"}
-            </button>
-            {showUserMenu && (
-              <div style={{ position: "absolute", bottom: "calc(100% + 6px)", right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 12, padding: "12px", zIndex: 200, minWidth: 200, boxShadow: "0 -4px 20px rgba(0,0,0,.15)", display: "flex", flexDirection: "column", gap: 8 }}>
-                <button onClick={() => { handleGoogle(); setShowUserMenu(false); }}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#374151" }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
-                  Google
-                </button>
-                <button onClick={() => { handleMicrosoft(); setShowUserMenu(false); }}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "#1a1917", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#fff" }}>
-                  <svg width="14" height="14" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
-                  Microsoft
-                </button>
-                <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowUserMenu(false); }}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "#0ea5e9", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#fff" }}>
-                  ✉ {t.signin}
-                </button>
-                <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowUserMenu(false); }}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: surf2, border: `1px solid ${bord}`, borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600, color: txt }}>
-                  ✦ {t.signup}
-                </button>
+                ))}
               </div>
             )}
           </div>
         )}
+
       </div>
 
-      {/* POPUP AUTH */}
-      {showAuthPopup && (
-        <div onClick={() => setShowAuthPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(6px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 20, padding: "28px 28px 22px", width: 320, display: "flex", flexDirection: "column", gap: 14, position: "relative" }}>
-            <button onClick={() => setShowAuthPopup(false)} style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 18 }}>✕</button>
-            <div style={{ textAlign: "center", marginBottom: 4 }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>⚡</div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: txt, marginBottom: 4 }}>
-                {lang === "fr" ? "Connecte-toi pour générer" : "Sign in to generate"}
-              </div>
-              <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
-                {lang === "fr"
-                  ? "Un compte gratuit suffit. Tes factures sont sauvegardées."
-                  : "A free account is enough. Your invoices are saved."}
-              </div>
+      {/* ── MODALE OFFRE UNIFIÉE ECHOAI PREMIUM (3,99$) ── */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr
+                ? "Débloquez l'accès illimité à l'ensemble des modules d'intelligence artificielle."
+                : "Unlock unlimited access to all artificial intelligence modules."}
+            </p>
+
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c
+                      ? "bg-amber-500 text-zinc-950 border-amber-400"
+                      : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
+                </button>
+              ))}
             </div>
-            <button onClick={() => { handleGoogle(); setShowAuthPopup(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151", width: "100%" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
-              {lang === "fr" ? "Continuer avec Google" : "Continue with Google"}
-            </button>
-            <button onClick={() => { handleMicrosoft(); setShowAuthPopup(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: dark ? "#2d2b28" : "#1a1917", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", width: "100%" }}>
-              <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
-              {lang === "fr" ? "Continuer avec Microsoft" : "Continue with Microsoft"}
-            </button>
-            <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#0ea5e9", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", width: "100%" }}>
-              ✉ {lang === "fr" ? "Se connecter par email" : "Sign in with email"}
-            </button>
-            <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: surf2, border: `1px solid ${bord}`, borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: txt, width: "100%" }}>
-              ✦ {lang === "fr" ? "Créer un compte gratuit" : "Create a free account"}
-            </button>
-            <div style={{ fontSize: 10, color: muted, textAlign: "center" }}>
-              {lang === "fr" ? "Gratuit · Aucune carte requise" : "Free · No card required"}
+
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
+              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ Sauvegarde permanente de vos projets</li>
+              </ul>
             </div>
+
+            <button
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
+            >
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
+                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
+            </button>
           </div>
         </div>
       )}
 
-      {/* MODAL EMAIL */}
-      {showEmailModal && (
-        <div onClick={() => setShowEmailModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(4px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 16, padding: "22px 26px", width: 300, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{emailMode === "signin" ? t.modalSignin : t.modalSignup}</div>
-              <button onClick={() => setShowEmailModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 16 }}>✕</button>
+      {/* ── MODALE CONNEXION ── */}
+      {showSignInModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-4">
+              <div>
+                <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                  {fr ? "Connectez-vous pour exporter et sauvegarder vos factures." : "Sign in to export and save your invoices."}
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowSignInModal(false)} className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer">✕</button>
             </div>
-            {authError   && <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "7px 10px", fontSize: 11, color: "#b91c1c" }}>⚠️ {authError}</div>}
-            {authSuccess && <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "7px 10px", fontSize: 11, color: "#15803d" }}>✓ {authSuccess}</div>}
-            <form onSubmit={handleEmailAuth} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              <input type="email" placeholder="nom@domaine.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 12, color: txt, outline: "none" }} />
-              <input type="password" placeholder="••••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 12, color: txt, outline: "none" }} />
-              <button type="submit" style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>{emailMode === "signin" ? t.submitSignin : t.submitSignup}</button>
-            </form>
-            <button onClick={() => { setEmailMode(emailMode === "signin" ? "signup" : "signin"); setAuthError(null); setAuthSuccess(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 10, textDecoration: "underline" }}>{emailMode === "signin" ? t.switchToSignup : t.switchToSignin}</button>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+              </button>
+              <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+              </button>
+            </div>
+
+            <div className="h-px bg-zinc-900 my-3" />
+
+            <div className="space-y-3">
+              <input
+                type="email"
+                placeholder="nom@domaine.com"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+              />
+              <input
+                type="password"
+                placeholder="••••••••••••"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+              />
+              {authError && <p className="text-red-400 text-xs font-mono">⚠️ {authError}</p>}
+
+              <button
+                onClick={async () => {
+                  setAuthError(null);
+                  const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+                  if (error) setAuthError(error.message);
+                  else setShowSignInModal(false);
+                }}
+                className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                {fr ? "Se connecter" : "Log in"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -959,21 +852,6 @@ export default function FastBillingPage() {
         @keyframes spin { to { transform: rotate(360deg); } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         textarea, input, select { font-family: inherit; }
-        ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: #c4bfb8; border-radius: 3px; }
-        @media (max-width: 768px) {
-          .fb-layout { grid-template-columns: 1fr !important; }
-          .fb-col-left, .fb-col-right { display: none !important; }
-          .fb-col-centre { padding: 16px 14px 80px !important; }
-          .fb-mobile-bar { display: flex !important; }
-          .fb-mobile-pubs { display: flex !important; }
-        }
-        @media (min-width: 769px) { .fb-mobile-bar { display: none !important; } }
-        .fb-mobile-bar {
-          position: fixed; bottom: 0; left: 0; right: 0; display: none;
-          background: var(--surf, #fffdf9); border-top: 1px solid var(--bord, #e2ddd5);
-          padding: 8px 14px 12px; gap: 8px; z-index: 50;
-          align-items: center; justify-content: space-between;
-        }
       `}</style>
     </div>
   );
