@@ -11,7 +11,7 @@ const supabaseAdmin = createClient(
 
 export const dynamic = "force-dynamic";
 
-// 🔑 Ton Secret Webhook Stripe (considéré valide)
+// 🔑 METS TA VRAIE CLÉ STRIPE ICI
 const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "whsec_1U3vFgBHw5LMtvb0HSkCF7kdfOtJZLkl";
 
 export async function POST(req: Request) {
@@ -19,58 +19,65 @@ export async function POST(req: Request) {
   const signature = req.headers.get("stripe-signature");
 
   if (!signature) {
+    console.error("❌ Signature Stripe manquante dans le header");
     return NextResponse.json({ error: "Signature manquante" }, { status: 400 });
   }
 
   let event: Stripe.Event;
 
   try {
+    // Validation officielle Stripe
     event = stripe.webhooks.constructEvent(payload, signature, ENDPOINT_SECRET);
   } catch (err: any) {
-    console.error(`Échec Webhook Stripe: ${err.message}`);
+    console.error(`❌ Échec signature Webhook: ${err.message}`);
     return NextResponse.json({ error: `Signature invalide: ${err.message}` }, { status: 400 });
   }
 
+  // Si on arrive ici, l'événement est 100% valide
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    const metadata = session.metadata;
+    const userId = session.metadata?.userId || session.metadata?.user_id;
 
-    // Récupère l'ID utilisateur sous n'importe quelle forme
-    const userId = metadata?.userId || metadata?.user_id;
-
-    if (!userId) {
-      console.warn("[WEBHOOK] userId manquant dans la session Stripe - Validation contournée pour éviter 400");
-      return NextResponse.json({ received: true, note: "Aucun userId fourni dans metadata" }, { status: 200 });
-    }
-
-    console.log(`[WEBHOOK SUCCESS] Activation de l'abonnement pour userId: ${userId}`);
+    console.log(`⚡ Traitement paiement pour userId: ${userId} / email: ${session.customer_email}`);
 
     try {
-      // 1. Mise à jour de la table PROFILES (Nouveau système - Statut Premium / Vert)
-      await supabaseAdmin
-        .from("profiles")
-        .update({
-          user_tier: "premium",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", userId);
+      // 1. Recherche de l'utilisateur dans Supabase (par metadata ou par courriel)
+      let targetUserId = userId;
 
-      // 2. Mise à jour de la table WORLD_QUOTAS (Ancien système - 9999 questions)
-      await supabaseAdmin
-        .from("world_quotas")
-        .upsert({
-          user_id: userId,
+      if (!targetUserId && session.customer_email) {
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+        const matched = usersData?.users.find(u => u.email === session.customer_email);
+        if (matched) targetUserId = matched.id;
+      }
+
+      if (targetUserId) {
+        // 2. ÉCRITURE DANS PROFILES
+        await supabaseAdmin.from("profiles").upsert({
+          id: targetUserId,
+          user_tier: "premium",
+          updated_at: new Date().toISOString()
+        }, { onConflict: "id" });
+
+        // 3. ÉCRITURE DANS WORLD_QUOTAS
+        await supabaseAdmin.from("world_quotas").upsert({
+          user_id: targetUserId,
           available: 9999,
           tier: "advantage",
-          last_regen: new Date().toISOString(),
-          cycle_start: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         }, { onConflict: "user_id" });
 
-      console.log(`[WEBHOOK SUCCESS] Utilisateur ${userId} activé avec succès sur Profiles et World Quotas !`);
-    } catch (err: any) {
-      console.error(`[WEBHOOK DB ERROR]`, err.message);
-      return NextResponse.json({ error: "Erreur DB" }, { status: 500 });
+        // 4. ÉCRITURE DANS CONTENU_QUOTAS
+        await supabaseAdmin.from("contenu_quotas").upsert({
+          user_id: targetUserId,
+          tier: "advantage",
+          updated_at: new Date().toISOString()
+        }, { onConflict: "user_id" });
+
+        console.log(`✅ TOUTES LES TABLES SUPABASE ONT ÉTÉ MISES À JOUR POUR ${targetUserId} !`);
+      }
+    } catch (dbErr: any) {
+      console.error("❌ Erreur écriture Supabase:", dbErr.message);
+      return NextResponse.json({ error: "Erreur Supabase" }, { status: 500 });
     }
   }
 
