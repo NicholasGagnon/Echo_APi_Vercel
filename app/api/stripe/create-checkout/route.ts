@@ -28,30 +28,28 @@ export async function POST(req: Request) {
     const origin = req.headers.get("origin") ?? "http://localhost:3000";
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "subscription",
-      customer_email: userEmail,
-      
-      // 🎟️ AJOUT DE LA CASE CODE PROMO DANS STRIPE
-      allow_promotion_codes: true,
-
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      success_url: `${origin}/contratachat?subscription=success`,
-      cancel_url: `${origin}/contratachat?subscription=canceled`,
-      metadata: {
-        userId: userId,
-      },
-      subscription_data: {
-        metadata: {
-          userId: userId,
-        },
-      },
-    });
+  payment_method_types: ["card"],
+  mode: "subscription",
+  customer_email: userEmail,
+  allow_promotion_codes: true,
+  line_items: [
+    {
+      price: priceId,
+      quantity: 1,
+    },
+  ],
+  // 🎯 REDIRECTION VERS TA PAGE DE TEST AU LIEU DE CONTRATACHAT
+  success_url: `${origin}/test-stripe?subscription=success`,
+  cancel_url: `${origin}/test-stripe?subscription=canceled`,
+  metadata: {
+    userId: userId,
+  },
+  subscription_data: {
+    metadata: {
+      userId: userId,
+    },
+  },
+});
 
     return NextResponse.json({ url: session.url });
   } catch (error: any) {
