@@ -1,19 +1,43 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 type Lang = "fr" | "en";
+type Currency = "CAD" | "USD" | "EUR";
+
+const MicrosoftLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
+    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
+  </svg>
+);
+
+const GoogleLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+  </svg>
+);
 
 const T = {
   fr: {
-    title: "Analyse d'idée",
+    title: "ANALYSE D'IDÉE",
     sub: "Décris ton idée. L'IA te dit la vérité.",
     placeholder: `Ex: Je veux créer une application qui permet aux plombiers indépendants de gérer leurs factures et rendez-vous depuis leur téléphone. Ils perdent beaucoup de temps sur l'administratif et ratent des clients parce qu'ils ne rappellent pas assez vite.`,
     hint: "Plus tu es précis sur le problème, la cible et la solution, meilleure sera l'analyse.",
-    analyse: "Analyser l'idée",
-    analysing: "Analyse en cours…",
-    howBtn: "💡 Comment ça marche ?",
+    analyse: "ANALYSER L'IDÉE",
+    analysing: "ANALYSE EN COURS...",
+    howBtn: "💡 COMMENT ÇA MARCHE ?",
     howTitle: "Comment ça marche ?",
     howSteps: [
       { icon: "⚡", title: "Gagnez un temps précieux", desc: "Décrivez votre idée en quelques phrases et obtenez une analyse immédiate, sans formulaire interminable ni questionnaire de 30 minutes." },
@@ -23,18 +47,6 @@ const T = {
       { icon: "✅", title: "Une opinion honnête, rapide et centralisée", desc: "Une seule description, un seul clic, une seule analyse claire pour savoir si vous avez un bon pari ou un chantier colossal." },
     ],
     howClose: "Fermer",
-    authTitle: "Connecte-toi pour analyser",
-    authSub: "Gratuit · Ton texte est conservé · Aucune carte requise",
-    authGoogle: "Continuer avec Google",
-    authMicrosoft: "Continuer avec Microsoft",
-    authEmail: "Se connecter par email",
-    authSignup: "Créer un compte gratuit",
-    modalSignin: "🛸 Connexion",
-    modalSignup: "🛸 Créer un compte",
-    submitSignin: "Se connecter",
-    submitSignup: "Créer mon compte",
-    switchToSignup: "Pas de compte ? Créer",
-    switchToSignin: "Déjà un compte ? Se connecter",
     reconstruction: "Ce que j'ai compris",
     problem: "Problème détecté",
     solution: "Solution proposée",
@@ -58,7 +70,6 @@ const T = {
     expDepth: "Profondeur d'expérience",
     directCompetitor: "Concurrent direct ?",
     yes: "Oui", no: "Non",
-    competitorVerdict: "Verdict concurrentiel",
     competitorSimilarity: "Dimensions de similarité",
     sameLabels: ["Même problème", "Même solution", "Même workflow", "Même clientèle", "Même modèle", "Même expérience"],
     viability: "Scores de viabilité",
@@ -70,24 +81,16 @@ const T = {
     assumptionsUsed: "Hypothèses utilisées",
     assumptionsRisk: "Si fausses, tout change",
     verdictLabel: "Verdict final",
-    donTitle: "Soutenir l'outil",
-    donDesc: "Outil gratuit. Un don maintient le service en ligne.",
-    donBtn: "Faire un don ▼",
-    donClose: "Fermer ▲",
-    amazonTitle: "Valide ton idée avec les vrais avis",
-    amazonLink: "Rechercher sur Amazon →",
-    connected: "Connecté", myAccount: "Mon compte", logout: "Se déconnecter",
-    dark: "☾", light: "☀",
     monetizationLevels: { "none_or_low":"Aucune ou faible","medium":"Moyenne","high":"Élevée","critical":"Critique" } as Record<string,string>,
   },
   en: {
-    title: "Idea Analysis",
+    title: "IDEA ANALYSIS",
     sub: "Describe your idea. The AI tells you the truth.",
     placeholder: `Ex: I want to create an app that helps independent plumbers manage invoices and appointments from their phone. They lose a lot of time on admin and miss clients because they don't follow up fast enough.`,
     hint: "The more precise you are about the problem, target, and solution, the better the analysis.",
-    analyse: "Analyze the idea",
-    analysing: "Analyzing…",
-    howBtn: "💡 How does it work?",
+    analyse: "ANALYZE THE IDEA",
+    analysing: "ANALYZING...",
+    howBtn: "💡 HOW DOES IT WORK?",
     howTitle: "How does it work?",
     howSteps: [
       { icon: "⚡", title: "Save precious time", desc: "Describe your idea in a few sentences and get an immediate analysis, without endless forms or 30-minute questionnaires." },
@@ -97,18 +100,6 @@ const T = {
       { icon: "✅", title: "Honest, fast and centralized opinion", desc: "One description, one click, one clear analysis to know if you have a good bet or a massive undertaking." },
     ],
     howClose: "Close",
-    authTitle: "Sign in to analyze",
-    authSub: "Free · Your text is preserved · No card required",
-    authGoogle: "Continue with Google",
-    authMicrosoft: "Continue with Microsoft",
-    authEmail: "Sign in with email",
-    authSignup: "Create a free account",
-    modalSignin: "🛸 Sign In",
-    modalSignup: "🛸 Create Account",
-    submitSignin: "Sign in",
-    submitSignup: "Create my account",
-    switchToSignup: "No account? Create one",
-    switchToSignin: "Already have an account?",
     reconstruction: "What I understood",
     problem: "Detected problem",
     solution: "Proposed solution",
@@ -132,7 +123,6 @@ const T = {
     expDepth: "Experience depth",
     directCompetitor: "Direct competitor?",
     yes: "Yes", no: "No",
-    competitorVerdict: "Competitive verdict",
     competitorSimilarity: "Similarity dimensions",
     sameLabels: ["Same problem", "Same solution", "Same workflow", "Same customers", "Same model", "Same experience"],
     viability: "Viability scores",
@@ -144,110 +134,122 @@ const T = {
     assumptionsUsed: "Assumptions used",
     assumptionsRisk: "If wrong, everything changes",
     verdictLabel: "Final verdict",
-    donTitle: "Support the tool",
-    donDesc: "Free tool. A donation keeps it running.",
-    donBtn: "Donate ▼",
-    donClose: "Close ▲",
-    amazonTitle: "Validate your idea with real reviews",
-    amazonLink: "Search on Amazon →",
-    connected: "Connected", myAccount: "My account", logout: "Sign out",
-    dark: "☾", light: "☀",
     monetizationLevels: { "none_or_low":"None or low","medium":"Medium","high":"High","critical":"Critical" } as Record<string,string>,
   },
 };
 
-const DONATION_PLANS = [
-  { name:"Petit geste",  nameEn:"Small gesture", amount:"$1.50",  plan:"micro",   desc:"Comme une fiche", descEn:"Like a listing unlock" },
-  { name:"Avantage",  nameEn:"Advantage", amount:"$5.99",  plan:"basic",   desc:"Un café",          descEn:"A coffee" },
-  { name:"Premium",   nameEn:"Premium",   amount:"$9.99",  plan:"premium", desc:"Vrai soutien",     descEn:"Real support" },
-  { name:"Ultra",     nameEn:"Ultra",     amount:"$19.99", plan:"ultra",   desc:"Généreux 💛",      descEn:"Generous 💛" },
-  { name:"Fondateur", nameEn:"Founder",   amount:"$99",    plan:"founder", desc:"Tu crois en nous", descEn:"You believe in us" },
-];
+const PRICES: Record<Currency, { amount: string; symbol: string }> = {
+  CAD: { amount: "3.99", symbol: "CA$" },
+  USD: { amount: "3.99", symbol: "US$" },
+  EUR: { amount: "3.99", symbol: "€" },
+};
 
 const scoreColor = (s: number) =>
-  s >= 8 ? "#22c55e" : s >= 6 ? "#eab308" : s >= 4 ? "#f97316" : "#ef4444";
+  s >= 8 ? "#10b981" : s >= 6 ? "#f59e0b" : s >= 4 ? "#f97316" : "#ef4444";
 
 const ScoreBar = ({ score, color }: { score: number; color: string }) => (
-  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-    <div style={{ flex:1, height:6, background:"rgba(255,255,255,.1)", borderRadius:3, overflow:"hidden" }}>
-      <div style={{ width:`${score*10}%`, height:"100%", background:color, borderRadius:3, transition:"width .6s ease" }} />
+  <div className="flex items-center gap-2">
+    <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score * 10}%`, backgroundColor: color }} />
     </div>
-    <div style={{ fontSize:14, fontWeight:900, color, minWidth:32, textAlign:"right" }}>
-      {score}<span style={{ fontSize:10, opacity:.5 }}>/10</span>
+    <div className="text-xs font-black font-mono" style={{ color }}>
+      {score}<span className="text-[9px] opacity-40">/10</span>
     </div>
   </div>
 );
 
-export default function IdeaPage() {
-  const [dark, setDark]                 = useState(true);
-  const [pseudo, setPseudo]             = useState<string>("");
-  const [pseudoInput, setPseudoInput]   = useState<string>("");
-  const [showLangMenu, setShowLangMenu] = useState(false);
-  const [lang, setLang]                 = useState<Lang>("fr");
-  const [user, setUser]                 = useState<any>(null);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showHow, setShowHow]           = useState(false);
-  const [showAuthPopup, setShowAuthPopup] = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailMode, setEmailMode]       = useState<"signin"|"signup">("signin");
-  const [authEmail, setAuthEmail]       = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError]       = useState<string|null>(null);
-  const [authSuccess, setAuthSuccess]   = useState<string|null>(null);
-  const [donOpen, setDonOpen]           = useState(false);
-  const [donLoading, setDonLoading]     = useState<string|null>(null);
-  const [donCurrency, setDonCurrency]   = useState<"CAD"|"USD"|"EUR">("CAD");
-  const [idea, setIdea]                 = useState("");
-  const [loading, setLoading]           = useState(false);
-  const [result, setResult]             = useState<any>(null);
-  const [error, setError]               = useState<string|null>(null);
+function IdeaContent() {
+  const { lang, setLang } = useApp();
+  const fr = lang === "fr";
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [user, setUser] = useState<any>(null);
+  const [userTier, setUserTier] = useState<string>("free");
+
+  // Currency & Stripe Premium
+  const [currency, setCurrency] = useState<Currency>("CAD");
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  // Auth Modals
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+
+  // Idea Core
+  const [idea, setIdea] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showHow, setShowHow] = useState(false);
+
   const t = T[lang];
-
-  const bg    = dark ? "#08070a" : "#f5f2ee";
-  const surf  = dark ? "#111118" : "#fffdf9";
-  const surf2 = dark ? "#1a1a24" : "#f0ece4";
-  const bord  = dark ? "rgba(255,255,255,.08)" : "#e2ddd5";
-  const txt   = dark ? "#e8e8f0" : "#1a1917";
-  const muted = dark ? "rgba(255,255,255,.35)" : "#7a7570";
-  const acc   = "#00c8ff";
-
   const api = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
-  // ── AUTH + RESTORE ─────────────────────────────────────────────────────────
   useEffect(() => {
-    // Sauvegarder le texte avant OAuth
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+        restoreAnalysis(session.user.id);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+        restoreAnalysis(session.user.id);
+      } else {
+        setUser(null);
+        setUserTier("free");
+      }
+    });
+
     const draft = localStorage.getItem("idea_draft");
     if (draft) { setIdea(draft); localStorage.removeItem("idea_draft"); }
 
-    supabase.auth.getUser().then(({ data: authData }) => {
-      if (authData?.user) { setUser(authData.user); restoreAnalysis(authData.user.id); loadProfile(authData.user.id); }
-    });
-
-    const { data: l } = supabase.auth.onAuthStateChange(async (_, s) => {
-      setUser(s?.user ?? null);
-      if (s?.user) { restoreAnalysis(s.user.id); loadProfile(s.user.id); } else setPseudo("");
-    });
-    // Devise partagée avec le site principal
-    const saved = localStorage.getItem("echo-currency") as "CAD"|"USD"|"EUR"|null;
-    if (saved) setDonCurrency(saved);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "echo-currency" && e.newValue) setDonCurrency(e.newValue as "CAD"|"USD"|"EUR");
-    };
-    window.addEventListener("storage", onStorage);
-    return () => { l.subscription.unsubscribe(); window.removeEventListener("storage", onStorage); };
+    return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("premium") === "success" && user) {
+      const timer = setTimeout(() => {
+        verifierStatutUser(user.id);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, user]);
+
+  const verifierStatutUser = async (uid: string) => {
+    try {
+      const { data: cData } = await supabase.from("contenu_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
+        setUserTier(cData.tier); return;
+      }
+      const { data: wData } = await supabase.from("world_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
+        setUserTier(wData.tier); return;
+      }
+      setUserTier("free");
+    } catch { setUserTier("free"); }
+  };
 
   const restoreAnalysis = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data, error: fetchErr } = await supabase
         .from("idea_analyses")
         .select("data")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (!error && data?.data?.result) setResult(data.data.result);
-      if (!error && data?.data?.idea && !idea) setIdea(data.data.idea);
+      if (!fetchErr && data?.data?.result) setResult(data.data.result);
+      if (!fetchErr && data?.data?.idea && !idea) setIdea(data.data.idea);
     } catch {}
   };
 
@@ -261,58 +263,50 @@ export default function IdeaPage() {
     } catch {}
   };
 
-  // ── OAUTH ──────────────────────────────────────────────────────────────────
-  const saveBeforeRedirect = () => { if (idea.trim()) localStorage.setItem("idea_draft", idea); };
-  const handleGoogle    = async () => { saveBeforeRedirect(); await supabase.auth.signInWithOAuth({ provider:"google",  options:{ redirectTo:`${window.location.origin}/idea`, scopes:"openid profile email", queryParams:{ prompt:"select_account" } } }); };
-  const handleMicrosoft = async () => { saveBeforeRedirect(); await supabase.auth.signInWithOAuth({ provider:"azure",   options:{ redirectTo:`${window.location.origin}/idea`, scopes:"openid profile email User.Read" } }); };
-  const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setPseudo(""); setShowUserMenu(false); };
-  const loadProfile = async (uid: string) => {
-    const { data } = await supabase.from("profiles").select("username").eq("id", uid).maybeSingle();
-    setPseudo(data?.username || "");
-  };
-  const savePseudo = async () => {
-    const clean = pseudoInput.trim();
-    if (!clean || !user) return;
-    await supabase.from("profiles").upsert({ id: user.id, username: clean, updated_at: new Date().toISOString() });
-    setPseudo(clean);
-  };
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      setShowPremiumModal(false);
+      setShowSignInModal(true);
+      return;
+    }
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault(); setAuthError(null); setAuthSuccess(null);
-    if (emailMode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
-      if (error) setAuthError(error.message); else setShowEmailModal(false);
-    } else {
-      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options:{ emailRedirectTo:`${window.location.origin}/idea` } });
-      if (error) setAuthError(error.message);
-      else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError("Compte existant.");
-      else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
+    setIsCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/create-checkout-site2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: "world_advantage",
+          currency: currency.toUpperCase(),
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
+      }
+    } catch {
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
+    } finally {
+      setIsCheckoutLoading(false);
     }
   };
 
-  const handleDon = async (plan: string) => {
-    setDonLoading(plan);
-    try {
-      // Le palier "micro" (1,50$) passe par la même route que l'unlock fiche
-      // (price_data inline, montant fixe peu importe la devise).
-      const endpoint = plan === "micro" ? "/api/stripe/create-checkout-site2" : "/api/stripe/create-checkout";
-      const res = await fetch(endpoint, {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ plan, userId: user?.id||"guest_don", userEmail: user?.email||"don@echosai.ca", currency: donCurrency }),
-      });
-      const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch {} finally { setDonLoading(null); }
-  };
-
-  // ── ANALYSE ────────────────────────────────────────────────────────────────
   const handleAnalyse = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!user) {
+      setShowSignInModal(true);
+      return;
+    }
     if (!idea.trim() || idea.trim().length < 10) return;
     setLoading(true); setError(null); setResult(null);
     try {
       const res = await fetch(`${api}/2/analyse-idee`, {
-        method:"POST", headers:{"Content-Type":"application/json"},
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idea: idea.trim(), lang }),
       });
       const data = await res.json();
@@ -324,247 +318,309 @@ export default function IdeaPage() {
     } finally { setLoading(false); }
   };
 
-  // ── HELPERS UI ─────────────────────────────────────────────────────────────
-  const sameKeys = ["same_problem","same_solution","same_workflow","same_target_customer","same_business_model","same_user_experience"];
+  const handleGoogleConnect = async () => {
+    if (idea.trim()) localStorage.setItem("idea_draft", idea);
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/idea`, scopes: "openid profile email", queryParams: { prompt: "select_account" } },
+    });
+  };
 
-  const Section = ({ title, color=acc, children }: { title:string; color?:string; children:React.ReactNode }) => (
-    <div style={{ marginBottom:24 }}>
-      <div style={{ fontSize:9, fontWeight:800, letterSpacing:4, textTransform:"uppercase", color, marginBottom:12, opacity:.8 }}>{title}</div>
+  const handleMicrosoftConnect = async () => {
+    if (idea.trim()) localStorage.setItem("idea_draft", idea);
+    await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: { redirectTo: `${window.location.origin}/idea`, scopes: "openid profile email User.Read" },
+    });
+  };
+
+  const handleEmailSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAuthError(null); setAuthSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setAuthError(fr ? "Veuillez entrer vos identifiants." : "Please enter credentials.");
+      return;
+    }
+    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (err) setAuthError(err.message);
+    else setShowSignInModal(false);
+  };
+
+  const handleEmailSignUp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAuthError(null); setAuthSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setAuthError(fr ? "Veuillez entrer un courriel et un mot de passe." : "Please enter email and password.");
+      return;
+    }
+    const { data, error: err } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/idea` },
+    });
+    if (err) {
+      setAuthError(err.message);
+    } else {
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setAuthError(fr ? "Un compte avec ce courriel existe déjà." : "An account with this email already exists.");
+        return;
+      }
+      setAuthSuccess(fr ? "Lien de confirmation envoyé ! Vérifiez votre boîte mail." : "Confirmation link sent! Check your inbox.");
+    }
+  };
+
+  const sameKeys = ["same_problem","same_solution","same_workflow","same_target_customer","same_business_model","same_user_experience"];
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
+
+  const Section = ({ title, color = "#06b6d4", children }: { title: string; color?: string; children: React.ReactNode }) => (
+    <div className="space-y-3">
+      <div className="text-[10px] font-mono font-black tracking-widest uppercase" style={{ color }}>
+        {title}
+      </div>
       {children}
     </div>
   );
 
-  const Card = ({ children, style={} }: { children:React.ReactNode; style?:React.CSSProperties }) => (
-    <div style={{ background:surf, border:`1px solid ${bord}`, borderRadius:13, padding:"14px 18px", ...style }}>{children}</div>
+  const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+    <div className={`bg-zinc-900/80 border border-zinc-800/80 rounded-2xl p-4 md:p-5 ${className}`}>
+      {children}
+    </div>
   );
 
-  const Row = ({ label, value }: { label:string; value?:string }) => value ? (
-    <div style={{ display:"flex", gap:12, marginBottom:10, alignItems:"flex-start" }}>
-      <div style={{ fontSize:10, fontWeight:700, color:muted, textTransform:"uppercase", letterSpacing:.5, flexShrink:0, width:140, paddingTop:2 }}>{label}</div>
-      <div style={{ fontSize:13, color:txt, lineHeight:1.5, flex:1 }}>{value}</div>
+  const Row = ({ label, value }: { label: string; value?: string }) => value ? (
+    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 py-1.5 border-b border-zinc-800/40 last:border-none">
+      <span className="text-[11px] font-mono font-bold text-zinc-500 uppercase shrink-0 sm:w-36">{label}</span>
+      <span className="text-xs text-zinc-200 leading-relaxed flex-1">{value}</span>
     </div>
   ) : null;
 
-  const btnOAuth = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-    display:"flex", alignItems:"center", gap:10, padding:"10px 14px",
-    borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:600, width:"100%", border:"none", ...extra,
-  });
-
-  // ── POSTERS VERTICAUX — bordure colorée, image qui zoom au survol ──────────
-  // Le poster "Talk" pointe vers Hall (c'est là qu'on obtient de vrais avis humains)
-  const POSTER_ITEMS = [
-    { href:"https://echosai.ca/",      src:"/talkmini.png",    label:"Talk",        color:"#a78bfa" },
-    { href:"https://echosai.ca/avis",        src:"/avismini.png",    label:"Avis Produits", color:"#f59e0b" },
-    { href:"https://echosai.ca/fastbilling", src:"/facturemini.png", label:"FastBilling", color:"#c9a84c" },
-  ];
-  const WORLD_ITEM = { href:"https://echosai.ca/world", src:"/worldmini.png", label:"World", color:"#34d399" };
-
-  const PosterCard = ({ item, width=175, ratio="2 / 3" }: { item: { href:string; src:string; label:string; color:string }; width?: number; ratio?: string }) => (
-    <a href={item.href} target="_blank" rel="noopener noreferrer"
-      style={{
-        display:"block", width, borderRadius:14, overflow:"hidden",
-        border:`2px solid ${item.color}`, boxShadow:`0 0 18px ${item.color}35`,
-        textDecoration:"none", background:surf,
-      }}>
-      <div style={{ overflow:"hidden", aspectRatio:ratio }}>
-        <img src={item.src} alt={item.label}
-          style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"transform .35s ease" }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.1)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }} />
-      </div>
-    </a>
-  );
-
-  // ── RENDU ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ background:bg, color:txt, minHeight:"100dvh", fontFamily:"'Inter', system-ui, sans-serif", transition:"background .3s" }}>
+    <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
+      
+      {/* ── HEADER BLANC UNIFIÉ ── */}
+      <section className="bg-white text-zinc-900 relative z-30">
+        <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
+            
+            <div className="flex items-center gap-6">
+              <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-zinc-900 uppercase">
+                ECHOSAI
+              </Link>
 
-      {/* NAV — modèle Hall à 2 zones, adapté au style clair/sombre d'Idea */}
-      <nav style={{ borderBottom:`1px solid ${bord}`, padding:"0 24px", minHeight:52, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background: dark?"rgba(8,7,10,.96)":"rgba(245,242,238,.96)", backdropFilter:"blur(12px)", zIndex:50, flexWrap:"wrap", gap:10 }}>
-        {/* ZONE 1 — logo + onglets */}
-        <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", padding:"8px 0" }}>
-          <a href="/" style={{ fontWeight:800, fontSize:14, color:txt, textDecoration:"none" }}>Echo AI</a>
-          <div style={{ display:"flex", alignItems:"center", gap:14, fontSize:14, flexWrap:"wrap" }}>
-            <a href="/" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Accueil":"Home"}</a>
-            <a href="/dashboard" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Tous les outils":"All tools"}</a>
-            <a href="/conversation" style={{ color:muted, textDecoration:"none" }}>AI Chat</a>
-            <a href="/form" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Créer un projet":"Create project"}</a>
-            <a href="/fiche" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Explorer les projets":"Explore projects"}</a>
-            <a href="/talk" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Avis de la communauté":"Community feedback"}</a>
-            <a href="/audit" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Audition de site web":"Website audit"}</a>
-            <a href="/idea" style={{ color:acc, fontWeight:700, textDecoration:"none" }}>{lang==="fr"?"Avis de l'IA":"AI feedback"}</a>
-            <a href="/account" style={{ color:muted, textDecoration:"none" }}>{lang==="fr"?"Mon compte":"My account"}</a>
-          </div>
-        </div>
-
-        {/* SÉPARATEUR + ZONE 2 — Bureau (premium) + How it works + dark + langue + pseudo */}
-        <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0, padding:"8px 0" }}>
-          <div style={{ width:1, height:22, background:bord, flexShrink:0 }} />
-
-          <div style={{ position:"relative" }}
-            onMouseEnter={e => { const t = (e.currentTarget as HTMLElement).querySelector(".ideaLockTip") as HTMLElement; if (t) t.style.opacity = "1"; }}
-            onMouseLeave={e => { const t = (e.currentTarget as HTMLElement).querySelector(".ideaLockTip") as HTMLElement; if (t) t.style.opacity = "0"; }}>
-            <button onClick={() => { /* TODO: activer + ouvrir popup d'avantages une fois le premium prêt */ }}
-              style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(201,168,76,.08)", border:"1px solid rgba(201,168,76,.3)", borderRadius:7, padding:"5px 10px", cursor:"not-allowed", opacity:.65 }}>
-              <span style={{ fontSize:11 }}>🔒</span>
-              <span style={{ fontSize:11, fontWeight:700, color:"#c9a84c", whiteSpace:"nowrap" }}>{lang==="fr"?"Mon Bureau":"My Desk"}</span>
-            </button>
-            <div className="ideaLockTip" style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:"#111", border:"1px solid rgba(255,255,255,.15)", borderRadius:6, padding:"4px 10px", fontSize:10, color:"#fff", whiteSpace:"nowrap", opacity:0, pointerEvents:"none", transition:"opacity .15s", zIndex:50 }}>
-              {lang==="fr"?"🚧 En construction":"🚧 Under construction"}
+              <Link
+                href="/outil"
+                className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all hover:scale-105 active:scale-95"
+              >
+                <span>⚡</span>
+                <span>{fr ? "RETOUR AUX OUTILS" : "BACK TO TOOLS"}</span>
+              </Link>
             </div>
-          </div>
+            
+            <div className="flex items-center gap-4 text-xs font-mono relative">
+              <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
+                {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCurrency(c)}
+                    className={`px-2 py-1 font-bold transition-colors ${currency === c ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"}`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
 
-          <button onClick={() => setShowHow(true)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"5px 10px", fontSize:11, color:acc, cursor:"pointer", fontWeight:700, whiteSpace:"nowrap" }}>{t.howBtn}</button>
-          <button onClick={() => setDark(d => !d)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"5px 10px", fontSize:12, color:muted, cursor:"pointer" }}>{dark?t.light:t.dark}</button>
-
-          <div style={{ position:"relative" }}>
-            <button onClick={() => setShowLangMenu(v => !v)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"5px 10px", fontSize:11, color:muted, cursor:"pointer", fontWeight:700 }}>
-              {lang==="fr"?"FR":"EN"}
-            </button>
-            {showLangMenu && (
-              <>
-                <div onClick={() => setShowLangMenu(false)} style={{ position:"fixed", inset:0, zIndex:40 }} />
-                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:surf, border:`1px solid ${bord}`, borderRadius:10, overflow:"hidden", zIndex:100, minWidth:110 }}>
-                  {(["fr","en"] as Lang[]).map(l => (
-                    <button key={l} onClick={() => { setLang(l); setShowLangMenu(false); }}
-                      style={{ display:"block", width:"100%", textAlign:"left", padding:"8px 12px", fontSize:11, background: lang===l ? "rgba(0,200,255,.1)" : "transparent", color: lang===l ? acc : muted, border:"none", cursor:"pointer", fontWeight: lang===l?700:500 }}>
-                      {l==="fr"?"Français":"English"}
-                    </button>
-                  ))}
+              {isPaidTier ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                  <span className="font-bold text-[11px] uppercase tracking-wider">
+                    {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
+                  </span>
                 </div>
-              </>
-            )}
-          </div>
+              ) : (
+                <div 
+                  onClick={() => setShowPremiumModal(true)} 
+                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+                >
+                  <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                    ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  </span>
+                </div>
+              )}
 
-          {user ? (
-            <div style={{ position:"relative" }}>
-              <button onClick={() => setShowUserMenu(v => !v)} style={{ display:"flex", alignItems:"center", gap:5, background:"rgba(0,200,255,.1)", border:"1px solid rgba(0,200,255,.3)", borderRadius:8, padding:"5px 12px", cursor:"pointer" }}>
-                <span style={{ width:6, height:6, borderRadius:"50%", background:acc, display:"inline-block" }} />
-                <span style={{ fontSize:11, fontWeight:700, color:acc }}>{pseudo || (lang==="fr"?"Choisir un pseudo":"Choose nickname")}</span>
-              </button>
-              {showUserMenu && (
-                <>
-                  <div onClick={() => setShowUserMenu(false)} style={{ position:"fixed", inset:0, zIndex:40 }} />
-                  <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, background:surf, border:`1px solid ${bord}`, borderRadius:10, padding:12, zIndex:100, minWidth:200 }}>
-                    <div style={{ fontSize:10, color:muted, marginBottom:8, wordBreak:"break-all" }}>{user.email}</div>
-                    {!pseudo && (
-                      <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:8 }}>
-                        <input type="text" value={pseudoInput} onChange={e => setPseudoInput(e.target.value.replace(/[^a-zA-Z0-9_\s-]/g, ""))}
-                          placeholder={lang==="fr"?"Ton pseudo":"Your nickname"}
-                          style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:6, padding:"6px 10px", fontSize:11, color:txt, outline:"none" }} />
-                        <button onClick={savePseudo} style={{ background:acc, color:"#000", border:"none", borderRadius:6, padding:"6px 0", fontSize:11, fontWeight:700, cursor:"pointer" }}>{lang==="fr"?"Valider":"Save"}</button>
-                      </div>
-                    )}
-                    <button onClick={handleLogout} style={{ width:"100%", textAlign:"left", background:"none", border:"none", color:"#ef4444", fontSize:11, cursor:"pointer", padding:"4px 0" }}>↩ {t.logout}</button>
-                  </div>
-                </>
+              <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
+                <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
+                <button onClick={() => setLang("en")} className={`px-2 py-1 ${lang === "en" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>EN</button>
+              </div>
+
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200 font-mono">
+                    🟢 {user.email}
+                  </span>
+                  <button
+                    onClick={() => supabase.auth.signOut()}
+                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold"
+                  >
+                    [ {fr ? "Déconnexion" : "Sign Out"} ]
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowSignInModal(true)}
+                    className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm"
+                  >
+                    {fr ? "Connexion" : "Sign In"}
+                  </button>
+                  <button
+                    onClick={() => setShowSignUpModal(true)}
+                    className="px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-bold tracking-tight shadow-sm"
+                  >
+                    {fr ? "S'inscrire" : "Sign Up"}
+                  </button>
+                </div>
               )}
             </div>
-          ) : (
-            <button onClick={() => setShowAuthPopup(true)} style={{ background:acc, color:"#000", border:"none", borderRadius:8, padding:"5px 14px", fontSize:11, fontWeight:700, cursor:"pointer" }}>
-              {lang==="fr"?"Se connecter":"Sign in"}
-            </button>
-          )}
-        </div>
-      </nav>
+          </div>
+        </header>
 
-      {/* LAYOUT 3 COLONNES */}
-      <div style={{ display:"grid", gridTemplateColumns:"180px 1fr 180px", maxWidth:1200, margin:"0 auto", padding:"0 10px", minHeight:"calc(100dvh - 52px)" }} className="idea-layout">
-
-        {/* COL GAUCHE — pubs en anneau */}
-        <aside className="idea-col-left" style={{ paddingTop:24, display:"flex", flexDirection:"column", gap:32, paddingRight:10, alignItems:"center" }}>
-          {POSTER_ITEMS.map((item, i) => <PosterCard key={i} item={item} />)}
-        </aside>
-
-        {/* CENTRE */}
-        <div className="idea-col-centre" style={{ padding:"24px 14px 60px" }}>
-
-          {/* Header */}
-          <div style={{ textAlign:"center", marginBottom:28 }}>
-            <div style={{ fontSize:10, fontWeight:800, letterSpacing:5, color:acc, marginBottom:8, opacity:.7 }}>ANALYSE D'IDÉE</div>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:12, marginBottom:6 }}>
-              <img src="/echo1.png" alt="Echo AI" style={{ width:36, height:36, borderRadius:9, objectFit:"cover", flexShrink:0 }} />
-              <h1 style={{ fontSize:"clamp(24px, 4vw, 42px)", fontWeight:900, letterSpacing:-1, color: dark?"#fff":"#1a1917" }}>{t.title}</h1>
+        {/* HERO BANNER DE L'OUTIL */}
+        <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div className="lg:col-span-8">
+            <div className="inline-block text-[10px] font-mono tracking-widest text-cyan-600 font-bold uppercase mb-2 border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 rounded">
+              {fr ? "MODULE 11 // ÉVALUATION DE POTENTIEL" : "MODULE 11 // POTENTIAL EVALUATION"}
             </div>
-            <p style={{ fontSize:13, color:muted }}>{t.sub}</p>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 leading-[1.0] mb-3 uppercase">
+              {t.title}
+            </h1>
+            <p className="text-zinc-500 max-w-xl text-xs md:text-sm font-sans leading-relaxed">
+              {t.sub}
+            </p>
           </div>
-
-          {/* Pubs mobile — en anneau, 2 items */}
-          <div className="idea-mobile-pubs" style={{ display:"none", gap:14, marginBottom:16, justifyContent:"center" }}>
-            <PosterCard item={POSTER_ITEMS[0]} width={115} />
-            <PosterCard item={POSTER_ITEMS[1]} width={115} />
+          <div className="lg:col-span-4 flex justify-center lg:justify-end">
+            <img src="/echo1.png" alt="Echo AI Core System" className="w-full max-w-[180px] h-auto object-contain drop-shadow-[0_10px_25px_rgba(6,182,212,0.15)]" />
           </div>
+        </div>
+      </section>
 
-          {/* Formulaire */}
-          <form onSubmit={e => e.preventDefault()} style={{ marginBottom:0 }}>
-            <div style={{ fontSize:11, color:muted, marginBottom:8, lineHeight:1.6 }}>💡 {t.hint}</div>
-            <textarea value={idea} onChange={e => setIdea(e.target.value)} required rows={8} placeholder={t.placeholder}
-              style={{ width:"100%", background:surf, border:`1.5px solid ${bord}`, borderRadius:14, padding:"14px 16px", fontSize:13, color:txt, outline:"none", resize:"vertical", fontFamily:"inherit", lineHeight:1.7 }}
-              onFocus={e => (e.target.style.borderColor=acc)} onBlur={e => (e.target.style.borderColor=bord)} />
-            {error && <div style={{ marginTop:8, padding:"8px 12px", background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:9, fontSize:12, color:"#b91c1c" }}>⚠️ {error}</div>}
+      {/* ── SEPARATION VAGUE BLANCHE ET STRIC CYAN ── */}
+      <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
+        <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
+        </svg>
+
+        <svg className="absolute top-0 left-0 w-full h-full text-transparent fill-none pointer-events-none z-22" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,60 Q360,0 720,50 Q1080,90 1440,30" stroke="#06b6d4" strokeWidth="6" className="drop-shadow-[0_0_12px_#06b6d4]" />
+        </svg>
+      </div>
+
+      {/* ── SECTION BASSE NOIRE ── */}
+      <section className="bg-zinc-950 text-zinc-50 pb-16 pt-0 relative z-10 -mt-6">
+        <div className="max-w-4xl mx-auto px-6 space-y-8">
+
+          {/* FORMULAIRE IDEA */}
+          <form onSubmit={e => e.preventDefault()} className="bg-black/90 border-2 border-cyan-500/40 rounded-3xl p-6 md:p-8 shadow-[0_0_30px_rgba(6,182,212,0.15)] space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="font-mono text-xs text-cyan-400 font-extrabold tracking-wider uppercase">
+                01. {fr ? "VOTRE CONCEPT & VISION" : "YOUR CONCEPT & VISION"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowHow(true)}
+                className="text-[11px] font-mono font-bold text-cyan-400 hover:text-cyan-300 underline"
+              >
+                {t.howBtn}
+              </button>
+            </div>
+
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 text-xs text-zinc-400 font-mono leading-relaxed">
+              💡 {t.hint}
+            </div>
+
+            <textarea
+              value={idea}
+              onChange={(e) => setIdea(e.target.value)}
+              required
+              rows={8}
+              placeholder={t.placeholder}
+              className="w-full bg-zinc-900/90 border border-zinc-800 focus:border-cyan-400 rounded-2xl p-4 text-xs font-mono text-zinc-100 placeholder:text-zinc-600 outline-none resize-y transition-colors leading-relaxed"
+            />
+
+            {error && (
+              <div className="p-3 bg-red-950/60 border border-red-500/50 rounded-xl text-xs text-red-400 font-mono">
+                ⚠️ {error}
+              </div>
+            )}
+
+            {!user ? (
+              <button
+                type="button"
+                onClick={() => setShowSignInModal(true)}
+                className="w-full py-4 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_25px_rgba(6,182,212,0.4)] cursor-pointer"
+              >
+                🔐 {fr ? "Se connecter pour analyser" : "Sign in to analyze"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleAnalyse}
+                disabled={loading || idea.trim().length < 10}
+                className="w-full py-4 rounded-2xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-zinc-950 font-mono font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_25px_rgba(6,182,212,0.4)] cursor-pointer"
+              >
+                {loading ? `▶ ${t.analysing}` : `▶ ${t.analyse}`}
+              </button>
+            )}
           </form>
 
-          {/* Bouton principal — hors du form pour éviter les conflits disabled */}
-          {!user ? (
-            <button type="button" onClick={() => setShowAuthPopup(true)}
-              style={{ width:"100%", background:`linear-gradient(135deg,${acc},#0080ff)`, color:"#000", border:"none", borderRadius:12, padding:"14px 0", fontWeight:900, fontSize:15, cursor:"pointer", marginBottom:16 }}>
-              {lang==="fr"?"🔐 Se connecter pour analyser":"🔐 Sign in to analyze"}
-            </button>
-          ) : (
-            <button type="button" onClick={handleAnalyse} disabled={loading || idea.trim().length < 10}
-              style={{ width:"100%", background: loading ? muted : `linear-gradient(135deg,${acc},#0080ff)`, color:"#000", border:"none", borderRadius:12, padding:"14px 0", fontWeight:900, fontSize:15, cursor: loading||idea.trim().length<10?"not-allowed":"pointer", marginBottom:16 }}>
-              {loading
-                ? <span style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, color:"#fff" }}>
-                    <span style={{ width:18, height:18, border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin .7s linear infinite", display:"inline-block" }} />
-                    {t.analysing}
-                  </span>
-                : t.analyse}
-            </button>
-          )}
-
-          {/* RÉSULTATS */}
+          {/* RÉSULTATS DE L'ANALYSE */}
           {result && (
-            <div style={{ animation:"fadeIn .4s ease" }}>
-
-              {/* Verdict */}
+            <div className="bg-black/90 border-2 border-cyan-500/40 rounded-3xl p-6 md:p-8 space-y-8 shadow-[0_0_40px_rgba(6,182,212,0.15)] animate-in fade-in duration-300">
+              
+              {/* Verdict Final */}
               {result.verdict && (
-                <div style={{ background:surf, border:`1.5px solid ${bord}`, borderRadius:14, padding:"18px 22px", marginBottom:24, borderLeft:`4px solid ${acc}` }}>
-                  <div style={{ fontSize:9, fontWeight:800, letterSpacing:3, color:acc, marginBottom:8, textTransform:"uppercase" }}>{t.verdictLabel}</div>
-                  <div style={{ fontSize:15, fontWeight:700, color:txt, lineHeight:1.6 }}>{result.verdict}</div>
+                <div className="bg-zinc-900/90 border-l-4 border-cyan-400 border-zinc-800 rounded-2xl p-5 md:p-6 space-y-2">
+                  <div className="text-[10px] font-mono font-black text-cyan-400 uppercase tracking-widest">
+                    02. {t.verdictLabel}
+                  </div>
+                  <div className="text-sm md:text-base font-bold text-zinc-100 leading-relaxed">
+                    {result.verdict}
+                  </div>
                 </div>
               )}
 
-              {/* Scores viabilité */}
+              {/* Scores de Viabilité */}
               {result.mvp_viability_scores && (
                 <Section title={t.viability} color="#a78bfa">
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Card>
-                      <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>{t.demandScore}</div>
+                      <div className="text-[11px] font-mono font-bold text-violet-400 mb-2">{t.demandScore}</div>
                       <ScoreBar score={result.mvp_viability_scores.user_demand_score} color={scoreColor(result.mvp_viability_scores.user_demand_score)} />
-                      <div style={{ fontSize:11, color:muted, marginTop:8, lineHeight:1.4 }}>{result.mvp_viability_scores.user_demand_rationale}</div>
+                      <div className="text-xs text-zinc-400 mt-3 leading-relaxed">{result.mvp_viability_scores.user_demand_rationale}</div>
                     </Card>
                     <Card>
-                      <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>{t.buildScore}</div>
+                      <div className="text-[11px] font-mono font-bold text-violet-400 mb-2">{t.buildScore}</div>
                       <ScoreBar score={result.mvp_viability_scores.build_efficiency_score} color={scoreColor(result.mvp_viability_scores.build_efficiency_score)} />
-                      <div style={{ fontSize:11, color:muted, marginTop:8, lineHeight:1.4 }}>{result.mvp_viability_scores.build_efficiency_rationale}</div>
+                      <div className="text-xs text-zinc-400 mt-3 leading-relaxed">{result.mvp_viability_scores.build_efficiency_rationale}</div>
                     </Card>
                     <Card>
-                      <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>{t.defensScore}</div>
+                      <div className="text-[11px] font-mono font-bold text-violet-400 mb-2">{t.defensScore}</div>
                       <ScoreBar score={result.mvp_viability_scores.defensibility_score} color={scoreColor(result.mvp_viability_scores.defensibility_score)} />
-                      <div style={{ fontSize:11, color:muted, marginTop:8, lineHeight:1.4 }}>{result.mvp_viability_scores.defensibility_rationale}</div>
+                      <div className="text-xs text-zinc-400 mt-3 leading-relaxed">{result.mvp_viability_scores.defensibility_rationale}</div>
                     </Card>
                     <Card>
-                      <div style={{ fontSize:10, fontWeight:700, color:"#a78bfa", marginBottom:8 }}>{t.monetization}</div>
-                      <div style={{ fontSize:13, fontWeight:700, color:txt, marginBottom:6 }}>{t.monetizationLevels[result.mvp_viability_scores.monetization_requirement] || result.mvp_viability_scores.monetization_requirement}</div>
-                      <div style={{ fontSize:11, color:muted, lineHeight:1.4 }}>{result.mvp_viability_scores.monetization_rationale}</div>
+                      <div className="text-[11px] font-mono font-bold text-violet-400 mb-2">{t.monetization}</div>
+                      <div className="text-xs font-bold text-zinc-100 mb-1">
+                        {t.monetizationLevels[result.mvp_viability_scores.monetization_requirement] || result.mvp_viability_scores.monetization_requirement}
+                      </div>
+                      <div className="text-xs text-zinc-400 leading-relaxed">{result.mvp_viability_scores.monetization_rationale}</div>
                     </Card>
                   </div>
                 </Section>
               )}
 
-              {/* Reconstruction */}
-              <Section title={t.reconstruction} color={acc}>
-                <Card>
+              {/* Reconstruction du Modèle */}
+              <Section title={t.reconstruction} color="#06b6d4">
+                <Card className="space-y-1">
                   <Row label={t.problem}  value={result.reconstructed_model?.problem_user_believes_he_solves} />
                   <Row label={t.solution} value={result.reconstructed_model?.solution_proposed} />
                   <Row label={t.target}   value={result.reconstructed_model?.target_customer_detected} />
@@ -573,23 +629,23 @@ export default function IdeaPage() {
                 </Card>
               </Section>
 
-              {/* Zones d'ombre */}
+              {/* Zones d'Ombre */}
               {result.understanding_risk?.length > 0 && (
                 <Section title={t.risks} color="#f97316">
-                  <Card>
+                  <Card className="space-y-2">
                     {result.understanding_risk.map((r: string, i: number) => (
-                      <div key={i} style={{ display:"flex", gap:10, marginBottom:7, fontSize:12, color:txt, alignItems:"flex-start" }}>
-                        <span style={{ color:"#f97316", flexShrink:0 }}>⚠</span>
-                        <span style={{ lineHeight:1.5 }}>{r}</span>
+                      <div key={i} className="flex gap-2.5 items-start text-xs text-zinc-200">
+                        <span className="text-orange-500 shrink-0 mt-0.5">⚠️</span>
+                        <span className="leading-relaxed">{r}</span>
                       </div>
                     ))}
                   </Card>
                 </Section>
               )}
 
-              {/* Vraies questions */}
-              <Section title={t.questions} color="#34d399">
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {/* Les Vraies Questions */}
+              <Section title={t.questions} color="#10b981">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {([
                     [t.q1, result.questions?.do_people_really_want_this],
                     [t.q2, result.questions?.does_someone_already_do_this],
@@ -599,36 +655,52 @@ export default function IdeaPage() {
                     [t.q6, result.questions?.biggest_strength],
                     [t.q7, result.questions?.time_to_know_if_it_works],
                     [t.q8, result.questions?.worth_trying],
-                  ] as [string,string][]).map(([label,value],i) => (
-                    <Card key={i} style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      <div style={{ fontSize:10, fontWeight:700, color:"#34d399" }}>{label}</div>
-                      <div style={{ fontSize:12, color:txt, lineHeight:1.5 }}>{value||"—"}</div>
+                  ] as [string, string][]).map(([label, value], i) => (
+                    <Card key={i} className="space-y-1">
+                      <div className="text-[11px] font-mono font-bold text-emerald-400">{label}</div>
+                      <div className="text-xs text-zinc-300 leading-relaxed">{value || "—"}</div>
                     </Card>
                   ))}
                 </div>
               </Section>
 
-              {/* Concurrent principal */}
+              {/* Concurrent Principal */}
               {result.competitor_analysis && (
                 <Section title={t.competitorAnalysis} color="#f59e0b">
-                  <Card>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                  <Card className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
                       <div>
-                        <div style={{ fontSize:10, color:muted, marginBottom:2 }}>{t.alternative}</div>
-                        <div style={{ fontSize:14, fontWeight:700, color:txt }}>{result.competitor_analysis.alternative_name}</div>
+                        <span className="text-[10px] font-mono text-zinc-500 uppercase block">{t.alternative}</span>
+                        <span className="text-sm font-bold text-zinc-100">{result.competitor_analysis.alternative_name}</span>
                       </div>
-                      <div style={{ padding:"4px 12px", borderRadius:20, background: result.competitor_analysis.is_direct_product_competitor?"rgba(239,68,68,.15)":"rgba(34,197,94,.15)", border:`1px solid ${result.competitor_analysis.is_direct_product_competitor?"#ef4444":"#22c55e"}`, fontSize:11, fontWeight:700, color: result.competitor_analysis.is_direct_product_competitor?"#ef4444":"#22c55e" }}>
-                        {t.directCompetitor} {result.competitor_analysis.is_direct_product_competitor?t.yes:t.no}
-                      </div>
+                      <span className={`px-3 py-1 rounded-full text-[11px] font-mono font-bold border ${
+                        result.competitor_analysis.is_direct_product_competitor
+                          ? "bg-red-950/50 border-red-500/50 text-red-400"
+                          : "bg-emerald-950/50 border-emerald-500/50 text-emerald-400"
+                      }`}>
+                        {t.directCompetitor} {result.competitor_analysis.is_direct_product_competitor ? t.yes : t.no}
+                      </span>
                     </div>
+
                     {result.competitor_analysis.friction_comparison && (
-                      <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:12 }}>
-                        {result.competitor_analysis.friction_comparison.target_alignment && <div style={{ fontSize:12, color:txt }}><span style={{ color:muted, marginRight:8 }}>{t.targetAlign} :</span>{result.competitor_analysis.friction_comparison.target_alignment}</div>}
-                        {result.competitor_analysis.friction_comparison.workflow_friction && <div style={{ fontSize:12, color:txt }}><span style={{ color:muted, marginRight:8 }}>{t.workflowFriction} :</span>{result.competitor_analysis.friction_comparison.workflow_friction}</div>}
-                        {result.competitor_analysis.friction_comparison.experience_depth && <div style={{ fontSize:12, color:txt }}><span style={{ color:muted, marginRight:8 }}>{t.expDepth} :</span>{result.competitor_analysis.friction_comparison.experience_depth}</div>}
+                      <div className="space-y-1.5 text-xs text-zinc-300">
+                        {result.competitor_analysis.friction_comparison.target_alignment && (
+                          <div><span className="text-zinc-500 font-mono">{t.targetAlign} :</span> {result.competitor_analysis.friction_comparison.target_alignment}</div>
+                        )}
+                        {result.competitor_analysis.friction_comparison.workflow_friction && (
+                          <div><span className="text-zinc-500 font-mono">{t.workflowFriction} :</span> {result.competitor_analysis.friction_comparison.workflow_friction}</div>
+                        )}
+                        {result.competitor_analysis.friction_comparison.experience_depth && (
+                          <div><span className="text-zinc-500 font-mono">{t.expDepth} :</span> {result.competitor_analysis.friction_comparison.experience_depth}</div>
+                        )}
                       </div>
                     )}
-                    {result.competitor_analysis.verdict && <div style={{ borderTop:`1px solid ${bord}`, paddingTop:10, fontSize:12, color:txt, fontStyle:"italic", lineHeight:1.5 }}>{result.competitor_analysis.verdict}</div>}
+
+                    {result.competitor_analysis.verdict && (
+                      <div className="border-t border-zinc-800/80 pt-3 text-xs text-zinc-300 italic leading-relaxed">
+                        {result.competitor_analysis.verdict}
+                      </div>
+                    )}
                   </Card>
                 </Section>
               )}
@@ -636,40 +708,53 @@ export default function IdeaPage() {
               {/* Similarité */}
               {result.competitor_similarity && (
                 <Section title={t.competitorSimilarity} color="#f59e0b">
-                  <Card>
-                    <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
-                      {sameKeys.map((key,i) => (
-                        <div key={i} style={{ display:"flex", alignItems:"center", gap:5, padding:"4px 10px", borderRadius:20, background: result.competitor_similarity[key]?"rgba(239,68,68,.12)":surf2, border:`1px solid ${result.competitor_similarity[key]?"#ef4444":bord}`, fontSize:11, color: result.competitor_similarity[key]?"#ef4444":muted }}>
-                          <span>{result.competitor_similarity[key]?"✓":"✗"}</span>
+                  <Card className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {sameKeys.map((key, i) => (
+                        <div
+                          key={i}
+                          className={`px-3 py-1 rounded-full text-xs font-mono font-bold border flex items-center gap-1.5 ${
+                            result.competitor_similarity[key]
+                              ? "bg-red-950/40 border-red-500/50 text-red-400"
+                              : "bg-zinc-800/50 border-zinc-700/50 text-zinc-400"
+                          }`}
+                        >
+                          <span>{result.competitor_similarity[key] ? "✓" : "✗"}</span>
                           <span>{t.sameLabels[i]}</span>
                         </div>
                       ))}
                     </div>
-                    {result.competitor_similarity.verdict && <div style={{ borderTop:`1px solid ${bord}`, paddingTop:10, fontSize:12, color:txt, fontStyle:"italic" }}>{result.competitor_similarity.verdict}</div>}
+                    {result.competitor_similarity.verdict && (
+                      <div className="border-t border-zinc-800/80 pt-3 text-xs text-zinc-300 italic">
+                        {result.competitor_similarity.verdict}
+                      </div>
+                    )}
                   </Card>
                 </Section>
               )}
 
-              {/* Hypothèses */}
+              {/* Hypothèses Critiques */}
               {(result.analysis_trace?.critical_assumptions_used?.length > 0 || result.analysis_trace?.assumptions_that_if_wrong_change_everything?.length > 0) && (
                 <Section title={t.assumptions} color="#f97316">
-                  <Card>
+                  <Card className="space-y-4">
                     {result.analysis_trace?.critical_assumptions_used?.length > 0 && (
-                      <div style={{ marginBottom:14 }}>
-                        <div style={{ fontSize:10, fontWeight:700, color:muted, marginBottom:8, textTransform:"uppercase", letterSpacing:1 }}>{t.assumptionsUsed}</div>
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-mono font-bold text-zinc-500 uppercase">{t.assumptionsUsed}</div>
                         {result.analysis_trace.critical_assumptions_used.map((a: string, i: number) => (
-                          <div key={i} style={{ fontSize:12, color:txt, marginBottom:5, display:"flex", gap:8, lineHeight:1.5 }}>
-                            <span style={{ color:"#f59e0b", flexShrink:0 }}>→</span>{a}
+                          <div key={i} className="text-xs text-zinc-300 flex gap-2 items-start leading-relaxed">
+                            <span className="text-amber-500 shrink-0">→</span>
+                            <span>{a}</span>
                           </div>
                         ))}
                       </div>
                     )}
                     {result.analysis_trace?.assumptions_that_if_wrong_change_everything?.length > 0 && (
-                      <div>
-                        <div style={{ fontSize:10, fontWeight:700, color:"#ef4444", marginBottom:8, textTransform:"uppercase", letterSpacing:1 }}>{t.assumptionsRisk}</div>
+                      <div className="space-y-2 border-t border-zinc-800/80 pt-3">
+                        <div className="text-[10px] font-mono font-bold text-red-400 uppercase">{t.assumptionsRisk}</div>
                         {result.analysis_trace.assumptions_that_if_wrong_change_everything.map((a: string, i: number) => (
-                          <div key={i} style={{ fontSize:12, color:txt, marginBottom:5, display:"flex", gap:8, lineHeight:1.5 }}>
-                            <span style={{ color:"#ef4444", flexShrink:0 }}>⚡</span>{a}
+                          <div key={i} className="text-xs text-zinc-300 flex gap-2 items-start leading-relaxed">
+                            <span className="text-red-500 shrink-0">⚡</span>
+                            <span>{a}</span>
                           </div>
                         ))}
                       </div>
@@ -678,261 +763,227 @@ export default function IdeaPage() {
                 </Section>
               )}
 
-              {/* Bannière contextuelle Talk — apparaît seulement après un résultat */}
-              <a href="https://echosai.ca/talk" target="_blank" rel="noopener noreferrer" style={{ textDecoration:"none" }}>
-                <div style={{
-                  background: "linear-gradient(135deg, rgba(167,139,250,.16), rgba(139,92,246,.05))",
-                  border: "1px solid rgba(167,139,250,.4)", borderRadius: 16, padding: "20px 22px",
-                  marginBottom: 16, display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap",
-                  transition: "all .2s", cursor:"pointer",
-                }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 30px rgba(167,139,250,.2)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:700, color: dark?"#fff":"#1a1917", marginBottom:4 }}>
-                      {lang==="fr" ? "🤖 L'IA a terminé son analyse." : "🤖 The AI finished its analysis."}
-                    </div>
-                    <div style={{ fontSize:12, color:muted }}>
-                      {lang==="fr" ? "Envie de voir comment de vraies personnes réagiraient à votre idée ?" : "Curious how real people would react to your idea?"}
-                    </div>
-                  </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(167,139,250,.15)", padding:"8px 16px", borderRadius:10, whiteSpace:"nowrap" }}>
-                    <span style={{ fontSize:16 }}>💬</span>
-                    <span style={{ fontSize:12, fontWeight:800, color:"#a78bfa" }}>{lang==="fr" ? "Tester sur Talk →" : "Test on Talk →"}</span>
-                  </div>
-                </div>
-              </a>
-
-              {/* Amazon */}
-              <div style={{ background:surf, border:`1px solid ${bord}`, borderRadius:13, padding:"14px 18px", marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                <div style={{ fontSize:12, color:muted }}>{t.amazonTitle}</div>
-                <a href="https://amzn.to/3RyEK8l" target="_blank" rel="noopener noreferrer"
-                  style={{ background:"#f90", color:"#111", border:"none", borderRadius:8, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap" }}>
-                  {t.amazonLink}
-                </a>
-              </div>
-
-              {/* World — grande bannière finale */}
-              <a href={WORLD_ITEM.href} target="_blank" rel="noopener noreferrer" style={{ display:"block", textDecoration:"none" }}>
-                <div style={{
-                  borderRadius: 18, overflow: "hidden", border: `2px solid ${WORLD_ITEM.color}`,
-                  boxShadow: `0 0 24px ${WORLD_ITEM.color}30`, transition: "transform .25s, box-shadow .25s",
-                }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 40px ${WORLD_ITEM.color}45`; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 0 24px ${WORLD_ITEM.color}30`; }}>
-                  <img src={WORLD_ITEM.src} alt={WORLD_ITEM.label} style={{ width:"100%", display:"block", objectFit:"cover" }} />
-                </div>
-              </a>
-
             </div>
           )}
 
-          <div style={{ marginTop:"auto", paddingTop:10, fontSize:10, color:muted, opacity:.4, textAlign:"center" }}>© IdeaAnalysis · echosai.ca</div>
         </div>
+      </section>
 
-        {/* COL DROITE */}
-        <aside className="idea-col-right" style={{ paddingTop:16, display:"flex", flexDirection:"column", gap:12, paddingLeft:10 }}>
-          {/* Dark + Lang */}
-          <div style={{ display:"flex", gap:6 }}>
-            <button onClick={() => setDark(d => !d)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:13, color:muted, fontWeight:700 }}>{dark?t.light:t.dark}</button>
-            <button onClick={() => setLang(l => l==="fr"?"en":"fr")} style={{ flex:1, background:surf2, border:`1px solid ${bord}`, borderRadius:8, padding:"6px 8px", cursor:"pointer", fontSize:11, color:txt, fontWeight:700 }}>
-              {lang==="fr"?"🇫🇷 FR":"🇬🇧 EN"}
+      {/* ── MODALE EXPLICATIVE "COMMENT ÇA MARCHE ?" ── */}
+      {showHow && (
+        <div onClick={() => setShowHow(false)} className="fixed inset-0 bg-black/85 flex items-center justify-center z-[9999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div onClick={e => e.stopPropagation()} className="bg-zinc-950 border border-cyan-500/40 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5 text-zinc-100 relative max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setShowHow(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+            
+            <h2 className="text-lg font-black text-white font-mono uppercase tracking-wider">{t.howTitle}</h2>
+            
+            <div className="space-y-4">
+              {t.howSteps.map((step, i) => (
+                <div key={i} className="flex items-start gap-3 bg-zinc-900/60 border border-zinc-800/80 p-3.5 rounded-2xl">
+                  <span className="text-xl shrink-0 mt-0.5">{step.icon}</span>
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold text-cyan-300">{step.title}</div>
+                    <div className="text-[11px] text-zinc-400 leading-relaxed">{step.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button onClick={() => setShowHow(false)} className="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold text-xs font-mono uppercase tracking-wider cursor-pointer">
+              {t.howClose}
             </button>
           </div>
+        </div>
+      )}
 
-          {/* Connecté */}
-          {user && (
-            <div style={{ position:"relative" }}>
-              <button onClick={() => setShowUserMenu(v => !v)} style={{ width:"100%", background:"#16a34a", border:"none", borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:11, color:"#fff", fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ width:6, height:6, borderRadius:"50%", background:"#86efac", display:"inline-block" }} />
-                {t.connected}<span style={{ marginLeft:"auto", fontSize:8, opacity:.7 }}>{showUserMenu?"▲":"▼"}</span>
-              </button>
-              {showUserMenu && (
-                <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, right:0, background:surf, border:`1px solid ${bord}`, borderRadius:9, overflow:"hidden", zIndex:100 }}>
-                  <button onClick={handleLogout} style={{ width:"100%", padding:"8px 12px", fontSize:11, color:"#ef4444", background:"none", border:"none", cursor:"pointer", fontWeight:600, textAlign:"left" }}>↩ {t.logout}</button>
-                </div>
-              )}
-            </div>
-          )}
+      {/* ── MODALE ECHOAI PREMIUM (3,99$) ── */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
 
-          {/* Don */}
-          <div style={{ background:surf, border:`1px solid ${bord}`, borderRadius:11, overflow:"hidden" }}>
-            <div style={{ padding:"10px 12px 8px" }}>
-              <div style={{ fontWeight:800, fontSize:13, marginBottom:4 }}>☕ {t.donTitle}</div>
-              <div style={{ fontSize:11, color:muted, lineHeight:1.5, marginBottom:10 }}>{t.donDesc}</div>
-              {/* Sélecteur devise */}
-              <div style={{ display:"flex", gap:4, marginBottom:8 }}>
-                {(["CAD","USD","EUR"] as const).map(c => (
-                  <button key={c} onClick={() => { setDonCurrency(c); localStorage.setItem("echo-currency", c); }}
-                    style={{ flex:1, padding:"4px 0", fontSize:10, fontWeight:700, borderRadius:7, border:`1px solid ${donCurrency===c ? acc : bord}`, background: donCurrency===c ? (dark?"rgba(0,200,255,.15)":"rgba(0,200,255,.1)") : surf2, color: donCurrency===c ? acc : muted, cursor:"pointer" }}>
-                    {c}
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => setDonOpen(d => !d)} style={{ width:"100%", background:acc, color:"#000", border:"none", borderRadius:9, padding:"9px 0", fontWeight:800, fontSize:12, cursor:"pointer" }}>
-                {donOpen ? t.donClose : t.donBtn}
-              </button>
-            </div>
-            {donOpen && (
-              <div style={{ borderTop:`1px solid ${bord}`, padding:"8px 12px", display:"flex", flexDirection:"column", gap:5 }}>
-                {DONATION_PLANS.map(d => (
-                  <button key={d.plan} onClick={() => handleDon(d.plan)} disabled={donLoading===d.plan}
-                    style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:7, padding:"7px 9px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", opacity: donLoading===d.plan?.6:1, color:txt }}>
-                    <div>
-                      <div style={{ fontSize:12, fontWeight:700 }}>{lang==="fr"?d.name:d.nameEn}</div>
-                      <div style={{ fontSize:10, color:muted }}>{lang==="fr"?d.desc:d.descEn}</div>
-                    </div>
-                    <div style={{ fontSize:14, fontWeight:900, color:acc }}>{d.amount}</div>
-                  </button>
-                ))}
-                <div style={{ fontSize:9, color:muted, textAlign:"center" }}>🔒 Stripe</div>
-              </div>
-            )}
-          </div>
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr
+                ? "Débloquez l'accès illimité à l'ensemble des modules d'intelligence artificielle."
+                : "Unlock unlimited access to all artificial intelligence modules."}
+            </p>
 
-          {/* Connexion si pas connecté */}
-          {!user && (
-            <div style={{ background:surf, border:`1px solid ${bord}`, borderRadius:11, padding:"10px 12px", display:"flex", flexDirection:"column", gap:6 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:muted, letterSpacing:1, textTransform:"uppercase", marginBottom:1 }}>Compte Echo</div>
-              <button onClick={handleGoogle} style={{ ...btnOAuth({ background:"#fff", color:"#374151" }) }}>
-                <svg width="13" height="13" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
-                Google
-              </button>
-              <button onClick={handleMicrosoft} style={{ ...btnOAuth({ background: dark?"#2d2b28":"#1a1917", color:"#fff" }) }}>
-                <svg width="13" height="13" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
-                Microsoft
-              </button>
-              <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }} style={{ ...btnOAuth({ background:"#0ea5e9", color:"#fff" }) }}>✉ {lang==="fr"?"Se connecter":"Sign in"}</button>
-              <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }} style={{ ...btnOAuth({ background:surf2 }) }}>✦ {lang==="fr"?"Créer un compte":"Create account"}</button>
-            </div>
-          )}
-        </aside>
-      </div>
-
-      {/* BARRE MOBILE */}
-      <div className="idea-mobile-bar" style={{ "--surf": dark?"#111118":"#fffdf9","--bord": dark?"rgba(255,255,255,.08)":"#e2ddd5" } as React.CSSProperties}>
-        <button onClick={() => setDark(d => !d)} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:8, padding:"7px 11px", fontSize:13, color:muted, fontWeight:700, cursor:"pointer" }}>{dark?t.light:t.dark}</button>
-        <button onClick={() => setLang(l => l==="fr"?"en":"fr")} style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:8, padding:"7px 11px", fontSize:11, color:txt, fontWeight:700, cursor:"pointer" }}>
-          {lang==="fr"?"🇫🇷 FR":"🇬🇧 EN"}
-        </button>
-        <div style={{ position:"relative", flex:1, display:"flex", justifyContent:"center" }}>
-          <button onClick={() => setDonOpen(d => !d)} style={{ background:acc, color:"#000", border:"none", borderRadius:10, padding:"9px 16px", fontSize:12, fontWeight:800, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-            ☕ {lang==="fr"?"Don café":"Buy coffee"}
-          </button>
-          {donOpen && (
-            <div style={{ position:"absolute", bottom:"calc(100% + 8px)", left:"50%", transform:"translateX(-50%)", background:surf, border:`1px solid ${bord}`, borderRadius:14, padding:"14px", zIndex:300, minWidth:250, boxShadow:"0 -4px 28px rgba(0,0,0,.2)" }}>
-              <div style={{ fontWeight:800, fontSize:12, marginBottom:10, display:"flex", justifyContent:"space-between", color:txt }}>
-                ☕ {lang==="fr"?"Soutenir l'outil":"Support the tool"}
-                <button onClick={() => setDonOpen(false)} style={{ background:"none", border:"none", cursor:"pointer", color:muted, fontSize:16 }}>✕</button>
-              </div>
-              {DONATION_PLANS.map(d => (
-                <button key={d.plan} onClick={() => handleDon(d.plan)} style={{ width:"100%", background:surf2, border:`1px solid ${bord}`, borderRadius:9, padding:"8px 12px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, color:txt }}>
-                  <div><div style={{ fontSize:12, fontWeight:700 }}>{lang==="fr"?d.name:d.nameEn}</div><div style={{ fontSize:10, color:muted }}>{lang==="fr"?d.desc:d.descEn}</div></div>
-                  <div style={{ fontSize:14, fontWeight:900, color:acc }}>{d.amount}</div>
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c
+                      ? "bg-amber-500 text-zinc-950 border-amber-400"
+                      : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
                 </button>
               ))}
             </div>
-          )}
-        </div>
-        {user
-          ? <button onClick={handleLogout} style={{ background:"#16a34a", border:"none", borderRadius:8, padding:"7px 11px", fontSize:11, color:"#fff", fontWeight:700, cursor:"pointer" }}>{t.connected}</button>
-          : <button onClick={() => setShowAuthPopup(true)} style={{ background:acc, color:"#000", border:"none", borderRadius:8, padding:"7px 12px", fontSize:11, fontWeight:700, cursor:"pointer" }}>{lang==="fr"?"Se connecter":"Sign in"}</button>
-        }
-      </div>
 
-      {/* POPUP AUTH */}
-      {showAuthPopup && (
-        <div onClick={() => setShowAuthPopup(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.8)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300, backdropFilter:"blur(8px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:surf, border:`1px solid ${bord}`, borderRadius:20, padding:"28px 28px 22px", width:320, display:"flex", flexDirection:"column", gap:14, position:"relative" }}>
-            <button onClick={() => setShowAuthPopup(false)} style={{ position:"absolute", top:14, right:16, background:"none", border:"none", cursor:"pointer", color:muted, fontSize:18 }}>✕</button>
-            <div style={{ textAlign:"center", marginBottom:4 }}>
-              <div style={{ fontSize:28, marginBottom:8 }}>💡</div>
-              <div style={{ fontWeight:800, fontSize:15, color:txt, marginBottom:4 }}>{t.authTitle}</div>
-              <div style={{ fontSize:12, color:muted, lineHeight:1.5 }}>{t.authSub}</div>
-            </div>
-            <button onClick={() => { handleGoogle(); setShowAuthPopup(false); }} style={{ ...btnOAuth({ background:"#fff", color:"#374151" }) }}>
-              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
-              {t.authGoogle}
-            </button>
-            <button onClick={() => { handleMicrosoft(); setShowAuthPopup(false); }} style={{ ...btnOAuth({ background: dark?"#2d2b28":"#1a1917", color:"#fff" }) }}>
-              <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
-              {t.authMicrosoft}
-            </button>
-            <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }} style={{ ...btnOAuth({ background:"#0ea5e9", color:"#fff" }) }}>✉ {t.authEmail}</button>
-            <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }} style={{ ...btnOAuth({ background:surf2 }) }}>✦ {t.authSignup}</button>
-            <div style={{ fontSize:10, color:muted, textAlign:"center" }}>{lang==="fr"?"Gratuit · Aucune carte requise":"Free · No card required"}</div>
-          </div>
-        </div>
-      )}
-
-      {/* POPUP COMMENT ÇA MARCHE */}
-      {showHow && (
-        <div onClick={() => setShowHow(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.75)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:300, backdropFilter:"blur(8px)", padding:20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:surf, border:`1px solid ${bord}`, borderRadius:20, padding:"28px 28px 22px", width:"100%", maxWidth:480, display:"flex", flexDirection:"column", gap:20, position:"relative", maxHeight:"90vh", overflowY:"auto" }}>
-            <button onClick={() => setShowHow(false)} style={{ position:"absolute", top:14, right:16, background:"none", border:"none", cursor:"pointer", color:muted, fontSize:18 }}>✕</button>
-            <div style={{ fontWeight:900, fontSize:18, color: dark?"#fff":"#1a1917" }}>{t.howTitle}</div>
-            {t.howSteps.map((step, i) => (
-              <div key={i} style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
-                <div style={{ fontSize:24, flexShrink:0, marginTop:2 }}>{step.icon}</div>
-                <div>
-                  <div style={{ fontWeight:700, fontSize:14, color: dark?"#fff":"#1a1917", marginBottom:4 }}>{step.title}</div>
-                  <div style={{ fontSize:13, color:muted, lineHeight:1.6 }}>{step.desc}</div>
-                </div>
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
               </div>
-            ))}
-            <button onClick={() => setShowHow(false)} style={{ background:acc, color:"#000", border:"none", borderRadius:10, padding:"11px 0", fontWeight:800, fontSize:14, cursor:"pointer", marginTop:4 }}>{t.howClose}</button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL EMAIL */}
-      {showEmailModal && (
-        <div onClick={() => setShowEmailModal(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.75)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:400, backdropFilter:"blur(6px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:surf, border:`1px solid ${bord}`, borderRadius:16, padding:"22px 26px", width:300, display:"flex", flexDirection:"column", gap:12 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <div style={{ fontWeight:700, fontSize:13 }}>{emailMode==="signin"?t.modalSignin:t.modalSignup}</div>
-              <button onClick={() => setShowEmailModal(false)} style={{ background:"none", border:"none", cursor:"pointer", color:muted, fontSize:16 }}>✕</button>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ Sauvegarde permanente de vos projets</li>
+              </ul>
             </div>
-            {authError   && <div style={{ background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:8, padding:"7px 10px", fontSize:11, color:"#b91c1c" }}>⚠️ {authError}</div>}
-            {authSuccess && <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:8, padding:"7px 10px", fontSize:11, color:"#15803d" }}>✓ {authSuccess}</div>}
-            <form onSubmit={handleEmailAuth} style={{ display:"flex", flexDirection:"column", gap:9 }}>
-              <input type="email" placeholder="nom@domaine.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:8, padding:"8px 11px", fontSize:12, color:txt, outline:"none" }} />
-              <input type="password" placeholder="••••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required style={{ background:surf2, border:`1px solid ${bord}`, borderRadius:8, padding:"8px 11px", fontSize:12, color:txt, outline:"none" }} />
-              <button type="submit" style={{ background:acc, color:"#000", border:"none", borderRadius:8, padding:"9px 0", fontWeight:700, fontSize:12, cursor:"pointer" }}>
-                {emailMode==="signin"?t.submitSignin:t.submitSignup}
-              </button>
-            </form>
-            <button onClick={() => { setEmailMode(emailMode==="signin"?"signup":"signin"); setAuthError(null); setAuthSuccess(null); }} style={{ background:"none", border:"none", cursor:"pointer", color:muted, fontSize:10, textDecoration:"underline" }}>
-              {emailMode==="signin"?t.switchToSignup:t.switchToSignin}
+
+            <button
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
+            >
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
+                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
           </div>
         </div>
       )}
 
-      <style>{`
-        @keyframes spin   { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        textarea, input, select { font-family: inherit; }
-        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
-        @media (max-width: 768px) {
-          .idea-layout { grid-template-columns: 1fr !important; }
-          .idea-col-left, .idea-col-right { display: none !important; }
-          .idea-col-centre { padding: 16px 14px 80px !important; }
-          .idea-mobile-bar { display: flex !important; }
-          .idea-mobile-pubs { display: flex !important; }
-        }
-        @media (min-width: 769px) { .idea-mobile-bar { display: none !important; } }
-        .idea-mobile-bar {
-          position: fixed; bottom: 0; left: 0; right: 0; display: none;
-          background: var(--surf, #111118); border-top: 1px solid var(--bord, rgba(255,255,255,.08));
-          padding: 8px 14px 12px; gap: 8px; z-index: 50;
-          align-items: center; justify-content: space-between;
-        }
-        @media (max-width: 600px) {
-          div[style*="gridTemplateColumns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
-    </div>
+      {/* ── MODALE CONNEXION (SIGN IN) ── */}
+      {showSignInModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <form onSubmit={handleEmailSignIn} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Connectez-vous pour analyser votre idée." : "Sign in to analyze your idea."}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setShowSignInModal(false)} className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              <div className="h-px bg-zinc-900 my-2" />
+
+              {authError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {authError}</div>}
+
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  placeholder="nom@domaine.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                />
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer">
+                {fr ? "Se connecter" : "Log in"}
+              </button>
+
+              <p className="text-center text-zinc-500 text-xs pt-1">
+                {fr ? "Pas encore de compte ? " : "Don't have an account? "}
+                <button type="button" onClick={() => { setShowSignInModal(false); setShowSignUpModal(true); }} className="text-cyan-400 underline">
+                  {fr ? "S'inscrire" : "Sign up"}
+                </button>
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE INSCRIPTION (SIGN UP) ── */}
+      {showSignUpModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <form onSubmit={handleEmailSignUp} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Créer un compte" : "Create account"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Inscrivez-vous pour débloquer les fonctionnalités." : "Sign up to unlock features."}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setShowSignUpModal(false)} className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              <div className="h-px bg-zinc-900 my-2" />
+
+              {authError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {authError}</div>}
+              {authSuccess && <div className="bg-emerald-950/50 border border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-400">✓ {authSuccess}</div>}
+
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  placeholder="nom@domaine.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                />
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer">
+                {fr ? "Créer mon compte" : "Create my account"}
+              </button>
+
+              <p className="text-center text-zinc-500 text-xs pt-1">
+                {fr ? "Déjà un compte ? " : "Already have an account? "}
+                <button type="button" onClick={() => { setShowSignUpModal(false); setShowSignInModal(true); }} className="text-cyan-400 underline">
+                  {fr ? "Se connecter" : "Sign in"}
+                </button>
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+    </main>
+  );
+}
+
+export default function IdeaPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-cyan-400 font-mono text-xs">Initialisation d'Idea Analysis...</div>}>
+      <IdeaContent />
+    </Suspense>
   );
 }

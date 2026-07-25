@@ -1,10 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
 
-// ── TYPES & CONFIGURATION ───────────────────────────────────────────────────
+export const dynamic = "force-dynamic";
+
 type Lang = "fr" | "en";
+type Currency = "CAD" | "USD" | "EUR";
 type StepNum = 1 | 2 | 3 | 4;
 
 interface StepResult {
@@ -16,7 +21,6 @@ interface StepResult {
 
 const API_BASE = process.env.NEXT_PUBLIC_CORRECTEUR_API || "http://localhost:5003";
 
-// ── LOGOS VECTORIELS ────────────────────────────────────────────────────────
 const MicrosoftLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
     <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
@@ -35,11 +39,10 @@ const GoogleLogo = () => (
   </svg>
 );
 
-// ── TRADUCTIONS (I18N) ───────────────────────────────────────────────────────
 const I18N = {
   fr: {
-    title: "ECHO AI",
-    subTitle: "PIPELINE D'ÉDITION MULTI-AGENTS",
+    title: "STUDIO CORRECTEUR",
+    subTitle: "PIPELINE D'ÉDITION MULTI-AGENTS EN 4 PASSES",
     originalTitle: "TEXTE ORIGINAL",
     resultTitle: "RÉSULTAT SÉLECTIONNÉ",
     importBtn: "📁 Importer fichier",
@@ -54,10 +57,6 @@ const I18N = {
       3: "03. Lissage Universel",
       4: "04. Typo / BAT Final",
     },
-    login: "Se connecter",
-    logout: "Déconnexion",
-    premiumActive: "✓ Plan Actif",
-    premiumGet: "★ Passer Premium",
     historyTitle: "HISTORIQUE DES CORRECTIONS",
     noErrors: "Aucune modification enregistrée sur cette passe.",
     words: "MOTS",
@@ -65,8 +64,8 @@ const I18N = {
     dropPlaceholder: "Glissez votre fichier ici ou collez votre chapitre brut (~3000 mots)...",
   },
   en: {
-    title: "ECHO AI",
-    subTitle: "MULTI-AGENT EDITING PIPELINE",
+    title: "PROOFREADING STUDIO",
+    subTitle: "4-STAGE MULTI-AGENT EDITING PIPELINE",
     originalTitle: "ORIGINAL SOURCE",
     resultTitle: "SELECTED REVISION",
     importBtn: "📁 Import File",
@@ -81,10 +80,6 @@ const I18N = {
       3: "03. Universal Style",
       4: "04. Typo / BAT Final",
     },
-    login: "Sign In",
-    logout: "Sign Out",
-    premiumActive: "✓ Plan Active",
-    premiumGet: "★ Get Premium",
     historyTitle: "CORRECTION LOGS",
     noErrors: "No edits recorded on this pass.",
     words: "WORDS",
@@ -93,29 +88,39 @@ const I18N = {
   },
 };
 
-export default function CorrecteurEchoPage() {
-  // ── ÉTATS GLOBAUX & AUTH ──────────────────────────────────────────────────
+const PRICES: Record<Currency, { amount: string; symbol: string }> = {
+  CAD: { amount: "3.99", symbol: "CA$" },
+  USD: { amount: "3.99", symbol: "US$" },
+  EUR: { amount: "3.99", symbol: "€" },
+};
+
+function CorrecteurContent() {
+  const { lang, setLang } = useApp();
+  const fr = lang === "fr";
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [user, setUser] = useState<any>(null);
-  const [lang, setLang] = useState<Lang>("fr");
-  const [currency, setCurrency] = useState("CAD");
-  const [isPremium, setIsPremium] = useState(false);
-  
-  // Interface & Modales
-  const [showSettings, setShowSettings] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showQuotaPopup, setShowQuotaPopup] = useState(false);
+  const [userTier, setUserTier] = useState<string>("free");
+
+  // Devise & Stripe Premium
+  const [currency, setCurrency] = useState<Currency>("CAD");
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  // Auth Modals
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+
+  // Interface & Drawer
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
 
-  // Authentification Form State
-  const [authMode, setAuthMode] = useState<"none" | "signin" | "signup">("none");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(false);
-
-  // ── ÉTATS DU PIPELINE ─────────────────────────────────────────────────────
+  // Pipeline Core State
   const [originalText, setOriginalText] = useState("");
   const [versions, setVersions] = useState<StepResult[]>([]);
   const [activeStepTab, setActiveStepTab] = useState<StepNum>(1);
@@ -127,85 +132,82 @@ export default function CorrecteurEchoPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const t = I18N[lang];
 
-  // ── CHARGEMENT DE LA SESSION SUPABASE ──────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        checkUserSubscription(session.user.id);
+        verifierStatutUser(session.user.id);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session?.user) {
         setUser(session.user);
-        checkUserSubscription(session.user.id);
-        setShowAuthModal(false);
+        verifierStatutUser(session.user.id);
       } else {
         setUser(null);
-        setIsPremium(false);
+        setUserTier("free");
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const checkUserSubscription = async (uid: string) => {
+  useEffect(() => {
+    if (searchParams.get("premium") === "success" && user) {
+      const timer = setTimeout(() => {
+        verifierStatutUser(user.id);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, user]);
+
+  const verifierStatutUser = async (uid: string) => {
     try {
-      const { data } = await supabase
-        .from("world_quotas")
-        .select("tier")
-        .eq("user_id", uid)
-        .maybeSingle();
-      if (data?.tier === "premium" || data?.tier === "advantage") {
-        setIsPremium(true);
+      const { data: cData } = await supabase.from("contenu_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
+        setUserTier(cData.tier); return;
       }
-    } catch {}
+      const { data: wData } = await supabase.from("world_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
+        setUserTier(wData.tier); return;
+      }
+      setUserTier("free");
+    } catch { setUserTier("free"); }
   };
 
-  // ── GESTION DE L'AUTHENTIFICATION ─────────────────────────────────────────
-  const getRedirectUrl = () => typeof window !== "undefined" ? window.location.href : "https://echosai.ca";
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      setShowPremiumModal(false);
+      setShowSignInModal(true);
+      return;
+    }
 
-  const handleGoogle = async () => {
-    setAuthLoading(true);
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: getRedirectUrl() },
-    });
+    setIsCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/create-checkout-site2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: "world_advantage",
+          currency: currency.toUpperCase(),
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
+      }
+    } catch {
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
+    } finally {
+      setIsCheckoutLoading(false);
+    }
   };
 
-  const handleMicrosoft = async () => {
-    setAuthLoading(true);
-    await supabase.auth.signInWithOAuth({
-      provider: "azure",
-      options: { redirectTo: getRedirectUrl(), scopes: "openid profile email" },
-    });
-  };
-
-  const handleEmailSignIn = async () => {
-    setAuthError(null);
-    if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Champs requis."); return; }
-    setAuthLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
-    setAuthLoading(false);
-    if (error) setAuthError(error.message);
-  };
-
-  const handleEmailSignUp = async () => {
-    setAuthError(null);
-    if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Champs requis."); return; }
-    setAuthLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: authEmail.trim(),
-      password: authPassword,
-      options: { emailRedirectTo: getRedirectUrl() },
-    });
-    setAuthLoading(false);
-    if (error) setAuthError(error.message);
-    else setAuthSuccess("Lien envoyé par courriel.");
-  };
-
-  // ── IMPORTATION DE FICHIER ───────────────────────────────────────────────
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -217,7 +219,6 @@ export default function CorrecteurEchoPage() {
     reader.readAsText(file);
   };
 
-  // ── EXECUTION DU PIPELINE D'ÉDITION ──────────────────────────────────────
   const executeStep = async (step: StepNum): Promise<StepResult> => {
     const previous = versions.find(v => v.step === step - 1);
     
@@ -240,15 +241,14 @@ export default function CorrecteurEchoPage() {
       step,
       texte: data.texte,
       erreurs: data.erreurs || [],
-      timestamp: new Date().toLocaleTimeString("fr-CA"),
+      timestamp: new Date().toLocaleTimeString(fr ? "fr-CA" : "en-US"),
     };
   };
 
-  // Lancer EXPLICITEMENT une seule étape
   const runSingleStep = async (step: StepNum) => {
-    if (!user) { setShowAuthModal(true); return; }
+    if (!user) { setShowSignInModal(true); return; }
     setErrorMsg(null);
-    if (!originalText.trim()) { setErrorMsg("Veuillez d'abord fournir le texte original."); return; }
+    if (!originalText.trim()) { setErrorMsg(fr ? "Veuillez d'abord fournir le texte original." : "Please provide the original text first."); return; }
     
     setRunningStep(step);
     try {
@@ -262,11 +262,10 @@ export default function CorrecteurEchoPage() {
     }
   };
 
-  // Lancer le pipeline complet
   const runAllPipeline = async () => {
-    if (!user) { setShowAuthModal(true); return; }
+    if (!user) { setShowSignInModal(true); return; }
     setErrorMsg(null);
-    if (!originalText.trim()) { setErrorMsg("Veuillez d'abord fournir le texte original."); return; }
+    if (!originalText.trim()) { setErrorMsg(fr ? "Veuillez d'abord fournir le texte original." : "Please provide the original text first."); return; }
 
     setRunningAll(true);
     setVersions([]);
@@ -288,329 +287,394 @@ export default function CorrecteurEchoPage() {
     }
   };
 
-  // Copier le texte
   const copyStepText = (text: string, stepIndex: number) => {
     navigator.clipboard.writeText(text);
     setCopiedStep(stepIndex);
     setTimeout(() => setCopiedStep(null), 2000);
   };
 
+  const handleGoogleConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/correcteur`, scopes: "openid profile email", queryParams: { prompt: "select_account" } },
+    });
+  };
+
+  const handleMicrosoftConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: { redirectTo: `${window.location.origin}/correcteur`, scopes: "openid profile email User.Read" },
+    });
+  };
+
+  const handleEmailSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAuthError(null); setAuthSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setAuthError(fr ? "Veuillez entrer vos identifiants." : "Please enter credentials.");
+      return;
+    }
+    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (err) setAuthError(err.message);
+    else setShowSignInModal(false);
+  };
+
+  const handleEmailSignUp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAuthError(null); setAuthSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setAuthError(fr ? "Veuillez entrer un courriel et un mot de passe." : "Please enter email and password.");
+      return;
+    }
+    const { data, error: err } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/correcteur` },
+    });
+    if (err) {
+      setAuthError(err.message);
+    } else {
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setAuthError(fr ? "Un compte avec ce courriel existe déjà." : "An account with this email already exists.");
+        return;
+      }
+      setAuthSuccess(fr ? "Lien de confirmation envoyé ! Vérifiez votre boîte mail." : "Confirmation link sent! Check your inbox.");
+    }
+  };
+
   const activeVersion = versions.find(v => v.step === activeStepTab);
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#0B0F17] text-slate-100 font-sans overflow-hidden antialiased select-none">
+    <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden flex flex-col">
       
-      {/* ── HEADER NAVIGATION ────────────────────────────────────────────────── */}
-      <header className="h-14 border-b border-slate-800/80 px-6 flex items-center justify-between bg-[#0B0F17]/90 backdrop-blur-md z-20">
-        
-        {/* Branding Echo AI */}
-        <div className="flex items-center gap-3">
-          <img src="/echo2.png" alt="Echo AI" className="w-6 h-6 rounded object-contain" />
-          <div className="flex flex-col">
-            <span className="font-mono font-bold text-xs tracking-widest text-slate-200">{t.title}</span>
-            <span className="text-[9px] font-mono text-cyan-400/80 tracking-tight">{t.subTitle}</span>
-          </div>
-        </div>
-
-        {/* Action Lancer Tout */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={runAllPipeline}
-            disabled={runningAll || runningStep !== null}
-            className={`px-4 py-1.5 rounded-md text-xs font-mono font-semibold transition-all duration-200 flex items-center gap-2 ${
-              runningAll
-                ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
-                : "bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-500/10"
-            }`}
-          >
-            {runningAll ? (
-              <>
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                {t.running} ({runningStep}/4)
-              </>
-            ) : (
-              t.executeAll
-            )}
-          </button>
-        </div>
-
-        {/* Contrôles Haut-Droite */}
-        <div className="flex items-center gap-3">
-          
-          {/* Bouton Ouverture Panneau Historique */}
-          <button
-            onClick={() => setShowHistoryDrawer(true)}
-            className="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-mono transition-all flex items-center gap-1.5"
-          >
-            <span>⚡</span>
-            <span>Historique ({versions.length})</span>
-          </button>
-
-          {/* Statut Connexion */}
-          {user ? (
-            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="hidden sm:inline">
-                {user.email.split("@")[0].slice(0, 6)}...@{user.email.split("@")[1]}
-              </span>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="px-3 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-mono transition-all"
-            >
-              {t.login}
-            </button>
-          )}
-
-          {/* Bouton Premium */}
-          {isPremium ? (
-            <span className="px-2.5 py-1 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-mono font-bold tracking-wider">
-              {t.premiumActive}
-            </span>
-          ) : (
-            <button
-              onClick={() => setShowQuotaPopup(true)}
-              className="px-2.5 py-1 rounded-md bg-gradient-to-r from-amber-500/20 to-red-500/20 border border-amber-500/40 text-amber-400 text-xs font-mono font-bold hover:brightness-125 transition-all"
-            >
-              {t.premiumGet}
-            </button>
-          )}
-
-          {/* Menu Déroulant ⚙️ */}
-          <div className="relative">
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="w-8 h-8 flex items-center justify-center rounded-md border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-white text-xs transition-colors"
-            >
-              ⚙
-            </button>
-
-            {showSettings && (
-              <div className="absolute right-0 top-10 w-52 bg-[#0D121F] border border-slate-800 rounded-xl shadow-2xl py-2 z-50 text-xs font-mono">
-                <div className="px-4 py-2 border-b border-slate-800/80 flex items-center justify-between">
-                  <span className="text-slate-500">LANGUE</span>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => setLang("fr")}
-                      className={`px-1.5 py-0.5 rounded ${lang === "fr" ? "bg-cyan-500/20 text-cyan-300 font-bold" : "text-slate-500"}`}
-                    >
-                      FR
-                    </button>
-                    <button
-                      onClick={() => setLang("en")}
-                      className={`px-1.5 py-0.5 rounded ${lang === "en" ? "bg-cyan-500/20 text-cyan-300 font-bold" : "text-slate-500"}`}
-                    >
-                      EN
-                    </button>
-                  </div>
-                </div>
-
-                <div className="px-4 py-2 border-b border-slate-800/80 flex items-center justify-between">
-                  <span className="text-slate-500">DEVISE</span>
-                  <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
-                    className="bg-transparent text-slate-300 outline-none cursor-pointer"
-                  >
-                    <option value="CAD" className="bg-slate-900">CAD ($)</option>
-                    <option value="USD" className="bg-slate-900">USD ($)</option>
-                    <option value="EUR" className="bg-slate-900">EUR (€)</option>
-                  </select>
-                </div>
-
-                {user && (
-                  <button
-                    onClick={() => { supabase.auth.signOut(); setShowSettings(false); }}
-                    className="w-full text-left px-4 py-2 text-red-400 hover:bg-slate-800/50 transition-colors"
-                  >
-                    ⏏ {t.logout}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-        </div>
-      </header>
-
-      {/* ── BARRE DE SÉLECTION DE L'ÉTAPE ─────────────────────────────────────── */}
-      <div className="bg-[#0D121F] border-b border-slate-800/60 px-6 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {([1, 2, 3, 4] as StepNum[]).map((sNum) => {
-            const hasResult = versions.some(v => v.step === sNum);
-            const isTabActive = activeStepTab === sNum;
-
-            return (
-              <button
-                key={sNum}
-                onClick={() => setActiveStepTab(sNum)} // <-- CHANGEMENT : N'EXÉCUTE PLUS, RESTE EN SIMPLE SELECTION
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs transition-all cursor-pointer ${
-                  isTabActive
-                    ? "bg-slate-800 border-cyan-500/50 text-cyan-300 shadow-sm"
-                    : hasResult
-                    ? "bg-slate-900/60 border-emerald-500/30 text-emerald-400"
-                    : "bg-slate-900/20 border-slate-800/60 text-slate-500 hover:border-slate-700"
-                }`}
-              >
-                <span className="font-mono text-[10px] px-1 rounded bg-slate-800 text-slate-400">
-                  {sNum}
-                </span>
-                <span className="font-medium">{t.stepNames[sNum]}</span>
-                {hasResult && <span className="text-[10px] text-emerald-400">✓</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Métriques */}
-        <div className="flex items-center gap-4 text-xs font-mono text-slate-500">
-          <span>{t.words}: <strong className="text-slate-300">{originalText.trim() ? originalText.trim().split(/\s+/).length : 0}</strong></span>
-          <span>{t.chars}: <strong className="text-slate-300">{originalText.length}</strong></span>
-        </div>
-      </div>
-
-      {errorMsg && (
-        <div className="bg-red-950/50 border-b border-red-800 px-6 py-2 text-xs font-mono text-red-400">
-          ⚠️ {errorMsg}
-        </div>
-      )}
-
-      {/* ── ZONE DE TRAVAIL PRINCIPALE (FULL HEIGHT) ─────────────────────────── */}
-      <main className="flex-1 grid grid-cols-2 gap-[1px] bg-slate-800/40 overflow-hidden">
-        
-        {/* COLONNE GAUCHE — TEXTE ORIGINAL */}
-        <section className="flex flex-col bg-[#0B0F17] overflow-hidden">
-          <div className="px-6 py-3 border-b border-slate-800/60 flex items-center justify-between bg-[#0D121F]/40">
-            <span className="text-xs font-mono tracking-wider text-slate-400 uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-              {t.originalTitle}
-            </span>
-
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1 rounded border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 text-xs font-mono transition-colors"
-            >
-              {t.importBtn}
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept=".txt,.md,.doc,.docx"
-              className="hidden"
-            />
-          </div>
-
-          <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-            <textarea
-              value={originalText}
-              onChange={(e) => setOriginalText(e.target.value)}
-              placeholder={t.dropPlaceholder}
-              className="w-full h-full bg-transparent resize-none focus:outline-none font-serif text-slate-300 text-lg leading-relaxed placeholder:text-slate-700 placeholder:font-sans"
-            />
-          </div>
-        </section>
-
-        {/* COLONNE DROITE — RÉSULTAT ET ACTION DE LANCEMENT DÉDIÉE */}
-        <section className="flex flex-col bg-[#0E1422] overflow-hidden">
-          <div className="px-6 py-3 border-b border-slate-800/60 flex items-center justify-between bg-[#0D121F]/80">
+      {/* ── HEADER BLANC UNIFIÉ ── */}
+      <section className="bg-white text-zinc-900 relative z-30">
+        <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
             
-            <span className="text-xs font-mono text-cyan-400 uppercase">
-              {t.resultTitle} — ÉTAPE {activeStepTab}
-            </span>
+            <div className="flex items-center gap-6">
+              <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-zinc-900 uppercase">
+                ECHOSAI
+              </Link>
 
-            {/* BOUTONS D'ACTION SPECIFIQUES */}
-            <div className="flex items-center gap-2">
-              {/* BOUTON LANCER SEULEMENT CETTE ETAPE */}
-              <button
-                onClick={() => runSingleStep(activeStepTab)}
-                disabled={runningAll || runningStep !== null}
-                className="px-3 py-1 rounded border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-mono transition-all flex items-center gap-1.5"
+              <Link
+                href="/outil"
+                className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all hover:scale-105 active:scale-95"
               >
-                {runningStep === activeStepTab ? (
-                  <span>⏳ Traitement...</span>
-                ) : (
-                  <span>{t.executeSingle} {activeStepTab}</span>
-                )}
-              </button>
+                <span>⚡</span>
+                <span>{fr ? "RETOUR AUX OUTILS" : "BACK TO TOOLS"}</span>
+              </Link>
+            </div>
+            
+            <div className="flex items-center gap-4 text-xs font-mono relative">
+              <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
+                {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCurrency(c)}
+                    className={`px-2 py-1 font-bold transition-colors ${currency === c ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"}`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
 
-              {/* BOUTON COPIER */}
-              {activeVersion && (
-                <button
-                  onClick={() => copyStepText(activeVersion.texte, activeStepTab)}
-                  className="px-3 py-1 rounded border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-mono transition-colors flex items-center gap-1.5"
+              {/* BADGE NOIR / VERT NÉON SI ACTIF OU BOUTON PREMIUM */}
+              {isPaidTier ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                  <span className="font-bold text-[11px] uppercase tracking-wider">
+                    {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
+                  </span>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setShowPremiumModal(true)} 
+                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
                 >
-                  {copiedStep === activeStepTab ? t.copied : `${t.copyBtn} Étape ${activeStepTab}`}
-                </button>
+                  <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                    ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  </span>
+                </div>
+              )}
+
+              <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
+                <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
+                <button onClick={() => setLang("en")} className={`px-2 py-1 ${lang === "en" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>EN</button>
+              </div>
+
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200 font-mono">
+                    🟢 {user.email}
+                  </span>
+                  <button
+                    onClick={() => supabase.auth.signOut()}
+                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold"
+                  >
+                    [ {fr ? "Déconnexion" : "Sign Out"} ]
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowSignInModal(true)}
+                    className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm"
+                  >
+                    {fr ? "Connexion" : "Sign In"}
+                  </button>
+                  <button
+                    onClick={() => setShowSignUpModal(true)}
+                    className="px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-bold tracking-tight shadow-sm"
+                  >
+                    {fr ? "S'inscrire" : "Sign Up"}
+                  </button>
+                </div>
               )}
             </div>
           </div>
+        </header>
 
-          <div className="flex-1 p-8 overflow-y-auto custom-scrollbar bg-[#0B0F17]/30">
-            {activeVersion ? (
-              <div className="font-serif text-slate-100 text-lg leading-relaxed whitespace-pre-wrap selection:bg-cyan-500/30">
-                {activeVersion.texte}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-600 font-mono text-xs gap-3">
-                <div className="w-8 h-8 rounded-full border border-slate-800 flex items-center justify-center">
-                  ✦
-                </div>
-                <span>CLIQUEZ SUR « {t.executeSingle} {activeStepTab} » POUR CORRIGER CETTE PASSE</span>
-              </div>
-            )}
+        {/* HERO BANNER DE L'OUTIL */}
+        <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div className="lg:col-span-8">
+            <div className="inline-block text-[10px] font-mono tracking-widest text-cyan-600 font-bold uppercase mb-2 border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 rounded">
+              {fr ? "MODULE 09 // RELECTURE & IMPRESSION" : "MODULE 09 // PROOFREADING & PRINT"}
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 leading-[1.0] mb-3 uppercase">
+              {t.title}
+            </h1>
+            <p className="text-zinc-500 max-w-xl text-xs md:text-sm font-sans leading-relaxed">
+              {t.subTitle}
+            </p>
           </div>
-        </section>
+          <div className="lg:col-span-4 flex justify-center lg:justify-end">
+            <img src="/echo1.png" alt="Echo AI Core System" className="w-full max-w-[180px] h-auto object-contain drop-shadow-[0_10px_25px_rgba(6,182,212,0.15)]" />
+          </div>
+        </div>
+      </section>
 
-      </main>
+      {/* ── SEPARATION VAGUE BLANCHE ET STRIC CYAN ── */}
+      <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
+        <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
+        </svg>
 
-      {/* ── PANNEAU LATÉRAL RÉTRACTABLE (DRAWER HISTORIQUE) ────────────────────── */}
-      {showHistoryDrawer && (
-        <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex justify-end">
-          <div className="w-full max-w-md bg-[#0D121F] border-l border-slate-800 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
+        <svg className="absolute top-0 left-0 w-full h-full text-transparent fill-none pointer-events-none z-22" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,60 Q360,0 720,50 Q1080,90 1440,30" stroke="#06b6d4" strokeWidth="6" className="drop-shadow-[0_0_12px_#06b6d4]" />
+        </svg>
+      </div>
+
+      {/* ── SECTION BASSE NOIRE : APPLICATION ET WORKSPACE ── */}
+      <section className="bg-zinc-950 text-zinc-50 pb-16 pt-0 relative z-10 -mt-6 flex-1 flex flex-col">
+        <div className="max-w-7xl mx-auto px-6 w-full space-y-6 flex-1 flex flex-col">
+
+          {/* BARRE D'ACTIONS ET DE CONTRÔLE DE PIPELINE */}
+          <div className="bg-black/90 border-2 border-cyan-500/40 rounded-3xl p-4 md:p-6 shadow-[0_0_30px_rgba(6,182,212,0.15)] flex flex-wrap items-center justify-between gap-4">
             
-            {/* Header Drawer */}
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-[#0B0F17]">
-              <span className="font-mono text-xs font-bold text-slate-200 flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={runAllPipeline}
+                disabled={runningAll || runningStep !== null}
+                className={`px-5 py-3 rounded-2xl font-mono text-xs font-black uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] cursor-pointer ${
+                  runningAll
+                    ? "bg-amber-500/20 text-amber-400 border border-amber-500/50"
+                    : "bg-cyan-500 hover:bg-cyan-400 text-zinc-950"
+                }`}
+              >
+                {runningAll ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                    {t.running} ({runningStep}/4)
+                  </span>
+                ) : (
+                  t.executeAll
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowHistoryDrawer(true)}
+                className="px-4 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 text-xs font-mono font-bold transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>⚡</span>
+                <span>{fr ? `Historique (${versions.length})` : `Logs (${versions.length})`}</span>
+              </button>
+            </div>
+
+            {/* MÉTROLOGIE */}
+            <div className="flex items-center gap-4 text-xs font-mono text-zinc-400 bg-zinc-900/80 px-4 py-2 rounded-xl border border-zinc-800">
+              <span>{t.words}: <strong className="text-cyan-400">{originalText.trim() ? originalText.trim().split(/\s+/).length : 0}</strong></span>
+              <span className="text-zinc-700">|</span>
+              <span>{t.chars}: <strong className="text-cyan-400">{originalText.length}</strong></span>
+            </div>
+          </div>
+
+          {/* SÉLECTEUR D'ÉTAPES DU PIPELINE */}
+          <div className="flex flex-wrap items-center gap-2 bg-black/80 border border-zinc-800/80 rounded-2xl p-2">
+            {([1, 2, 3, 4] as StepNum[]).map((sNum) => {
+              const hasResult = versions.some(v => v.step === sNum);
+              const isTabActive = activeStepTab === sNum;
+
+              return (
+                <button
+                  key={sNum}
+                  onClick={() => setActiveStepTab(sNum)}
+                  className={`flex-1 min-w-[140px] flex items-center justify-between px-4 py-2.5 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer ${
+                    isTabActive
+                      ? "bg-cyan-950/80 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                      : hasResult
+                      ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-400"
+                      : "bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:border-zinc-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                      {sNum}
+                    </span>
+                    <span>{t.stepNames[sNum]}</span>
+                  </div>
+                  {hasResult && <span className="text-emerald-400 text-xs">✓</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          {errorMsg && (
+            <div className="p-3 bg-red-950/60 border border-red-500/50 rounded-2xl text-xs font-mono text-red-400">
+              ⚠️ {errorMsg}
+            </div>
+          )}
+
+          {/* WORKSPACE DOUBLE COLONNE */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-[500px]">
+            
+            {/* COLONNE GAUCHE — ORIGINE */}
+            <div className="bg-black/90 border-2 border-zinc-800 rounded-3xl p-6 flex flex-col space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <span className="text-xs font-mono font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                  {t.originalTitle}
+                </span>
+
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-mono transition-colors cursor-pointer"
+                >
+                  {t.importBtn}
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept=".txt,.md,.doc,.docx"
+                  className="hidden"
+                />
+              </div>
+
+              <textarea
+                value={originalText}
+                onChange={(e) => setOriginalText(e.target.value)}
+                placeholder={t.dropPlaceholder}
+                className="w-full flex-1 bg-transparent resize-none outline-none font-serif text-zinc-200 text-base leading-relaxed placeholder:text-zinc-700 placeholder:font-sans custom-scrollbar min-h-[350px]"
+              />
+            </div>
+
+            {/* COLONNE DROITE — RÉSULTAT ET ACTION */}
+            <div className="bg-black/90 border-2 border-cyan-500/40 rounded-3xl p-6 flex flex-col space-y-4 shadow-[0_0_30px_rgba(6,182,212,0.1)]">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
+                  {t.resultTitle} — ÉTAPE {activeStepTab}
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => runSingleStep(activeStepTab)}
+                    disabled={runningAll || runningStep !== null}
+                    className="px-3 py-1.5 rounded-xl border border-cyan-500/50 bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {runningStep === activeStepTab ? (
+                      <span>⏳ Traitement...</span>
+                    ) : (
+                      <span>{t.executeSingle} {activeStepTab}</span>
+                    )}
+                  </button>
+
+                  {activeVersion && (
+                    <button
+                      onClick={() => copyStepText(activeVersion.texte, activeStepTab)}
+                      className="px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {copiedStep === activeStepTab ? t.copied : `${t.copyBtn} Étape ${activeStepTab}`}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 bg-zinc-900/40 rounded-2xl p-4 overflow-y-auto custom-scrollbar min-h-[350px]">
+                {activeVersion ? (
+                  <div className="font-serif text-zinc-100 text-base leading-relaxed whitespace-pre-wrap selection:bg-cyan-500/30">
+                    {activeVersion.texte}
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-zinc-600 font-mono text-xs gap-3 text-center p-6">
+                    <div className="w-10 h-10 rounded-2xl border border-zinc-800 flex items-center justify-center text-cyan-400 font-bold">
+                      ✦
+                    </div>
+                    <span>CLIQUEZ SUR « {t.executeSingle} {activeStepTab} » POUR GÉNÉRER CETTE PASSE DE CORRECTION</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      {/* ── DRAWER HISTORIQUE RÉTRACTABLE ── */}
+      {showHistoryDrawer && (
+        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-md bg-zinc-950 border-l border-zinc-800 h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-200">
+            
+            <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-black">
+              <span className="font-mono text-xs font-black text-zinc-200 flex items-center gap-2">
                 <span>⚡</span> {t.historyTitle}
               </span>
               <button
                 onClick={() => setShowHistoryDrawer(false)}
-                className="text-slate-500 hover:text-slate-200 text-xs font-mono"
+                className="text-zinc-500 hover:text-white text-xs font-mono cursor-pointer"
               >
                 ✕ FERMER
               </button>
             </div>
 
-            {/* Contenu Historique */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
               {versions.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-slate-600 font-mono text-xs italic">
+                <div className="h-full flex items-center justify-center text-zinc-600 font-mono text-xs italic">
                   Aucune passe exécutée pour le moment.
                 </div>
               ) : (
                 versions.sort((a,b) => a.step - b.step).map((v) => (
-                  <div key={v.step} className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 flex flex-col gap-2">
-                    <div className="flex items-center justify-between border-b border-slate-800/60 pb-2">
+                  <div key={v.step} className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
                       <span className="font-mono text-xs font-bold text-cyan-400">Étape {v.step} — {t.stepNames[v.step]}</span>
-                      <span className="text-slate-500 font-mono text-[10px]">{v.timestamp}</span>
+                      <span className="text-zinc-500 font-mono text-[10px]">{v.timestamp}</span>
                     </div>
 
-                    {/* Liste des erreurs */}
                     {v.erreurs.length > 0 ? (
-                      <ul className="list-disc list-inside text-slate-300 font-mono text-xs space-y-1 py-1">
+                      <ul className="list-disc list-inside text-zinc-300 font-mono text-xs space-y-1 py-1">
                         {v.erreurs.map((err, i) => (
                           <li key={i} className="leading-normal">{err}</li>
                         ))}
                       </ul>
                     ) : (
-                      <span className="text-slate-500 font-mono text-xs py-1">{t.noErrors}</span>
+                      <span className="text-zinc-500 font-mono text-xs py-1">{t.noErrors}</span>
                     )}
 
                     <button
                       onClick={() => copyStepText(v.texte, v.step)}
-                      className="mt-1 w-full py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-mono transition-colors"
+                      className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-mono font-bold transition-colors cursor-pointer"
                     >
                       {copiedStep === v.step ? t.copied : `${t.copyBtn} le résultat de l'Étape ${v.step}`}
                     </button>
@@ -623,129 +687,194 @@ export default function CorrecteurEchoPage() {
         </div>
       )}
 
-      {/* ── MODALE AUTHENTIFICATION ─────────────────────────────────────────── */}
-      {showAuthModal && (
-        <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative w-full max-w-sm bg-[#0D121F] border border-slate-800 rounded-2xl p-6 shadow-2xl">
-            <button
-              onClick={() => setShowAuthModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-200 text-xs font-mono"
-            >
-              ✕
-            </button>
+      {/* ── MODALE ECHOAI PREMIUM (3,99$) ── */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
 
-            <div className="flex items-center justify-center gap-2 mb-6">
-              <img src="/echo2.png" alt="Echo AI" className="w-5 h-5 rounded object-contain" />
-              <span className="text-white font-mono font-bold text-sm tracking-widest">
-                ECHO AI <span className="text-slate-500">//</span> AUTH
-              </span>
-            </div>
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr
+                ? "Débloquez l'accès illimité à l'ensemble des modules d'intelligence artificielle."
+                : "Unlock unlimited access to all artificial intelligence modules."}
+            </p>
 
-            <div className="space-y-3">
-              <button
-                onClick={handleGoogle}
-                disabled={authLoading}
-                className="w-full flex items-center gap-3 px-4 py-3 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-all text-slate-200 text-xs font-medium"
-              >
-                <GoogleLogo />
-                <span>Continuer avec Google</span>
-              </button>
-
-              <button
-                onClick={handleMicrosoft}
-                disabled={authLoading}
-                className="w-full flex items-center gap-3 px-4 py-3 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-all text-slate-200 text-xs font-medium"
-              >
-                <MicrosoftLogo />
-                <span>Continuer avec Microsoft</span>
-              </button>
-            </div>
-
-            <div className="flex items-center my-4 gap-3">
-              <div className="flex-1 h-[1px] bg-slate-800" />
-              <span className="text-[10px] font-mono text-slate-600">OU</span>
-              <div className="flex-1 h-[1px] bg-slate-800" />
-            </div>
-
-            {authMode === "none" ? (
-              <div className="flex gap-2">
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
                 <button
-                  onClick={() => { setAuthMode("signin"); setAuthError(null); }}
-                  className="flex-1 py-2 rounded-xl border border-slate-700 text-slate-300 text-xs font-mono"
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c
+                      ? "bg-amber-500 text-zinc-950 border-amber-400"
+                      : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
                 >
-                  ✉ Connexion
+                  {c} ({PRICES[c].symbol})
                 </button>
-                <button
-                  onClick={() => { setAuthMode("signup"); setAuthError(null); }}
-                  className="flex-1 py-2 rounded-xl border border-cyan-500/30 text-cyan-400 text-xs font-mono"
-                >
-                  Créer un compte
+              ))}
+            </div>
+
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
+              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ Sauvegarde permanente de vos projets</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
+            >
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
+                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE CONNEXION (SIGN IN) ── */}
+      {showSignInModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <form onSubmit={handleEmailSignIn} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Connectez-vous pour corriger vos textes." : "Sign in to correct your texts."}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setShowSignInModal(false)} className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
                 </button>
               </div>
-            ) : (
-              <div className="space-y-2">
+
+              <div className="h-px bg-zinc-900 my-2" />
+
+              {authError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {authError}</div>}
+
+              <div className="space-y-3">
                 <input
                   type="email"
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  placeholder="Courriel"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 outline-none"
+                  placeholder="nom@domaine.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
                 />
                 <input
                   type="password"
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                  placeholder="Mot de passe"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 outline-none"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
                 />
-                {authError && <p className="text-red-400 text-[10px] font-mono">{authError}</p>}
-                {authSuccess && <p className="text-emerald-400 text-[10px] font-mono">✓ {authSuccess}</p>}
-                <button
-                  onClick={authMode === "signin" ? handleEmailSignIn : handleEmailSignUp}
-                  disabled={authLoading}
-                  className="w-full py-2 rounded-xl text-xs font-bold text-slate-950 bg-cyan-400 hover:bg-cyan-300"
-                >
-                  {authLoading ? "..." : authMode === "signin" ? "Se connecter" : "Créer le compte"}
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer">
+                {fr ? "Se connecter" : "Log in"}
+              </button>
+
+              <p className="text-center text-zinc-500 text-xs pt-1">
+                {fr ? "Pas encore de compte ? " : "Don't have an account? "}
+                <button type="button" onClick={() => { setShowSignInModal(false); setShowSignUpModal(true); }} className="text-cyan-400 underline">
+                  {fr ? "S'inscrire" : "Sign up"}
+                </button>
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE INSCRIPTION (SIGN UP) ── */}
+      {showSignUpModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <form onSubmit={handleEmailSignUp} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Créer un compte" : "Create account"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Inscrivez-vous pour débloquer les fonctionnalités." : "Sign up to unlock features."}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setShowSignUpModal(false)} className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
                 </button>
               </div>
-            )}
+
+              <div className="h-px bg-zinc-900 my-2" />
+
+              {authError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {authError}</div>}
+              {authSuccess && <div className="bg-emerald-950/50 border border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-400">✓ {authSuccess}</div>}
+
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  placeholder="nom@domaine.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                />
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer">
+                {fr ? "Créer mon compte" : "Create my account"}
+              </button>
+
+              <p className="text-center text-zinc-500 text-xs pt-1">
+                {fr ? "Déjà un compte ? " : "Already have an account? "}
+                <button type="button" onClick={() => { setShowSignUpModal(false); setShowSignInModal(true); }} className="text-cyan-400 underline">
+                  {fr ? "Se connecter" : "Sign in"}
+                </button>
+              </p>
+            </form>
           </div>
         </div>
       )}
 
-      {/* ── MODALE PREMIUM / STRIPE ─────────────────────────────────────────── */}
-      {showQuotaPopup && (
-        <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="relative w-full max-w-sm bg-[#0D121F] border border-slate-800 rounded-2xl p-6 shadow-2xl text-center">
-            <button
-              onClick={() => setShowQuotaPopup(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-200 text-xs font-mono"
-            >
-              ✕
-            </button>
+    </main>
+  );
+}
 
-            <h3 className="text-white font-bold text-base mb-1">Plan Premium Echo AI</h3>
-            <p className="text-slate-400 text-xs mb-6">Correction illimitée et pipeline haute vitesse</p>
-
-            <button
-              onClick={async () => {
-                if (!user) { setShowAuthModal(true); return; }
-                const res = await fetch("/api/stripe/create-checkout-site2", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ plan: "world", currency, userId: user.id, userEmail: user.email }),
-                });
-                const d = await res.json();
-                if (d.url) window.location.href = d.url;
-              }}
-              className="w-full py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 shadow-lg shadow-amber-500/10"
-            >
-              Activer Premium — 9.99$ / mois
-            </button>
-          </div>
-        </div>
-      )}
-
-    </div>
+export default function CorrecteurEchoPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-cyan-400 font-mono text-xs">Initialisation du Studio Correcteur...</div>}>
+      <CorrecteurContent />
+    </Suspense>
   );
 }
