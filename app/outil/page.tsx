@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
+
+// 🎯 DESACTIVE LE PRERENDERING STATIQUE QUI FAISAIT PLANTER VERCEL
+export const dynamic = "force-dynamic";
 
 const MicrosoftLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
@@ -33,7 +36,7 @@ const PRICES: Record<CurrencyCode, { amount: string; symbol: string }> = {
   EUR: { amount: "3.99", symbol: "€" },
 };
 
-export default function OutilTotemPage() {
+function OutilTotemContent() {
   const { lang, setLang } = useApp();
   const fr = lang === "fr";
   const router = useRouter();
@@ -82,10 +85,8 @@ export default function OutilTotemPage() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Détection du retour Stripe (?premium=success)
   useEffect(() => {
     if (searchParams.get("premium") === "success" && user) {
-      // Force un petit délai pour laisser le webhook Stripe finir d'écrire en DB
       const timer = setTimeout(() => {
         verifierStatutUser(user.id);
       }, 1500);
@@ -93,10 +94,8 @@ export default function OutilTotemPage() {
     }
   }, [searchParams, user]);
 
-  // VÉRIFICATION Élargie et robuste de tous les statuts payants possibles
   const verifierStatutUser = async (uid: string) => {
     try {
-      // 1. Vérifie contenu_quotas
       const { data: cData, error: cErr } = await supabase
         .from("contenu_quotas")
         .select("tier")
@@ -108,7 +107,6 @@ export default function OutilTotemPage() {
         return;
       }
 
-      // 2. Vérifie world_quotas en recours
       const { data: wData, error: wErr } = await supabase
         .from("world_quotas")
         .select("tier")
@@ -159,7 +157,7 @@ export default function OutilTotemPage() {
 
     setIsCheckoutLoading(true);
     try {
-      const res = await fetch("/api/stripe/create-checkout-site2", {
+      const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -307,99 +305,24 @@ export default function OutilTotemPage() {
   };
 
   const tools = [
-    { 
-      id: "01", 
-      text: fr ? "📖 Créer un nouveau livre de 200 pages à partir d'une simple idée, prêt pour l'impression." : "📖 Create a new 200-page book from a simple idea, print-ready.", 
-      side: "left", 
-      href: "/contenu", 
-      badge: "CRÉATION" 
-    },
-    { 
-      id: "02", 
-      text: fr ? "🌍 Créez un débat entre 3 IA représentant la Chine, les États-Unis et l'Europe, puis choisissez votre allégeance, qui aura le dernier mot." : "🌍 Create a debate between 3 AIs representing China, the US, and Europe, then choose your allegiance.", 
-      side: "right", 
-      href: "/world", 
-      badge: "DÉBAT" 
-    },
-    { 
-      id: "03", 
-      text: fr ? "⭐ Découvrez les vrais avis cachés de votre prochain achat derrière le marketing, en collant simplement une URL." : "⭐ Discover real hidden reviews behind marketing before your next purchase, simply by pasting a URL.", 
-      side: "left", 
-      href: "/avis", 
-      badge: "ACHAT" 
-    },
-    { 
-      id: "04", 
-      text: fr ? "📄 Créez une facture professionnelle en 30 secondes avec un simple prompt, prête à être exportée en PDF." : "📄 Create a professional invoice in 30 seconds with a simple prompt, ready to export as PDF.", 
-      side: "right", 
-      href: "/fastbilling", 
-      badge: "FACTURE" 
-    },
-    { 
-      id: "05", 
-      text: fr ? "📅 Gérez votre calendrier et ajoutez automatiquement vos rendez-vous grâce à un agent IA." : "📅 Manage your calendar and automatically add appointments using an AI agent.", 
-      side: "left", 
-      href: "/calendar", 
-      badge: "CALENDRIER" 
-    },
-    { 
-      id: "06", 
-      text: fr ? "💰 Gérez votre budget et laissez un agent IA enregistrer vos dépenses, organiser vos finances et suivre votre évolution." : "💰 Manage your budget and let an AI agent log expenses, organize finances, and track your progress.", 
-      side: "right", 
-      href: "/budget", 
-      badge: "BUDGET" 
-    },
-    { 
-      id: "07", 
-      text: fr ? "🔥 Suivez facilement vos apports caloriques, vos repas et votre déficit pour atteindre vos objectifs de perte de poids." : "🔥 Easily track your caloric intake, meals, and deficit to reach your weight loss goals.", 
-      side: "left", 
-      href: "/vitality", 
-      badge: "FITNESS" 
-    },
-    { 
-      id: "08", 
-      text: fr ? "🔎 Effectuez des recherches intelligentes qui analysent le web au lieu de simplement afficher des liens." : "🔎 Perform smart searches that analyze the web instead of simply displaying links.", 
-      side: "right", 
-      href: "/horizonweb", 
-      badge: "MOTEUR WEB" 
-    },
-    { 
-      id: "09", 
-      text: fr ? "✨ Corrigez et améliorez vos documents pour les rendre prêts à l'impression en moins de 2 minutes." : "✨ Fix and improve your documents to make them print-ready in under 2 minutes.", 
-      side: "left", 
-      href: "/correcteur", 
-      badge: "CORRIGER" 
-    },
-    { 
-      id: "10", 
-      text: fr ? "📚 Écrivez votre livre avec un compagnon IA dans un espace calme, conçu pour rester concentré et créatif." : "📚 Write your book with an AI companion in a quiet space designed to stay focused and creative.", 
-      side: "right", 
-      href: "/books", 
-      badge: "AUTEUR" 
-    },
-    { 
-      id: "11", 
-      text: fr ? "💡 Faites analyser votre idée et obtenez un premier avis sur son potentiel en moins de 30 secondes." : "💡 Get your idea analyzed and receive an initial opinion on its potential in under 30 seconds.", 
-      side: "left", 
-      href: "/idea", 
-      badge: "ANALYSE" 
-    },
-    { 
-      id: "12", 
-      text: fr ? "💬 Discutez avec une IA rapide plus libre dans ses échanges." : "💬 Chat with a fast AI that is more unconstrained in dialogue.", 
-      side: "right", 
-      href: "/chat", 
-      badge: "CHAT" 
-    }
+    { id: "01", text: fr ? "📖 Créer un nouveau livre de 200 pages à partir d'une simple idée, prêt pour l'impression." : "📖 Create a new 200-page book from a simple idea, print-ready.", side: "left", href: "/contenu", badge: "CRÉATION" },
+    { id: "02", text: fr ? "🌍 Créez un débat entre 3 IA représentant la Chine, les États-Unis et l'Europe, puis choisissez votre allégeance, qui aura le dernier mot." : "🌍 Create a debate between 3 AIs representing China, the US, and Europe, then choose your allegiance.", side: "right", href: "/world", badge: "DÉBAT" },
+    { id: "03", text: fr ? "⭐ Découvrez les vrais avis cachés de votre prochain achat derrière le marketing, en collant simplement une URL." : "⭐ Discover real hidden reviews behind marketing before your next purchase, simply by pasting a URL.", side: "left", href: "/avis", badge: "ACHAT" },
+    { id: "04", text: fr ? "📄 Créez une facture professionnelle en 30 secondes avec un simple prompt, prête à être exportée en PDF." : "📄 Create a professional invoice in 30 seconds with a simple prompt, ready to export as PDF.", side: "right", href: "/fastbilling", badge: "FACTURE" },
+    { id: "05", text: fr ? "📅 Gérez votre calendrier et ajoutez automatiquement vos rendez-vous grâce à un agent IA." : "📅 Manage your calendar and automatically add appointments using an AI agent.", side: "left", href: "/calendar", badge: "CALENDRIER" },
+    { id: "06", text: fr ? "💰 Gérez votre budget et laissez un agent IA enregistrer vos dépenses, organiser vos finances et suivre votre évolution." : "💰 Manage your budget and let an AI agent log expenses, organize finances, and track your progress.", side: "right", href: "/budget", badge: "BUDGET" },
+    { id: "07", text: fr ? "🔥 Suivez facilement vos apports caloriques, vos repas et votre déficit pour atteindre vos objectifs de perte de poids." : "🔥 Easily track your caloric intake, meals, and deficit to reach your weight loss goals.", side: "left", href: "/vitality", badge: "FITNESS" },
+    { id: "08", text: fr ? "🔎 Effectuez des recherches intelligentes qui analysent le web au lieu de simplement afficher des liens." : "🔎 Perform smart searches that analyze the web instead of simply displaying links.", side: "right", href: "/horizonweb", badge: "MOTEUR WEB" },
+    { id: "09", text: fr ? "✨ Corrigez et améliorez vos documents pour les rendre prêts à l'impression en moins de 2 minutes." : "✨ Fix and improve your documents to make them print-ready in under 2 minutes.", side: "left", href: "/correcteur", badge: "CORRIGER" },
+    { id: "10", text: fr ? "📚 Écrivez votre livre avec un compagnon IA dans un espace calme, conçu pour rester concentré et créatif." : "📚 Write your book with an AI companion in a quiet space designed to stay focused and creative.", side: "right", href: "/books", badge: "AUTEUR" },
+    { id: "11", text: fr ? "💡 Faites analyser votre idée et obtenez un premier avis sur son potentiel en moins de 30 secondes." : "💡 Get your idea analyzed and receive an initial opinion on its potential in under 30 seconds.", side: "left", href: "/idea", badge: "ANALYSE" },
+    { id: "12", text: fr ? "💬 Discutez avec une IA rapide plus libre dans ses échanges." : "💬 Chat with a fast AI that is more unconstrained in dialogue.", side: "right", href: "/chat", badge: "CHAT" }
   ];
 
-  // Condition élargie pour le badge vert (prend en compte advantage, premium, ultra, founder, basic...)
   const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
-      
-      {/* ── HEADER BLANC UNIFIÉ ── */}
       <section className="bg-white text-zinc-900 relative z-30">
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
@@ -410,8 +333,6 @@ export default function OutilTotemPage() {
             </div>
             
             <div className="flex items-center gap-4 text-xs font-mono relative">
-              
-              {/* SÉLECTEUR DE DEVISE */}
               <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
                 {CURRENCIES.map((c) => (
                   <button
@@ -424,7 +345,6 @@ export default function OutilTotemPage() {
                 ))}
               </div>
 
-              {/* DÉTECTION ÉLARGIE : SI TIER ACTIF -> VERT NÉON */}
               {isPaidTier ? (
                 <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.2)]">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -471,7 +391,6 @@ export default function OutilTotemPage() {
           </div>
         </header>
 
-        {/* HERO BANNER */}
         <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-8">
             <div className="inline-block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-2 border border-zinc-200 px-2 py-0.5 rounded">
@@ -490,7 +409,6 @@ export default function OutilTotemPage() {
         </div>
       </section>
 
-      {/* ── COURBE BLANCHE ── */}
       <div className="relative w-full h-24 bg-zinc-950 overflow-hidden -mt-1 z-20">
         <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
@@ -501,10 +419,8 @@ export default function OutilTotemPage() {
         </svg>
       </div>
 
-      {/* ── SECTION TOTEM ── */}
       <section className="bg-zinc-950 text-zinc-50 pb-12 pt-0 relative z-10 -mt-8">
         <div className="max-w-7xl mx-auto px-4 relative">
-          
           <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-6 bg-cyan-950/80 border-x-2 border-cyan-400 shadow-[0_0_35px_rgba(6,182,212,0.6)] hidden md:block z-0 rounded-b-full">
             <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-2 bg-cyan-300 shadow-[0_0_15px_#06b6d4]" />
           </div>
@@ -550,7 +466,6 @@ export default function OutilTotemPage() {
               );
             })}
           </div>
-
         </div>
 
         <div className="mt-20 max-w-7xl mx-auto px-6">
@@ -560,7 +475,6 @@ export default function OutilTotemPage() {
         </div>
       </section>
 
-      {/* ── MODALE OFFRE UNIFIÉE ECHOAI PREMIUM (3,99$) ── */}
       {showPremiumModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
@@ -619,7 +533,6 @@ export default function OutilTotemPage() {
         </div>
       )}
 
-      {/* ── MODALE CONNEXION ── */}
       {showSignInModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
@@ -673,7 +586,6 @@ export default function OutilTotemPage() {
         </div>
       )}
 
-      {/* ── MODALE INSCRIPTION ── */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
@@ -736,7 +648,15 @@ export default function OutilTotemPage() {
           </div>
         </div>
       )}
-
     </main>
+  );
+}
+
+// 🎯 EMPAQUETAGE DANS SUSPENSE POUR ÉVITER LE CRASH VERCEL
+export default function OutilTotemPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-cyan-400 font-mono text-xs">Chargement...</div>}>
+      <OutilTotemContent />
+    </Suspense>
   );
 }
