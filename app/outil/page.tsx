@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
 
-// 🎯 DESACTIVE LE PRERENDERING STATIQUE QUI FAISAIT PLANTER VERCEL
 export const dynamic = "force-dynamic";
 
 const MicrosoftLogo = () => (
@@ -323,6 +322,7 @@ function OutilTotemContent() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
+      {/* SECTION DU HAUT : BLANCHE AVEC MASCOTTE ET NAVIGATION */}
       <section className="bg-white text-zinc-900 relative z-30">
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
@@ -333,6 +333,7 @@ function OutilTotemContent() {
             </div>
             
             <div className="flex items-center gap-4 text-xs font-mono relative">
+              {/* SÉLECTEUR DE DEVISES */}
               <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
                 {CURRENCIES.map((c) => (
                   <button
@@ -345,9 +346,10 @@ function OutilTotemContent() {
                 ))}
               </div>
 
+              {/* BADGE D'ACTIVATION / ACCÈS PREMIUM */}
               {isPaidTier ? (
-                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
                   <span className="font-bold text-[11px] uppercase tracking-wider">
                     {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
                   </span>
@@ -363,11 +365,13 @@ function OutilTotemContent() {
                 </div>
               )}
 
+              {/* SÉLECTEUR FR/EN */}
               <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
                 <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
                 <button onClick={() => setLang("en")} className={`px-2 py-1 ${lang === "en" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>EN</button>
               </div>
 
+              {/* IDENTIFIANT UTILISATEUR OU BOUTONS D'AUTH */}
               {user ? (
                 <div className="flex items-center gap-4">
                   <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200">
@@ -409,6 +413,7 @@ function OutilTotemContent() {
         </div>
       </section>
 
+      {/* TRANSITION COURBE + LUEUR DE COULEUR */}
       <div className="relative w-full h-24 bg-zinc-950 overflow-hidden -mt-1 z-20">
         <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
@@ -419,6 +424,7 @@ function OutilTotemContent() {
         </svg>
       </div>
 
+      {/* SECTION DU BAS : SOMBRE (NOIR/CYAN) AVEC TOTEM ET OUTILS */}
       <section className="bg-zinc-950 text-zinc-50 pb-12 pt-0 relative z-10 -mt-8">
         <div className="max-w-7xl mx-auto px-4 relative">
           <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-6 bg-cyan-950/80 border-x-2 border-cyan-400 shadow-[0_0_35px_rgba(6,182,212,0.6)] hidden md:block z-0 rounded-b-full">
@@ -475,6 +481,7 @@ function OutilTotemContent() {
         </div>
       </section>
 
+      {/* MODAL STRIPE / PREMIUM */}
       {showPremiumModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
@@ -533,6 +540,7 @@ function OutilTotemContent() {
         </div>
       )}
 
+      {/* MODAL CONNEXION (SIGN IN) */}
       {showSignInModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
@@ -586,6 +594,7 @@ function OutilTotemContent() {
         </div>
       )}
 
+      {/* MODAL INSCRIPTION (SIGN UP) AVEC COMPTE À REBOURS DE RENVOI */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
@@ -652,7 +661,6 @@ function OutilTotemContent() {
   );
 }
 
-// 🎯 EMPAQUETAGE DANS SUSPENSE POUR ÉVITER LE CRASH VERCEL
 export default function OutilTotemPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-cyan-400 font-mono text-xs">Chargement...</div>}>

@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, ReactNode } from "react";
+import { useState, useEffect, useRef, useCallback, ReactNode, Suspense } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
 import { checkQuota, UserTier } from "../../utils/quota";
-import LangDropdown from "../components/LangDropdown";
-import TutorialHeaderControls from "../components/TutorialHeaderControls";
 import PremiumRequiredModal from "../components/PremiumRequiredModal";
 import QuotaPopup from "../components/QuotaPopup";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -15,10 +14,38 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { TextAlign } from "@tiptap/extension-text-align";
 
+export const dynamic = "force-dynamic";
+
 type EchoMode    = "creative" | "ideas" | "critical";
 type BookView    = "edit" | "present";
 type BookMessage = { role: "user" | "echo"; text: string; imageB64?: string };
 type Chapter     = { id: string; title: string; content: string };
+type CurrencyCode = "CAD" | "USD" | "EUR";
+
+const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
+const PRICES: Record<CurrencyCode, { amount: string; symbol: string }> = {
+  CAD: { amount: "3.99", symbol: "CA$" },
+  USD: { amount: "3.99", symbol: "US$" },
+  EUR: { amount: "3.99", symbol: "€" },
+};
+
+const MicrosoftLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
+    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
+  </svg>
+);
+
+const GoogleLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+  </svg>
+);
 
 const I: Record<"fr"|"en", Record<string,string>> = {
   fr: {
@@ -177,15 +204,33 @@ function applyPreset(preset: "print"|"kindle", s: {
   }
 }
 
-// ── Clé localStorage par user ─────────────────────────────────────────────────
 const LS_KEY = (uid: string | null) => uid ? `echo-books-${uid}` : "echo-books-anon";
 
-export default function BooksPage() {
-  const { lang, theme, toggleTheme, userTier } = useApp();
+function BooksContent() {
+  const { lang, setLang, theme, toggleTheme } = useApp();
   const fr = lang === "fr";
   const T  = I[lang as "fr"|"en"] ?? I.fr;
+
+  const [user, setUser] = useState<any>(null);
+  const [userTier, setUserTier] = useState<string>("free");
+
+  const [currency, setCurrency] = useState<CurrencyCode>("CAD");
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [showStripeModal, setShowStripeModal] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
+  const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [resendEmail, setResendEmail] = useState("");
+
   const safeTier = (userTier || "connected_free") as UserTier;
-  const isImageButtonLocked = safeTier === "connected_free" || safeTier === "basic";
+  const isImageButtonLocked = safeTier === "connected_free" || safeTier === "basic" || userTier === "free";
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
 
   const [userId,   setUserId]   = useState<string|null>(null);
   const [bookDbId, setBookDbId] = useState<string|null>(null);
@@ -200,7 +245,6 @@ export default function BooksPage() {
   const [showChapterDropdown, setShowChapterDropdown] = useState(false);
   const chapterDropRef = useRef<HTMLDivElement>(null);
 
-  // ── Inject confirm modal ──────────────────────────────────────────────────
   const [showInjectConfirm, setShowInjectConfirm] = useState(false);
   const [pendingInjectText, setPendingInjectText] = useState<string|null>(null);
 
@@ -223,7 +267,6 @@ export default function BooksPage() {
   const [showQuotaPopup,    setShowQuotaPopup]    = useState(false);
   const [quotaPopupLabel,   setQuotaPopupLabel]   = useState("");
   const [memorySummary,     setMemorySummary]     = useState("");
-  const [tutorialStep,      setTutorialStep]      = useState<number|null>(null);
   const [dataLoaded,        setDataLoaded]        = useState(false);
   const [showLoginPopup,    setShowLoginPopup]    = useState(false);
 
@@ -231,7 +274,6 @@ export default function BooksPage() {
   const getBooksSummaryKey = (uid: string|null) => uid ? `echo-books-summary-${uid}` : "echo-books-summary";
 
   useEffect(() => {
-    // Marque automatiquement le tuto comme vu — on n'affiche plus le popup blanc
     localStorage.setItem("echo-tuto-books-done-v1", "true");
   }, []);
 
@@ -249,16 +291,14 @@ export default function BooksPage() {
   useEffect(() => { const t = setTimeout(updatePageCount, 150); return () => clearTimeout(t); }, [chapters, activeChapter, view, updatePageCount]);
   useEffect(() => { window.addEventListener("resize", updatePageCount); return () => window.removeEventListener("resize", updatePageCount); }, [updatePageCount]);
 
-  // ── Refs pour éviter boucle infinie onUpdate ──────────────────────────────
   const activeChapterRef = useRef(activeChapter);
   useEffect(() => { activeChapterRef.current = activeChapter; }, [activeChapter]);
 
   const chaptersRef = useRef(chapters);
   useEffect(() => { chaptersRef.current = chapters; }, [chapters]);
 
-  const isLoadingRef = useRef(false); // bloque onUpdate pendant chargement
+  const isLoadingRef = useRef(false);
 
-  // ── Éditeur Tiptap — FIX boucle infinie + hydration ──────────────────────
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -282,7 +322,6 @@ export default function BooksPage() {
       if (isLoadingRef.current) return;
       const { $from, empty } = editor.state.selection;
 
-      // Stratégie 1 : storedMarks (marks en attente quand le curseur est entre deux caractères)
       const stored = editor.state.storedMarks;
       if (stored) {
         const m = stored.find((m: any) => m.type.name === "textStyle");
@@ -292,7 +331,6 @@ export default function BooksPage() {
         }
       }
 
-      // Stratégie 2 : marks du caractère AVANT le curseur (position -1)
       if ($from.pos > 0) {
         const marksAt = $from.doc.resolve(Math.max(0, $from.pos - 1)).marks();
         const m = marksAt.find((m: any) => m.type.name === "textStyle");
@@ -302,7 +340,6 @@ export default function BooksPage() {
         }
       }
 
-      // Stratégie 3 : getAttributes (fonctionne bien sur sélection active)
       if (!empty) {
         const attrs = editor.getAttributes("textStyle");
         if (attrs?.fontSize) {
@@ -311,7 +348,6 @@ export default function BooksPage() {
         }
       }
 
-      // Pas de fontSize local → taille globale du chapitre
       const saved = localStorage.getItem(`echo-book-base-size-${activeChapterRef.current}`);
       setFontSize(saved ? parseInt(saved, 10) : 15);
     },
@@ -321,7 +357,6 @@ export default function BooksPage() {
       const chId = activeChapterRef.current;
       setChapters(prev => {
         const existing = prev.find(c => c.id === chId);
-        // Normalise les deux pour éviter les faux positifs ProseMirror (<p></p> vs <p><br></p>)
         const normalize = (s: string) => s.replace(/<p><br\s*\/?><\/p>/g,"<p></p>").replace(/\s+/g," ").trim();
         if (normalize(existing?.content || "") === normalize(html)) return prev;
         return prev.map(c => c.id === chId ? { ...c, content: html } : c);
@@ -330,7 +365,6 @@ export default function BooksPage() {
     },
   });
 
-  // Charger contenu dans l'éditeur quand chapitre change
   useEffect(() => {
     if (!editor || view !== "edit") return;
     const cur = chaptersRef.current.find(c => c.id === activeChapter);
@@ -343,7 +377,6 @@ export default function BooksPage() {
     if (editor) editor.commands.setFontFamily(fontFamily);
   }, [fontFamily, editor]);
 
-  // Keyboard shortcuts Ctrl+Z / Ctrl+Y
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
@@ -364,16 +397,13 @@ export default function BooksPage() {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     if (from !== to) {
-      // Sélection active → style inline local
       const current = parseInt(editor.getAttributes("textStyle").fontSize) || fontSize;
       const next = Math.min(72, Math.max(8, current + delta));
       editor.chain().focus().setMark("textStyle", { fontSize:`${next}px` }).run();
       setFontSize(next);
     } else {
-      // Pas de sélection → modifie la taille globale du document
       const next = Math.min(72, Math.max(8, fontSize + delta));
       setFontSize(next);
-      // Persiste la taille globale pour ce chapitre
       localStorage.setItem(`echo-book-base-size-${activeChapterRef.current}`, next.toString());
     }
   };
@@ -385,7 +415,6 @@ export default function BooksPage() {
     );
   };
 
-  // ── Inject helpers ────────────────────────────────────────────────────────
   const injectTextAtEnd = useCallback((text: string) => {
     if (!editor) return;
     const { doc } = editor.state;
@@ -424,31 +453,26 @@ export default function BooksPage() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  // ── SAVE ──────────────────────────────────────────────────────────────────
   const [saveStatus, setSaveStatus] = useState<"saved"|"saving"|"unsaved">("saved");
   const saveTimer = useRef<ReturnType<typeof setTimeout>|null>(null);
   const userIdRef = useRef<string|null>(null);
   useEffect(() => { userIdRef.current = userId; }, [userId]);
 
-  // Sanitize : retire les src base64 des images avant envoi Supabase (payload trop lourd)
   const sanitizeChapters = (chs: Chapter[]): Chapter[] =>
     chs.map(c => ({
       ...c,
       content: c.content.replace(/src="data:[^"]{100,}"/g, 'src="[image]"'),
     }));
 
-  // saveBook : localStorage IMMÉDIAT + Supabase echo_books (table dédiée)
   const saveBook = useCallback(async (currentChapters: Chapter[], currentTitle: string) => {
     const uid = userIdRef.current;
     const payload = { bookTitle: currentTitle, chapters: currentChapters, savedAt: Date.now() };
 
-    // 1. localStorage immédiat — garde le contenu complet (images comprises)
     try { localStorage.setItem(LS_KEY(uid), JSON.stringify(payload)); } catch {}
 
     if (!uid) { setSaveStatus("saved"); return; }
     setSaveStatus("saving");
 
-    // 2. Supabase — chapitres sanitizés (pas de base64 dans la DB)
     const safeChapters = sanitizeChapters(currentChapters);
 
     try {
@@ -460,7 +484,6 @@ export default function BooksPage() {
       }, { onConflict: "user_id" });
 
       if (error) {
-        console.warn("[Books] echo_books upsert failed, fallback echo_conversations:", error.message);
         const safePayload = { ...payload, chapters: safeChapters };
         if (bookDbId) {
           await supabase.from("echo_conversations")
@@ -477,7 +500,6 @@ export default function BooksPage() {
     setSaveStatus("saved");
   }, [bookDbId]);
 
-  // Auto-save : 1.5s après changement (debounce) + toutes les 10s (intervalle fixe)
   useEffect(() => {
     if (!dataLoaded) return;
     setSaveStatus("unsaved");
@@ -490,7 +512,6 @@ export default function BooksPage() {
     if (!dataLoaded) return;
     const interval = setInterval(() => saveBook(chaptersRef.current, bookTitle), 10000);
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoaded, saveBook]);
 
   const manualSave = () => {
@@ -500,13 +521,40 @@ export default function BooksPage() {
     setTimeout(() => setShowSaveConfirm(false), 2000);
   };
 
-  // ── CHARGEMENT INITIAL ────────────────────────────────────────────────────
-  // Ordre de priorité : Supabase echo_books > echo_conversations > localStorage
+  const verifierStatutUser = async (uid: string) => {
+    try {
+      const { data: cData } = await supabase
+        .from("contenu_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
+        setUserTier(cData.tier);
+        return;
+      }
+
+      const { data: wData } = await supabase
+        .from("world_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
+        setUserTier(wData.tier);
+        return;
+      }
+
+      setUserTier("free");
+    } catch (e) {
+      console.warn("Erreur verif statut:", e);
+    }
+  };
+
   const loadBook = useCallback(async (uid: string | null) => {
     let loaded = false;
 
     if (uid) {
-      // 1. Essai echo_books (table dédiée)
       try {
         const { data: row } = await supabase.from("echo_books")
           .select("book_title,chapters,updated_at")
@@ -523,7 +571,6 @@ export default function BooksPage() {
         }
       } catch {}
 
-      // 2. Fallback echo_conversations
       if (!loaded) {
         try {
           const { data: rows } = await supabase.from("echo_conversations")
@@ -549,7 +596,6 @@ export default function BooksPage() {
       }
     }
 
-    // 3. localStorage (anon ou fallback)
     if (!loaded) {
       try {
         const raw = localStorage.getItem(LS_KEY(uid));
@@ -570,7 +616,6 @@ export default function BooksPage() {
     if (savedSummary) setMemorySummary(savedSummary);
     setSaveStatus("saved");
     setDataLoaded(true);
-    // Popup connexion — seulement si pas connecté et pas déjà ignoré
     if (!uid && !localStorage.getItem("echo-books-login-dismissed")) {
       setShowLoginPopup(true);
     }
@@ -580,28 +625,37 @@ export default function BooksPage() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const uid = session?.user?.id || null;
       setUserId(uid);
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+      }
       loadBook(uid);
     });
+
     const { data: listener } = supabase.auth.onAuthStateChange((_, s) => {
       const uid = s?.user?.id || null;
       setUserId(uid);
+      if (s?.user) {
+        setUser(s.user);
+        verifierStatutUser(s.user.id);
+      } else {
+        setUser(null);
+        setUserTier("free");
+      }
       if (!dataLoaded) loadBook(uid);
     });
+
     return () => listener.subscription.unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-charger quand l'éditeur devient disponible (init Tiptap async)
   useEffect(() => {
     if (editor && !dataLoaded) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         loadBook(session?.user?.id || null);
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
-  // ── Resize Echo panel ─────────────────────────────────────────────────────
   const [echoPanelWidth, setEchoPanelWidth] = useState(280);
   const [isDesktop, setIsDesktop] = useState(false);
   const resizingRef = useRef(false);
@@ -615,6 +669,7 @@ export default function BooksPage() {
     e.preventDefault(); resizingRef.current = true;
     document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
   };
+
   useEffect(() => {
     const onMove = (e: MouseEvent) => { if (resizingRef.current) setEchoPanelWidth(Math.min(520, Math.max(220, window.innerWidth - e.clientX))); };
     const onUp   = () => { if (!resizingRef.current) return; resizingRef.current = false; document.body.style.cursor = ""; document.body.style.userSelect = ""; };
@@ -622,10 +677,8 @@ export default function BooksPage() {
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, []);
 
-  // ── File inputs ───────────────────────────────────────────────────────────
   const fontInputRef  = useRef<HTMLInputElement>(null);
   const fileInputRef  = useRef<HTMLInputElement>(null);
-  const importJsonRef = useRef<HTMLInputElement>(null);
   const insertImgRef  = useRef<HTMLInputElement>(null);
 
   const [showRecontextModal, setShowRecontextModal] = useState(false);
@@ -660,7 +713,6 @@ export default function BooksPage() {
       checkQuota("vitality_actions", safeTier, true, userId);
       setTimeout(() => { quotaConsumedRef.current = false; }, 500);
     }
-    // Sélection active ou tout le texte du chapitre
     const { from, to } = editor.state.selection;
     const textToSync = from !== to
       ? editor.state.doc.textBetween(from, to, " ")
@@ -717,37 +769,6 @@ export default function BooksPage() {
     reader.readAsText(file);
   };
 
-  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; e.target.value = "";
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const raw = reader.result as string;
-        const parsed = JSON.parse(raw);
-        // Supporte { bookTitle, chapters } ou { title, chapters } ou tableau direct
-        const t = parsed.bookTitle || parsed.title || parsed.book_title || null;
-        const c = parsed.chapters || parsed.content || (Array.isArray(parsed) ? parsed : null);
-        if (t) setBookTitle(t);
-        if (c?.length) {
-          // Normalise chaque chapitre si besoin
-          const normalized: Chapter[] = c.map((ch: any, i: number) => ({
-            id:      ch.id || `ch${Date.now()}-${i}`,
-            title:   ch.title || `${fr?"Chapitre":"Chapter"} ${i+1}`,
-            content: ch.content || ch.text || "",
-          }));
-          setChapters(normalized);
-          setActiveChapter(normalized[0].id);
-          setTimeout(() => editor?.commands.setContent(normalized[0].content || "<p></p>"), 150);
-        } else {
-          alert(fr?"Aucun chapitre trouvé dans ce fichier.":"No chapters found in this file.");
-        }
-      } catch { alert(fr?"Fichier invalide ou corrompu.":"Invalid or corrupted file."); }
-    };
-    reader.readAsText(file);
-  };
-
-  // ── Export ────────────────────────────────────────────────────────────────
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -766,8 +787,6 @@ export default function BooksPage() {
     if (fmt === "json") {
       downloadBlob(new Blob([JSON.stringify({bookTitle,chapters},null,2)], {type:"application/json"}), `${slug}.echo-book.json`); return;
     }
-    // Enveloppe le HTML avec les styles globaux du document
-    // Le serveur d'export (docx/pdf/epub) reçoit ainsi la taille et la police réelles
     const formattedHtml = `<div style="font-size:${fontSize}px;font-family:${fontFamily};line-height:${lineHeight};">${currentHtml}</div>`;
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -781,7 +800,6 @@ export default function BooksPage() {
     } catch(e) { alert(`Cannot reach export server: ${e}`); }
   };
 
-  // ── Echo chat ─────────────────────────────────────────────────────────────
   const [echoMode,      setEchoMode]      = useState<EchoMode|null>(null);
   const [echoMessages,  setEchoMessages]  = useState<BookMessage[]>([]);
   const [echoInput,     setEchoInput]     = useState("");
@@ -789,18 +807,14 @@ export default function BooksPage() {
   const [isListening,   setIsListening]   = useState(false);
   const [imageBase64,   setImageBase64]   = useState<string|null>(null);
   const [imageName,     setImageName]     = useState<string|null>(null);
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
   const echoBottomRef = useRef<HTMLDivElement>(null);
 
-  // ── Save convo Echo (localStorage + Supabase) ────────────────────────────
   const getEchoConvoKey = (uid: string|null) => uid ? `echo-books-convo-${uid}` : "echo-books-convo-anon";
 
   const saveEchoConvo = useCallback(async (msgs: BookMessage[]) => {
     const uid = userIdRef.current;
-    // localStorage immédiat
     try { localStorage.setItem(getEchoConvoKey(uid), JSON.stringify(msgs.slice(-50))); } catch {}
-    // Supabase — on réutilise echo_conversations avec source "books_chat"
     if (!uid) return;
     try {
       const { data: existing } = await supabase.from("echo_conversations")
@@ -817,15 +831,12 @@ export default function BooksPage() {
     } catch(e) { console.error("[Books convo save]", e); }
   }, []);
 
-  // Charger convo Echo au démarrage
   useEffect(() => {
     const uid = userIdRef.current;
-    // localStorage d'abord
     try {
       const raw = localStorage.getItem(getEchoConvoKey(uid));
       if (raw) { const msgs = JSON.parse(raw); if (msgs?.length) setEchoMessages(msgs); }
     } catch {}
-    // Supabase en arrière-plan
     if (uid) {
       supabase.from("echo_conversations")
         .select("messages").eq("user_id", uid).eq("source", "books_chat").maybeSingle()
@@ -833,19 +844,15 @@ export default function BooksPage() {
           if (data?.messages?.length) setEchoMessages(data.messages as BookMessage[]);
         });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoaded]);
 
-  // Guard anti double-consume quota (React StrictMode)
   const quotaConsumedRef = useRef(false);
 
   const sendEcho = async () => {
     if ((!echoInput.trim() && !imageBase64) || echoThinking) return;
 
-    // Vérif sans consommer
     const quotaCheck = checkQuota("vitality_actions", safeTier, false, userId);
     if (!quotaCheck.allowed) { triggerQuotaPopup(fr ? "Books" : "Books"); return; }
-    // Consomme une seule fois avec guard
     if (!quotaConsumedRef.current) {
       quotaConsumedRef.current = true;
       checkQuota("vitality_actions", safeTier, true, userId);
@@ -964,13 +971,122 @@ export default function BooksPage() {
     else editor?.chain().focus().unsetTextAlign().run();
   };
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => { if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setIsSettingsOpen(false); };
-    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
-  }, []);
+  const handleGoogleConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/books`, scopes: "openid profile email", queryParams: { prompt: "select_account" } },
+    });
+  };
 
+  const handleMicrosoftConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: { redirectTo: `${window.location.origin}/books`, scopes: "openid profile email User.Read" },
+    });
+  };
+
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      setShowStripeModal(false);
+      setShowSignInModal(true);
+      return;
+    }
+
+    setIsCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: "world_advantage",
+          currency: currency.toUpperCase(),
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
+      }
+    } catch {
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
+    } finally {
+      setIsCheckoutLoading(false);
+    }
+  };
+
+  const handleEmailSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSignInError(null);
+    if (!email.trim() || !password.trim()) {
+      setSignInError(fr ? "Veuillez entrer vos identifiants." : "Please enter your credentials.");
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) {
+      setSignInError(error.message);
+    } else {
+      setShowSignInModal(false);
+      clearInputs();
+    }
+  };
+
+  const startResendCountdown = () => {
+    setResendCountdown(120);
+    const interval = setInterval(() => {
+      setResendCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleEmailSignUp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSignUpError(null);
+    setSignUpSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setSignUpError(fr ? "Veuillez entrer un courriel et un mot de passe." : "Please enter an email and password.");
+      return;
+    }
+    const trimmedEmail = email.trim();
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/books` },
+    });
+
+    if (error) {
+      setSignUpError(error.message);
+    } else {
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setSignUpError(fr ? "Un compte avec ce courriel existe déjà." : "An account with this email already exists.");
+        return;
+      }
+      setResendEmail(trimmedEmail);
+      setSignUpSuccess(
+        fr
+          ? "Lien de confirmation envoyé ! Veuillez vérifier votre boîte de réception ainsi que vos indésirables."
+          : "Confirmation link sent! Please check your inbox and spam folder."
+      );
+      startResendCountdown();
+    }
+  };
+
+  const clearInputs = () => {
+    setEmail("");
+    setPassword("");
+    setSignInError(null);
+    setSignUpError(null);
+    setSignUpSuccess(null);
+  };
+
+  const isSettingsOpen = false;
   const saveLabel = { saved:{dot:"bg-emerald-400",text:T.saved}, saving:{dot:"bg-amber-400 animate-pulse",text:T.saving}, unsaved:{dot:"bg-zinc-500",text:T.unsaved} }[saveStatus];
   const currentChapter = chapters.find(c => c.id === activeChapter);
   const currentContent = currentChapter?.content || "";
@@ -988,7 +1104,6 @@ export default function BooksPage() {
     </button>
   );
 
-  // ── PRESENT MODE ──────────────────────────────────────────────────────────
   if (view === "present") return (
     <div className="fixed inset-0 bg-black flex flex-col z-50">
       <div className="flex items-center justify-between px-8 py-3 border-b border-zinc-800">
@@ -1017,130 +1132,87 @@ export default function BooksPage() {
   );
 
   return (
-    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
+    <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex flex-col overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
 
-      {/* ── MODAL REMISE EN CONTEXTE ──────────────────────────── */}
-      {showRecontextModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4">
-            <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
-              <span className="text-lg">📖</span>
-              <h3 className="font-black text-sm font-mono uppercase tracking-widest text-zinc-200">{T.recontextBtn}</h3>
-            </div>
-            <p className="text-zinc-300 text-sm leading-relaxed">{T.recontextWarning}</p>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setShowRecontextModal(false)}
-                className="flex-1 py-2 rounded-xl border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-800 transition-all">
-                {T.recontextCancel}
-              </button>
-              <button onClick={handleRecontext}
-                className="flex-1 py-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 font-bold text-sm hover:bg-cyan-500/20 transition-all">
-                {T.recontextConfirm}
-              </button>
-            </div>
+      {/* ── HEADER ULTRA-MINCE UNIFIÉ DE L'ÉCOSYSTÈME ── */}
+      <header className="border-b border-zinc-100 dark:border-zinc-900 bg-white dark:bg-zinc-950 px-4 py-2 shrink-0 z-40">
+        <div className="max-w-full mx-auto flex justify-between items-center relative">
+          
+          <div className="flex items-center gap-3">
+            <Link
+              href="/outil"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black text-[11px] uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(6,182,212,0.4)] animate-pulse"
+            >
+              ⚡ {fr ? "RETOUR AUX OUTILS" : "BACK TO TOOLS"}
+            </Link>
+            <Link href="/outil" className="text-xs font-mono font-black tracking-[0.2em] text-zinc-900 dark:text-white uppercase">
+              ECHOSAI
+            </Link>
           </div>
-        </div>
-      )}
 
-      {/* ── MODAL INJECTION ───────────────────────────────────────── */}
-      {showInjectConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4 flex flex-col gap-4">
-            <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
-              <span className="text-lg">📝</span>
-              <h3 className="font-black text-sm font-mono uppercase tracking-widest text-zinc-200">{T.injectConfirmTitle}</h3>
+          <div className="flex items-center gap-3 text-xs font-mono relative">
+            <div className="flex border border-zinc-300 dark:border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100 dark:bg-zinc-900">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-2 py-0.5 font-bold transition-colors ${currency === c ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-950" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"}`}
+                >
+                  {c}
+                </button>
+              ))}
             </div>
-            <p className="text-zinc-300 text-sm leading-relaxed">{T.injectConfirmBody}</p>
-            <p className="text-red-400 text-xs font-semibold border border-red-500/30 bg-red-500/10 rounded-lg px-3 py-2 leading-relaxed">
-              ⚠️ {T.injectConfirmWarning}
-            </p>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => { setShowInjectConfirm(false); setPendingInjectText(null); }}
-                className="flex-1 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-bold text-sm hover:bg-emerald-500/20 transition-all">
-                {T.injectCancel}
-              </button>
-              <button onClick={confirmInject}
-                className="flex-1 py-2 rounded-xl border border-red-500/40 bg-red-500/10 text-red-400 font-bold text-sm hover:bg-red-500/20 transition-all">
-                {T.injectOk}
-              </button>
-            </div>
-            <div className="flex gap-2 border-t border-zinc-800 pt-3">
-              <button onClick={() => editor?.commands.undo()}
-                className="flex-1 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 text-xs hover:border-zinc-500 hover:text-zinc-200 transition-all">
-                {T.injectUndo}
-              </button>
-              <button onClick={() => editor?.commands.redo()}
-                className="flex-1 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 text-xs hover:border-zinc-500 hover:text-zinc-200 transition-all">
-                {T.injectRedo}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
-
-      {/* ── POPUP CONNEXION (non connecté seulement) ──────────────────────── */}
-      {showLoginPopup && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center pb-12 sm:items-center sm:pb-0">
-          {/* Overlay transparent — bloque les clics sans flouter */}
-          <div className="absolute inset-0 pointer-events-auto" style={{background:"transparent"}} />
-          <div className="relative pointer-events-auto bg-zinc-950/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_40px_rgba(6,182,212,0.25)] p-7 w-full max-w-md mx-4 flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {/* Header titre + menu langue */}
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">📚</span>
-                <h3 className="font-black text-base font-mono uppercase tracking-widest text-cyan-400">
-                  {T.loginPopupTitle}
-                </h3>
+            {isPaidTier ? (
+              <div className="flex items-center gap-2 px-3 py-1 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                <span className="font-bold text-[10px] uppercase tracking-wider">
+                  {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
+                </span>
               </div>
-              {/* Menu FR/EN directement dans le popup */}
-              <LangDropdown />
-            </div>
-            <div className="flex gap-4 items-start">
-              <div className="shrink-0 bg-zinc-900 p-1.5 rounded-full border border-zinc-800">
-                <img src="/echo1.png" alt="Echo" className="w-14 h-14 rounded-full object-cover"/>
+            ) : (
+              <div 
+                onClick={() => setShowStripeModal(true)} 
+                className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
+              >
+                <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse">
+                  ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                </span>
               </div>
-              <p className="text-zinc-300 text-sm leading-relaxed flex-1">
-                {T.loginPopupBody}
-              </p>
+            )}
+
+            <div className="flex border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px]">
+              <button onClick={() => setLang("fr")} className={`px-2 py-0.5 ${lang === "fr" ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 font-bold" : "bg-zinc-50 dark:bg-zinc-900 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
+              <button onClick={() => setLang("en")} className={`px-2 py-0.5 ${lang === "en" ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 font-bold" : "bg-zinc-50 dark:bg-zinc-900 text-zinc-400 hover:text-zinc-600"}`}>EN</button>
             </div>
-            <div className="flex flex-col gap-2 pt-1">
-              <Link href="/account"
-                className="w-full text-center py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold text-sm tracking-widest transition-all shadow-md uppercase">
-                {T.loginPopupBtn}
-              </Link>
-            </div>
+
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800">
+                  🟢 {user.email}
+                </span>
+                <button onClick={() => supabase.auth.signOut()} className="text-[10px] text-red-500 hover:text-red-700 font-bold uppercase">
+                  [ {fr ? "Déconnexion" : "Sign Out"} ]
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-1.5">
+                <button onClick={() => setShowSignInModal(true)} className="px-2.5 py-1 border border-zinc-900 dark:border-zinc-700 text-zinc-900 dark:text-white rounded-lg hover:bg-zinc-900 hover:text-white transition-all font-bold text-[10px]">
+                  {fr ? "Connexion" : "Sign In"}
+                </button>
+                <button onClick={() => setShowSignUpModal(true)} className="px-2.5 py-1 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 rounded-lg hover:bg-zinc-800 transition-all font-bold text-[10px]">
+                  {fr ? "S'inscrire" : "Sign Up"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </header>
 
-      <PremiumRequiredModal open={showPremiumModal} onClose={() => setShowPremiumModal(false)} />
+      {/* ── ATELIER D'ÉCRITURE & ÉDITEUR (ZONE PRINCIPALE SANS NAV GAUCHE) ── */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
 
-      {/* NAV */}
-      <aside className="w-44 shrink-0 border-r border-zinc-200 dark:border-zinc-800 px-5 py-6 bg-zinc-50 dark:bg-zinc-950 flex flex-col justify-between">
-        <div className="space-y-20">
-          <h2 className="font-bold"><Link href="/" className="text-cyan-600 dark:text-cyan-400">🏢{T.home}</Link></h2>
-          <div className="space-y-20 text-zinc-800 dark:text-zinc-100 font-medium text-sm">
-            <Link href="/chat"       className="block hover:text-cyan-500">💬{T.chat}</Link>
-            <Link href="/books"      className="block text-cyan-500 font-bold">📚{T.books}</Link>
-            <Link href="/calendar"   className="block hover:text-cyan-500">📅{T.calendar}</Link>
-            <Link href="/vitality"   className="block hover:text-cyan-500">📈{T.vitality}</Link>
-            <Link href="/services"   className="block hover:text-cyan-500">💎{T.services}</Link>
-            <Link href="/account"    className="block hover:text-cyan-500">👤{T.account}</Link>
-            <Link href="/horizonweb" className="block hover:text-cyan-500">📡HorizonWeb</Link>
-            <hr className="border-zinc-200 dark:border-zinc-800"/>
-            <Link href="/history"    className="block hover:text-amber-500">⭐{T.history}</Link>
-          </div>
-        </div>
-        <div className="text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-800 pt-3">
-          {T.mode} : <span className="text-cyan-500 dark:text-cyan-400 uppercase font-black tracking-wider block">{safeTier === "connected_free" ? (fr ? "Accès libre" : "FreeConnect") : safeTier}</span>
-        </div>
-      </aside>
-
-      <div className="flex flex-1 overflow-hidden min-h-0">
-
-        {/* TOOLBAR */}
+        {/* TOOLBAR VERTICALE D'ÉDITION */}
         <div className="w-[130px] shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col py-2 overflow-y-auto overflow-x-hidden">
           <div className="px-2 pb-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.struct}</div>
@@ -1224,7 +1296,7 @@ export default function BooksPage() {
           </div>
         </div>
 
-        {/* EDITOR ZONE */}
+        {/* BLOC CENTRAL DE RÉDACTION (PAGE ET PAPIER) */}
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="h-9 shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center px-3 gap-2">
             {(["edit","present"] as BookView[]).map(v => (
@@ -1277,18 +1349,10 @@ export default function BooksPage() {
                 </div>
               )}
             </div>
-            <div className="relative ml-1 shrink-0" ref={settingsRef}>
-              <button onClick={() => setIsSettingsOpen(v=>!v)} className="text-[10px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all flex items-center gap-1">
-                <svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><circle cx="7" cy="7" r="1.8"/><path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.9 2.9l1 1M10.1 10.1l1 1M2.9 11.1l1-1M10.1 3.9l1-1"/></svg>
-                <span className="font-mono text-[8px] bg-cyan-500/15 text-cyan-500 px-1 rounded uppercase">{fr?"FR":"EN"}</span>
+            <div className="relative ml-1 shrink-0">
+              <button onClick={toggleTheme} className="text-[10px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-cyan-400 transition-all font-mono">
+                {theme === "dark" ? "☀ Light" : "☾ Dark"}
               </button>
-              {isSettingsOpen && (
-                <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl p-2 flex flex-col gap-1 z-50">
-                  <div className="text-[9px] uppercase font-mono tracking-widest text-zinc-400 px-2 py-1 border-b border-zinc-100 dark:border-zinc-900">{T.settings}</div>
-                  <button onClick={toggleTheme} className="text-left px-2 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg transition-colors">{theme==="dark"?T.lightMode:T.darkMode}</button>
-                  <div className="px-2 py-1.5"><LangDropdown/></div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -1345,8 +1409,6 @@ export default function BooksPage() {
                   minHeight:`${pageCount * A4_H}px`,
                   paddingTop:"52px",
                   paddingBottom:"64px",
-                  // Miroir recto-verso : page 1,3,5... = marge gauche large; page 2,4,6... = marge droite large
-                  // On utilise currentPage pour alterner. Par défaut page 1 = recto (marge gauche 90, droite 60)
                   paddingLeft: mirrorMargins ? (currentPage % 2 === 1 ? "90px" : "60px") : "72px",
                   paddingRight: mirrorMargins ? (currentPage % 2 === 1 ? "60px" : "90px") : "72px",
                   ...pageBgStyle,
@@ -1416,12 +1478,14 @@ export default function BooksPage() {
           </div>
         </div>
 
+        {/* DRAGGER DE REDIMENSIONNEMENT AGENT ECHO */}
         {isDesktop && (
           <div onMouseDown={startResizeEcho} className="w-2.5 shrink-0 cursor-col-resize flex items-center justify-center group z-10">
             <div className="w-1 h-12 rounded-full bg-zinc-200 dark:bg-zinc-800 group-hover:bg-cyan-500 transition-colors"/>
           </div>
         )}
 
+        {/* PANNEAU AGENT ECHO (À DROITE) */}
         <aside style={isDesktop?{width:echoPanelWidth,flexBasis:echoPanelWidth}:undefined}
           className="w-72 shrink-0 border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col overflow-hidden">
           <div className="h-10 shrink-0 border-b border-zinc-200 dark:border-zinc-800 flex items-center px-3 gap-2">
@@ -1477,7 +1541,7 @@ export default function BooksPage() {
             </div>
           )}
           <div className="flex gap-1.5 px-2 pt-2 shrink-0">
-            <button type="button" onClick={() => isImageButtonLocked ? setShowPremiumModal(true) : imageFileInputRef.current?.click()}
+            <button type="button" onClick={() => isImageButtonLocked ? setShowStripeModal(true) : imageFileInputRef.current?.click()}
               className={`flex-1 h-7 rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 border transition-all ${isImageButtonLocked?"cursor-not-allowed bg-zinc-900 border-zinc-800 text-zinc-500":imageBase64?"bg-emerald-600/15 border-emerald-500/40 text-emerald-400":"bg-violet-600/10 border-violet-500/30 hover:bg-violet-600/20 text-violet-400"}`}>
               <span>{isImageButtonLocked?"🔒":imageBase64?"✓":"🖼️"}</span>
               <span>{isImageButtonLocked?(fr?"Image":"Image"):imageBase64?(fr?"Prête":"Ready"):(fr?"Image":"Image")}</span>
@@ -1495,6 +1559,186 @@ export default function BooksPage() {
         </aside>
       </div>
 
+      {/* ── MODALS STRIPE & AUTHENTIFICATION ── */}
+      {showStripeModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowStripeModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr ? "Débloquez l'accès illimité à l'ensemble des modules d'intelligence artificielle." : "Unlock unlimited access to all AI modules."}
+            </p>
+
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c ? "bg-amber-500 text-zinc-950 border-amber-400" : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
+              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ Sauvegarde permanente de vos livres</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
+            >
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
+                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mo)`)}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showSignInModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100">
+            <form onSubmit={handleEmailSignIn} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                </div>
+                <button type="button" onClick={() => { setShowSignInModal(false); clearInputs(); }} className="text-zinc-400 hover:text-white text-sm p-1">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              {signInError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {signInError}</div>}
+
+              <div className="space-y-3">
+                <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors">
+                {fr ? "Se connecter" : "Log in"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showSignUpModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100">
+            <form onSubmit={handleEmailSignUp} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Créer un compte" : "Create account"}</h2>
+                </div>
+                <button type="button" onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-white text-sm p-1">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              {signUpError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {signUpError}</div>}
+              {signUpSuccess && <div className="bg-emerald-950/50 border border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-400">✓ {signUpSuccess}</div>}
+
+              <div className="space-y-3">
+                <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors">
+                {fr ? "Créer mon compte" : "Create my account"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODALS RECONTEXTE & INJECTION */}
+      {showRecontextModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4">
+            <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
+              <span className="text-lg">📖</span>
+              <h3 className="font-black text-sm font-mono uppercase tracking-widest text-zinc-200">{T.recontextBtn}</h3>
+            </div>
+            <p className="text-zinc-300 text-sm leading-relaxed">{T.recontextWarning}</p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setShowRecontextModal(false)}
+                className="flex-1 py-2 rounded-xl border border-zinc-700 text-zinc-400 font-bold text-sm hover:bg-zinc-800 transition-all">
+                {T.recontextCancel}
+              </button>
+              <button onClick={handleRecontext}
+                className="flex-1 py-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 text-cyan-400 font-bold text-sm hover:bg-cyan-500/20 transition-all">
+                {T.recontextConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInjectConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4 flex flex-col gap-4">
+            <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
+              <span className="text-lg">📝</span>
+              <h3 className="font-black text-sm font-mono uppercase tracking-widest text-zinc-200">{T.injectConfirmTitle}</h3>
+            </div>
+            <p className="text-zinc-300 text-sm leading-relaxed">{T.injectConfirmBody}</p>
+            <p className="text-red-400 text-xs font-semibold border border-red-500/30 bg-red-500/10 rounded-lg px-3 py-2 leading-relaxed">
+              ⚠️ {T.injectConfirmWarning}
+            </p>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => { setShowInjectConfirm(false); setPendingInjectText(null); }}
+                className="flex-1 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-bold text-sm hover:bg-emerald-500/20 transition-all">
+                {T.injectCancel}
+              </button>
+              <button onClick={confirmInject}
+                className="flex-1 py-2 rounded-xl border border-red-500/40 bg-red-500/10 text-red-400 font-bold text-sm hover:bg-red-500/20 transition-all">
+                {T.injectOk}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
+
       <input ref={fileInputRef}  type="file" accept=".txt,.md,.markdown"      onChange={handleImportTxt}  className="hidden"/>
       <input ref={fontInputRef}  type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontImport} className="hidden"/>
       <input ref={insertImgRef}  type="file" accept="image/*"                 onChange={handleInsertImage} className="hidden"/>
@@ -1509,5 +1753,13 @@ export default function BooksPage() {
         [contenteditable="false"] { user-select:none; -webkit-user-select:none; cursor:default; pointer-events:none; }
       `}</style>
     </main>
+  );
+}
+
+export default function BooksPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-cyan-400 font-mono text-xs">Chargement...</div>}>
+      <BooksContent />
+    </Suspense>
   );
 }

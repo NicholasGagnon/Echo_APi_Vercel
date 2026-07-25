@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
 
@@ -8,6 +8,7 @@ import Link from "next/link";
 type Stage = "language" | "auth" | "continent" | "allegiance" | "chat";
 type Lang  = "fr" | "en" | "zh";
 type Continent = "na" | "cn" | "eu";
+type CurrencyCode = "CAD" | "USD" | "EUR" | "CNY";
 
 interface AIMessage {
   continent: Continent;
@@ -58,25 +59,6 @@ const SLOGANS: Record<Lang, { main: string; sub: string }> = {
   zh: {
     main: "三方势力，一个问题，没有简单答案。",
     sub:  "三大文明。一个真理待揭晓。",
-  },
-};
-
-// Slogans par continent — affichés sur chaque drapeau
-const CONTINENT_SLOGANS: Record<Continent, Record<Lang, string>> = {
-  na: {
-    fr: "3 Empires. 1 Question. Alliance ou Chaos ?",
-    en: "Three Powers. One Question. No Easy Answer.",
-    zh: "三方势力，一个问题，没有简单答案。",
-  },
-  cn: {
-    fr: "3 Empires. 1 Question. Alliance ou Chaos ?",
-    en: "Three Powers. One Question. No Easy Answer.",
-    zh: "三方势力，一个问题，没有简单答案。",
-  },
-  eu: {
-    fr: "3 Empires. 1 Question. Alliance ou Chaos ?",
-    en: "Three Powers. One Question. No Easy Answer.",
-    zh: "三方势力，一个问题，没有简单答案。",
   },
 };
 
@@ -242,7 +224,7 @@ const LANGS = [
   { code: "zh" as Lang, label: "中文",     sub: "中国 · 台湾 · 新加坡" },
 ];
 
-// ── BACKGROUND DRAPEAUX — visible sur toutes les pages ───────────────────────
+// ── BACKGROUND DRAPEAUX ───────────────────────────────────────────────────────
 const FlagBackground = ({ stage, continent }: { stage: Stage; continent: Continent | null }) => (
   <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
     {(Object.keys(CONTINENTS) as Continent[]).map((key, i) => {
@@ -254,7 +236,6 @@ const FlagBackground = ({ stage, continent }: { stage: Stage; continent: Contine
         { top: "0", left: "66.66%", width: "33.34%" },
       ];
       const pos = positions[i];
-      // Sur langue et auth — tous les 3 drapeaux égaux, subtils mais visibles
       const isLangOrAuth = stage === "language" || stage === "auth";
       return (
         <div key={key} className="absolute h-full transition-all duration-700"
@@ -272,13 +253,11 @@ const FlagBackground = ({ stage, continent }: { stage: Stage; continent: Contine
           }} />
       );
     })}
-    {/* Overlay gradient pour lisibilité */}
     <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/25 to-black/55" />
   </div>
 );
 
-// ── MAIN ──────────────────────────────────────────────────────────────────────
-export default function WorldPage() {
+function WorldContent() {
   const [user, setUser]               = useState<any>(null);
   const [stage, setStage]             = useState<Stage>("language");
   const [lang, setLang]               = useState<Lang>("fr");
@@ -290,17 +269,18 @@ export default function WorldPage() {
   const [isLoading, setIsLoading]     = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [sessions, setSessions]       = useState<DebateSession[]>([]);
-  // ── QUOTA ────────────────────────────────────────────────────────────────────
+
+  // ── QUOTA & DEVISE ───────────────────────────────────────────────────────────
   const [worldAvailable, setWorldAvailable] = useState(3);
   const [worldMax, setWorldMax]             = useState(3);
   const [worldTier, setWorldTier]           = useState<"free"|"advantage"|"premium">("free");
   const [showQuotaPopup, setShowQuotaPopup] = useState(false);
   const [showAuthInPopup, setShowAuthInPopup] = useState(false);
   const [nextRegenIn, setNextRegenIn]       = useState(0);
-  const [currency, setCurrency]             = useState("CAD");
-  const [anonQuestions, setAnonQuestions]   = useState(0); // questions posées sans compte
-  // ── DEVISE ───────────────────────────────────────────────────────────────────
-  const CURRENCIES = ["CAD","USD","EUR","CNY"];
+  const [currency, setCurrency]             = useState<CurrencyCode>("CAD");
+  const [anonQuestions, setAnonQuestions]   = useState(0);
+
+  const CURRENCIES: CurrencyCode[] = ["CAD","USD","EUR","CNY"];
   const PRICES: Record<string, {amount:string;symbol:string}> = {
     CAD: { amount:"9.99",  symbol:"CA$" },
     USD: { amount:"7.99",  symbol:"US$" },
@@ -313,7 +293,7 @@ export default function WorldPage() {
     EUR: { amount:"2.79",  symbol:"€"   },
     CNY: { amount:"21.00", symbol:"¥ CNY" },
   };
-  const [showSettings, setShowSettings] = useState(false);
+
   const [authMode, setAuthMode] = useState<"none" | "signin" | "signup">("none");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -326,8 +306,9 @@ export default function WorldPage() {
   const pseudoRef   = useRef<HTMLInputElement>(null);
 
   const t = copy[lang];
+  const isPaidTier = worldTier === "advantage" || worldTier === "premium";
 
-  // ── Persist ──────────────────────────────────────────────────────────────────
+  // ── Persist & Load ───────────────────────────────────────────────────────────
   useEffect(() => {
     const savedLang      = sessionStorage.getItem("world_lang")      as Lang | null;
     const savedContinent = sessionStorage.getItem("world_continent")  as Continent | null;
@@ -342,7 +323,6 @@ export default function WorldPage() {
       if (saved) setSessions(JSON.parse(saved));
     } catch {}
 
-    // Quota anonyme depuis localStorage
     try {
       const anonQ = parseInt(localStorage.getItem("world_anon_questions") || "0");
       setAnonQuestions(anonQ);
@@ -352,27 +332,21 @@ export default function WorldPage() {
       }
     } catch {}
 
-    // Restaurer les messages IMMÉDIATEMENT depuis localStorage
     try {
       const savedMsgs = localStorage.getItem("world_messages");
       if (savedMsgs) {
         const msgs = JSON.parse(savedMsgs);
-        if (msgs.length > 0) {
-          setMessages(msgs);
-        }
+        if (msgs.length > 0) setMessages(msgs);
       }
     } catch {}
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        // Charger pseudo depuis Supabase
         const { data: ps } = await supabase.from("world_pseudos")
           .select("pseudo").eq("user_id", session.user.id).maybeSingle();
         if (ps?.pseudo) { setPseudo(ps.pseudo); sessionStorage.setItem("world_pseudo", ps.pseudo); }
-        // Charger quota
         await loadWorldQuotaState(session.user.id);
-        // Charger historique des débats
         await loadDebatesFromSupabase(session.user.id);
         if (savedStage && savedStage !== "auth" && savedStage !== "language") {
           setStage(savedStage);
@@ -391,7 +365,6 @@ export default function WorldPage() {
         setUser(null);
         setStage("language");
         sessionStorage.removeItem("world_stage");
-        // Vider les messages au logout
         setMessages([]);
         try { localStorage.removeItem("world_messages"); } catch {}
       }
@@ -403,7 +376,7 @@ export default function WorldPage() {
   useEffect(() => { sessionStorage.setItem("world_lang", lang); }, [lang]);
   useEffect(() => { if (continent) sessionStorage.setItem("world_continent", continent); }, [continent]);
   useEffect(() => { sessionStorage.setItem("world_pseudo", pseudo); }, [pseudo]);
-  // Sauvegarder les messages au fur et à mesure
+
   useEffect(() => {
     if (messages.length > 0) {
       try { localStorage.setItem("world_messages", JSON.stringify(messages.filter(m => !m.loading))); }
@@ -415,7 +388,7 @@ export default function WorldPage() {
     bottomRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "instant" });
   }, [messages]);
 
-  // ── Email auth handlers ──────────────────────────────────────────────────────
+  // ── Auth Handlers ────────────────────────────────────────────────────────────
   const startResend = () => {
     setResendCountdown(30);
     const iv = setInterval(() => setResendCountdown(p => { if (p <= 1) { clearInterval(iv); return 0; } return p - 1; }), 1000);
@@ -427,7 +400,7 @@ export default function WorldPage() {
     setAuthLoading2(true);
     const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
     setAuthLoading2(false);
-    if (error) { setAuthError(error.message); }
+    if (error) setAuthError(error.message);
   };
 
   const handleEmailSignUp = async () => {
@@ -459,7 +432,6 @@ export default function WorldPage() {
     startResend();
   };
 
-  // ── Auth ──────────────────────────────────────────────────────────────────────
   const handleGoogle = async () => {
     setAuthLoading(true);
     await supabase.auth.signInWithOAuth({
@@ -476,7 +448,7 @@ export default function WorldPage() {
     });
   };
 
-  // ── Quota helpers ─────────────────────────────────────────────────────────────
+  // ── Quotas ───────────────────────────────────────────────────────────────────
   const loadWorldQuotaState = async (uid: string) => {
     try {
       const { data } = await supabase.from("world_quotas")
@@ -500,11 +472,9 @@ export default function WorldPage() {
   };
 
   const consumeWorldQuota = async (): Promise<boolean> => {
-    // Utilisateur non connecté — quota anonyme de 3 questions
     if (!user) {
       const newAnon = anonQuestions + 1;
       if (anonQuestions >= 3) {
-        // 3 questions épuisées — demander connexion pour 3 de plus
         setShowAuthInPopup(true);
         setShowQuotaPopup(true);
         return false;
@@ -525,7 +495,6 @@ export default function WorldPage() {
       }, { onConflict: "user_id" });
       return true;
     }
-    // Free — vérifier le stock + regen
     const { data } = await supabase.from("world_quotas")
       .select("*").eq("user_id", user.id).maybeSingle();
     const now = Date.now();
@@ -537,10 +506,9 @@ export default function WorldPage() {
       available = Math.min(3, (data.available || 0) + recovered);
       lastRegen = recovered > 0 ? now : new Date(data.last_regen).getTime();
     } else {
-      available = 3; // première fois
+      available = 3;
     }
     if (available < 1) {
-      // Calculer temps restant
       const elapsed = now - lastRegen;
       setNextRegenIn(3600000 - (elapsed % 3600000));
       setShowQuotaPopup(true);
@@ -566,16 +534,10 @@ export default function WorldPage() {
     return h > 0 ? `${h}h ${min}min` : `${min} min`;
   };
 
-  // ── Flow ──────────────────────────────────────────────────────────────────────
-  const selectLang = (l: Lang) => {
-    setLang(l);
-    setStage("continent"); // Plus d'auth obligatoire au départ
-  };
-
+  const selectLang = (l: Lang) => { setLang(l); setStage("continent"); };
   const selectContinent = (c: Continent) => { setContinent(c); setStage("allegiance"); };
 
   const confirmAllegiance = async () => {
-    // Sauvegarder pseudo dans Supabase
     if (user && pseudo.trim()) {
       await supabase.from("world_pseudos").upsert({
         user_id: user.id, pseudo: pseudo.trim(),
@@ -584,7 +546,6 @@ export default function WorldPage() {
     }
     setStage("chat");
     setTimeout(() => textareaRef.current?.focus(), 100);
-    // Warmup Flask en arrière-plan — réveille Render avant la première question
     fetch("/api/world/conversation", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -592,7 +553,6 @@ export default function WorldPage() {
     }).catch(() => {});
   };
 
-  // ── Save session ──────────────────────────────────────────────────────────────
   const saveSession = async (q: string, msgs: AIMessage[]) => {
     if (!continent || !user) return;
     const session: DebateSession = {
@@ -602,14 +562,12 @@ export default function WorldPage() {
       created_at: new Date().toISOString(),
     };
 
-    // localStorage
     setSessions(prev => {
       const updated = [session, ...prev].slice(0, 50);
       try { localStorage.setItem("world_sessions", JSON.stringify(updated)); } catch {}
       return updated;
     });
 
-    // Supabase — même pattern que les autres pages
     try {
       await supabase.from("world_debates").insert({
         id:         session.id,
@@ -620,13 +578,11 @@ export default function WorldPage() {
         messages:   session.messages,
         created_at: session.created_at,
       });
-      console.log("[WORLD] Session sauvegardée dans Supabase");
     } catch (e) {
       console.warn("[WORLD] Supabase save error:", e);
     }
   };
 
-  // Charger l'historique depuis Supabase au login
   const loadDebatesFromSupabase = async (uid: string) => {
     try {
       const { data, error } = await supabase
@@ -638,10 +594,8 @@ export default function WorldPage() {
 
       if (error) throw error;
       if (data && data.length > 0) {
-        // Reconstruire les messages de tous les débats en ordre
         const allMessages: AIMessage[] = [];
         for (const debate of data) {
-          // Séparateur entre débats
           if (allMessages.length > 0) {
             allMessages.push({
               continent: "na" as Continent,
@@ -655,17 +609,14 @@ export default function WorldPage() {
         }
         if (allMessages.length > 0) {
           setMessages(allMessages);
-          // Sync localStorage aussi
           try { localStorage.setItem("world_messages", JSON.stringify(allMessages)); } catch {}
         }
-        console.log(`[WORLD] ${data.length} débats chargés depuis Supabase`);
       }
     } catch (e) {
       console.warn("[WORLD] Chargement historique Supabase:", e);
     }
   };
 
-  // ── AI Call ───────────────────────────────────────────────────────────────────
   const callContinent = async (c: Continent, contextSoFar: string, isFinal: boolean, round: 1 | 2): Promise<string> => {
     try {
       const res = await fetch("/api/world/conversation", {
@@ -733,25 +684,22 @@ export default function WorldPage() {
     setIsLoading(false);
   };
 
-  // ── Shared: background flags always visible ───────────────────────────────────
   const myC = continent ? CONTINENTS[continent] : null;
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER: LANGUAGE — première page, slogan magistral
+  // RENDER: LANGUAGE
   // ══════════════════════════════════════════════════════════════════════════════
   if (stage === "language") return (
     <div className="fixed inset-0 bg-black flex flex-col overflow-hidden">
       <FlagBackground stage="language" continent={null} />
 
       <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 gap-8">
-        {/* Logo Echo + WORLD — gros et en haut */}
         <div className="flex items-center gap-4 -mt-8">
           <img src="/echo2.png" alt="Echo" className="w-16 h-16 rounded-2xl object-contain"
             style={{ filter: "drop-shadow(0 0 12px rgba(6,182,212,0.5))" }} />
           <span className="text-white font-black font-mono text-3xl tracking-widest">WORLD</span>
         </div>
 
-        {/* Sélecteur langue */}
         <div className="flex flex-col sm:flex-row gap-3 w-full max-w-xl">
           {LANGS.map(({ code, label, sub }) => (
             <button key={code} onClick={() => selectLang(code)}
@@ -779,7 +727,6 @@ export default function WorldPage() {
       <FlagBackground stage={stage} continent={continent} />
 
       <div className="relative z-10 flex flex-col items-center justify-center h-full px-4 gap-6">
-        {/* Slogan en arrière-plan haut */}
         <div className="text-center mb-2">
           <p className="font-black text-white/20 tracking-tight"
             style={{ fontSize: "clamp(1rem, 2.5vw, 1.5rem)" }}>
@@ -811,7 +758,6 @@ export default function WorldPage() {
               <span className="text-white text-sm font-medium flex-1 text-left">{t.microsoft}</span>
             </button>
 
-            {/* Boutons toggle signin/signup */}
             {authMode === "none" && (
               <div className="flex gap-2 pt-1">
                 <button onClick={() => { setAuthMode("signin"); setAuthError(null); setAuthSuccess(null); }}
@@ -825,7 +771,6 @@ export default function WorldPage() {
               </div>
             )}
 
-            {/* Formulaire email inline */}
             {authMode !== "none" && (
               <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between mb-1">
@@ -848,9 +793,6 @@ export default function WorldPage() {
                 {authSuccess && (
                   <div className="space-y-2">
                     <p className="text-emerald-400 text-xs font-mono px-1">✓ {authSuccess}</p>
-                    <p className="text-zinc-600 text-xs px-1">
-                      {lang === "fr" ? "📱 Gmail/Outlook: confirmez sur votre téléphone d'abord." : "📱 Gmail/Outlook: confirm on your phone first."}
-                    </p>
                     <button onClick={handleResend} disabled={resendCountdown > 0}
                       className="w-full py-2 rounded-xl text-xs font-mono border transition-all disabled:opacity-40"
                       style={{ borderColor: "#10b981", color: "#10b981" }}>
@@ -870,45 +812,28 @@ export default function WorldPage() {
                       : (lang === "fr" ? "Créer mon compte" : "Create account")}
                   </button>
                 )}
-                {authMode === "signin" && (
-                  <button onClick={() => { setAuthMode("signup"); setAuthError(null); }}
-                    className="w-full text-center text-zinc-600 hover:text-zinc-400 text-xs transition-colors">
-                    {lang === "fr" ? "Pas de compte ? Créer →" : "No account? Create →"}
-                  </button>
-                )}
-                {authMode === "signup" && (
-                  <button onClick={() => { setAuthMode("signin"); setAuthError(null); }}
-                    className="w-full text-center text-zinc-600 hover:text-zinc-400 text-xs transition-colors">
-                    {lang === "fr" ? "Déjà un compte ? Se connecter →" : "Already have one? Sign in →"}
-                  </button>
-                )}
               </div>
             )}
           </div>
-
-
         </div>
       </div>
     </div>
   );
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER: CONTINENT — 3 immenses boutons + slogan flottant
+  // RENDER: CONTINENT
   // ══════════════════════════════════════════════════════════════════════════════
   if (stage === "continent") return (
     <div className="fixed inset-0 bg-black flex flex-col">
 
-      {/* Slogan flottant PAR-DESSUS les drapeaux — disparaît au hover */}
       <div className="absolute inset-0 z-20 flex flex-col items-center justify-start pt-8 pointer-events-none transition-opacity duration-500"
         style={{ opacity: hovered ? 0 : 1 }}>
         <div className="flex items-center gap-2 mb-3">
           <img src="/echo2.png" alt="Echo" className="w-6 h-6 rounded object-contain opacity-60" />
           <span className="text-zinc-500 text-xs font-mono uppercase tracking-widest">WORLD</span>
         </div>
-        {/* Slogan — chaque segment avec le drapeau de son continent clipé dans les lettres */}
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 mb-2"
           style={{ fontSize: "clamp(1.6rem, 3.5vw, 2.8rem)" }}>
-          {/* "3 Empires." — drapeau USA */}
           <span className="font-black"
             style={{
               backgroundImage: "url(/usa.png)",
@@ -922,7 +847,6 @@ export default function WorldPage() {
             }}>
             {lang === "fr" ? "3 Empires." : lang === "en" ? "3 Empires." : "3个帝国。"}
           </span>
-          {/* "1 Question." — drapeau Chine */}
           <span className="font-black"
             style={{
               backgroundImage: "url(/chinoix.png)",
@@ -936,7 +860,6 @@ export default function WorldPage() {
             }}>
             {lang === "fr" ? "1 Question." : lang === "en" ? "1 Question." : "1个问题。"}
           </span>
-          {/* "Alliance ou Chaos ?" — drapeau Europe */}
           <span className="font-black"
             style={{
               backgroundImage: "url(/france.png)",
@@ -951,7 +874,6 @@ export default function WorldPage() {
             {lang === "fr" ? "Alliance ou Chaos ?" : lang === "en" ? "Alliance or Chaos?" : "联盟还是混沌？"}
           </span>
         </div>
-        {/* Bas — choisissez votre continent */}
         <div className="text-center px-6 pb-2">
           <p className="text-white font-black"
             style={{
@@ -965,7 +887,6 @@ export default function WorldPage() {
         </div>
       </div>
 
-      {/* 3 immenses boutons plein écran */}
       <div className="relative z-10 flex flex-row" style={{ height: "100%" }}>
         {(Object.keys(CONTINENTS) as Continent[]).map((key) => {
           const c = CONTINENTS[key];
@@ -981,7 +902,6 @@ export default function WorldPage() {
                 boxShadow: isHov ? `inset 0 0 80px ${c.glow}, 0 0 40px ${c.glow}` : "none",
               }}
             >
-              {/* Drapeau en fond plein — LA MAGIE */}
               <div className="absolute inset-0 transition-all duration-500"
                 style={{
                   backgroundImage: `url(${c.img})`,
@@ -990,17 +910,14 @@ export default function WorldPage() {
                   opacity: isHov ? 0.35 : 0.12,
                   filter: isHov ? "saturate(1.1)" : "saturate(0.2) brightness(0.5)",
                 }} />
-              {/* Scanlines */}
               <div className="absolute inset-0 pointer-events-none opacity-20"
                 style={{ background: "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.15) 2px,rgba(0,0,0,0.15) 4px)" }} />
-              {/* Lignes colorées top/bottom */}
               <div className="absolute inset-x-0 top-0 h-px transition-all duration-300"
                 style={{ background: isHov ? c.color : "transparent", boxShadow: isHov ? `0 0 8px ${c.color}` : "none" }} />
               <div className="absolute inset-x-0 bottom-0 h-px transition-all duration-300"
                 style={{ background: isHov ? c.color : "transparent", boxShadow: isHov ? `0 0 8px ${c.color}` : "none" }} />
 
               <div className="relative z-10 text-center px-4">
-                {/* Drapeau miniature au centre */}
                 <div className="mx-auto mb-4 overflow-hidden transition-all duration-300"
                   style={{
                     width: isHov ? 110 : 80, height: isHov ? 72 : 52,
@@ -1043,13 +960,11 @@ export default function WorldPage() {
         <FlagBackground stage={stage} continent={continent} />
 
         <div className="relative z-10 w-full max-w-md text-center">
-          {/* Logo */}
           <div className="flex items-center justify-center gap-2 mb-4">
             <img src="/echo2.png" alt="Echo" className="w-6 h-6 rounded object-contain opacity-70" />
             <span className="text-zinc-600 text-xs font-mono uppercase tracking-widest">WORLD</span>
           </div>
 
-          {/* Drapeau grand */}
           <div className="mx-auto mb-4 overflow-hidden rounded-xl"
             style={{ width: 120, height: 78, border: `2px solid ${c.color}`, boxShadow: `0 0 30px ${c.glow}` }}>
             <img src={c.img} alt={c.label[lang]} className="w-full h-full object-cover" />
@@ -1070,7 +985,6 @@ export default function WorldPage() {
             <p className="text-zinc-300 text-sm leading-relaxed mb-4">
               {t.allegianceDesc(c.label[lang])}
             </p>
-            {/* Pseudo */}
             <label className="text-xs font-mono uppercase tracking-wider mb-1.5 block" style={{ color: c.color }}>
               {t.enterPseudo}
             </label>
@@ -1113,187 +1027,93 @@ export default function WorldPage() {
     <div className="fixed inset-0 bg-black flex flex-col overflow-hidden">
       <FlagBackground stage={stage} continent={continent} />
 
-      {/* Topbar */}
-      <div className="relative z-30 shrink-0 border-b border-zinc-900/80 px-4 py-2 flex items-center justify-between bg-black/60 backdrop-blur-sm" style={{ overflow: "visible" }}>
-
-        {/* GAUCHE — Echo + WORLD + nav links */}
-        <div className="flex items-center gap-2">
-          {/* Echo logo débordant */}
-          <div className="relative shrink-0" style={{ width: 44, height: 44, marginTop: -8, marginBottom: -8 }}>
-            <img src="/echo2.png" alt="Echo"
-              className="absolute inset-0 w-full h-full object-contain rounded-xl"
-              style={{ filter: "drop-shadow(0 0 6px rgba(6,182,212,0.4))" }} />
+      {/* ── HEADER MINCE ET UNIFIÉ DE L'ÉCOSYSTÈME ── */}
+      <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md px-4 py-2 shrink-0 z-40 relative">
+        <div className="max-w-full mx-auto flex justify-between items-center relative">
+          
+          <div className="flex items-center gap-3">
+            <Link
+              href="/outil"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black text-[11px] uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(6,182,212,0.4)] animate-pulse"
+            >
+              ⚡ {lang === "fr" ? "RETOUR AUX OUTILS" : "BACK TO TOOLS"}
+            </Link>
+            <Link href="/outil" className="text-xs font-mono font-black tracking-[0.2em] text-white uppercase">
+              ECHOSAI WORLD
+            </Link>
           </div>
-          {/* WORLD sous l'image */}
-          <span className="text-white font-black font-mono text-sm leading-none">WORLD</span>
 
-          {/* Nav tuiles style Hall — 1 ligne horizontale, contour cyan visible, cachées Premium */}
-          {(worldTier === "free") && (
-            <div className="hidden xl:flex items-center gap-1 ml-2">
-              {t.navLinks.map((link: {label:string;href:string}) => (
-                <a key={link.href} href={link.href} target="_blank" rel="noopener noreferrer"
-                  className="px-2 py-1 rounded-md text-[10px] font-medium text-zinc-400 hover:text-white transition-all whitespace-nowrap"
-                  style={{
-                    background: "rgba(6,182,212,0.06)",
-                    border: "1px solid rgba(6,182,212,0.3)",
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(6,182,212,0.15)"; e.currentTarget.style.borderColor = "rgba(6,182,212,0.6)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(6,182,212,0.06)"; e.currentTarget.style.borderColor = "rgba(6,182,212,0.3)"; }}
+          <div className="flex items-center gap-3 text-xs font-mono relative">
+            <div className="flex border border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-900">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-2 py-0.5 font-bold transition-colors ${currency === c ? "bg-white text-zinc-950" : "text-zinc-400 hover:text-white"}`}
                 >
-                  {link.label}
-                </a>
+                  {c}
+                </button>
               ))}
             </div>
-          )}
-        </div>
 
-        {/* DROITE — Connexion/Email · Pseudo+drapeau · Premium · ⚙️ */}
-        <div className="flex items-center gap-2 shrink-0">
-
-          {/* Bouton Se connecter (non connecté) ou Email (connecté) */}
-          {user ? (
-            <span className="hidden sm:block text-zinc-700 text-xs font-mono">
-              {user.email.split("@")[0].slice(0, 4)}xxxx@{user.email.split("@")[1]}
-            </span>
-          ) : (
-            <button onClick={() => { setShowAuthInPopup(true); setShowQuotaPopup(true); }}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-all shrink-0"
-              style={{
-                background: "rgba(6,182,212,0.1)",
-                border: "1px solid rgba(6,182,212,0.4)",
-                color: "#22d3ee",
-              }}>
-              {lang === "fr" ? "Se connecter" : lang === "en" ? "Sign in" : "登录"}
-            </button>
-          )}
-
-          {/* Pseudo + drapeau */}
-          {myC && (
-            <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setStage("allegiance")}>
-              <div className="overflow-hidden rounded shrink-0" style={{ width: 24, height: 16, border: `1px solid ${myC.color}60` }}>
-                <img src={myC.img} alt={myC.label[lang]} className="w-full h-full object-cover" />
+            {isPaidTier ? (
+              <div className="flex items-center gap-2 px-3 py-1 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                <span className="font-bold text-[10px] uppercase tracking-wider">
+                  ✓ {lang === "fr" ? "PLAN PREMIUM ACTIF" : "PREMIUM ACTIVE"}
+                </span>
               </div>
-              <span className="text-xs font-mono hidden sm:block"
-                style={{ color: myC.color }}>
-                {pseudo || myC.label[lang]}
-              </span>
+            ) : (
+              <div 
+                onClick={() => setShowQuotaPopup(true)} 
+                className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
+              >
+                <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse">
+                  ★ PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                </span>
+              </div>
+            )}
+
+            <div className="flex border border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px]">
+              <button onClick={() => setLang("fr")} className={`px-2 py-0.5 ${lang === "fr" ? "bg-white text-zinc-950 font-bold" : "bg-zinc-900 text-zinc-400 hover:text-zinc-200"}`}>FR</button>
+              <button onClick={() => setLang("en")} className={`px-2 py-0.5 ${lang === "en" ? "bg-white text-zinc-950 font-bold" : "bg-zinc-900 text-zinc-400 hover:text-zinc-200"}`}>EN</button>
+              <button onClick={() => setLang("zh")} className={`px-2 py-0.5 ${lang === "zh" ? "bg-white text-zinc-950 font-bold" : "bg-zinc-900 text-zinc-400 hover:text-zinc-200"}`}>ZH</button>
             </div>
-          )}
 
-          {/* Quota count — free seulement */}
-          {worldTier === "free" && (
-            <span className="text-xs font-mono hidden sm:block" style={{ color: worldAvailable === 0 ? "#ef4444" : "#52525b" }}>
-              {worldAvailable}/{worldMax}
-            </span>
-          )}
-
-          {/* Bouton Premium / Advantage / Active */}
-          {worldTier === "free" ? (
-            <button onClick={() => setShowQuotaPopup(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold font-mono uppercase tracking-wider transition-all shrink-0"
-              style={{
-                background: "linear-gradient(135deg, #f59e0b20, #ef444420)",
-                border: "1px solid #f59e0b50",
-                color: "#f59e0b",
-              }}>
-              ★ Premium
-            </button>
-          ) : worldTier === "advantage" ? (
-            <span className="flex items-center gap-1 text-xs font-bold font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg shrink-0"
-              style={{
-                background: "linear-gradient(135deg, #3b82f630, #2563eb 40%)",
-                border: "1px solid #3b82f670",
-                color: "#93c5fd",
-                boxShadow: "0 0 8px rgba(59,130,246,0.25)",
-              }}>
-              ✓ {lang === "fr" ? "Avantage" : lang === "en" ? "Advantage" : "优势"}
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-xs font-bold font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg shrink-0"
-              style={{
-                background: "linear-gradient(135deg, #10b98130, #059669 40%)",
-                border: "1px solid #10b98170",
-                color: "#6ee7b7",
-                boxShadow: "0 0 8px rgba(16,185,129,0.25)",
-              }}>
-              ✓ Premium
-            </span>
-          )}
-
-          {/* ⚙️ Settings dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowSettings(s => !s)}
-              className="w-8 h-8 flex items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 hover:border-zinc-600 transition-all text-zinc-500 hover:text-white text-sm"
-            >
-              ⚙
-            </button>
-
-            {showSettings && (
-              <>
-                {/* Menu — rendu EN PREMIER dans le DOM pour être au-dessus */}
-                <div className="fixed right-4 top-14 w-56 rounded-xl shadow-2xl overflow-hidden" style={{ zIndex: 99999, background: "#09090b", border: "1px solid #27272a" }}>
-                  {/* Email */}
-                  {user?.email && (
-                    <div className="px-4 py-2.5 border-b border-zinc-800">
-                      <p className="text-zinc-600 text-xs font-mono">
-                        {user.email.split("@")[0].slice(0, 4)}xxxx@{user.email.split("@")[1]}
-                      </p>
-                    </div>
-                  )}
-                  {/* Langue */}
-                  <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between">
-                    <span className="text-zinc-500 text-xs font-mono">{lang === "fr" ? "Langue" : lang === "en" ? "Language" : "语言"}</span>
-                    <div className="flex gap-1">
-                      {(["fr","en","zh"] as Lang[]).map(l => (
-                        <button key={l} onClick={() => { setLang(l); }}
-                          className="px-1.5 py-0.5 rounded text-xs font-mono transition-all"
-                          style={{
-                            background: lang === l ? (myC?.color || "#06b6d4") + "25" : "transparent",
-                            color: lang === l ? (myC?.color || "#06b6d4") : "#52525b",
-                            fontWeight: lang === l ? 700 : 400,
-                          }}>
-                          {l === "fr" ? "FR" : l === "en" ? "EN" : "中"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Devise */}
-                  <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between">
-                    <span className="text-zinc-500 text-xs font-mono">{lang === "fr" ? "Devise" : lang === "en" ? "Currency" : "货币"}</span>
-                    <select value={currency} onChange={e => setCurrency(e.target.value)}
-                      className="bg-transparent text-zinc-400 text-xs font-mono border-0 outline-none cursor-pointer">
-                      {CURRENCIES.map(c => <option key={c} value={c} className="bg-zinc-950">{c}</option>)}
-                    </select>
-                  </div>
-                  {/* Pseudo */}
-                  <button onClick={() => { setStage("allegiance"); setShowSettings(false); }}
-                    className="w-full px-4 py-2.5 text-left text-zinc-400 hover:text-white hover:bg-zinc-900 text-xs font-mono transition-colors border-b border-zinc-800">
-                    👤 {lang === "fr" ? "Changer de pseudo" : lang === "en" ? "Change handle" : "更改昵称"}
-                  </button>
-                  {/* Changer continent */}
-                  <button onClick={() => { setStage("continent"); setShowSettings(false); }}
-                    className="w-full px-4 py-2.5 text-left text-zinc-400 hover:text-white hover:bg-zinc-900 text-xs font-mono transition-colors border-b border-zinc-800">
-                    🌍 {lang === "fr" ? "Changer d'allégeance" : lang === "en" ? "Change allegiance" : "更换阵营"}
-                  </button>
-                  {/* Quitter */}
-                  <button onClick={() => { supabase.auth.signOut(); setShowSettings(false); }}
-                    className="w-full px-4 py-2.5 text-left text-red-600 hover:text-red-400 hover:bg-zinc-900 text-xs font-mono transition-colors">
-                    ⏏ {lang === "fr" ? "Quitter" : lang === "en" ? "Sign out" : "退出"}
-                  </button>
+            {myC && (
+              <div className="flex items-center gap-1.5 cursor-pointer bg-zinc-900 px-2 py-1 rounded-lg border border-zinc-800" onClick={() => setStage("allegiance")}>
+                <div className="overflow-hidden rounded shrink-0" style={{ width: 20, height: 14, border: `1px solid ${myC.color}60` }}>
+                  <img src={myC.img} alt={myC.label[lang]} className="w-full h-full object-cover" />
                 </div>
-              </>
+                <span className="text-[10px] font-mono hidden sm:block" style={{ color: myC.color }}>
+                  {pseudo || myC.label[lang]}
+                </span>
+              </div>
+            )}
+
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-800">
+                  🟢 {user.email}
+                </span>
+                <button onClick={() => supabase.auth.signOut()} className="text-[10px] text-red-500 hover:text-red-400 font-bold uppercase">
+                  [ {lang === "fr" ? "Déconnexion" : "Sign Out"} ]
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => { setShowAuthInPopup(true); setShowQuotaPopup(true); }} className="px-2.5 py-1 bg-white text-zinc-950 rounded-lg hover:bg-zinc-200 transition-all font-bold text-[10px]">
+                {lang === "fr" ? "Connexion" : "Sign In"}
+              </button>
             )}
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Messages */}
       <div className="relative z-10 flex-1 overflow-y-auto px-6 py-4 space-y-1">
         {messages.length === 0 && !isLoading && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center space-y-6">
-              {/* Slogan flottant dans le chat aussi */}
               <p className="font-black text-white/10 tracking-tight"
                 style={{ fontSize: "clamp(1.2rem, 3vw, 2rem)" }}>
                 {SLOGANS[lang].main}
@@ -1334,7 +1154,6 @@ export default function WorldPage() {
           const isMine = msg.continent === continent;
           const isSep = msg.text.startsWith("──");
 
-          // Séparateur entre débats
           if (isSep) return (
             <div key={idx} className="flex items-center gap-3 py-4">
               <div className="flex-1 h-px bg-zinc-900" />
@@ -1366,7 +1185,6 @@ export default function WorldPage() {
                   paddingLeft: "14px",
                 }}>
                 <div className="flex items-center gap-2 mb-1.5">
-                  {/* Miniature drapeau */}
                   <div className="shrink-0 overflow-hidden"
                     style={{
                       width: 38, height: 25, borderRadius: "4px",
@@ -1380,7 +1198,6 @@ export default function WorldPage() {
                     {c.label[lang]}
                   </span>
                   <span className="text-zinc-800 text-xs font-mono">· {msg.round}</span>
-                  {/* Signature discrète — toujours visible */}
                   <span className="font-mono" style={{ color: c.color, opacity: 0.65, fontSize: "9px", letterSpacing: "0.04em" }}>
                     🛰️ {lang === "zh"
                       ? (msg.continent === "cn" ? "真实AI · 中国" : msg.continent === "na" ? "真实AI · 北美洲" : "真实AI · 欧洲")
@@ -1409,17 +1226,6 @@ export default function WorldPage() {
                           : (msg.continent === "cn" ? "Real AI · China. Connection established." : msg.continent === "na" ? "Real AI · North America. Connection established." : "Real AI · Europe. Connection established.")}
                       </span>
                     </div>
-                    {/* Warmup message — seulement sur le 1er message */}
-                    {messages.filter(m => !m.loading).length === 0 && messages.indexOf(msg) === 0 && (
-                      <span className="font-mono animate-pulse"
-                        style={{ color: "#52525b", fontSize: "9px", letterSpacing: "0.05em" }}>
-                        {lang === "fr"
-                          ? "⚡ Réveil des serveurs IA — première connexion plus lente..."
-                          : lang === "en"
-                          ? "⚡ Waking up AI servers — first connection may be slower..."
-                          : "⚡ 正在唤醒AI服务器 — 首次连接可能较慢..."}
-                      </span>
-                    )}
                   </div>
                 ) : (
                   <p className="text-sm leading-relaxed"
@@ -1440,16 +1246,14 @@ export default function WorldPage() {
 
       {/* ── POP-UP QUOTA ── */}
       {showQuotaPopup && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4" style={{ zIndex: 999999 }}>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[999999]">
           <div className="relative w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
-            {/* Logo */}
             <div className="flex items-center justify-center gap-2 mb-4">
               <img src="/echo2.png" alt="Echo" className="w-5 h-5 rounded object-contain opacity-70" />
               <span className="text-zinc-500 text-xs font-mono uppercase tracking-widest">WORLD</span>
             </div>
 
             {showAuthInPopup ? (
-              /* ── MODE CONNEXION — après 3 questions anon ── */
               <div className="space-y-3">
                 <div className="text-center mb-3">
                   <div className="text-2xl mb-2">🎁</div>
@@ -1470,50 +1274,12 @@ export default function WorldPage() {
                   <MicrosoftLogo />
                   <span className="text-white text-sm font-medium flex-1 text-left">{t.microsoft}</span>
                 </button>
-                {authMode === "none" && (
-                  <div className="flex gap-2">
-                    <button onClick={() => { setAuthMode("signin"); setAuthError(null); }}
-                      className="flex-1 py-2 rounded-xl border border-zinc-700 text-zinc-400 hover:text-white text-xs font-mono transition-all">
-                      ✉ {t.email}
-                    </button>
-                    <button onClick={() => { setAuthMode("signup"); setAuthError(null); }}
-                      className="flex-1 py-2 rounded-xl border border-cyan-500/20 text-cyan-500 text-xs font-mono transition-all">
-                      {t.signup}
-                    </button>
-                  </div>
-                )}
-                {authMode !== "none" && (
-                  <div className="space-y-2">
-                    <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)}
-                      placeholder={lang === "fr" ? "Courriel" : "Email"}
-                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-white placeholder-zinc-600 outline-none" />
-                    <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter") authMode === "signin" ? handleEmailSignIn() : handleEmailSignUp(); }}
-                      placeholder={lang === "fr" ? "Mot de passe" : "Password"}
-                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-white placeholder-zinc-600 outline-none" />
-                    {authError && <p className="text-red-400 text-xs">{authError}</p>}
-                    {authSuccess && <p className="text-emerald-400 text-xs">✓ {authSuccess}</p>}
-                    <button onClick={authMode === "signin" ? handleEmailSignIn : handleEmailSignUp}
-                      disabled={authLoading2}
-                      className="w-full py-2 rounded-xl text-sm font-bold text-white transition-all"
-                      style={{ background: "#0891b2" }}>
-                      {authLoading2 ? "..." : authMode === "signin"
-                        ? (lang === "fr" ? "Se connecter" : lang === "en" ? "Sign in" : "登录")
-                        : (lang === "fr" ? "Créer mon compte" : lang === "en" ? "Create account" : "创建账户")}
-                    </button>
-                    <button onClick={() => { setAuthMode("none"); setAuthError(null); }}
-                      className="w-full text-center text-zinc-700 text-xs transition-colors">
-                      ← {lang === "fr" ? "Retour" : lang === "en" ? "Back" : "返回"}
-                    </button>
-                  </div>
-                )}
                 <button onClick={() => { setShowQuotaPopup(false); setShowAuthInPopup(false); setAuthMode("none"); }}
                   className="w-full py-2 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors text-center mt-1">
                   {lang === "fr" ? "Fermer" : lang === "en" ? "Close" : "关闭"}
                 </button>
               </div>
             ) : (
-              /* ── MODE PLANS — limite atteinte ── */
               <div className="text-center">
                 {worldAvailable === 0 ? (
                   <div className="mb-4">
@@ -1599,5 +1365,13 @@ export default function WorldPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function WorldPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-cyan-400 font-mono text-xs">Chargement...</div>}>
+      <WorldContent />
+    </Suspense>
   );
 }

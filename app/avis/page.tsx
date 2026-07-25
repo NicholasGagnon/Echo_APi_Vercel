@@ -1,103 +1,39 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import React, { useState, useRef, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
 
-type Lang = "fr" | "en";
+export const dynamic = "force-dynamic";
 
-const T = {
-  fr: {
-    tagline: "Ne vous faites pas avoir. Achetez intelligemment.",
-    sub1: "Le vrai visage d'un produit, en quelques secondes.",
-    sub2: "Collez un lien Web et découvrez ce qu'il vaut vraiment.",
-    placeholder: "https://www.amazon.ca/... ou walmart.ca/...",
-    analyse: "Analyser",
-    analysing: "Analyser…",
-    loading: "Recherche en cours, peut prendre quelques secondes…",
-    empty: "Colle un lien produit ci-dessus",
-    pos: "5 Points Forts Réels",
-    neg: "5 Pires Défauts Cachés",
-    amazon: "Trouver sur Amazon",
-    amzBiz: "Offres du Jour Amazon",
-    amzAffiliate: "Nouveaux produits recommandés",
-    chatPh: "Pose une question sur ce produit…",
-    chatWelcome: "Analyse terminée pour",
-    chatWelcome2: ". Pose-moi une question.",
-    chatErr: "Erreur de connexion.",
-    donTitle: "Soutenir le projet",
-    donDesc: "Cet outil est gratuit. Si il t'a sauvé d'un mauvais achat, un petit geste est bienvenu.",
-    donBtn: "Faire un don ▼",
-    donClose: "Fermer ▲",
-    accountTitle: "Mon compte Echo",
-    google: "Google",
-    microsoft: "Microsoft",
-    signin: "Se connecter",
-    signup: "Créer un compte",
-    connected: "Connecté",
-    myAccount: "Mon compte",
-    logout: "Se déconnecter",
-    modalSignin: "🛸 Connexion",
-    modalSignup: "🛸 Créer un compte",
-    switchToSignup: "Pas encore de compte ? Créer",
-    switchToSignin: "Déjà un compte ? Se connecter",
-    submitSignin: "Se connecter",
-    submitSignup: "Créer mon compte",
-    dark: "☾",
-    light: "☀",
-    footer: "© Anti-Bullshit Reviews",
-    errPrefix: "Erreur",
-  },
-  en: {
-    tagline: "Don't Be Fooled. Buy Smart.",
-    sub1: "The real face of a product, in seconds.",
-    sub2: "Paste a web link and discover what it's really worth.",
-    placeholder: "https://www.amazon.ca/... or walmart.ca/...",
-    analyse: "Analyze",
-    analysing: "Analyzing…",
-    loading: "Search in progress, may take a few seconds…",
-    empty: "Paste a product link above",
-    pos: "5 Real Strengths",
-    neg: "5 Hidden Flaws",
-    amazon: "Find on Amazon",
-    amzBiz: "Amazon Daily Deals",
-    amzAffiliate: "Recommended new products",
-    chatPh: "Ask a question about this product…",
-    chatWelcome: "Analysis done for",
-    chatWelcome2: ". Ask me anything.",
-    chatErr: "Connection error.",
-    donTitle: "Support the project",
-    donDesc: "This tool is free. If it saved you from a bad purchase, a small contribution is welcome.",
-    donBtn: "Donate ▼",
-    donClose: "Close ▲",
-    accountTitle: "My Echo Account",
-    google: "Google",
-    microsoft: "Microsoft",
-    signin: "Sign in",
-    signup: "Create account",
-    connected: "Connected",
-    myAccount: "My account",
-    logout: "Sign out",
-    modalSignin: "🛸 Sign In",
-    modalSignup: "🛸 Create Account",
-    switchToSignup: "No account? Create one",
-    switchToSignin: "Already have an account? Sign in",
-    submitSignin: "Sign in",
-    submitSignup: "Create my account",
-    dark: "☾",
-    light: "☀",
-    footer: "© Anti-Bullshit Reviews",
-    errPrefix: "Error",
-  },
+const MicrosoftLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
+    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
+  </svg>
+);
+
+const GoogleLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+  </svg>
+);
+
+type CurrencyCode = "CAD" | "USD" | "EUR";
+
+const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
+const PRICES: Record<CurrencyCode, { amount: string; symbol: string }> = {
+  CAD: { amount: "3.99", symbol: "CA$" },
+  USD: { amount: "3.99", symbol: "US$" },
+  EUR: { amount: "3.99", symbol: "€" },
 };
-
-const DONATION_PLANS = [
-  { name: "Petit geste",  nameEn: "Small gesture", amount: "$1.50",  plan: "micro",   desc: "Comme une fiche", descEn: "Like a listing unlock" },
-  { name: "Avantage",  nameEn: "Advantage", amount: "$5.99",  plan: "basic",   desc: "Un café offert",        descEn: "Buy me a coffee" },
-  { name: "Premium",   nameEn: "Premium",   amount: "$9.99",  plan: "premium", desc: "Soutien réel",          descEn: "Real support" },
-  { name: "Ultra",     nameEn: "Ultra",     amount: "$19.99", plan: "ultra",   desc: "Généreux 💛",           descEn: "Generous 💛" },
-  { name: "Fondateur", nameEn: "Founder",   amount: "$99",    plan: "founder", desc: "Tu crois en nous",      descEn: "You believe in us" },
-];
 
 interface AnalysisResults {
   productName: string;
@@ -105,35 +41,49 @@ interface AnalysisResults {
   negatives: string[];
 }
 
-interface ChatMessage { sender: "user" | "ia"; text: string; }
+interface ChatMessage {
+  sender: "user" | "ia";
+  text: string;
+}
 
-export default function AvisPage() {
-  const [dark, setDark] = useState(false);
-  const [lang, setLang] = useState<Lang>("fr");
-  const [showLang, setShowLang] = useState(false);
+function AvisContent() {
+  const { lang, setLang } = useApp();
+  const fr = lang === "fr";
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [user, setUser] = useState<any>(null);
+  const [userTier, setUserTier] = useState<string>("free");
+
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<AnalysisResults | null>(null);
+
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
-  const [donOpen, setDonOpen] = useState(false);
-  const [donLoading, setDonLoading] = useState<string | null>(null);
-  const [donCurrency, setDonCurrency] = useState<"CAD"|"USD"|"EUR">("CAD");
-  const [showAuthPopup, setShowAuthPopup] = useState(false);
-  const [sessionId, setSessionId] = useState<string>("");
-  const [user, setUser] = useState<any>(null);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailMode, setEmailMode] = useState<"signin" | "signup">("signin");
+
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  const [currency, setCurrency] = useState<CurrencyCode>("CAD");
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signInSuccess, setSignInSuccess] = useState<string | null>(null);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
+  const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
+
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [resendEmail, setResendEmail] = useState("");
+  const [sessionId, setSessionId] = useState<string>("");
+
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const t = T[lang];
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -141,63 +91,61 @@ export default function AvisPage() {
 
   useEffect(() => {
     let sid = localStorage.getItem("avis_session_id");
-    if (!sid) { sid = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`; localStorage.setItem("avis_session_id", sid); }
+    if (!sid) {
+      sid = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem("avis_session_id", sid);
+    }
     setSessionId(sid);
 
-    const draftUrl = localStorage.getItem("avis_draft_url");
-    if (draftUrl) { setUrl(draftUrl); localStorage.removeItem("avis_draft_url"); }
-
-    const restoreAnalysis = async (currentUser: any) => {
-      try {
-        let query = supabase
-          .from("avis_analyses")
-          .select("data")
-          .order("updated_at", { ascending: false })
-          .limit(1);
-        if (currentUser) {
-          query = (query as any).eq("user_id", currentUser.id);
-        } else {
-          query = (query as any).eq("session_id", sid);
-        }
-        const { data, error } = await (query as any).maybeSingle();
-        if (!error && data?.data) {
-          const saved = data.data;
-          if (saved.url) setUrl(saved.url);
-          if (saved.results) setResults(saved.results);
-          if (saved.chatMessages) setChatMessages(saved.chatMessages);
-        }
-      } catch (e) {}
-    };
-
-    supabase.auth.getUser().then(({ data: authData }) => {
-      if (authData?.user) setUser(authData.user);
-      restoreAnalysis(authData?.user ?? null);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_, session) => {
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        const s = localStorage.getItem("avis_session_id");
-        if (s) {
-          await supabase.from("avis_analyses")
-            .update({ user_id: session.user.id })
-            .eq("session_id", s)
-            .is("user_id", null);
-        }
-        restoreAnalysis(session.user);
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
       }
     });
 
-    return () => listener.subscription.unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+      } else {
+        setUser(null);
+        setUserTier("free");
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const saved = localStorage.getItem("echo-currency") as "CAD"|"USD"|"EUR"|null;
-    if (saved) setDonCurrency(saved);
-    const onStorage = (e: StorageEvent) => { if (e.key === "echo-currency" && e.newValue) setDonCurrency(e.newValue as "CAD"|"USD"|"EUR"); };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  const verifierStatutUser = async (uid: string) => {
+    try {
+      const { data: cData } = await supabase
+        .from("contenu_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
+        setUserTier(cData.tier);
+        return;
+      }
+
+      const { data: wData } = await supabase
+        .from("world_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
+        setUserTier(wData.tier);
+        return;
+      }
+
+      setUserTier("free");
+    } catch (e) {
+      console.warn("Erreur verif statut:", e);
+    }
+  };
 
   const api = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
@@ -205,23 +153,28 @@ export default function AvisPage() {
     e.preventDefault();
     if (!url.trim()) return;
 
-    setLoading(true); setError(null); setResults(null); setChatMessages([]);
+    setLoading(true);
+    setError(null);
+    setResults(null);
+    setChatMessages([]);
+
     try {
       const res = await fetch(`${api}/api/analyse-avis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: url.trim(), lang }),
       });
-      if (!res.ok) throw new Error(`${t.errPrefix} ${res.status}`);
+
+      if (!res.ok) throw new Error(fr ? "Erreur serveur" : "Server error");
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+
       const name = data.product_name || "Produit";
-      setResults({
-        productName: name,
-        positives: Array.isArray(data.positives) ? data.positives.slice(0, 5) : [],
-        negatives: Array.isArray(data.negatives) ? data.negatives.slice(0, 5) : [],
-      });
-      setChatMessages([{ sender: "ia", text: `${t.chatWelcome} **${name}**${t.chatWelcome2}` }]);
+      const pos = Array.isArray(data.positives) ? data.positives.slice(0, 5) : [];
+      const neg = Array.isArray(data.negatives) ? data.negatives.slice(0, 5) : [];
+
+      setResults({ productName: name, positives: pos, negatives: neg });
+      setChatMessages([{ sender: "ia", text: fr ? `Analyse terminée pour **${name}**. Posez-moi une question !` : `Analysis completed for **${name}**. Ask me any question!` }]);
 
       try {
         const sid = sessionId || localStorage.getItem("avis_session_id");
@@ -231,19 +184,15 @@ export default function AvisPage() {
           session_id: sid,
           data: {
             url: url.trim(),
-            results: {
-              productName: name,
-              positives: Array.isArray(data.positives) ? data.positives.slice(0, 5) : [],
-              negatives: Array.isArray(data.negatives) ? data.negatives.slice(0, 5) : [],
-            },
-            chatMessages: [{ sender: "ia", text: `${t.chatWelcome} **${name}**${t.chatWelcome2}` }],
+            results: { productName: name, positives: pos, negatives: neg },
+            chatMessages: [{ sender: "ia", text: fr ? `Analyse terminée pour **${name}**.` : `Analysis finished for **${name}**.` }],
           },
           updated_at: new Date().toISOString(),
         }, { onConflict: "id" });
       } catch (e) {}
 
     } catch (err: any) {
-      setError(err.message || "Erreur inattendue.");
+      setError(err.message || (fr ? "Erreur inattendue." : "Unexpected error."));
     } finally {
       setLoading(false);
     }
@@ -256,590 +205,536 @@ export default function AvisPage() {
     setChatInput("");
     setChatMessages(p => [...p, { sender: "user", text: q }]);
     setChatLoading(true);
+
     try {
       const res = await fetch(`${api}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: lang === "fr"
-            ? `Question sur "${results.productName}" : "${q}". Points forts : ${results.positives.join(", ")}. Défauts : ${results.negatives.join(", ")}. Réponds en français, de façon directe et courte.`
-            : `Question about "${results.productName}": "${q}". Strengths: ${results.positives.join(", ")}. Flaws: ${results.negatives.join(", ")}. Answer in English, directly and concisely.`,
-          userTier: "connected_free",
+          message: fr
+            ? `Question sur "${results.productName}" : "${q}". Points forts : ${results.positives.join(", ")}. Défauts : ${results.negatives.join(", ")}. Réponds en français, directement.`
+            : `Question regarding "${results.productName}": "${q}". Strengths: ${results.positives.join(", ")}. Flaws: ${results.negatives.join(", ")}. Answer directly in English.`,
+          userTier: isPaidTier ? "premium" : "free",
           history: [],
         }),
       });
       const data = await res.json();
-      setChatMessages(p => [...p, { sender: "ia", text: data.response || t.chatErr }]);
+      setChatMessages(p => [...p, { sender: "ia", text: data.response || (fr ? "Erreur de connexion." : "Connection error.") }]);
     } catch {
-      setChatMessages(p => [...p, { sender: "ia", text: t.chatErr }]);
+      setChatMessages(p => [...p, { sender: "ia", text: fr ? "Erreur de connexion." : "Connection error." }]);
     } finally {
       setChatLoading(false);
     }
   };
 
-  const handleDon = async (plan: string) => {
-    setDonLoading(plan);
+  const handleGoogleConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/avis`, scopes: "openid profile email", queryParams: { prompt: "select_account" } },
+    });
+  };
+
+  const handleMicrosoftConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: { redirectTo: `${window.location.origin}/avis`, scopes: "openid profile email User.Read" },
+    });
+  };
+
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      setShowPremiumModal(false);
+      setShowSignInModal(true);
+      return;
+    }
+
+    setIsCheckoutLoading(true);
     try {
-      // Le palier "micro" (1,50$) passe par la même route que l'unlock fiche
-      // (price_data inline, montant fixe peu importe la devise).
-      const endpoint = plan === "micro" ? "/api/stripe/create-checkout-site2" : "/api/stripe/create-checkout";
-      const res = await fetch(endpoint, {
+      const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan, userId: user?.id || "guest_don", userEmail: user?.email || "don@echosai.ca", currency: donCurrency }),
+        body: JSON.stringify({
+          plan: "world_advantage",
+          currency: currency.toUpperCase(),
+          userId: user.id,
+          userEmail: user.email,
+        }),
       });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch { alert("Erreur Stripe, réessaie."); }
-    finally { setDonLoading(null); }
-  };
-
-  const saveBeforeRedirect = () => { if (url.trim()) localStorage.setItem("avis_draft_url", url); };
-  const handleGoogle = async () => {
-    saveBeforeRedirect();
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/avis`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } });
-  };
-  const handleMicrosoft = async () => {
-    saveBeforeRedirect();
-    await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/avis`, scopes: "openid profile email User.Read" } });
-  };
-  const handleLogout = async () => { await supabase.auth.signOut(); setUser(null); setShowUserMenu(false); };
-
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null); setAuthSuccess(null);
-    if (emailMode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) setAuthError(error.message);
-      else { setShowEmailModal(false); router.push("/avis"); }
-    } else {
-      const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: `${window.location.origin}/avis` } });
-      if (error) setAuthError(error.message);
-      else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError(lang === "fr" ? "Un compte avec cet e-mail existe déjà." : "An account with this email already exists.");
-      else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(fr ? "Erreur de redirection." : "Redirection error.");
+      }
+    } catch {
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
+    } finally {
+      setIsCheckoutLoading(false);
     }
   };
 
-  // ── TOKENS — couleurs Avis inchangées ───────────────────────────────────────
-  const bg    = dark ? "#1a1917" : "#f0ece4";
-  const surf  = dark ? "#242220" : "#fffdf9";
-  const surf2 = dark ? "#2d2b28" : "#f5f1e8";
-  const bord  = dark ? "#3a3835" : "#e2ddd5";
-  const txt   = dark ? "#f0ece4" : "#1a1917";
-  const muted = dark ? "#8a8680" : "#7a7570";
-  const acc   = "#e07b39";
+  const handleEmailSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSignInError(null);
+    if (!email.trim() || !password.trim()) {
+      setSignInError(fr ? "Veuillez entrer vos identifiants." : "Please enter credentials.");
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) {
+      setSignInError(error.message);
+    } else {
+      setShowSignInModal(false);
+      clearInputs();
+    }
+  };
 
-  const btn = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-    width: "100%", padding: "8px 10px", border: `1px solid ${bord}`,
-    borderRadius: 9, cursor: "pointer", fontSize: 11, fontWeight: 600,
-    background: surf2, color: txt, transition: "border-color .2s", ...extra,
-  });
+  const startResendCountdown = () => {
+    setResendCountdown(120);
+    const interval = setInterval(() => {
+      setResendCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
-  const AMAZON_GOLDBOX = "https://www.amazon.ca/-/fr/gp/goldbox?ie=UTF8&linkCode=ll2&tag=echoai-20&linkId=9642833136b9884646516fb24e8d1e73&ref_=as_li_ss_tl";
-  const AMAZON_AFFILIATE = "https://amzn.to/3SJj8Gz";
+  const handleEmailSignUp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSignUpError(null);
+    setSignUpSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setSignUpError(fr ? "Champs manquants." : "Missing fields.");
+      return;
+    }
+    const trimmedEmail = email.trim();
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/avis` },
+    });
 
-  // ── POSTERS VERTICAUX — même composant que sur /idea, couleurs par produit ──
-  const POSTER_ITEMS = [
-    { href:"https://echosai.ca/1/hall", src:"/talkmini.png", label:"Talk",  color:"#a78bfa" },
-    { href:"https://echosai.ca/idea",   src:"/ideamini.png", label:"Idea",  color:"#00c8ff" },
-    { href:"https://echosai.ca/fastbilling", src:"/facturemini.png", label:"FastBilling", color:"#c9a84c" },
-  ];
-  const WORLD_ITEM = { href:"https://echosai.ca/world", src:"/worldmini.png", label:"World", color:"#34d399" };
+    if (error) {
+      setSignUpError(error.message);
+    } else {
+      setResendEmail(trimmedEmail);
+      setSignUpSuccess(fr ? "Lien de confirmation envoyé ! Pensez aux spams." : "Confirmation link sent! Check spam folder.");
+      startResendCountdown();
+    }
+  };
 
-  const PosterCard = ({ item, width=175 }: { item: { href:string; src:string; label:string; color:string }; width?: number }) => (
-    <a href={item.href} target="_blank" rel="noopener noreferrer"
-      style={{
-        display:"block", width, borderRadius:14, overflow:"hidden",
-        border:`2px solid ${item.color}`, boxShadow:`0 0 18px ${item.color}35`,
-        textDecoration:"none", background:surf,
-      }}>
-      <div style={{ overflow:"hidden", aspectRatio:"2 / 3" }}>
-        <img src={item.src} alt={item.label}
-          style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", transition:"transform .35s ease" }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.1)"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }} />
-      </div>
-    </a>
-  );
+  const clearInputs = () => {
+    setEmail("");
+    setPassword("");
+    setSignInError(null);
+    setSignInSuccess(null);
+    setSignUpError(null);
+    setSignUpSuccess(null);
+  };
+
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
 
   return (
-    <div style={{ background: bg, color: txt, minHeight: "100dvh", fontFamily: "'Inter', system-ui, sans-serif", transition: "background .3s, color .3s" }}>
-
-      {/* ══ LAYOUT 3 COLONNES — même structure que /idea ═════════════════════ */}
-      <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "180px 1fr 180px", maxWidth: 1200, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
-
-        {/* ── COL GAUCHE — posters verticaux ──────────────────────────────────── */}
-        <aside className="col-left" style={{ paddingTop: 24, display: "flex", flexDirection: "column", gap: 32, paddingRight: 10, alignItems: "center" }}>
-          {POSTER_ITEMS.map((item, i) => <PosterCard key={i} item={item} />)}
-        </aside>
-
-        {/* ── CENTRE ──────────────────────────────────────────────────────────── */}
-        <div className="col-centre" style={{ display: "flex", flexDirection: "column", padding: "24px 14px 60px" }}>
-
-          {/* Accroche + barre */}
-          <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:8 }}>
-              <img src="/echo1.png" alt="Echo AI" style={{ width:30, height:30, borderRadius:8, objectFit:"cover" }} />
-              <h1 style={{ fontWeight: 900, fontSize: "clamp(20px,3.4vw,26px)", letterSpacing: -.5, lineHeight: 1.15 }}>{t.tagline}</h1>
+    <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
+      {/* ── SECTION DU HAUT : BLANCHE AVEC MASCOTTE, BRANDING ET NAVIGATION ── */}
+      <section className="bg-white text-zinc-900 relative z-30">
+        <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
+            
+            {/* BOUTON RETOUR AUX OUTILS ET LOGO ECHOSAI */}
+            <div className="flex items-center gap-4">
+              <Link
+                href="/outil"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(6,182,212,0.5)] hover:shadow-[0_0_25px_rgba(6,182,212,0.8)] animate-pulse"
+              >
+                ⚡ {fr ? "RETOUR AUX OUTILS" : "BACK TO TOOLS"}
+              </Link>
+              <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-zinc-900 uppercase hidden sm:block">
+                ECHOSAI
+              </Link>
             </div>
-            <p style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>{t.sub1}<br />{t.sub2}</p>
-          </div>
 
-          <form onSubmit={handleSearch} style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-            <input type="url" required value={url} onChange={e => setUrl(e.target.value)} placeholder={t.placeholder}
-              style={{ flex: 1, background: surf, border: `1.5px solid ${bord}`, borderRadius: 11, padding: "10px 14px", fontSize: 12, color: txt, outline: "none", fontFamily: "monospace" }}
-              onFocus={async e => {
-                e.target.style.borderColor = acc;
-                if (!url) {
-                  try {
-                    const text = await navigator.clipboard.readText();
-                    if (text.startsWith("http")) setUrl(text);
-                  } catch {}
-                }
-              }}
-              onBlur={e => (e.target.style.borderColor = bord)} />
-            <button type="submit" disabled={loading}
-              style={{ background: loading ? muted : acc, color: "#fff", border: "none", borderRadius: 11, padding: "10px 20px", fontWeight: 700, fontSize: 12, cursor: loading ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}>
-              {loading ? t.analysing : t.analyse}
-            </button>
-          </form>
-          {error && <div style={{ marginTop: 8, padding: "8px 12px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 9, fontSize: 12, color: "#b91c1c" }}>⚠️ {error}</div>}
-
-          {/* Poster mobile — 2 items visibles */}
-          <div className="mobile-pubs" style={{ display: "none", gap: 14, marginTop: 16, marginBottom: 4, justifyContent: "center" }}>
-            <PosterCard item={POSTER_ITEMS[0]} width={115} />
-            <PosterCard item={POSTER_ITEMS[1]} width={115} />
-          </div>
-
-          {/* Loader */}
-          {loading && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 0", color: muted, fontSize: 12 }}>
-              <div style={{ width: 20, height: 20, border: `2px solid ${bord}`, borderTopColor: acc, borderRadius: "50%", animation: "spin .8s linear infinite", flexShrink: 0 }} />
-              {t.loading}
-            </div>
-          )}
-
-          {/* Résultats — empilés de haut en bas */}
-          {results && !loading && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "8px 12px", background: surf2, borderRadius: 9, border: `1px solid ${bord}` }}>
-                <span>📦</span>
-                <span style={{ fontWeight: 700, fontSize: 13 }}>{results.productName}</span>
-              </div>
-
-              {/* Positifs */}
-              <div style={{ background: surf, border: "1px solid #86efac", borderRadius: 11, padding: "12px 14px", marginBottom: 10 }}>
-                <div style={{ fontSize: 9, fontWeight: 800, color: "#16a34a", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} />{t.pos}
-                </div>
-                <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
-                  {results.positives.map((p, i) => (
-                    <li key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: txt, lineHeight: 1.5,
-                      filter: !user && i >= 2 ? "blur(4px)" : "none",
-                      userSelect: !user && i >= 2 ? "none" : "auto",
-                      pointerEvents: !user && i >= 2 ? "none" : "auto",
-                    }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 3, padding: "1px 5px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>
-                      {!user && i >= 2 ? "●●●●●●●●●●●●●●●" : p}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              {/* Négatifs */}
-              <div style={{ background: surf, border: "1px solid #fca5a5", borderRadius: 11, padding: "12px 14px", marginBottom: 10 }}>
-                <div style={{ fontSize: 9, fontWeight: 800, color: "#dc2626", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />{t.neg}
-                </div>
-                <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
-                  {results.negatives.map((n, i) => (
-                    <li key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: txt, lineHeight: 1.5,
-                      filter: !user && i >= 2 ? "blur(4px)" : "none",
-                      userSelect: !user && i >= 2 ? "none" : "auto",
-                      pointerEvents: !user && i >= 2 ? "none" : "auto",
-                    }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: "#dc2626", background: "#fee2e2", borderRadius: 3, padding: "1px 5px", flexShrink: 0, alignSelf: "flex-start", marginTop: 1 }}>#{i+1}</span>
-                      {!user && i >= 2 ? "●●●●●●●●●●●●●●●" : n}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              {/* Bandeau unlock si pas connecté */}
-              {!user && (
-                <div style={{ margin: "10px 0", padding: "14px 16px", background: `linear-gradient(135deg, ${dark?"rgba(224,123,57,.15)":"rgba(224,123,57,.08)"}, ${dark?"rgba(224,123,57,.08)":"rgba(224,123,57,.04)"})`, border: `1px solid rgba(224,123,57,.3)`, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap:"wrap" }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: acc, marginBottom: 2 }}>
-                      {lang === "fr" ? "🔒 3 résultats cachés" : "🔒 3 results hidden"}
-                    </div>
-                    <div style={{ fontSize: 10, color: muted }}>
-                      {lang === "fr" ? "Connecte-toi gratuitement pour tout voir" : "Sign in for free to see everything"}
-                    </div>
-                  </div>
-                  <button onClick={() => setShowAuthPopup(true)}
-                    style={{ background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-                    {lang === "fr" ? "Voir tout →" : "See all →"}
-                  </button>
-                </div>
-              )}
-
-              {/* ── Liens Amazon — importants ici, on garde le format texte (pas de posters) ── */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10, marginBottom: 16 }}>
-                <a href={`https://www.amazon.ca/s?k=${encodeURIComponent(results.productName)}&tag=echoai-20`} target="_blank" rel="noopener noreferrer"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: surf2, border: `1px solid ${bord}`, borderRadius: 10, fontSize: 12, fontWeight: 600, color: txt, textDecoration: "none" }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = acc)} onMouseLeave={e => (e.currentTarget.style.borderColor = bord)}>
-                  <span>🛒 {t.amazon}</span><span style={{ color: muted }}>→</span>
-                </a>
-                <a href={AMAZON_GOLDBOX} target="_blank" rel="noopener noreferrer"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: surf2, border: `1px solid ${bord}`, borderRadius: 10, fontSize: 12, fontWeight: 600, color: txt, textDecoration: "none" }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = acc)} onMouseLeave={e => (e.currentTarget.style.borderColor = bord)}>
-                  <span>🏷 {t.amzBiz}</span><span style={{ color: muted }}>→</span>
-                </a>
-                <a href={AMAZON_AFFILIATE} target="_blank" rel="noopener noreferrer"
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#fff8e1", border: "1px solid #fbbf24", borderRadius: 10, fontSize: 12, fontWeight: 600, color: "#92400e", textDecoration: "none" }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = acc)} onMouseLeave={e => (e.currentTarget.style.borderColor = "#fbbf24")}>
-                  <span>⭐ {t.amzAffiliate}</span><span>→</span>
-                </a>
-              </div>
-
-              {/* World — grande bannière finale, même traitement que sur /idea */}
-              <a href={WORLD_ITEM.href} target="_blank" rel="noopener noreferrer" style={{ display: "block", textDecoration: "none", marginBottom: 16 }}>
-                <div style={{
-                  borderRadius: 18, overflow: "hidden", border: `2px solid ${WORLD_ITEM.color}`,
-                  boxShadow: `0 0 24px ${WORLD_ITEM.color}30`, transition: "transform .25s, box-shadow .25s",
-                }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 40px ${WORLD_ITEM.color}45`; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; (e.currentTarget as HTMLElement).style.boxShadow = `0 0 24px ${WORLD_ITEM.color}30`; }}>
-                  <img src={WORLD_ITEM.src} alt={WORLD_ITEM.label} style={{ width: "100%", display: "block", objectFit: "cover" }} />
-                </div>
-              </a>
-            </div>
-          )}
-
-          {/* État vide */}
-          {!results && !loading && !error && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "30px 0", gap: 5, color: muted }}>
-              <span style={{ fontSize: 24, filter: "grayscale(1)", opacity: .4 }}>🔍</span>
-              <span style={{ fontSize: 11 }}>{t.empty}</span>
-            </div>
-          )}
-
-          {/* Chat */}
-          {results && (
-            <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, padding: "11px 13px" }}>
-              {chatMessages.length > 0 && (
-                <div style={{ maxHeight: 120, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
-                  {chatMessages.map((m, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: m.sender === "user" ? "flex-end" : "flex-start" }}>
-                      <div style={{ maxWidth: "80%", padding: "6px 10px", borderRadius: 9, fontSize: 11, lineHeight: 1.45, background: m.sender === "user" ? acc : surf2, color: m.sender === "user" ? "#fff" : txt, border: m.sender === "ia" ? `1px solid ${bord}` : "none" }}>
-                        {m.text}
-                      </div>
-                    </div>
-                  ))}
-                  {chatLoading && <div style={{ display: "flex", gap: 4, padding: "6px 10px" }}>{[0,1,2].map(i => <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: muted, animation: `bounce 1s ${i*.15}s infinite` }} />)}</div>}
-                  <div ref={chatEndRef} />
-                </div>
-              )}
-              <form onSubmit={handleChat} style={{ display: "flex", gap: 6 }}>
-                <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} disabled={chatLoading} placeholder={t.chatPh}
-                  style={{ flex: 1, background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 11, color: txt, outline: "none" }} />
-                <button type="submit" disabled={chatLoading || !chatInput.trim()}
-                  style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "7px 13px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: chatLoading || !chatInput.trim() ? .5 : 1 }}>↵</button>
-              </form>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div style={{ marginTop: "auto", paddingTop: 14, fontSize: 10, color: muted, opacity: .5, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-            {t.footer}
-            <a href="mailto:support@echosai.ca" style={{ color: muted, textDecoration: "none", opacity: .6 }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-              onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-              ✉ support
-            </a>
-          </div>
-        </div>
-
-        {/* ── COL DROITE : contrôles + don + connexion ─────────────────────── */}
-        <aside className="col-right" style={{ paddingTop: 16, display: "flex", flexDirection: "column", gap: 8, paddingLeft: 10 }}>
-
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => setDark(d => !d)}
-              style={{ flex: "none", background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 13, color: muted, fontWeight: 700 }}>
-              {dark ? t.light : t.dark}
-            </button>
-            <div style={{ position: "relative", flex: 1 }}>
-              <button onClick={() => setShowLang(v => !v)}
-                style={{ width: "100%", background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 11, color: txt, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span>{lang === "fr" ? "🇫🇷 FR" : "🇬🇧 EN"}</span>
-                <span style={{ fontSize: 8, opacity: .6 }}>{showLang ? "▲" : "▼"}</span>
-              </button>
-              {showLang && (
-                <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, left: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 100, boxShadow: "0 4px 16px rgba(0,0,0,.12)" }}>
-                  {(["fr", "en"] as Lang[]).map(l => (
-                    <button key={l} onClick={() => { setLang(l); setShowLang(false); }}
-                      style={{ width: "100%", padding: "8px 12px", fontSize: 11, background: lang === l ? surf2 : "transparent", color: lang === l ? acc : txt, border: "none", cursor: "pointer", fontWeight: lang === l ? 700 : 500, textAlign: "left", display: "flex", alignItems: "center", gap: 6 }}>
-                      {l === "fr" ? "🇫🇷 Français" : "🇬🇧 English"}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {user && (
-            <div style={{ position: "relative" }}>
-              <button onClick={() => setShowUserMenu(v => !v)}
-                style={{ width: "100%", background: "#16a34a", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 11, color: "#fff", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#86efac", display: "inline-block" }} />
-                {t.connected}
-                <span style={{ marginLeft: "auto", fontSize: 8, opacity: .7 }}>{showUserMenu ? "▲" : "▼"}</span>
-              </button>
-              {showUserMenu && (
-                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 100, boxShadow: "0 4px 16px rgba(0,0,0,.12)" }}>
-                  <a href="/account" style={{ display: "block", padding: "8px 12px", fontSize: 11, color: txt, textDecoration: "none", fontWeight: 600, borderBottom: `1px solid ${bord}` }}
-                    onMouseEnter={e => (e.currentTarget.style.background = surf2)} onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    👤 {t.myAccount}
-                  </a>
-                  <button onClick={handleLogout} style={{ width: "100%", display: "block", padding: "8px 12px", fontSize: 11, color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontWeight: 600, textAlign: "left" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = surf2)} onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    ↩ {t.logout}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* DON */}
-          <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, overflow: "hidden" }}>
-            <div style={{ padding: "10px 12px 8px" }}>
-              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>☕ {t.donTitle}</div>
-              <div style={{ fontSize: 11, color: muted, lineHeight: 1.5, marginBottom: 10 }}>{t.donDesc}</div>
-              <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-                {(["CAD", "USD", "EUR"] as const).map(c => (
-                  <button key={c} type="button" onClick={() => { setDonCurrency(c); localStorage.setItem("echo-currency", c); }}
-                    style={{ flex: 1, padding: "4px 0", fontSize: 10, fontWeight: 700, borderRadius: 7, border: `1px solid ${donCurrency === c ? acc : bord}`, background: donCurrency === c ? (dark ? "rgba(224,123,57,.15)" : "rgba(224,123,57,.1)") : surf2, color: donCurrency === c ? acc : muted, cursor: "pointer" }}>
+            {/* CONTROLES / DEVISES / PREMIUM / AUTH */}
+            <div className="flex items-center gap-4 text-xs font-mono relative">
+              
+              {/* DEVISES */}
+              <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
+                {CURRENCIES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCurrency(c)}
+                    className={`px-2 py-1 font-bold transition-colors ${currency === c ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"}`}
+                  >
                     {c}
                   </button>
                 ))}
               </div>
-              <button onClick={() => setDonOpen(d => !d)}
-                style={{ width: "100%", background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "10px 0", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
-                {donOpen ? t.donClose : t.donBtn}
-              </button>
-            </div>
-            {donOpen && (
-              <div style={{ borderTop: `1px solid ${bord}`, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 5 }}>
-                {DONATION_PLANS.map(d => (
-                  <button key={d.plan} onClick={() => handleDon(d.plan)} disabled={donLoading === d.plan}
-                    style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 7, padding: "6px 9px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", opacity: donLoading === d.plan ? .6 : 1, color: txt }}
-                    onMouseEnter={e => (e.currentTarget.style.borderColor = acc)} onMouseLeave={e => (e.currentTarget.style.borderColor = bord)}>
-                    <div style={{ textAlign: "left" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div>
-                      <div style={{ fontSize: 10, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div>
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: acc }}>{d.amount}</div>
-                  </button>
-                ))}
-                <div style={{ fontSize: 9, color: muted, textAlign: "center" }}>🔒 Stripe</div>
-              </div>
-            )}
-          </div>
 
-          {!user && (
-            <div style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 11, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 1 }}>{t.accountTitle}</div>
-              <button onClick={handleGoogle} style={{ ...btn({ background: "#fff", border: "1px solid #e5e7eb", color: "#374151" }) }}>
-                <svg width="13" height="13" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
-                {t.google}
-              </button>
-              <button onClick={handleMicrosoft} style={{ ...btn({ background: dark ? "#2d2b28" : "#1a1917", border: "none", color: "#fff" }) }}>
-                <svg width="13" height="13" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
-                {t.microsoft}
-              </button>
-              <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }}
-                style={{ ...btn({ background: "#0ea5e9", border: "none", color: "#fff" }) }}>
-                ✉ {t.signin}
-              </button>
-              <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }}
-                style={{ ...btn() }}>
-                ✦ {t.signup}
-              </button>
+              {/* BADGE PREMIUM NOIR ET VERT NÉON */}
+              {isPaidTier ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                  <span className="font-bold text-[11px] uppercase tracking-wider">
+                    {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
+                  </span>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setShowPremiumModal(true)} 
+                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+                >
+                  <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                    ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  </span>
+                </div>
+              )}
+
+              {/* TRADUCTION FR / EN */}
+              <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
+                <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
+                <button onClick={() => setLang("en")} className={`px-2 py-1 ${lang === "en" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>EN</button>
+              </div>
+
+              {/* PROFIL / CONNEXION */}
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200">
+                    🟢 {user.email}
+                  </span>
+                  <button onClick={() => supabase.auth.signOut()} className="text-[11px] text-red-500 hover:text-red-700 font-bold uppercase">
+                    [ {fr ? "Déconnexion" : "Sign Out"} ]
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => setShowSignInModal(true)} className="px-3.5 py-1.5 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold">
+                    {fr ? "Connexion" : "Sign In"}
+                  </button>
+                  <button onClick={() => setShowSignUpModal(true)} className="px-3.5 py-1.5 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-bold">
+                    {fr ? "S'inscrire" : "Sign Up"}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </aside>
+          </div>
+        </header>
+
+        {/* BANNIÈRE DE PRÉSENTATION DE L'OUTIL AVIS */}
+        <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div className="lg:col-span-8">
+            <div className="inline-block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-2 border border-zinc-200 px-2 py-0.5 rounded">
+              {fr ? "MODULE 03 // ANALYSE D'AVIS ACHAts" : "MODULE 03 // BUYING REVIEWS ANALYSIS"}
+            </div>
+            <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 leading-[1.0] mb-3 uppercase">
+              {fr ? "DÉCOUVREZ LA VÉRITÉ SUR UN PRODUIT" : "DISCOVER THE TRUTH ABOUT A PRODUCT"}
+            </h2>
+            <p className="text-zinc-500 max-w-lg text-xs md:text-sm font-sans leading-relaxed">
+              {fr
+                ? "Ne vous fiez plus aux avis truqués. Collez l'URL d'une fiche produit pour extraire les vrais points forts et les défauts cachés."
+                : "Don't trust fake reviews. Paste any product link to extract true strengths and hidden flaws."}
+            </p>
+          </div>
+          <div className="lg:col-span-4 flex justify-center lg:justify-end">
+            <img src="/echo1.png" alt="Echo AI Core" className="w-full max-w-[180px] h-auto object-contain drop-shadow-[0_10px_25px_rgba(6,182,212,0.15)]" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── TRANSITION COURBE NEON CYAN ── */}
+      <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
+        <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
+        </svg>
+        <svg className="absolute top-0 left-0 w-full h-full text-transparent fill-none pointer-events-none z-22" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,60 Q360,0 720,50 Q1080,90 1440,30" stroke="#06b6d4" strokeWidth="6" className="drop-shadow-[0_0_12px_#06b6d4]" />
+        </svg>
       </div>
 
-      {/* ── BARRE MOBILE FIXÉE EN BAS ──────────────────────────────────────── */}
-      <div className="mobile-bar" style={{ "--surf": dark ? "#242220" : "#fffdf9", "--bord": dark ? "#3a3835" : "#e2ddd5" } as React.CSSProperties}>
-        <button onClick={() => setDark(d => !d)}
-          style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 13, color: muted, fontWeight: 700, cursor: "pointer" }}>
-          {dark ? t.light : t.dark}
-        </button>
+      
+      {/* ── SECTION DU BAS : FORMULAIRE, RÉSULTATS & CHAT ── */}
+      <section className="bg-zinc-950 text-zinc-50 pb-16 pt-12 relative z-10">
+        <div className="max-w-4xl mx-auto px-6 space-y-8">
+          
+          {/* BARRE DE RECHERCHE PRODUIT */}
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="url"
+              required
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder={fr ? "https://www.amazon.ca/... ou walmart.ca/..." : "https://www.amazon.com/... or Walmart link..."}
+              className="flex-1 bg-zinc-900 border-2 border-cyan-500/40 rounded-2xl px-5 py-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all font-mono"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black px-8 py-4 rounded-2xl text-xs uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+            >
+              {loading ? (fr ? "ANALYSE EN COURS..." : "ANALYZING...") : (fr ? "ANALYSER LE PRODUIT" : "ANALYZE PRODUCT")}
+            </button>
+          </form>
 
-        <div style={{ position: "relative" }}>
-          <button onClick={() => setShowLang(v => !v)}
-            style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 11, color: txt, fontWeight: 700, cursor: "pointer" }}>
-            {lang === "fr" ? "🇫🇷 FR" : "🇬🇧 EN"} {showLang ? "▲" : "▼"}
-          </button>
-          {showLang && (
-            <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 200, boxShadow: "0 -4px 16px rgba(0,0,0,.12)", minWidth: 130 }}>
-              {(["fr", "en"] as Lang[]).map(l => (
-                <button key={l} onClick={() => { setLang(l); setShowLang(false); }}
-                  style={{ width: "100%", padding: "9px 13px", fontSize: 12, background: lang === l ? surf2 : "transparent", color: lang === l ? acc : txt, border: "none", cursor: "pointer", fontWeight: lang === l ? 700 : 500, textAlign: "left", display: "flex", gap: 8 }}>
-                  {l === "fr" ? "🇫🇷 Français" : "🇬🇧 English"}
+          {error && (
+            <div className="bg-red-950/60 border border-red-500/50 rounded-2xl p-4 text-xs text-red-400 font-mono">
+              ⚠️ {error}
+            </div>
+          )}
+
+          {/* INDICATEUR DE CHARGEMENT */}
+          {loading && (
+            <div className="flex items-center justify-center gap-3 py-12 text-cyan-400 font-mono text-xs">
+              <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+              <span>{fr ? "Recherche et analyse en cours..." : "Search and analysis in progress..."}</span>
+            </div>
+          )}
+
+          {/* AFFICHAGE DES RÉSULTATS */}
+          {results && !loading && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              
+              <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 flex items-center gap-3 font-mono">
+                <span className="text-xl">📦</span>
+                <span className="font-bold text-sm text-cyan-300">{results.productName}</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* POINTS FORTS */}
+                <div className="bg-zinc-900/60 border border-emerald-500/40 rounded-3xl p-6 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                  <h3 className="text-emerald-400 font-mono font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    {fr ? "5 Points Forts Réels" : "5 Real Strengths"}
+                  </h3>
+                  <ol className="space-y-3 font-sans text-xs text-zinc-300">
+                    {results.positives.map((p, i) => (
+                      <li key={i} className="flex gap-3 items-start">
+                        <span className="bg-emerald-950 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded font-mono font-bold text-[10px]">#{i + 1}</span>
+                        <span>{p}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+
+                {/* DÉFAUTS CACHÉS */}
+                <div className="bg-zinc-900/60 border border-rose-500/40 rounded-3xl p-6 shadow-[0_0_20px_rgba(244,63,94,0.1)]">
+                  <h3 className="text-rose-400 font-mono font-bold text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-rose-400" />
+                    {fr ? "5 Pires Défauts Cachés" : "5 Hidden Flaws"}
+                  </h3>
+                  <ol className="space-y-3 font-sans text-xs text-zinc-300">
+                    {results.negatives.map((n, i) => (
+                      <li key={i} className="flex gap-3 items-start">
+                        <span className="bg-rose-950 text-rose-400 border border-rose-500/40 px-2 py-0.5 rounded font-mono font-bold text-[10px]">#{i + 1}</span>
+                        <span>{n}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+
+              {/* MODULE CHAT PRODUIT */}
+              <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 space-y-4">
+                <h4 className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
+                  💬 {fr ? "Posez une question à l'agent sur ce produit" : "Ask the agent about this product"}
+                </h4>
+
+                {chatMessages.length > 0 && (
+                  <div className="max-h-60 overflow-y-auto space-y-3 p-3 bg-zinc-950/60 rounded-2xl border border-zinc-800 font-sans text-xs">
+                    {chatMessages.map((m, i) => (
+                      <div key={i} className={`flex ${m.sender === "user" ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[85%] p-3 rounded-2xl ${m.sender === "user" ? "bg-cyan-500 text-zinc-950 font-medium" : "bg-zinc-800 text-zinc-200"}`}>
+                          {m.text}
+                        </div>
+                      </div>
+                    ))}
+                    {chatLoading && <div className="text-zinc-500 text-[10px] font-mono animate-pulse">{fr ? "Réflexion..." : "Thinking..."}</div>}
+                    <div ref={chatEndRef} />
+                  </div>
+                )}
+
+                <form onSubmit={handleChat} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    disabled={chatLoading}
+                    placeholder={fr ? "Ex: Est-ce adapté pour un usage intensif ?" : "Ex: Is it suited for heavy use?"}
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-500 font-mono"
+                  />
+                  <button
+                    type="submit"
+                    disabled={chatLoading || !chatInput.trim()}
+                    className="bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold px-5 py-3 rounded-xl text-xs uppercase cursor-pointer disabled:opacity-50"
+                  >
+                    ↵
+                  </button>
+                </form>
+              </div>
+
+            </div>
+          )}
+
+          {/* ÉTAT VIDE */}
+          {!results && !loading && !error && (
+            <div className="text-center py-16 border border-dashed border-zinc-800 rounded-3xl space-y-2">
+              <span className="text-3xl opacity-40">🔍</span>
+              <p className="text-xs text-zinc-500 font-mono">
+                {fr ? "Collez un lien produit ci-dessus pour lancer le scanner d'avis." : "Paste a product link above to run the review scanner."}
+              </p>
+            </div>
+          )}
+
+        </div>
+      </section>
+
+      {/* ── MODAL PREMIUM ── */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1">✕</button>
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr ? "Débloquez l'accès illimité à l'ensemble des modules." : "Unlock unlimited access to all modules."}
+            </p>
+
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c ? "bg-amber-500 text-zinc-950 border-amber-400" : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
                 </button>
               ))}
             </div>
-          )}
-        </div>
 
-        <button onClick={() => setDonOpen(d => !d)}
-          style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-          ☕
-        </button>
-
-        {donOpen && (
-          <div style={{ position: "fixed", bottom: 60, left: 14, right: 14, background: surf, border: `1px solid ${bord}`, borderRadius: 12, padding: "12px", zIndex: 300, boxShadow: "0 -4px 24px rgba(0,0,0,.15)" }}>
-            <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, display: "flex", justifyContent: "space-between" }}>
-              ☕ {t.donTitle}
-              <button onClick={() => setDonOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 14 }}>✕</button>
-            </div>
-            {DONATION_PLANS.map(d => (
-              <button key={d.plan} onClick={() => handleDon(d.plan)} disabled={donLoading === d.plan}
-                style={{ width: "100%", background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, color: txt, opacity: donLoading === d.plan ? .6 : 1 }}>
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700 }}>{lang === "fr" ? d.name : d.nameEn}</div>
-                  <div style={{ fontSize: 10, color: muted }}>{lang === "fr" ? d.desc : d.descEn}</div>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: acc }}>{d.amount}</div>
-              </button>
-            ))}
-            <div style={{ fontSize: 10, color: muted, textAlign: "center" }}>🔒 Stripe</div>
-          </div>
-        )}
-
-        {user ? (
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setShowUserMenu(v => !v)}
-              style={{ background: "#16a34a", border: "none", borderRadius: 8, padding: "7px 11px", fontSize: 11, color: "#fff", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#86efac", display: "inline-block" }} />
-              {t.connected}
-            </button>
-            {showUserMenu && (
-              <div style={{ position: "absolute", bottom: "calc(100% + 6px)", right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 200, minWidth: 150, boxShadow: "0 -4px 16px rgba(0,0,0,.12)" }}>
-                <a href="/account" style={{ display: "block", padding: "9px 13px", fontSize: 12, color: txt, textDecoration: "none", fontWeight: 600, borderBottom: `1px solid ${bord}` }}>👤 {t.myAccount}</a>
-                <button onClick={handleLogout} style={{ width: "100%", padding: "9px 13px", fontSize: 12, color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontWeight: 600, textAlign: "left" }}>↩ {t.logout}</button>
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
               </div>
-            )}
-          </div>
-        ) : (
-          <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); }}
-            style={{ background: "#0ea5e9", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-            {t.signin}
-          </button>
-        )}
-      </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
+              </ul>
+            </div>
 
-      {/* ── POPUP AUTH ──────────────────────────────────────────────────────── */}
-      {showAuthPopup && (
-        <div onClick={() => setShowAuthPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(6px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 20, padding: "28px 28px 22px", width: 320, display: "flex", flexDirection: "column", gap: 14, position: "relative" }}>
-            <button onClick={() => setShowAuthPopup(false)} style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 18, lineHeight: 1 }}>✕</button>
-            <div style={{ textAlign: "center", marginBottom: 4 }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>🔍</div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: txt, marginBottom: 4 }}>
-                {lang === "fr" ? "Connecte-toi pour analyser" : "Sign in to analyze"}
-              </div>
-              <div style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>
-                {lang === "fr"
-                  ? "Un compte gratuit suffit. Tes analyses sont sauvegardées."
-                  : "A free account is enough. Your analyses are saved."}
-              </div>
-            </div>
-            <button onClick={() => { handleGoogle(); setShowAuthPopup(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#374151", width: "100%" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
-              {lang === "fr" ? "Continuer avec Google" : "Continue with Google"}
+            <button
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 shadow-[0_0_25px_rgba(245,158,11,0.3)] disabled:opacity-50"
+            >
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT..." : "LOADING...")
+                : (fr ? `Activer Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mois)` : `Activate Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mo)`)}
             </button>
-            <button onClick={() => { handleMicrosoft(); setShowAuthPopup(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: dark ? "#2d2b28" : "#1a1917", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", width: "100%" }}>
-              <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
-              {lang === "fr" ? "Continuer avec Microsoft" : "Continue with Microsoft"}
-            </button>
-            <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#0ea5e9", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#fff", width: "100%" }}>
-              ✉ {lang === "fr" ? "Se connecter par email" : "Sign in with email"}
-            </button>
-            <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: surf2, border: `1px solid ${bord}`, borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, color: txt, width: "100%" }}>
-              ✦ {lang === "fr" ? "Créer un compte gratuit" : "Create a free account"}
-            </button>
-            <div style={{ fontSize: 10, color: muted, textAlign: "center" }}>
-              {lang === "fr" ? "Gratuit · Aucune carte requise" : "Free · No card required"}
-            </div>
           </div>
         </div>
       )}
 
-      {/* ── MODAL EMAIL ─────────────────────────────────────────────────────── */}
-      {showEmailModal && (
-        <div onClick={() => setShowEmailModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(4px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 16, padding: "22px 26px", width: 300, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{emailMode === "signin" ? t.modalSignin : t.modalSignup}</div>
-              <button onClick={() => setShowEmailModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 16 }}>✕</button>
-            </div>
-            {authError   && <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "7px 10px", fontSize: 11, color: "#b91c1c" }}>⚠️ {authError}</div>}
-            {authSuccess && <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "7px 10px", fontSize: 11, color: "#15803d" }}>✓ {authSuccess}</div>}
-            <form onSubmit={handleEmailAuth} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              <input type="email" placeholder="nom@domaine.com" value={email} onChange={e => setEmail(e.target.value)} required
-                style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 12, color: txt, outline: "none" }} />
-              <input type="password" placeholder="••••••••••" value={password} onChange={e => setPassword(e.target.value)} required
-                style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 12, color: txt, outline: "none" }} />
-              <button type="submit" style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                {emailMode === "signin" ? t.submitSignin : t.submitSignup}
+      {/* ── MODAL CONNEXION (SIGN IN) ── */}
+      {showSignInModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100">
+            <form onSubmit={handleEmailSignIn} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{fr ? "Connectez-vous pour continuer." : "Sign in to continue."}</p>
+                </div>
+                <button type="button" onClick={() => { setShowSignInModal(false); clearInputs(); }} className="text-zinc-400 hover:text-white text-sm p-1">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              {signInError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {signInError}</div>}
+
+              <div className="space-y-3">
+                <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors">
+                {fr ? "Se connecter" : "Log in"}
+              </button>
+
+              <p className="text-center text-zinc-500 text-xs pt-1">
+                {fr ? "Pas de compte ? " : "No account? "}
+                <button type="button" onClick={() => { setShowSignInModal(false); setShowSignUpModal(true); clearInputs(); }} className="text-cyan-400 underline">
+                  {fr ? "S'inscrire" : "Sign up"}
+                </button>
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL INSCRIPTION (SIGN UP) ── */}
+      {showSignUpModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100">
+            <form onSubmit={handleEmailSignUp} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Créer un compte" : "Create account"}</h2>
+                </div>
+                <button type="button" onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-white text-sm p-1">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              {signUpError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {signUpError}</div>}
+              {signUpSuccess && <div className="bg-emerald-950/50 border border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-400">✓ {signUpSuccess}</div>}
+
+              <div className="space-y-3">
+                <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors">
+                {fr ? "Créer mon compte" : "Create my account"}
               </button>
             </form>
-            <button onClick={() => { setEmailMode(emailMode === "signin" ? "signup" : "signin"); setAuthError(null); setAuthSuccess(null); }}
-              style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 10, textDecoration: "underline" }}>
-              {emailMode === "signin" ? t.switchToSignup : t.switchToSignin}
-            </button>
           </div>
         </div>
       )}
+    </main>
+  );
+}
 
-      <style>{`
-        @keyframes spin   { to { transform: rotate(360deg); } }
-        @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: #c4bfb8; border-radius: 3px; }
-
-        @media (max-width: 768px) {
-          .layout-grid { grid-template-columns: 1fr !important; }
-          .col-left  { display: none !important; }
-          .col-right { display: none !important; }
-          .col-centre { padding: 16px 14px 80px !important; }
-          .mobile-bar { display: flex !important; }
-          .mobile-pubs { display: flex !important; }
-        }
-        @media (min-width: 769px) {
-          .mobile-bar { display: none !important; }
-        }
-
-        .mobile-bar {
-          position: fixed; bottom: 0; left: 0; right: 0;
-          display: none;
-          background: var(--surf, #fffdf9);
-          border-top: 1px solid var(--bord, #e2ddd5);
-          padding: 8px 14px 12px;
-          gap: 8px;
-          z-index: 50;
-          align-items: center;
-          justify-content: space-between;
-        }
-      `}</style>
-    </div>
+export default function AvisPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-cyan-400 font-mono text-xs">Chargement...</div>}>
+      <AvisContent />
+    </Suspense>
   );
 }
