@@ -534,7 +534,7 @@ function OutilTotemContent() {
             >
               {isCheckoutLoading
                 ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
-                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mo)`)}
+                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
           </div>
         </div>
