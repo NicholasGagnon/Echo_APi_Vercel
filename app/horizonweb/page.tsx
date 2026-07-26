@@ -122,11 +122,15 @@ function HorizonWebContent() {
   const [echoState, setEchoState] = useState<"idle" | "thinking" | "speaking">("idle");
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Modales & Devises
+  // Modales, Auth & Stripe
   const [currency, setCurrency] = useState<Currency>("CAD");
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
-  const [showQuotaPopup, setShowQuotaPopup] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+
   const [activeLens, setActiveLens] = useState<"critical" | "expert" | "strategy" | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [savedSearches, setSavedSearches] = useState<{ query: string; response: string; date: string }[]>([]);
@@ -276,7 +280,7 @@ function HorizonWebContent() {
     if (avail < 1) {
       const elapsed = now - lastRegen;
       setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
-      setShowQuotaPopup(true);
+      setShowPremiumModal(true);
       return false;
     }
 
@@ -297,6 +301,38 @@ function HorizonWebContent() {
   const formatRegenTime = (ms: number) => {
     const minutes = Math.ceil(ms / 60000);
     return `${minutes} min`;
+  };
+
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      setShowPremiumModal(false);
+      setShowSignInModal(true);
+      return;
+    }
+
+    setIsCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: "world_advantage",
+          currency: currency.toUpperCase(),
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
+      }
+    } catch {
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
+    } finally {
+      setIsCheckoutLoading(false);
+    }
   };
 
   const triggerWarmup = useCallback((text: string) => {
@@ -638,25 +674,106 @@ function HorizonWebContent() {
         </div>
       )}
 
-      {/* ── MODALE QUOTA POPUP ── */}
-      {showQuotaPopup && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4">
-          <div className="bg-zinc-950 border-2 border-amber-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.15)] text-center space-y-4">
-            <div className="text-3xl">📡</div>
-            <h3 className="text-sm font-mono uppercase tracking-widest text-amber-400 font-bold">
+      {/* ── MODALE ECHOAI PREMIUM (3,99$) ── */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
               {fr ? "Quota de 3 Recherches Atteint" : "3-Search Limit Reached"}
-            </h3>
-            <p className="text-zinc-300 text-xs font-mono leading-relaxed">
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
               {fr
-                ? `Prochain crédit disponible dans environ ${formatRegenTime(nextRegenIn)}. Ou débloquez l'accès illimité.`
-                : `Next credit available in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access.`}
+                ? `Prochain crédit dans environ ${formatRegenTime(nextRegenIn)}. Ou débloquez l'accès illimité dès maintenant.`
+                : `Next credit in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access now.`}
             </p>
+
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c
+                      ? "bg-amber-500 text-zinc-950 border-amber-400"
+                      : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
+              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ Sauvegarde permanente de vos recherches</li>
+              </ul>
+            </div>
+
             <button
-              onClick={() => setShowQuotaPopup(false)}
-              className="w-full py-3 rounded-xl bg-amber-500 text-zinc-950 font-mono font-black text-xs uppercase cursor-pointer"
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
             >
-              {fr ? "Fermer" : "Close"}
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
+                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE CONNEXION ── */}
+      {showSignInModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100">
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setAuthError(null);
+              const { error } = await supabase.auth.signInWithPassword({ email, password });
+              if (error) setAuthError(error.message);
+              else setShowSignInModal(false);
+            }} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{fr ? "Connectez-vous pour effectuer vos recherches." : "Sign in to search."}</p>
+                </div>
+                <button type="button" onClick={() => setShowSignInModal(false)} className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/horizonweb` } })} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={() => supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/horizonweb` } })} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              <div className="h-px bg-zinc-900 my-2" />
+
+              {authError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {authError}</div>}
+
+              <div className="space-y-3">
+                <input type="email" placeholder="nom@domaine.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer">
+                {fr ? "Se connecter" : "Log in"}
+              </button>
+            </form>
           </div>
         </div>
       )}
