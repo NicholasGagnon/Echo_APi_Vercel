@@ -4,12 +4,14 @@ import React, { useEffect, useRef, useState, useCallback, Suspense } from "react
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabase";
-import { checkQuota, UserTier } from "../../utils/quota";
 import { useApp } from "../../context/AppContext";
 
 export const dynamic = "force-dynamic";
 
 type Currency = "CAD" | "USD" | "EUR";
+
+const MAX_FREE_CREDITS = 3;
+const REGEN_1H_MS = 60 * 60 * 1000;
 
 const GoogleLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -107,19 +109,24 @@ function HorizonWebContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [user, setUser] = useState<any>(null);
+  const [currentUserTier, setCurrentUserTier] = useState<string>("free");
+
+  // Quotas
+  const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
+  const [nextRegenIn, setNextRegenIn] = useState<number>(0);
+
   const [query, setQuery] = useState("");
   const [echoResponse, setEchoResponse] = useState("");
   const [attributes, setAttributes] = useState<string[]>([]);
   const [echoState, setEchoState] = useState<"idle" | "thinking" | "speaking">("idle");
   const [userId, setUserId] = useState<string | null>(null);
-  const [userTier, setUserTier] = useState<UserTier>("connected_free");
-  
+
   // Modales & Devises
   const [currency, setCurrency] = useState<Currency>("CAD");
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showQuotaPopup, setShowQuotaPopup] = useState(false);
-  const [isAvatarBroken, setIsAvatarBroken] = useState(false);
   const [activeLens, setActiveLens] = useState<"critical" | "expert" | "strategy" | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [savedSearches, setSavedSearches] = useState<{ query: string; response: string; date: string }[]>([]);
@@ -142,12 +149,26 @@ function HorizonWebContent() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
       setUserId(uid);
-      if (uid) {
-        const { data: profile } = await supabase.from("profiles").select("user_tier").eq("id", uid).maybeSingle();
-        if (profile?.user_tier) {
-          const raw = profile.user_tier.toLowerCase().trim();
-          if (["basic","premium","ultra","founder"].includes(raw)) setUserTier(raw as UserTier);
-        }
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+        chargerQuotaUtilisateur(session.user.id);
+      } else {
+        verifierQuotaAnonyme();
+      }
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
+      const uid = session?.user?.id || null;
+      setUserId(uid);
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
+        chargerQuotaUtilisateur(session.user.id);
+      } else {
+        setUser(null);
+        setCurrentUserTier("free");
+        verifierQuotaAnonyme();
       }
     });
 
@@ -155,7 +176,128 @@ function HorizonWebContent() {
       const rawSaved = localStorage.getItem("horizon_saved_searches");
       if (rawSaved) setSavedSearches(JSON.parse(rawSaved));
     } catch {}
+
+    return () => listener.subscription.unsubscribe();
   }, []);
+
+  const verifierStatutUser = async (uid: string) => {
+    try {
+      const { data: hData } = await supabase.from("horizon_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (hData?.tier && hData.tier !== "free" && hData.tier !== "connected_free") {
+        setCurrentUserTier(hData.tier); return;
+      }
+      setCurrentUserTier("free");
+    } catch { setCurrentUserTier("free"); }
+  };
+
+  const chargerQuotaUtilisateur = async (uid: string) => {
+    try {
+      const { data } = await supabase
+        .from("horizon_quotas")
+        .select("*")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      const now = Date.now();
+      if (data) {
+        const tier = (data.tier || "free");
+        setCurrentUserTier(tier);
+
+        if (tier === "premium" || tier === "advantage") {
+          setAvailableQuota(999);
+          return;
+        }
+
+        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
+        const elapsed = now - lastRegen;
+        const recovered = Math.floor(elapsed / REGEN_1H_MS);
+        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + recovered);
+
+        setAvailableQuota(available);
+
+        if (available < MAX_FREE_CREDITS) {
+          setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
+        }
+      } else {
+        await supabase.from("horizon_quotas").insert({
+          user_id: uid,
+          available_credits: MAX_FREE_CREDITS,
+          tier: "free",
+          last_regen_at: new Date().toISOString(),
+        });
+        setAvailableQuota(MAX_FREE_CREDITS);
+        setCurrentUserTier("free");
+      }
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const verifierQuotaAnonyme = () => {
+    try {
+      const savedAnon = parseInt(localStorage.getItem("horizon_anon_used") || "0");
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const consommerUnCredit = async (): Promise<boolean> => {
+    if (currentUserTier === "premium" || currentUserTier === "advantage") return true;
+
+    if (!user) {
+      const currentUsed = parseInt(localStorage.getItem("horizon_anon_used") || "0");
+      if (currentUsed >= MAX_FREE_CREDITS) {
+        setShowSignInModal(true);
+        return false;
+      }
+      localStorage.setItem("horizon_anon_used", String(currentUsed + 1));
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
+      return true;
+    }
+
+    const now = Date.now();
+    const { data } = await supabase
+      .from("horizon_quotas")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
+
+    if (data && currentUserTier === "free") {
+      const elapsed = now - lastRegen;
+      const recovered = Math.floor(elapsed / REGEN_1H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
+      if (recovered > 0) lastRegen = now;
+    }
+
+    if (avail < 1) {
+      const elapsed = now - lastRegen;
+      setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
+      setShowQuotaPopup(true);
+      return false;
+    }
+
+    const newAvail = avail - 1;
+    setAvailableQuota(newAvail);
+
+    await supabase.from("horizon_quotas").upsert({
+      user_id: user.id,
+      available_credits: newAvail,
+      tier: currentUserTier,
+      last_regen_at: new Date(lastRegen).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+    return true;
+  };
+
+  const formatRegenTime = (ms: number) => {
+    const minutes = Math.ceil(ms / 60000);
+    return `${minutes} min`;
+  };
 
   const triggerWarmup = useCallback((text: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -193,6 +335,9 @@ function HorizonWebContent() {
   const executeHorizonSearch = async (targetQuery: string, overrideLens?: "critical" | "expert" | "strategy" | null) => {
     if (!targetQuery.trim()) return;
 
+    const autorise = await consommerUnCredit();
+    if (!autorise) return;
+
     localStorage.removeItem("horizon_last_response");
     localStorage.removeItem("horizon_last_attributes");
 
@@ -204,19 +349,12 @@ function HorizonWebContent() {
 
     const lensToSend = overrideLens !== undefined ? overrideLens : activeLens;
 
-    const quotaStatus = checkQuota("horizon", userTier, true, userId);
-    if (!quotaStatus.allowed) {
-      setShowQuotaPopup(true);
-      setEchoState("idle");
-      return;
-    }
-
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://echo-api-fixed.onrender.com";
       const res = await fetch(`${API_URL}/horizon`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: targetQuery, userTier, lang, selectedButtons: lensToSend ? [lensToSend] : [] }),
+        body: JSON.stringify({ query: targetQuery, userTier: isPaidTier ? "premium" : "free", lang, selectedButtons: lensToSend ? [lensToSend] : [] }),
       });
       const data = await res.json();
 
@@ -259,7 +397,7 @@ function HorizonWebContent() {
     setShowSavedDrawer(false);
   };
 
-  const isPaidTier = userTier && userTier !== "connected_free";
+  const isPaidTier = currentUserTier && currentUserTier !== "free" && currentUserTier !== "connected_free";
 
   return (
     <main className="h-screen w-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-red-500/30 relative overflow-hidden flex flex-col">
@@ -299,23 +437,21 @@ function HorizonWebContent() {
               ))}
             </div>
 
-            {isPaidTier ? (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_12px_rgba(16,185,129,0.3)]">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-bold text-[10px] uppercase tracking-wider">
-                  {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
+            {/* QUOTA COMPTEUR */}
+            <div 
+              onClick={() => !isPaidTier && setShowPremiumModal(true)} 
+              className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+            >
+              <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Recherches :" : "Searches:"}</span>
+              <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
+                {isPaidTier ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+              </span>
+              {!isPaidTier && (
+                <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                  ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                 </span>
-              </div>
-            ) : (
-              <div 
-                onClick={() => setShowPremiumModal(true)} 
-                className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
-              >
-                <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
-                  ★ PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
-                </span>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="flex border border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px]">
               <button onClick={() => setLang("fr")} className={`px-2 py-1 ${fr ? "bg-zinc-800 text-white font-bold" : "text-zinc-500 hover:text-zinc-300"}`}>FR</button>
@@ -505,19 +641,21 @@ function HorizonWebContent() {
       {/* ── MODALE QUOTA POPUP ── */}
       {showQuotaPopup && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-[99999] p-4">
-          <div className="bg-zinc-950 border-2 border-red-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.15)] text-center space-y-4">
+          <div className="bg-zinc-950 border-2 border-amber-500/40 p-6 rounded-2xl max-w-md w-full relative shadow-[0_0_50px_rgba(245,158,11,0.15)] text-center space-y-4">
             <div className="text-3xl">📡</div>
-            <h3 className="text-sm font-mono uppercase tracking-widest text-red-400 font-bold">
-              {fr ? "Limite de recherche atteinte" : "Quota reached"}
+            <h3 className="text-sm font-mono uppercase tracking-widest text-amber-400 font-bold">
+              {fr ? "Quota de 3 Recherches Atteint" : "3-Search Limit Reached"}
             </h3>
             <p className="text-zinc-300 text-xs font-mono leading-relaxed">
-              {fr ? "Vous avez atteint la limite de recherches HorizonWeb pour votre plan." : "You've reached your HorizonWeb search limit."}
+              {fr
+                ? `Prochain crédit disponible dans environ ${formatRegenTime(nextRegenIn)}. Ou débloquez l'accès illimité.`
+                : `Next credit available in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access.`}
             </p>
             <button
               onClick={() => setShowQuotaPopup(false)}
-              className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-mono font-bold text-xs uppercase cursor-pointer"
+              className="w-full py-3 rounded-xl bg-amber-500 text-zinc-950 font-mono font-black text-xs uppercase cursor-pointer"
             >
-              Fermer
+              {fr ? "Fermer" : "Close"}
             </button>
           </div>
         </div>

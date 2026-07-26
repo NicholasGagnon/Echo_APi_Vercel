@@ -38,8 +38,9 @@ export async function consumeToolQuota(
   tier: UserTier = "free",
   tableName: string,
   supabaseClient: SupabaseClient,
-  maxCredits: number = 8,
-  regenMs: number = 60 * 60 * 1000 // 1 heure par défaut
+  maxCredits: number = 3,
+  regenMs: number = 60 * 60 * 1000, // 1 heure
+  regenAmount: number = 1 // +1 par heure
 ): Promise<QuotaResult> {
   const isUnlimited = isPaidTier(tier);
 
@@ -78,10 +79,10 @@ export async function consumeToolQuota(
   let lastRegenAt = data ? new Date(data.last_regen_at).getTime() : now;
 
   const elapsed = now - lastRegenAt;
-  const recoveredCredits = Math.floor(elapsed / regenMs);
+  const cycles = Math.floor(elapsed / regenMs);
 
-  if (recoveredCredits > 0) {
-    currentCredits = Math.min(maxCredits, currentCredits + recoveredCredits);
+  if (cycles > 0) {
+    currentCredits = Math.min(maxCredits, currentCredits + (cycles * regenAmount));
     lastRegenAt = now;
   }
 

@@ -5,8 +5,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
-import { checkQuota, UserTier } from "../../utils/quota";
-import PremiumRequiredModal from "../components/PremiumRequiredModal";
 import QuotaPopup from "../components/QuotaPopup";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -21,6 +19,10 @@ type BookView    = "edit" | "present";
 type BookMessage = { role: "user" | "echo"; text: string; imageB64?: string };
 type Chapter     = { id: string; title: string; content: string };
 type CurrencyCode = "CAD" | "USD" | "EUR";
+
+const MAX_FREE_CREDITS = 20;
+const REGEN_1H_MS = 60 * 60 * 1000; // 1 heure
+const REGEN_ADD_AMOUNT = 2; // +2 crédits par heure
 
 const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
 const PRICES: Record<CurrencyCode, { amount: string; symbol: string }> = {
@@ -212,7 +214,11 @@ function BooksContent() {
   const T  = I[lang as "fr"|"en"] ?? I.fr;
 
   const [user, setUser] = useState<any>(null);
-  const [userTier, setUserTier] = useState<string>("free");
+  const [currentUserTier, setCurrentUserTier] = useState<string>("free");
+
+  // Quotas
+  const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
+  const [nextRegenIn, setNextRegenIn] = useState<number>(0);
 
   const [currency, setCurrency] = useState<CurrencyCode>("CAD");
   const [showSignInModal, setShowSignInModal] = useState(false);
@@ -228,9 +234,8 @@ function BooksContent() {
   const [resendCountdown, setResendCountdown] = useState(0);
   const [resendEmail, setResendEmail] = useState("");
 
-  const safeTier = (userTier || "connected_free") as UserTier;
-  const isImageButtonLocked = safeTier === "connected_free" || safeTier === "basic" || userTier === "free";
-  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
+  const isPaidTier = currentUserTier && currentUserTier !== "free" && currentUserTier !== "connected_free";
+  const isImageButtonLocked = !isPaidTier;
 
   const [userId,   setUserId]   = useState<string|null>(null);
   const [bookDbId, setBookDbId] = useState<string|null>(null);
@@ -265,12 +270,10 @@ function BooksContent() {
   const [showSettings,      setShowSettings]      = useState(true);
   const [showSaveConfirm,   setShowSaveConfirm]   = useState(false);
   const [showQuotaPopup,    setShowQuotaPopup]    = useState(false);
-  const [quotaPopupLabel,   setQuotaPopupLabel]   = useState("");
   const [memorySummary,     setMemorySummary]     = useState("");
   const [dataLoaded,        setDataLoaded]        = useState(false);
   const [showLoginPopup,    setShowLoginPopup]    = useState(false);
 
-  const triggerQuotaPopup = (label: string) => { setQuotaPopupLabel(label); setShowQuotaPopup(true); };
   const getBooksSummaryKey = (uid: string|null) => uid ? `echo-books-summary-${uid}` : "echo-books-summary";
 
   useEffect(() => {
@@ -433,7 +436,7 @@ function BooksContent() {
       c.id === activeChapterRef.current ? { ...c, content: editor?.getHTML() || c.content } : c
     );
     saveBook(updatedChapters, bookTitle);
-    setEchoMessages(prev => [...prev, { role:"echo", text: fr?"Texte injecte dans le chapitre.":"Text injected into chapter." }]);
+    setEchoMessages(prev => [...prev, { role:"echo", text: fr?"Texte injecté dans le chapitre.":"Text injected into chapter." }]);
     setShowInjectConfirm(false);
     setPendingInjectText(null);
   };
@@ -523,32 +526,116 @@ function BooksContent() {
 
   const verifierStatutUser = async (uid: string) => {
     try {
-      const { data: cData } = await supabase
-        .from("contenu_quotas")
-        .select("tier")
+      const { data: bData } = await supabase.from("books_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (bData?.tier && bData.tier !== "free" && bData.tier !== "connected_free") {
+        setCurrentUserTier(bData.tier); return;
+      }
+      setCurrentUserTier("free");
+    } catch { setCurrentUserTier("free"); }
+  };
+
+  const chargerQuotaUtilisateur = async (uid: string) => {
+    try {
+      const { data } = await supabase
+        .from("books_quotas")
+        .select("*")
         .eq("user_id", uid)
         .maybeSingle();
 
-      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
-        setUserTier(cData.tier);
-        return;
+      const now = Date.now();
+      if (data) {
+        const tier = (data.tier || "free");
+        setCurrentUserTier(tier);
+
+        if (tier === "premium" || tier === "advantage") {
+          setAvailableQuota(999);
+          return;
+        }
+
+        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
+        const elapsed = now - lastRegen;
+        const cycles = Math.floor(elapsed / REGEN_1H_MS);
+        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + (cycles * REGEN_ADD_AMOUNT));
+
+        setAvailableQuota(available);
+
+        if (available < MAX_FREE_CREDITS) {
+          setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
+        }
+      } else {
+        await supabase.from("books_quotas").insert({
+          user_id: uid,
+          available_credits: MAX_FREE_CREDITS,
+          tier: "free",
+          last_regen_at: new Date().toISOString(),
+        });
+        setAvailableQuota(MAX_FREE_CREDITS);
+        setCurrentUserTier("free");
       }
-
-      const { data: wData } = await supabase
-        .from("world_quotas")
-        .select("tier")
-        .eq("user_id", uid)
-        .maybeSingle();
-
-      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
-        setUserTier(wData.tier);
-        return;
-      }
-
-      setUserTier("free");
-    } catch (e) {
-      console.warn("Erreur verif statut:", e);
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
     }
+  };
+
+  const verifierQuotaAnonyme = () => {
+    try {
+      const savedAnon = parseInt(localStorage.getItem("books_anon_used") || "0");
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const consommerUnCredit = async (): Promise<boolean> => {
+    if (currentUserTier === "premium" || currentUserTier === "advantage") return true;
+
+    if (!user) {
+      const currentUsed = parseInt(localStorage.getItem("books_anon_used") || "0");
+      if (currentUsed >= MAX_FREE_CREDITS) {
+        setShowSignInModal(true);
+        return false;
+      }
+      localStorage.setItem("books_anon_used", String(currentUsed + 1));
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
+      return true;
+    }
+
+    const now = Date.now();
+    const { data } = await supabase
+      .from("books_quotas")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
+
+    if (data && currentUserTier === "free") {
+      const elapsed = now - lastRegen;
+      const cycles = Math.floor(elapsed / REGEN_1H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + (cycles * REGEN_ADD_AMOUNT));
+      if (cycles > 0) lastRegen = now;
+    }
+
+    if (avail < 1) {
+      const elapsed = now - lastRegen;
+      setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
+      setShowStripeModal(true);
+      return false;
+    }
+
+    const newAvail = avail - 1;
+    setAvailableQuota(newAvail);
+
+    await supabase.from("books_quotas").upsert({
+      user_id: user.id,
+      available_credits: newAvail,
+      tier: currentUserTier,
+      last_regen_at: new Date(lastRegen).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+    return true;
   };
 
   const loadBook = useCallback(async (uid: string | null) => {
@@ -616,9 +703,6 @@ function BooksContent() {
     if (savedSummary) setMemorySummary(savedSummary);
     setSaveStatus("saved");
     setDataLoaded(true);
-    if (!uid && !localStorage.getItem("echo-books-login-dismissed")) {
-      setShowLoginPopup(true);
-    }
   }, [editor, fr]);
 
   useEffect(() => {
@@ -628,6 +712,9 @@ function BooksContent() {
       if (session?.user) {
         setUser(session.user);
         verifierStatutUser(session.user.id);
+        chargerQuotaUtilisateur(session.user.id);
+      } else {
+        verifierQuotaAnonyme();
       }
       loadBook(uid);
     });
@@ -638,23 +725,17 @@ function BooksContent() {
       if (s?.user) {
         setUser(s.user);
         verifierStatutUser(s.user.id);
+        chargerQuotaUtilisateur(s.user.id);
       } else {
         setUser(null);
-        setUserTier("free");
+        setCurrentUserTier("free");
+        verifierQuotaAnonyme();
       }
       if (!dataLoaded) loadBook(uid);
     });
 
     return () => listener.subscription.unsubscribe();
   }, []);
-
-  useEffect(() => {
-    if (editor && !dataLoaded) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        loadBook(session?.user?.id || null);
-      });
-    }
-  }, [editor]);
 
   const [echoPanelWidth, setEchoPanelWidth] = useState(280);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -706,13 +787,9 @@ function BooksContent() {
 
   const handleRecontext = async () => {
     if (!editor) return;
-    const quotaCheck = checkQuota("vitality_actions", safeTier, false, userId);
-    if (!quotaCheck.allowed) { triggerQuotaPopup("Books"); return; }
-    if (!quotaConsumedRef.current) {
-      quotaConsumedRef.current = true;
-      checkQuota("vitality_actions", safeTier, true, userId);
-      setTimeout(() => { quotaConsumedRef.current = false; }, 500);
-    }
+    const autorise = await consommerUnCredit();
+    if (!autorise) return;
+
     const { from, to } = editor.state.selection;
     const textToSync = from !== to
       ? editor.state.doc.textBetween(from, to, " ")
@@ -727,7 +804,7 @@ function BooksContent() {
         body:JSON.stringify({
           summary: memorySummary,
           messages: [{ role:"user", text:`Met à jour ton contexte immédiat avec cet extrait : ${textToSync.slice(0,4000)}` }],
-          userTier: safeTier,
+          userTier: isPaidTier ? "premium" : "free",
         }),
       });
       const data = await res.json();
@@ -846,18 +923,11 @@ function BooksContent() {
     }
   }, [dataLoaded]);
 
-  const quotaConsumedRef = useRef(false);
-
   const sendEcho = async () => {
     if ((!echoInput.trim() && !imageBase64) || echoThinking) return;
 
-    const quotaCheck = checkQuota("vitality_actions", safeTier, false, userId);
-    if (!quotaCheck.allowed) { triggerQuotaPopup(fr ? "Books" : "Books"); return; }
-    if (!quotaConsumedRef.current) {
-      quotaConsumedRef.current = true;
-      checkQuota("vitality_actions", safeTier, true, userId);
-      setTimeout(() => { quotaConsumedRef.current = false; }, 500);
-    }
+    const autorise = await consommerUnCredit();
+    if (!autorise) return;
 
     let currentSummary = memorySummary;
     if (echoMessages.length > 10) {
@@ -868,7 +938,7 @@ function BooksContent() {
           body:JSON.stringify({
             summary:  memorySummary,
             messages: echoMessages.map(m => `${m.role==="user"?"You":"Echo"}: ${m.text}`).slice(0,500),
-            userTier: safeTier,
+            userTier: isPaidTier ? "premium" : "free",
           }),
         });
         const memData  = await memRes.json();
@@ -895,7 +965,7 @@ function BooksContent() {
           image:   currentImage ?? null,
           history,
           selectedButtons: echoMode ? [echoMode] : [],
-          userTier: safeTier,
+          userTier: isPaidTier ? "premium" : "free",
           bookTitle,
           summary: currentSummary,
         }),
@@ -1086,7 +1156,6 @@ function BooksContent() {
     setSignUpSuccess(null);
   };
 
-  const isSettingsOpen = false;
   const saveLabel = { saved:{dot:"bg-emerald-400",text:T.saved}, saving:{dot:"bg-amber-400 animate-pulse",text:T.saving}, unsaved:{dot:"bg-zinc-500",text:T.unsaved} }[saveStatus];
   const currentChapter = chapters.find(c => c.id === activeChapter);
   const currentContent = currentChapter?.content || "";
@@ -1134,7 +1203,7 @@ function BooksContent() {
   return (
     <main className="h-screen bg-white dark:bg-black text-black dark:text-white flex flex-col overflow-hidden font-sans transition-colors duration-200 selection:bg-cyan-500/30 relative">
 
-      {/* ── HEADER ULTRA-MINCE UNIFIÉ DE L'ÉCOSYSTÈME ── */}
+      {/* ── HEADER ULTRA-MINCE UNIFIÉ ── */}
       <header className="border-b border-zinc-100 dark:border-zinc-900 bg-white dark:bg-zinc-950 px-4 py-2 shrink-0 z-40">
         <div className="max-w-full mx-auto flex justify-between items-center relative">
           
@@ -1163,23 +1232,21 @@ function BooksContent() {
               ))}
             </div>
 
-            {isPaidTier ? (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
-                <span className="font-bold text-[10px] uppercase tracking-wider">
-                  {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
-                </span>
-              </div>
-            ) : (
-              <div 
-                onClick={() => setShowStripeModal(true)} 
-                className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
-              >
+            {/* QUOTA COMPTEUR */}
+            <div 
+              onClick={() => !isPaidTier && setShowStripeModal(true)} 
+              className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
+            >
+              <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Envois :" : "Sends:"}</span>
+              <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
+                {isPaidTier ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+              </span>
+              {!isPaidTier && (
                 <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse">
-                  ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                 </span>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="flex border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px]">
               <button onClick={() => setLang("fr")} className={`px-2 py-0.5 ${lang === "fr" ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 font-bold" : "bg-zinc-50 dark:bg-zinc-900 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
@@ -1209,10 +1276,10 @@ function BooksContent() {
         </div>
       </header>
 
-      {/* ── ATELIER D'ÉCRITURE & ÉDITEUR (ZONE PRINCIPALE SANS NAV GAUCHE) ── */}
+      {/* ── ATELIER D'ÉCRITATION & ÉDITEUR ── */}
       <div className="flex-1 flex overflow-hidden min-h-0">
 
-        {/* TOOLBAR VERTICALE D'ÉDITION */}
+        {/* TOOLBAR VERTICALE */}
         <div className="w-[130px] shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col py-2 overflow-y-auto overflow-x-hidden">
           <div className="px-2 pb-1.5 border-b border-zinc-200 dark:border-zinc-800">
             <div className="text-[8px] uppercase tracking-widest text-zinc-400 mb-1 font-mono">{T.struct}</div>
@@ -1296,7 +1363,7 @@ function BooksContent() {
           </div>
         </div>
 
-        {/* BLOC CENTRAL DE RÉDACTION (PAGE ET PAPIER) */}
+        {/* BLOC CENTRAL */}
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           <div className="h-9 shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex items-center px-3 gap-2">
             {(["edit","present"] as BookView[]).map(v => (
@@ -1485,7 +1552,7 @@ function BooksContent() {
           </div>
         )}
 
-        {/* PANNEAU AGENT ECHO (À DROITE) */}
+        {/* PANNEAU AGENT ECHO */}
         <aside style={isDesktop?{width:echoPanelWidth,flexBasis:echoPanelWidth}:undefined}
           className="w-72 shrink-0 border-l border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex flex-col overflow-hidden">
           <div className="h-10 shrink-0 border-b border-zinc-200 dark:border-zinc-800 flex items-center px-3 gap-2">
@@ -1559,7 +1626,7 @@ function BooksContent() {
         </aside>
       </div>
 
-      {/* ── MODALS STRIPE & AUTHENTIFICATION ── */}
+      {/* ── MODALS STRIPE & AUTH ── */}
       {showStripeModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md">
           <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100 text-center relative">
@@ -1567,7 +1634,7 @@ function BooksContent() {
 
             <div className="text-4xl mb-3">⚡</div>
             <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
-              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+              {fr ? "Quota de 20 Envois Atteint" : "20-Send Limit Reached"}
             </h2>
             <p className="text-xs text-zinc-400 mb-4 font-sans">
               {fr ? "Débloquez l'accès illimité à l'ensemble des modules d'intelligence artificielle." : "Unlock unlimited access to all AI modules."}
@@ -1608,7 +1675,7 @@ function BooksContent() {
             >
               {isCheckoutLoading
                 ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
-                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}{PRICES[currency].amount}/mo)`)}
+                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
           </div>
         </div>
@@ -1737,7 +1804,7 @@ function BooksContent() {
         </div>
       )}
 
-      {showQuotaPopup && <QuotaPopup label={quotaPopupLabel} lang={lang} onClose={() => setShowQuotaPopup(false)} />}
+      {showQuotaPopup && <QuotaPopup label="Books" lang={lang} onClose={() => setShowQuotaPopup(false)} />}
 
       <input ref={fileInputRef}  type="file" accept=".txt,.md,.markdown"      onChange={handleImportTxt}  className="hidden"/>
       <input ref={fontInputRef}  type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontImport} className="hidden"/>
