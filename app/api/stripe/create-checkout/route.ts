@@ -6,7 +6,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { userId, userEmail } = body;
+    const { userId, userEmail, currency = "CAD" } = body;
 
     if (!userId || !userEmail) {
       return NextResponse.json(
@@ -15,20 +15,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // ID du tarif à 3,99$ (World Advantage / Basic)
-    const priceId = process.env.STRIPE_WORLDBASIC_PRICE_ID || process.env.STRIPE_BASIC_PRICE_ID;
-
-    if (!priceId) {
-      return NextResponse.json(
-        { message: "Identifiant de prix 3.99$ manquant dans le .env" },
-        { status: 500 }
-      );
-    }
+    // Normalisation du code de devise pour Stripe (cad, usd, eur)
+    const normalizedCurrency = currency.toLowerCase().trim();
 
     const origin = req.headers.get("origin") ?? "https://echosai.ca";
     const referer = req.headers.get("referer");
 
-    // Détermine l'URL de retour : utilise la page exacte d'origine (ex: /idea, /books) ou le domaine
+    // Détermine l'URL de retour vers l'outil d'origine
     const returnUrl = referer || origin;
 
     const session = await stripe.checkout.sessions.create({
@@ -38,7 +31,17 @@ export async function POST(req: Request) {
       allow_promotion_codes: true,
       line_items: [
         {
-          price: priceId,
+          price_data: {
+            currency: normalizedCurrency,
+            product_data: {
+              name: "Abonnement EchoAI Premium",
+              description: "Accès illimité à l'ensemble des modules d'IA Echo",
+            },
+            unit_amount: 399, // 3.99 dans la devise choisie
+            recurring: {
+              interval: "month",
+            },
+          },
           quantity: 1,
         },
       ],
