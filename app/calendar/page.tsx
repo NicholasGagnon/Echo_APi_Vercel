@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
-import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +22,9 @@ type EventData = {
 
 type CalendarEvents = Record<string, EventData[]>;
 type ChatMessage = { raw: string; imageB64?: string };
+
+const MAX_FREE_CREDITS = 3;
+const REGEN_3H_MS = 3 * 60 * 60 * 1000; // 3 heures
 
 const DAYS_LABELS_FR = ["D", "L", "M", "M", "J", "V", "S"];
 const DAYS_LABELS_EN = ["S", "M", "T", "W", "T", "F", "S"];
@@ -115,10 +117,16 @@ function CalendarTutorialPopup({ lang, onClose, onConnect }: {
 }
 
 function CalendarContent() {
-  const { lang, setLang, userTier, triggerToast } = useApp();
+  const { lang, setLang, triggerToast } = useApp();
   const fr = lang === "fr";
   const today = new Date();
-  const safeTier = (userTier || "connected_free") as UserTier;
+
+  const [user, setUser] = useState<any>(null);
+  const [currentUserTier, setCurrentUserTier] = useState<string>("free");
+
+  // Quotas
+  const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
+  const [nextRegenIn, setNextRegenIn] = useState<number>(0);
 
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
@@ -145,7 +153,7 @@ function CalendarContent() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [needsGoogleReconnect, setNeedsGoogleReconnect] = useState(false);
 
-  // Chat Echo Agentic à droite
+  // Chat Echo Agentic
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatState, setChatState] = useState<"idle" | "thinking" | "speaking">("idle");
@@ -158,6 +166,127 @@ function CalendarContent() {
   const getStorageKey = (uid: string) => `echo-calendar-v2-${uid}`;
   const getGoogleTokenKey = (uid: string) => `echo-google-token-${uid}`;
   const TUTO_KEY = "echo-calendar-tuto-seen-v1";
+
+  const verifierStatutUser = async (uid: string) => {
+    try {
+      const { data: calData } = await supabase.from("calendar_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (calData?.tier && calData.tier !== "free" && calData.tier !== "connected_free") {
+        setCurrentUserTier(calData.tier); return;
+      }
+      setCurrentUserTier("free");
+    } catch { setCurrentUserTier("free"); }
+  };
+
+  const chargerQuotaUtilisateur = async (uid: string) => {
+    try {
+      const { data } = await supabase
+        .from("calendar_quotas")
+        .select("*")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      const now = Date.now();
+      if (data) {
+        const tier = (data.tier || "free");
+        setCurrentUserTier(tier);
+
+        if (tier === "premium" || tier === "advantage") {
+          setAvailableQuota(999);
+          return;
+        }
+
+        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
+        const elapsed = now - lastRegen;
+        const recovered = Math.floor(elapsed / REGEN_3H_MS);
+        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + recovered);
+
+        setAvailableQuota(available);
+
+        if (available < MAX_FREE_CREDITS) {
+          setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
+        }
+      } else {
+        await supabase.from("calendar_quotas").insert({
+          user_id: uid,
+          available_credits: MAX_FREE_CREDITS,
+          tier: "free",
+          last_regen_at: new Date().toISOString(),
+        });
+        setAvailableQuota(MAX_FREE_CREDITS);
+        setCurrentUserTier("free");
+      }
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const verifierQuotaAnonyme = () => {
+    try {
+      const savedAnon = parseInt(localStorage.getItem("calendar_anon_used") || "0");
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const consommerUnCredit = async (): Promise<boolean> => {
+    if (currentUserTier === "premium" || currentUserTier === "advantage") return true;
+
+    if (!user) {
+      const currentUsed = parseInt(localStorage.getItem("calendar_anon_used") || "0");
+      if (currentUsed >= MAX_FREE_CREDITS) {
+        setShowSignInModal(true);
+        return false;
+      }
+      localStorage.setItem("calendar_anon_used", String(currentUsed + 1));
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
+      return true;
+    }
+
+    const now = Date.now();
+    const { data } = await supabase
+      .from("calendar_quotas")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
+
+    if (data && currentUserTier === "free") {
+      const elapsed = now - lastRegen;
+      const recovered = Math.floor(elapsed / REGEN_3H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
+      if (recovered > 0) lastRegen = now;
+    }
+
+    if (avail < 1) {
+      const elapsed = now - lastRegen;
+      setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
+      setShowPremiumModal(true);
+      return false;
+    }
+
+    const newAvail = avail - 1;
+    setAvailableQuota(newAvail);
+
+    await supabase.from("calendar_quotas").upsert({
+      user_id: user.id,
+      available_credits: newAvail,
+      tier: currentUserTier,
+      last_regen_at: new Date(lastRegen).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+    return true;
+  };
+
+  const formatRegenTime = (ms: number) => {
+    const minutes = Math.ceil(ms / 60000);
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
+  };
 
   // ── FETCH EVENTS SUPABASE ──
   const fetchSupabaseEvents = useCallback(async (uid: string) => {
@@ -215,12 +344,12 @@ function CalendarContent() {
       supabase.from("user_tokens").upsert({
         id: uid, google_access_token: token,
         google_refresh_token: session?.refresh_token || null,
-        user_tier: safeTier,
+        user_tier: currentUserTier,
         last_request_date: new Date().toISOString().split("T")[0],
       }, { onConflict: "id" });
     });
     setNeedsGoogleReconnect(false);
-  }, [safeTier]);
+  }, [currentUserTier]);
 
   const clearToken = useCallback(async (uid: string) => {
     googleTokenRef.current = null;
@@ -333,9 +462,18 @@ function CalendarContent() {
 
     const bootstrap = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) { if (!cancelled) setIsLoaded(true); return; }
+      if (!session?.user) {
+        if (!cancelled) setIsLoaded(true);
+        verifierQuotaAnonyme();
+        return;
+      }
       const uid = session.user.id;
-      if (!cancelled) setUserId(uid);
+      if (!cancelled) {
+        setUser(session.user);
+        setUserId(uid);
+        verifierStatutUser(uid);
+        chargerQuotaUtilisateur(uid);
+      }
 
       const savedEvents = localStorage.getItem(getStorageKey(uid));
       if (savedEvents && !cancelled) { try { setEvents(JSON.parse(savedEvents)); } catch {} }
@@ -355,11 +493,18 @@ function CalendarContent() {
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_OUT" || !session?.user) {
-        setUserId(null); setEvents({}); setGoogleToken(null);
-        googleTokenRef.current = null; setNeedsGoogleReconnect(false); setIsLoaded(true); return;
+        setUser(null); setUserId(null); setEvents({}); setGoogleToken(null);
+        googleTokenRef.current = null; setNeedsGoogleReconnect(false); setIsLoaded(true);
+        verifierQuotaAnonyme();
+        return;
       }
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        const uid = session.user.id; setUserId(uid);
+        const uid = session.user.id;
+        setUser(session.user);
+        setUserId(uid);
+        verifierStatutUser(uid);
+        chargerQuotaUtilisateur(uid);
+
         const savedEvents = localStorage.getItem(getStorageKey(uid));
         setEvents(savedEvents ? JSON.parse(savedEvents) : {});
         await fetchSupabaseEvents(uid);
@@ -431,10 +576,13 @@ function CalendarContent() {
     setEvents(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).filter(e => e.id !== id) }));
   };
 
-  // ── ECHO CHAT AGENTIC INTÉGRÉ & SAUVEGARDE SUPABASE RÉPARÉE ──
+  // ── ECHO CHAT AGENTIC INTÉGRÉ ──
   const handleSendEcho = async () => {
     if (!chatInput.trim()) return;
     if (!userId) { setShowSignInModal(true); return; }
+
+    const autorise = await consommerUnCredit();
+    if (!autorise) return;
 
     const userMsg = chatInput.trim();
     const userEntry: ChatMessage = { raw: `${fr ? "Toi" : "You"}: ${userMsg}` };
@@ -452,7 +600,7 @@ function CalendarContent() {
         body: JSON.stringify({
           message: userMsg,
           history: baseMessages.map(m => m.raw),
-          userTier: safeTier,
+          userTier: isPaidTier ? "premium" : "free",
           calendarEvents: events,
           source: "calendar",
         }),
@@ -462,7 +610,6 @@ function CalendarContent() {
       setChatState("speaking");
       setChatMessages([...baseMessages, { raw: `Echo: ${data.response || ""}` }]);
 
-      // 💥 FIX AGENTIC : INSERER DANS SUPABASE + GOOGLE CALENDAR
       if (data.action?.type === "ADD_CALENDAR_EVENT") {
         const payload = data.action.payload;
         const eventTitle = payload.title || "Rendez-vous Echo";
@@ -474,11 +621,9 @@ function CalendarContent() {
         const tempId = Date.now().toString();
         const ev: EventData = { id: tempId, title: eventTitle, start: startTime, end: endTime, notes: notesStr, isFromEcho: true };
 
-        // 1. Pousser vers Google Calendar si disponible
         const cloudId = await pushEventToGoogle(userId, dateKey, ev);
         const finalId = cloudId || tempId;
 
-        // 2. Insérer formellement dans Supabase
         await supabase.from("echo_calendar").insert({
           id: finalId,
           user_id: userId,
@@ -491,7 +636,6 @@ function CalendarContent() {
           is_from_echo: true,
         });
 
-        // 3. Mettre à jour l'affichage local
         await fetchSupabaseEvents(userId);
       }
     } catch (err) {
@@ -520,7 +664,7 @@ function CalendarContent() {
   const selectedEvents = selectedDateKey ? events[selectedDateKey] || [] : [];
   const activeMonthLabel = fr ? MONTHS_FR[currentMonth] : MONTHS_EN[currentMonth];
   const activeDaysLabels = fr ? DAYS_LABELS_FR : DAYS_LABELS_EN;
-  const isPaidTier = userTier && userTier !== "connected_free";
+  const isPaidTier = currentUserTier && currentUserTier !== "free" && currentUserTier !== "connected_free";
 
   return (
     <main className="h-screen w-screen bg-black text-zinc-50 font-sans selection:bg-cyan-500/20 relative overflow-hidden flex flex-col">
@@ -556,23 +700,21 @@ function CalendarContent() {
               ))}
             </div>
 
-            {isPaidTier ? (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_12px_rgba(16,185,129,0.3)]">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-bold text-[10px] uppercase tracking-wider">
-                  {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
+            {/* QUOTA COMPTEUR */}
+            <div 
+              onClick={() => !isPaidTier && setShowPremiumModal(true)} 
+              className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+            >
+              <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Crédits :" : "Credits:"}</span>
+              <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
+                {isPaidTier ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+              </span>
+              {!isPaidTier && (
+                <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                  ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                 </span>
-              </div>
-            ) : (
-              <div 
-                onClick={() => setShowPremiumModal(true)} 
-                className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
-              >
-                <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider">
-                  ★ PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
-                </span>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="flex border border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px]">
               <button onClick={() => setLang("fr")} className={`px-2 py-1 ${fr ? "bg-zinc-800 text-white font-bold" : "text-zinc-500 hover:text-zinc-300"}`}>FR</button>
@@ -614,7 +756,6 @@ function CalendarContent() {
         {/* COLONNE GAUCHE — CALENDRIER ET GRILLE */}
         <section className="lg:col-span-7 border-r border-zinc-900 p-6 flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
           
-          {/* Navigation Mois & Boutons de Sync */}
           <div className="flex flex-wrap items-center justify-between gap-4 mb-6 shrink-0">
             <div className="flex items-center gap-3">
               <button onClick={prevMonth} className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 hover:border-cyan-500 text-xs font-mono cursor-pointer">◀</button>
@@ -642,7 +783,6 @@ function CalendarContent() {
             </div>
           </div>
 
-          {/* Grille du Calendrier */}
           <div className="flex-1 flex flex-col justify-start">
             <div className="grid grid-cols-7 gap-2 mb-2 text-center font-mono text-xs font-bold text-zinc-500 uppercase">
               {activeDaysLabels.map((d, i) => <div key={i}>{d}</div>)}
@@ -693,9 +833,17 @@ function CalendarContent() {
 
         {/* COLONNE DROITE — ECHO COMPAGNON AGENTIC CHAT */}
         <section className="lg:col-span-5 bg-black p-6 flex flex-col justify-between h-full overflow-hidden">
-          <div className="border-b border-zinc-900 pb-3 flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#06b6d4]" />
-            <span className="text-xs font-mono font-black uppercase tracking-widest text-cyan-400">AGENT CALENDRIER AGENTIC</span>
+          <div className="border-b border-zinc-900 pb-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#06b6d4]" />
+              <span className="text-xs font-mono font-black uppercase tracking-widest text-cyan-400">AGENT CALENDRIER AGENTIC</span>
+            </div>
+            <span className="text-xs font-mono text-zinc-400">
+              {fr ? "Crédits : " : "Credits: "}
+              <strong className={availableQuota === 0 ? "text-red-400" : "text-cyan-400"}>
+                {isPaidTier ? "∞ Illimité" : `${availableQuota}/${MAX_FREE_CREDITS}`}
+              </strong>
+            </span>
           </div>
 
           <div className="flex-1 overflow-y-auto py-4 space-y-4 custom-scrollbar">
@@ -742,7 +890,7 @@ function CalendarContent() {
 
       </div>
 
-      {/* ── MODAL DE GESTION DU JOUR ÉLÉMENTS ── */}
+      {/* ── MODAL ÉLÉMENTS JOUR ── */}
       {selectedDateKey && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-4 backdrop-blur-md" onClick={() => setSelectedDateKey(null)}>
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-lg w-full space-y-5 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -784,6 +932,70 @@ function CalendarContent() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE PREMIUM ── */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Quota de 3 Demandes Atteint" : "3-Request Limit Reached"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr
+                ? `Prochain crédit dans environ ${formatRegenTime(nextRegenIn)}. Ou débloquez l'accès illimité dès maintenant.`
+                : `Next credit in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access now.`}
+            </p>
+
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c ? "bg-amber-500 text-zinc-950 border-amber-400" : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
+              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Synchronisation prioritaire</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={async () => {
+                if (!userId) { setShowPremiumModal(false); setShowSignInModal(true); return; }
+                try {
+                  const res = await fetch("/api/stripe/create-checkout-site2", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ plan: "world_advantage", currency: currency.toUpperCase(), userId, userEmail: user?.email }),
+                  });
+                  const data = await res.json();
+                  if (data.url) window.location.href = data.url;
+                } catch { alert("Erreur Stripe."); }
+              }}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer"
+            >
+              {fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`}
+            </button>
           </div>
         </div>
       )}

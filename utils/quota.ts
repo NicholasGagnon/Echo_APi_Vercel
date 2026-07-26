@@ -39,8 +39,8 @@ export async function consumeToolQuota(
   tableName: string,
   supabaseClient: SupabaseClient,
   maxCredits: number = 3,
-  regenMs: number = 60 * 60 * 1000, // 1 heure
-  regenAmount: number = 1 // +1 par heure
+  regenMs: number = 3 * 60 * 60 * 1000, // 3 heures par défaut
+  regenAmount: number = 1 // +1 par cycle
 ): Promise<QuotaResult> {
   const isUnlimited = isPaidTier(tier);
 
