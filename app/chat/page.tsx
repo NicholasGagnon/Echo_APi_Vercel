@@ -254,32 +254,59 @@ function ChatContent() {
     })) as Conversation[];
   };
 
-  const saveConversationToDB = async (uid: string, convId: string | null, raws: string[], currentSummary: string) => {
-    if (!convId || convId === "new" || convId.startsWith("local-")) return;
-    await supabase.from("echo_conversations").update({
+  // ✅ CORRECTION CRITIQUE : UPSERT + Création dynamique si ID = "new"
+  const saveConversationToDB = async (uid: string, convId: string | null, raws: string[], currentSummary: string): Promise<string> => {
+    const isNew = !convId || convId === "new";
+    const recordPayload: any = {
+      user_id: uid,
+      source: CONV_SOURCE,
       messages: raws,
       summary: currentSummary,
       updated_at: new Date().toISOString(),
-    }).eq("id", convId).eq("user_id", uid);
+    };
+
+    if (!isNew && !convId.startsWith("local-")) {
+      recordPayload.id = convId;
+    }
+
+    const { data, error } = await supabase
+      .from("echo_conversations")
+      .upsert(recordPayload, { onConflict: "id" })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("[SUPABASE SAVE ERROR]", error);
+      return convId || "new";
+    }
+
+    const savedId = data?.id || convId;
+
+    // Met à jour la liste dans le state UI
+    setConversations(prev => {
+      const updatedTitle = deriveTitle(raws, lang);
+      const exists = prev.some(c => c.id === savedId);
+
+      if (exists) {
+        return prev.map(c => c.id === savedId ? { ...c, messages: raws, title: updatedTitle, updatedAt: Date.now() } : c);
+      } else {
+        const newConvo: Conversation = { id: savedId, title: updatedTitle, messages: raws, summary: currentSummary, updatedAt: Date.now() };
+        return [newConvo, ...prev.filter(c => c.id !== "new")];
+      }
+    });
+
+    setActiveConversationId(savedId);
+    return savedId;
   };
 
   const initForUser = async (uid: string | null) => {
     if (!uid) {
-      const sharedRaw = localStorage.getItem(LOCAL_CONV_KEY);
-      const sharedMsgs = sharedRaw ? JSON.parse(sharedRaw) : [];
       const localConvos = loadLocalConvos();
 
       if (localConvos.length > 0) {
         setConversations(localConvos);
         setActiveConversationId(localConvos[0].id);
         setMessages(deserializeMsgs(localConvos[0].messages));
-      } else if (sharedMsgs.length > 0) {
-        const localId = `local-${Date.now()}`;
-        const conv: Conversation = { id: localId, title: deriveTitle(sharedMsgs, lang), messages: sharedMsgs, summary: "", updatedAt: Date.now() };
-        setConversations([conv]);
-        setActiveConversationId(localId);
-        setMessages(deserializeMsgs(sharedMsgs));
-        saveLocalConvos([conv]);
       } else {
         const empty: Conversation = { id: "new", title: fr ? "Nouvelle conversation" : "New conversation", messages: [], summary: "", updatedAt: Date.now() };
         setConversations([empty]);
@@ -398,8 +425,17 @@ function ChatContent() {
       const generatedMsgs = [...baseMessages, { raw: `Echo: ${data.response || ""}` }];
       setMessages(generatedMsgs);
 
-      if (userId && activeConversationId && activeConversationId !== "new") {
+      // ✅ SAUVEGARDE SYNC (CONNECTÉ : SUPABASE, ANONYME : LOCALSTORAGE)
+      if (userId) {
         await saveConversationToDB(userId, activeConversationId, serializeMsgs(generatedMsgs), "");
+      } else {
+        const updatedTitle = deriveTitle(serializeMsgs(generatedMsgs), lang);
+        const localId = activeConversationId && activeConversationId.startsWith("local-") ? activeConversationId : `local-${Date.now()}`;
+        const updatedConvo: Conversation = { id: localId, title: updatedTitle, messages: serializeMsgs(generatedMsgs), summary: "", updatedAt: Date.now() };
+        
+        setActiveConversationId(localId);
+        setConversations(prev => [updatedConvo, ...prev.filter(c => c.id !== localId && c.id !== "new")]);
+        saveLocalConvos([updatedConvo]);
       }
     } catch {
       setMessages([...baseMessages, { raw: "Echo: Connexion au serveur impossible." }]);
@@ -514,7 +550,7 @@ function ChatContent() {
                 setActiveConversationId("new");
                 setMessages([]);
               }}
-              className="m-3 p-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold transition-all text-center shadow-[0_0_12px_rgba(6,182,212,0.2)]"
+              className="m-3 p-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold transition-all text-center shadow-[0_0_12px_rgba(6,182,212,0.2)] cursor-pointer"
             >
               + {fr ? "Nouvelle conversation" : "New conversation"}
             </button>
@@ -539,7 +575,7 @@ function ChatContent() {
         ) : (
           <button
             onClick={() => setIsConvoPanelOpen(true)}
-            className="w-8 border-r border-zinc-900 bg-black flex items-center justify-center text-zinc-500 hover:text-white transition-colors h-full shrink-0"
+            className="w-8 border-r border-zinc-900 bg-black flex items-center justify-center text-zinc-500 hover:text-white transition-colors h-full shrink-0 cursor-pointer"
           >
             ▸
           </button>
@@ -575,7 +611,7 @@ function ChatContent() {
                     </div>
                     <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 space-y-2 flex-1 shadow-lg">
                       <div className="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-widest">ECHO IA</div>
-                      <div className="text-zinc-200 leading-relaxed font-sans" style={{ fontSize: chatFontSize }}>
+                      <div className="text-zinc-200 leading-relaxed font-sans whitespace-pre-wrap" style={{ fontSize: chatFontSize }}>
                         {cleanText}
                       </div>
                     </div>
@@ -588,7 +624,7 @@ function ChatContent() {
                       {msg.imageB64 && (
                         <img src={msg.imageB64} alt="Upload" className="max-w-xs max-h-60 rounded-2xl border border-cyan-500/40 object-cover mb-2" />
                       )}
-                      <div className="text-cyan-100 leading-relaxed font-sans" style={{ fontSize: chatFontSize - 1 }}>
+                      <div className="text-cyan-100 leading-relaxed font-sans whitespace-pre-wrap" style={{ fontSize: chatFontSize - 1 }}>
                         {cleanText}
                       </div>
                     </div>
