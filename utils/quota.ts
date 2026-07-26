@@ -35,7 +35,7 @@ export const getMessageMaxLength = (tier?: string): number => {
 };
 
 /**
- * Version synchrone rétrocompatible pour la compilation
+ * Version synchrone rétrocompatible
  */
 export function checkQuota(
   _action?: string,
@@ -58,7 +58,7 @@ export async function consumeToolQuota(
   tableName: string,
   supabaseClient: SupabaseClient,
   maxCredits: number = 8,
-  regenMs: number = 60 * 60 * 1000, // 1 heure par défaut
+  regenMs: number = 60 * 60 * 1000, // 1 heure
   regenAmount: number = 1 // +1 par heure
 ): Promise<QuotaResult> {
   const isUnlimited = isPaidTier(tier);
