@@ -14,7 +14,6 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   let event: Stripe.Event;
 
-  // 1. PARSING DIRECT DU PAYLOAD SANS VÉRIFICATION DE SIGNATURE (ÉVITE LA 400)
   try {
     const rawBody = await req.text();
     event = JSON.parse(rawBody) as Stripe.Event;
@@ -23,7 +22,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "JSON Invalide" }, { status: 400 });
   }
 
-  // 2. EXÉCUTION DÈS QUE LE CHECKOUT EST COMPLÉTÉ
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const userId = session.metadata?.userId || session.metadata?.user_id;
@@ -33,7 +31,6 @@ export async function POST(req: Request) {
     try {
       let targetUserId = userId;
 
-      // Recherche par courriel si l'userId est manquant dans metadata
       if (!targetUserId && session.customer_email) {
         const { data } = await supabaseAdmin.auth.admin.listUsers();
         const matched = data?.users?.find((u: any) => u.email === session.customer_email);
@@ -41,30 +38,42 @@ export async function POST(req: Request) {
       }
 
       if (targetUserId) {
-        // ÉCRITURE DANS LES 3 TABLES SUPABASE
+        // 1. SOURCE DE VÉRITÉ GLOBALE
         await supabaseAdmin.from("profiles").upsert({
           id: targetUserId,
           user_tier: "premium",
           updated_at: new Date().toISOString()
         }, { onConflict: "id" });
 
-        await supabaseAdmin.from("world_quotas").upsert({
-          user_id: targetUserId,
-          available: 9999,
-          tier: "advantage",
-          updated_at: new Date().toISOString()
-        }, { onConflict: "user_id" });
+        // 2. DÉBLOCAGE DE TOUTES LES TABLES DE QUOTAS DU SITE
+        const quotaTables = [
+          "world_quotas",
+          "contenu_quotas",
+          "chat_quotas",
+          "idea_quotas",
+          "horizon_quotas",
+          "correcteur_quotas",
+          "budget_quotas",
+          "vitality_quotas",
+          "calendar_quotas",
+          "avis_quotas",
+          "fastbilling_quotas",
+          "books_quotas"
+        ];
 
-        await supabaseAdmin.from("contenu_quotas").upsert({
-          user_id: targetUserId,
-          tier: "advantage",
-          updated_at: new Date().toISOString()
-        }, { onConflict: "user_id" });
+        for (const table of quotaTables) {
+          await supabaseAdmin.from(table).upsert({
+            user_id: targetUserId,
+            available_credits: 9999,
+            tier: "advantage",
+            updated_at: new Date().toISOString()
+          }, { onConflict: "user_id" });
+        }
 
-        console.log(`✅ COMPTE DÉBLOQUÉ SUR SUPABASE POUR ${targetUserId}`);
+        console.log(`✅ ABONNEMENT GLOBAL DÉBLOQUÉ SUR TOUS LES OUTILS POUR ${targetUserId}`);
       }
     } catch (dbErr: any) {
-      console.error("❌ Erreur Supabase:", dbErr.message);
+      console.error("❌ Erreur Supabase Webhook:", dbErr.message);
       return NextResponse.json({ error: "Erreur DB" }, { status: 500 });
     }
   }
