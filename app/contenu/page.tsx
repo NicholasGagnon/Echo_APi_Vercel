@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
+
+export const dynamic = "force-dynamic";
 
 interface FormatOption {
   id: string;
@@ -76,10 +78,8 @@ const GoogleLogo = () => (
   </svg>
 );
 
-// On utilise TOUJOURS la variable globale de ton .env.local :
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
 
-// RÈGLE : Max 4 crédits. Recharge de 1 crédit toutes les 3 heures (10 800 000 ms)
 const MAX_FREE_CREDITS = 4;
 const REGEN_3H_MS = 3 * 60 * 60 * 1000;
 
@@ -92,7 +92,7 @@ const PRICES: Record<CurrencyCode, { amount: string; symbol: string; cents: numb
   EUR: { amount: "3.99", symbol: "€", cents: 399 },
 };
 
-export default function ContenuPage() {
+function ContenuContent() {
   const { lang, setLang } = useApp();
   const fr = lang === "fr";
 
@@ -100,7 +100,6 @@ export default function ContenuPage() {
   
   // Auth & Storage
   const [user, setUser] = useState<any>(null);
-  const [authChecked, setAuthChecked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -139,16 +138,19 @@ export default function ContenuPage() {
   const [error, setError] = useState<string | null>(null);
   const [copiedStep, setCopiedStep] = useState<string | null>(null);
 
+  const LOCAL_STORAGE_KEY = "echo-contenu-drafts";
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      const uid = session?.user?.id || null;
       if (session?.user) {
         setUser(session.user);
         chargerHistorique(session.user.id);
         chargerQuotaUtilisateur(session.user.id);
       } else {
         verifierQuotaAnonyme();
+        loadLocalDrafts();
       }
-      setAuthChecked(true);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
@@ -161,11 +163,25 @@ export default function ContenuPage() {
         setUser(null);
         setHistorique([]);
         verifierQuotaAnonyme();
+        loadLocalDrafts();
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const loadLocalDrafts = () => {
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (raw) setHistorique(JSON.parse(raw));
+    } catch {}
+  };
+
+  const saveLocalDrafts = (items: any[]) => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
+    } catch {}
+  };
 
   const chargerQuotaUtilisateur = async (uid: string) => {
     try {
@@ -281,7 +297,10 @@ export default function ContenuPage() {
 
   const chargerHistorique = async (userId?: string) => {
     const uid = userId || user?.id;
-    if (!uid) return;
+    if (!uid) {
+      loadLocalDrafts();
+      return;
+    }
     setLoadingHistorique(true);
     const { data } = await supabase
       .from("contenu_historique")
@@ -305,6 +324,22 @@ export default function ContenuPage() {
     setProgressPercent(0);
     setStatusMessage("");
     setFormKey((p) => p + 1);
+  };
+
+  const supprimerProjet = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(fr ? "Supprimer cet ouvrage définitivement ?" : "Delete this manuscript permanently?")) return;
+
+    if (user) {
+      await supabase.from("contenu_historique").delete().eq("id", id).eq("user_id", user.id);
+      chargerHistorique(user.id);
+    } else {
+      const updated = historique.filter(h => h.id !== id);
+      setHistorique(updated);
+      saveLocalDrafts(updated);
+    }
+
+    if (currentId === id) nouveauProjet();
   };
 
   const handleGoogleConnect = async () => {
@@ -354,11 +389,6 @@ export default function ContenuPage() {
   };
 
   const lancerFabrication = async () => {
-    if (!user) {
-      setShowAuthModal(true);
-      return;
-    }
-
     setError(null);
     if (!sujet.trim()) {
       setError(fr ? "Veuillez saisir votre sujet d'ouvrage." : "Please enter your book topic.");
@@ -433,7 +463,7 @@ export default function ContenuPage() {
             prompt_maitre: pMaitre,
             tranche: tranches[i],
             numero: i + 1,
-            total: formatSelectionne.nbBlocs,
+Total: formatSelectionne.nbBlocs,
             type_contenu: formatSelectionne.id,
           }),
         });
@@ -486,15 +516,31 @@ export default function ContenuPage() {
       setTexteFinal(tFinal);
       setNbMots(tFinal.split(/\s+/).length);
 
-      await supabase.from("contenu_historique").insert({
-        user_id: user.id,
+      const record = {
         titre: sujet.slice(0, 40) || "Sans titre",
         sujet_depart: sujet,
         prompt_maitre: pMaitre,
         liste_500_points: lPoints,
         texte_final: tFinal,
-      });
-      chargerHistorique(user.id);
+        created_at: new Date().toISOString(),
+      };
+
+      if (user) {
+        const { data: newRow } = await supabase.from("contenu_historique").insert({
+          user_id: user.id,
+          ...record,
+        }).select("id").single();
+
+        if (newRow?.id) setCurrentId(newRow.id);
+        chargerHistorique(user.id);
+      } else {
+        const localId = `local-${Date.now()}`;
+        const newLocalRecord = { id: localId, ...record };
+        setCurrentId(localId);
+        const updated = [newLocalRecord, ...historique];
+        setHistorique(updated);
+        saveLocalDrafts(updated);
+      }
 
     } catch (e: any) {
       setError(e.message || "Un obstacle est survenu lors de la confection.");
@@ -515,16 +561,9 @@ export default function ContenuPage() {
 
     let t = texteFinal;
 
-    // 1. Transformer les Chapitres en Titres H1 Markdown (# CHAPITRE)
     t = t.replace(/\s*(?:#{1,3}\s*)?(CHAPITRE\s+\d+[^\n]*)/gi, "\n\n# $1\n\n");
-
-    // 2. Transformer les sous-titres ou sections majeurs en H2 (## Titre)
     t = t.replace(/\n([A-ZÀ-Ÿ0-9\s\-\':]{4,80})\n/g, "\n\n## $1\n\n");
-
-    // 3. Forcer un saut de ligne double devant les puces ou listes numérotées
     t = t.replace(/([.!?])\s*([0-9]+\.\s+|[-•*]\s+)/g, "$1\n\n$2");
-
-    // 4. Nettoyer les espaces multiples et sauts de ligne excessifs
     t = t.replace(/[ \t]+/g, " ");
     t = t.replace(/\n{3,}/g, "\n\n");
 
@@ -533,13 +572,18 @@ export default function ContenuPage() {
     setTexteFinal(textePropre);
     setNbMots(textePropre.split(/\s+/).length);
 
-    // Mettre à jour dans Supabase si un projet est ouvert
-    if (currentId && user) {
-      await supabase
-        .from("contenu_historique")
-        .update({ texte_final: textePropre })
-        .eq("id", currentId);
-      chargerHistorique(user.id);
+    if (currentId) {
+      if (user) {
+        await supabase
+          .from("contenu_historique")
+          .update({ texte_final: textePropre })
+          .eq("id", currentId);
+        chargerHistorique(user.id);
+      } else {
+        const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: textePropre } : h);
+        setHistorique(updated);
+        saveLocalDrafts(updated);
+      }
     }
   };
 
@@ -606,7 +650,7 @@ export default function ContenuPage() {
                   </span>
                   <button
                     onClick={() => supabase.auth.signOut()}
-                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold"
+                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold cursor-pointer"
                   >
                     [ {fr ? "Déconnexion" : "Sign Out"} ]
                   </button>
@@ -614,7 +658,7 @@ export default function ContenuPage() {
               ) : (
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm"
+                  className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm cursor-pointer"
                 >
                   {fr ? "Connexion" : "Sign In"}
                 </button>
@@ -660,7 +704,7 @@ export default function ContenuPage() {
         <div className="max-w-7xl mx-auto px-6 space-y-8">
 
           <div className="flex flex-col lg:flex-row gap-8 items-start">
-            {/* BIBLIOTHÈQUE */}
+            {/* BIBLIOTHÈQUE ET OPTIONS DOCUMENT */}
             <aside className="w-full lg:w-80 border-2 border-cyan-500/30 bg-black/90 rounded-2xl p-5 shrink-0 space-y-4 shadow-[0_0_25px_rgba(6,182,212,0.1)]">
               <button
                 onClick={nouveauProjet}
@@ -669,18 +713,19 @@ export default function ContenuPage() {
                 + {fr ? "NOUVEL OUVRAGE" : "NEW MANUSCRIPT"}
               </button>
 
-              <div className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest font-bold border-b border-zinc-800 pb-2">
-                {fr ? "BIBLIOTHÈQUE DU STUDIO" : "STUDIO LIBRARY"}
+              <div className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest font-bold border-b border-zinc-800 pb-2 flex justify-between items-center">
+                <span>{fr ? "BIBLIOTHÈQUE DU STUDIO" : "STUDIO LIBRARY"}</span>
+                <span className="text-[9px] text-zinc-500">({historique.length})</span>
               </div>
 
-              <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
+              <div className="max-h-[280px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                 {loadingHistorique ? (
                   <div className="p-3 font-mono text-xs text-zinc-500 animate-pulse">{fr ? "Chargement..." : "Loading..."}</div>
                 ) : historique.length === 0 ? (
                   <div className="p-3 font-mono text-xs text-zinc-600 italic">{fr ? "Aucun ouvrage sauvegardé." : "No saved works."}</div>
                 ) : (
                   historique.map((item) => (
-                    <button
+                    <div
                       key={item.id}
                       onClick={() => {
                         setCurrentId(item.id);
@@ -690,17 +735,27 @@ export default function ContenuPage() {
                         setTexteFinal(item.texte_final || "");
                         setNbMots(item.texte_final ? item.texte_final.split(/\s+/).length : null);
                       }}
-                      className={`w-full text-left p-3.5 rounded-xl border transition-all ${
+                      className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer flex justify-between items-center group ${
                         currentId === item.id
                           ? "bg-cyan-950/60 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
                           : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700 text-zinc-400"
                       }`}
                     >
-                      <span className="block text-xs font-bold truncate">📖 {item.titre || "Ouvrage"}</span>
-                      <span className="block text-[9px] font-mono text-zinc-500 mt-1">
-                        {new Date(item.created_at).toLocaleDateString("fr-CA")}
-                      </span>
-                    </button>
+                      <div className="truncate flex-1 pr-2">
+                        <span className="block text-xs font-bold truncate">📖 {item.titre || "Ouvrage"}</span>
+                        <span className="block text-[9px] font-mono text-zinc-500 mt-0.5">
+                          {new Date(item.created_at).toLocaleDateString("fr-CA")}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={(e) => supprimerProjet(item.id, e)}
+                        title={fr ? "Supprimer l'ouvrage" : "Delete manuscript"}
+                        className="text-zinc-600 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-mono cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   ))
                 )}
               </div>
@@ -917,7 +972,16 @@ export default function ContenuPage() {
                 ) : (
                   <textarea
                     value={texteFinal}
-                    onChange={(e) => setTexteFinal(e.target.value)}
+                    onChange={(e) => {
+                      setTexteFinal(e.target.value);
+                      if (currentId) {
+                        if (!user) {
+                          const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: e.target.value } : h);
+                          setHistorique(updated);
+                          saveLocalDrafts(updated);
+                        }
+                      }
+                    }}
                     rows={25}
                     className="w-full bg-zinc-900/90 border border-emerald-800/40 rounded-2xl p-6 text-sm leading-relaxed outline-none resize-y font-mono text-zinc-100"
                   />
@@ -1048,5 +1112,13 @@ export default function ContenuPage() {
       )}
 
     </main>
+  );
+}
+
+export default function ContenuPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-cyan-400 font-mono text-xs">Chargement du Studio Éditorial...</div>}>
+      <ContenuContent />
+    </Suspense>
   );
 }

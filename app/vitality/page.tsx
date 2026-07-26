@@ -83,9 +83,9 @@ function VitalityContent() {
   const [imageName, setImageName] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const getCalorieGoalKey = (uid: string|null) => uid ? `echo-calorie-goal-${uid}` : "echo-calorie-goal";
-  const getVitalityProfileKey = (uid: string|null) => uid ? `echo-vitality-profile-${uid}` : "echo-vitality-profile";
-  const getVitalityConvoKey = (uid: string|null) => uid ? `echo-vitality-conversation-${uid}` : "echo-vitality-conversation";
+  const getCalorieGoalKey = (uid: string | null) => (uid ? `echo-calorie-goal-${uid}` : "echo-calorie-goal");
+  const getVitalityProfileKey = (uid: string | null) => (uid ? `echo-vitality-profile-${uid}` : "echo-vitality-profile");
+  const getVitalityConvoKey = (uid: string | null) => (uid ? `echo-vitality-conversation-${uid}` : "echo-vitality-conversation");
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -95,7 +95,7 @@ function VitalityContent() {
         verifierStatutUser(session.user.id);
         chargerQuotaUtilisateur(session.user.id);
         const { data: calRows } = await supabase.from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
-        setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
+        setCaloriesList((calRows || []).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
       } else {
         verifierQuotaAnonyme();
         const guestCal = localStorage.getItem("echo-calorie-logs-guest");
@@ -111,7 +111,7 @@ function VitalityContent() {
       const savedProfile = localStorage.getItem(getVitalityProfileKey(uid));
       if (savedProfile) {
         const p = JSON.parse(savedProfile);
-        setUserWeight(p.weight||""); setUserHeight(p.height||"");
+        setUserWeight(p.weight || ""); setUserHeight(p.height || "");
       }
     });
 
@@ -129,6 +129,10 @@ function VitalityContent() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [echoMessages]);
 
   const verifierStatutUser = async (uid: string) => {
     try {
@@ -279,8 +283,13 @@ function VitalityContent() {
   const handleManualCalorieSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualFoodName.trim() || !manualCalories) return;
-    await addCalorie({ foodName: manualFoodName.trim(), calories: parseInt(manualCalories)||0, date: new Date().toLocaleDateString("fr-CA") });
+    await addCalorie({ foodName: manualFoodName.trim(), calories: parseInt(manualCalories) || 0, date: new Date().toLocaleDateString("fr-CA") });
     setManualFoodName(""); setManualCalories("");
+  };
+
+  const saveConvoLocally = (msgs: VitalityMessage[]) => {
+    const uid = user?.id || null;
+    localStorage.setItem(getVitalityConvoKey(uid), JSON.stringify(msgs.map(m => m.raw)));
   };
 
   const totalCaloriesEaten = caloriesList.reduce((s, i) => s + i.calories, 0);
@@ -291,21 +300,21 @@ function VitalityContent() {
     const textToSubmit = forcedText ?? inputEcho.trim();
     if (!textToSubmit && !imageBase64) return;
 
-    if (!user) { setShowSignInModal(true); return; }
-
     const autorise = await consommerUnCredit();
     if (!autorise) return;
 
-    const userEntry: VitalityMessage = { raw: `You: ${textToSubmit}`, imageB64: imageBase64 ?? undefined };
+    const userEntry: VitalityMessage = { raw: `${fr ? "Toi" : "You"}: ${textToSubmit}`, imageB64: imageBase64 ?? undefined };
     const baseMessages = [...echoMessages, userEntry];
 
     setEchoState("thinking");
     setEchoMessages([...baseMessages, { raw: "Echo: ..." }]);
+    saveConvoLocally(baseMessages);
+
     if (!forcedText) setInputEcho("");
     setImageBase64(null); setImageName(null);
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
       const response = await fetch(`${API_URL}/vitality`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -324,7 +333,9 @@ function VitalityContent() {
       const data = await response.json();
       setEchoState("speaking");
 
-      setEchoMessages([...baseMessages, { raw: `Echo: ${data.response || ""}` }]);
+      const finalMessages = [...baseMessages, { raw: `Echo: ${data.response || ""}` }];
+      setEchoMessages(finalMessages);
+      saveConvoLocally(finalMessages);
 
       if (data.action?.type === "ADD_CALORIE_LOG") {
         const payload = data.action.payload;
@@ -335,9 +346,12 @@ function VitalityContent() {
         });
       }
     } catch {
-      setEchoMessages([...baseMessages, { raw: "Echo: Serveur indisponible." }]);
+      const errorMessages = [...baseMessages, { raw: "Echo: Connexion au serveur impossible." }];
+      setEchoMessages(errorMessages);
+      saveConvoLocally(errorMessages);
+    } finally {
+      setTimeout(() => setEchoState("idle"), 5000);
     }
-    setTimeout(() => setEchoState("idle"), 5000);
   };
 
   const isPaidTier = currentUserTier && currentUserTier !== "free" && currentUserTier !== "connected_free";
@@ -404,7 +418,7 @@ function VitalityContent() {
                   </span>
                   <button
                     onClick={() => supabase.auth.signOut()}
-                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold"
+                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold cursor-pointer"
                   >
                     [ {fr ? "Déconnexion" : "Sign Out"} ]
                   </button>
@@ -413,7 +427,7 @@ function VitalityContent() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowSignInModal(true)}
-                    className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm"
+                    className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm cursor-pointer"
                   >
                     {fr ? "Connexion" : "Sign In"}
                   </button>
@@ -468,7 +482,7 @@ function VitalityContent() {
               </div>
 
               <div className="w-full bg-zinc-900 h-3 rounded-full overflow-hidden border border-zinc-800">
-                <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${Math.min((totalCaloriesEaten/calorieGoal)*100, 100)}%` }} />
+                <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${Math.min((totalCaloriesEaten / calorieGoal) * 100, 100)}%` }} />
               </div>
 
               <div className="flex justify-between items-center text-xs font-mono">
@@ -540,13 +554,17 @@ function VitalityContent() {
             </div>
 
             <div className="flex-1 overflow-y-auto py-4 space-y-4 custom-scrollbar">
-              {echoMessages.map((msg, idx) => (
-                <div key={idx} className={`text-xs font-mono ${msg.raw.startsWith("You:") ? "text-right" : "text-left"}`}>
-                  <div className={`inline-block p-3 rounded-2xl max-w-[85%] ${msg.raw.startsWith("You:") ? "bg-zinc-900 border border-zinc-800 text-zinc-200" : "bg-emerald-950/40 border border-emerald-500/30 text-emerald-300"}`}>
-                    {msg.raw.replace(/^(Echo|You):\s*/i, "")}
+              {echoMessages.map((msg, idx) => {
+                const isUser = msg.raw.startsWith("You:") || msg.raw.startsWith("Toi:");
+                const cleanText = msg.raw.replace(/^(Echo|You|Toi):\s*/i, "");
+                return (
+                  <div key={idx} className={`text-xs font-mono ${isUser ? "text-right" : "text-left"}`}>
+                    <div className={`inline-block p-3 rounded-2xl max-w-[85%] whitespace-pre-wrap ${isUser ? "bg-zinc-900 border border-zinc-800 text-zinc-200" : "bg-emerald-950/40 border border-emerald-500/30 text-emerald-300"}`}>
+                      {cleanText}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={bottomRef} />
             </div>
 
@@ -554,7 +572,7 @@ function VitalityContent() {
               <textarea
                 value={inputEcho}
                 onChange={e => setInputEcho(e.target.value)}
-                onKeyDown={e => { if(e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendEcho(); } }}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendEcho(); } }}
                 rows={2}
                 placeholder={fr ? "Entrez vos repas ou posez une question (ex: Pizza 600 kcal)..." : "Log a meal or ask a question (e.g., Pizza 600 kcal)..."}
                 className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl p-3 text-xs font-mono text-zinc-100 outline-none resize-none"

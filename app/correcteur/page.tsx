@@ -22,7 +22,6 @@ interface StepResult {
 const MAX_FREE_CREDITS = 8;
 const REGEN_1H_MS = 60 * 60 * 1000; // 1 heure
 
-// On utilise TOUJOURS la variable globale de ton .env.local :
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
 
 const MicrosoftLogo = () => (
@@ -139,41 +138,119 @@ function CorrecteurContent() {
 
   const t = I18N[lang];
 
+  // Keys de stockage
+  const getTextStorageKey = (uid: string | null) => (uid ? `echo-correcteur-text-${uid}` : "echo-correcteur-text-guest");
+  const getVersionsStorageKey = (uid: string | null) => (uid ? `echo-correcteur-versions-${uid}` : "echo-correcteur-versions-guest");
+
+  // Charger depuis Supabase & LocalStorage
+  const loadCorrectionState = async (uid: string | null) => {
+    // 1. Tenter le chargement depuis LocalStorage d'abord (ultra rapide)
+    const localText = localStorage.getItem(getTextStorageKey(uid));
+    const localVers = localStorage.getItem(getVersionsStorageKey(uid));
+
+    if (localText) setOriginalText(localText);
+    if (localVers) {
+      try {
+        const parsed = JSON.parse(localVers);
+        if (Array.isArray(parsed)) setVersions(parsed);
+      } catch {}
+    }
+
+    // 2. Si connecté, synchroniser avec la base Supabase
+    if (uid) {
+      try {
+        const { data } = await supabase
+          .from("correcteur_historique")
+          .select("original_text, versions")
+          .eq("user_id", uid)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data) {
+          if (data.original_text && !localText) setOriginalText(data.original_text);
+          if (data.versions && Array.isArray(data.versions) && !localVers) setVersions(data.versions);
+        }
+      } catch (e) {
+        console.error("[CORRECTEUR LOAD ERROR]", e);
+      }
+    }
+  };
+
+  // Sauvegarder dans LocalStorage & Supabase
+  const persistCorrection = async (text: string, currentVersions: StepResult[], uid: string | null) => {
+    localStorage.setItem(getTextStorageKey(uid), text);
+    localStorage.setItem(getVersionsStorageKey(uid), JSON.stringify(currentVersions));
+
+    if (uid) {
+      try {
+        const { data: existing } = await supabase
+          .from("correcteur_historique")
+          .select("id")
+          .eq("user_id", uid)
+          .limit(1)
+          .maybeSingle();
+
+        if (existing?.id) {
+          await supabase
+            .from("correcteur_historique")
+            .update({
+              original_text: text,
+              versions: currentVersions,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id);
+        } else {
+          await supabase
+            .from("correcteur_historique")
+            .insert({
+              user_id: uid,
+              original_text: text,
+              versions: currentVersions,
+              updated_at: new Date().toISOString(),
+            });
+        }
+      } catch (e) {
+        console.error("[CORRECTEUR SAVE ERROR]", e);
+      }
+    }
+  };
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const uid = session?.user?.id || null;
       if (session?.user) {
         setUser(session.user);
-        verifierStatutUser(session.user.id);
-        chargerQuotaUtilisateur(session.user.id);
+        verifierStatutUser(uid);
+        chargerQuotaUtilisateur(uid);
       } else {
         verifierQuotaAnonyme();
       }
+      await loadCorrectionState(uid);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
       if (session?.user) {
+        const uid = session.user.id;
         setUser(session.user);
-        verifierStatutUser(session.user.id);
-        chargerQuotaUtilisateur(session.user.id);
+        verifierStatutUser(uid);
+        chargerQuotaUtilisateur(uid);
+        await loadCorrectionState(uid);
       } else {
         setUser(null);
         setCurrentUserTier("free");
         verifierQuotaAnonyme();
+        await loadCorrectionState(null);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (searchParams.get("premium") === "success" && user) {
-      const timer = setTimeout(() => {
-        verifierStatutUser(user.id);
-        chargerQuotaUtilisateur(user.id);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [searchParams, user]);
+  const handleOriginalTextChange = (val: string) => {
+    setOriginalText(val);
+    localStorage.setItem(getTextStorageKey(user?.id || null), val);
+  };
 
   const verifierStatutUser = async (uid: string) => {
     try {
@@ -326,7 +403,7 @@ function CorrecteurContent() {
     }
   };
 
-  const executeStep = async (step: StepNum): Promise<StepResult> => {
+  const executeStep = async (step: StepNum, prevText?: string, prevErrors?: string[]): Promise<StepResult> => {
     const previous = versions.find(v => v.step === step - 1);
     
     const res = await fetch(`${API_BASE}/api/correcteur/step`, {
@@ -336,8 +413,8 @@ function CorrecteurContent() {
         original: originalText,
         family: "deepseek",
         step,
-        previous_text: previous?.texte || "",
-        previous_errors: previous?.erreurs || [],
+        previous_text: prevText !== undefined ? prevText : (previous?.texte || ""),
+        previous_errors: prevErrors !== undefined ? prevErrors : (previous?.erreurs || []),
       }),
     });
 
@@ -363,8 +440,10 @@ function CorrecteurContent() {
     setRunningStep(step);
     try {
       const result = await executeStep(step);
-      setVersions(prev => [...prev.filter(v => v.step !== step), result]);
+      const updatedVersions = [...versions.filter(v => v.step !== step), result];
+      setVersions(updatedVersions);
       setActiveStepTab(step);
+      await persistCorrection(originalText, updatedVersions, user?.id || null);
     } catch (err: any) {
       setErrorMsg(err.message || "Erreur réseau.");
     } finally {
@@ -388,14 +467,13 @@ function CorrecteurContent() {
 
     try {
       const accumulated: StepResult[] = [];
-      let lastText = ""; // 👈 On garde le texte en mémoire locale pour la boucle
+      let lastText = "";
       let lastErrors: string[] = [];
 
       for (let s = 1; s <= stopAtStep; s++) {
         const stepNum = s as StepNum;
         setRunningStep(stepNum);
 
-        // Appel direct avec la mémoire locale instantanée
         const res = await fetch(`${API_BASE}/api/correcteur/step`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -403,7 +481,7 @@ function CorrecteurContent() {
             original: originalText,
             family: "deepseek",
             step: stepNum,
-            previous_text: stepNum === 1 ? "" : lastText, // 👈 Utilise le texte de la passe précédente
+            previous_text: stepNum === 1 ? "" : lastText,
             previous_errors: stepNum === 1 ? [] : lastErrors,
           }),
         });
@@ -418,14 +496,15 @@ function CorrecteurContent() {
           timestamp: new Date().toLocaleTimeString(fr ? "fr-CA" : "en-US"),
         };
 
-        // Mise à jour de la mémoire locale pour le prochain tour de boucle
         lastText = result.texte;
         lastErrors = result.erreurs;
 
-        // Mise à jour de l'affichage UI
         accumulated.push(result);
         setVersions([...accumulated]);
         setActiveStepTab(stepNum);
+
+        // Sauvegarde synchrone à chaque passe complétée
+        await persistCorrection(originalText, accumulated, user?.id || null);
       }
     } catch (err: any) {
       setErrorMsg(err.message || "Erreur pendant le pipeline.");
@@ -556,7 +635,7 @@ function CorrecteurContent() {
                   </span>
                   <button
                     onClick={() => supabase.auth.signOut()}
-                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold"
+                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold cursor-pointer"
                   >
                     [ {fr ? "Déconnexion" : "Sign Out"} ]
                   </button>
@@ -565,13 +644,13 @@ function CorrecteurContent() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowSignInModal(true)}
-                    className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm"
+                    className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm cursor-pointer"
                   >
                     {fr ? "Connexion" : "Sign In"}
                   </button>
                   <button
                     onClick={() => setShowSignUpModal(true)}
-                    className="px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-bold tracking-tight shadow-sm"
+                    className="px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-bold tracking-tight shadow-sm cursor-pointer"
                   >
                     {fr ? "S'inscrire" : "Sign Up"}
                   </button>
@@ -702,7 +781,7 @@ function CorrecteurContent() {
 
               <textarea
                 value={originalText}
-                onChange={(e) => setOriginalText(e.target.value)}
+                onChange={(e) => handleOriginalTextChange(e.target.value)}
                 placeholder={t.dropPlaceholder}
                 className="w-full flex-1 bg-transparent resize-none outline-none font-serif text-zinc-200 text-base leading-relaxed placeholder:text-zinc-700 placeholder:font-sans custom-scrollbar min-h-[350px]"
               />

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 type Lang = "fr" | "en";
 type Currency = "CAD" | "USD" | "EUR";
-type BudgetExpense = { id: string; title: string; amount: number; currency: "$"|"US$"|"€"; date: string };
+type BudgetExpense = { id: string; title: string; amount: number; currency: "$" | "US$" | "€"; date: string };
 type BudgetMessage = { raw: string };
 
 const MAX_FREE_CREDITS = 8;
@@ -69,7 +69,7 @@ function BudgetContent() {
   const [budgetGoal, setBudgetGoal] = useState(3000);
   const [manualExpenseTitle, setManualExpenseTitle] = useState("");
   const [manualExpenseAmount, setManualExpenseAmount] = useState("");
-  const [manualExpenseCurrency, setManualExpenseCurrency] = useState<"$"|"US$"|"€">("$");
+  const [manualExpenseCurrency, setManualExpenseCurrency] = useState<"$" | "US$" | "€">("$");
   const [manualExpenseDate, setManualExpenseDate] = useState(new Date().toLocaleDateString("fr-CA"));
 
   // Agent Echo
@@ -78,8 +78,8 @@ function BudgetContent() {
   const [echoState, setEchoState] = useState("idle");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const getBudgetGoalKey = (uid: string|null) => uid ? `echo-budget-goal-${uid}` : "echo-budget-goal";
-  const getBudgetConvoKey = (uid: string|null) => uid ? `echo-budget-conversation-${uid}` : "echo-budget-conversation";
+  const getBudgetGoalKey = (uid: string | null) => (uid ? `echo-budget-goal-${uid}` : "echo-budget-goal");
+  const getBudgetConvoKey = (uid: string | null) => (uid ? `echo-budget-conversation-${uid}` : "echo-budget-conversation");
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -89,7 +89,7 @@ function BudgetContent() {
         verifierStatutUser(session.user.id);
         chargerQuotaUtilisateur(session.user.id);
         const { data: expRows } = await supabase.from("echo_expenses").select("*").eq("user_id", uid).order("date", { ascending: false });
-        setExpenses((expRows||[]).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency||"$") as "$"|"US$"|"€", date: r.date })));
+        setExpenses((expRows || []).map(r => ({ id: r.id, title: r.title, amount: r.amount, currency: (r.currency || "$") as "$" | "US$" | "€", date: r.date })));
       } else {
         verifierQuotaAnonyme();
         const guestExp = localStorage.getItem("echo-budget-expenses-guest");
@@ -117,6 +117,10 @@ function BudgetContent() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [echoMessages]);
 
   useEffect(() => {
     if (searchParams.get("premium") === "success" && user) {
@@ -261,7 +265,7 @@ function BudgetContent() {
       user_id: user.id, title: exp.title, amount: exp.amount, currency: exp.currency, date: exp.date,
     }).select().single();
     if (!error && data) {
-      setExpenses(prev => [{ id: data.id, title: data.title, amount: data.amount, currency: (data.currency||"$") as "$"|"US$"|"€", date: data.date }, ...prev]);
+      setExpenses(prev => [{ id: data.id, title: data.title, amount: data.amount, currency: (data.currency || "$") as "$" | "US$" | "€", date: data.date }, ...prev]);
     }
   };
 
@@ -277,8 +281,13 @@ function BudgetContent() {
   const handleManualExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualExpenseTitle.trim() || !manualExpenseAmount) return;
-    await addExpense({ title: manualExpenseTitle.trim(), amount: parseFloat(manualExpenseAmount)||0, currency: manualExpenseCurrency, date: manualExpenseDate||new Date().toLocaleDateString("fr-CA") });
+    await addExpense({ title: manualExpenseTitle.trim(), amount: parseFloat(manualExpenseAmount) || 0, currency: manualExpenseCurrency, date: manualExpenseDate || new Date().toLocaleDateString("fr-CA") });
     setManualExpenseTitle(""); setManualExpenseAmount("");
+  };
+
+  const saveConvoLocally = (msgs: BudgetMessage[]) => {
+    const uid = user?.id || null;
+    localStorage.setItem(getBudgetConvoKey(uid), JSON.stringify(msgs.map(m => m.raw)));
   };
 
   const totalSpentUSD = expenses.filter(i => i.currency === "$" || i.currency === "US$").reduce((s, i) => s + i.amount, 0);
@@ -291,20 +300,20 @@ function BudgetContent() {
     const textToSubmit = forcedText ?? inputEcho.trim();
     if (!textToSubmit) return;
 
-    if (!user) { setShowSignInModal(true); return; }
-
     const autorise = await consommerUnCredit();
     if (!autorise) return;
 
-    const userEntry: BudgetMessage = { raw: `You: ${textToSubmit}` };
+    const userEntry: BudgetMessage = { raw: `${fr ? "Toi" : "You"}: ${textToSubmit}` };
     const baseMessages = [...echoMessages, userEntry];
 
     setEchoState("thinking");
     setEchoMessages([...baseMessages, { raw: "Echo: ..." }]);
+    saveConvoLocally(baseMessages);
+
     if (!forcedText) setInputEcho("");
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
       const response = await fetch(`${API_URL}/vitality`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -321,7 +330,9 @@ function BudgetContent() {
       const data = await response.json();
       setEchoState("speaking");
 
-      setEchoMessages([...baseMessages, { raw: `Echo: ${data.response || ""}` }]);
+      const finalMessages = [...baseMessages, { raw: `Echo: ${data.response || ""}` }];
+      setEchoMessages(finalMessages);
+      saveConvoLocally(finalMessages);
 
       if (data.action?.type === "ADD_BUDGET_EXPENSE") {
         const payload = data.action.payload;
@@ -333,9 +344,12 @@ function BudgetContent() {
         });
       }
     } catch {
-      setEchoMessages([...baseMessages, { raw: "Echo: Serveur indisponible." }]);
+      const errorMessages = [...baseMessages, { raw: "Echo: Connexion au serveur impossible." }];
+      setEchoMessages(errorMessages);
+      saveConvoLocally(errorMessages);
+    } finally {
+      setTimeout(() => setEchoState("idle"), 5000);
     }
-    setTimeout(() => setEchoState("idle"), 5000);
   };
 
   const isPaidTier = currentUserTier && currentUserTier !== "free" && currentUserTier !== "connected_free";
@@ -402,7 +416,7 @@ function BudgetContent() {
                   </span>
                   <button
                     onClick={() => supabase.auth.signOut()}
-                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold"
+                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold cursor-pointer"
                   >
                     [ {fr ? "Déconnexion" : "Sign Out"} ]
                   </button>
@@ -411,7 +425,7 @@ function BudgetContent() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowSignInModal(true)}
-                    className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm"
+                    className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm cursor-pointer"
                   >
                     {fr ? "Connexion" : "Sign In"}
                   </button>
@@ -545,13 +559,17 @@ function BudgetContent() {
                     {fr ? "Posez une question ou dictez vos dépenses à votre agent budget..." : "Ask a question or log expenses with your budget agent..."}
                   </p>
                 </div>
-              ) : echoMessages.map((msg, idx) => (
-                <div key={idx} className={`text-sm font-mono ${msg.raw.startsWith("You:") ? "text-right" : "text-left"}`}>
-                  <div className={`inline-block p-4 rounded-2xl max-w-[85%] leading-relaxed ${msg.raw.startsWith("You:") ? "bg-zinc-900 border border-zinc-800 text-zinc-200" : "bg-cyan-950/50 border border-cyan-500/40 text-cyan-200"}`}>
-                    {msg.raw.replace(/^(Echo|You):\s*/i, "")}
+              ) : echoMessages.map((msg, idx) => {
+                const isUser = msg.raw.startsWith("You:") || msg.raw.startsWith("Toi:");
+                const cleanText = msg.raw.replace(/^(Echo|You|Toi):\s*/i, "");
+                return (
+                  <div key={idx} className={`text-sm font-mono ${isUser ? "text-right" : "text-left"}`}>
+                    <div className={`inline-block p-4 rounded-2xl max-w-[85%] leading-relaxed whitespace-pre-wrap ${isUser ? "bg-zinc-900 border border-zinc-800 text-zinc-200" : "bg-cyan-950/50 border border-cyan-500/40 text-cyan-200"}`}>
+                      {cleanText}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={bottomRef} />
             </div>
 
@@ -559,7 +577,7 @@ function BudgetContent() {
               <textarea
                 value={inputEcho}
                 onChange={e => setInputEcho(e.target.value)}
-                onKeyDown={e => { if(e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendEcho(); } }}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendEcho(); } }}
                 rows={3}
                 placeholder={fr ? "Notez une dépense (ex: Café 5$)..." : "Log an expense (e.g. Coffee $5)..."}
                 className="w-full bg-zinc-900 border border-zinc-800 focus:border-cyan-400 rounded-2xl p-4 text-sm font-mono text-zinc-100 outline-none resize-none leading-relaxed"

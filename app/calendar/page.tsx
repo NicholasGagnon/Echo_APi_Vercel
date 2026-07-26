@@ -165,6 +165,7 @@ function CalendarContent() {
 
   const getStorageKey = (uid: string) => `echo-calendar-v2-${uid}`;
   const getGoogleTokenKey = (uid: string) => `echo-google-token-${uid}`;
+  const getCalendarConvoKey = (uid: string | null) => (uid ? `echo-calendar-conversation-${uid}` : "echo-calendar-conversation");
   const TUTO_KEY = "echo-calendar-tuto-seen-v1";
 
   const verifierStatutUser = async (uid: string) => {
@@ -288,7 +289,6 @@ function CalendarContent() {
     return hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
   };
 
-  // ── FETCH EVENTS SUPABASE ──
   const fetchSupabaseEvents = useCallback(async (uid: string) => {
     try {
       const { data: calRows, error } = await supabase.from("echo_calendar").select("*").eq("user_id", uid);
@@ -456,37 +456,45 @@ function CalendarContent() {
     } catch (err) { console.error("[Calendar] deleteFromGoogle:", err); }
   }, [resolveToken, clearToken]);
 
+  const saveConvoLocally = (msgs: ChatMessage[]) => {
+    const uid = user?.id || null;
+    localStorage.setItem(getCalendarConvoKey(uid), JSON.stringify(msgs.map(m => m.raw)));
+  };
+
   useEffect(() => {
     let cancelled = false;
     if (!localStorage.getItem(TUTO_KEY)) setShowTutorial(true);
 
     const bootstrap = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id || null;
       if (!session?.user) {
         if (!cancelled) setIsLoaded(true);
         verifierQuotaAnonyme();
-        return;
+      } else {
+        if (!cancelled) {
+          setUser(session.user);
+          setUserId(uid);
+          verifierStatutUser(uid);
+          chargerQuotaUtilisateur(uid);
+        }
+
+        const savedEvents = localStorage.getItem(getStorageKey(uid));
+        if (savedEvents && !cancelled) { try { setEvents(JSON.parse(savedEvents)); } catch {} }
+        if (!cancelled) await fetchSupabaseEvents(uid);
+
+        let activeToken: string | null = null;
+        const hashToken = extractProviderTokenFromHash();
+        if (hashToken) { clearHash(); activeToken = hashToken; await storeToken(uid, hashToken); }
+        else if (session.provider_token) { activeToken = session.provider_token; await storeToken(uid, session.provider_token); }
+        else { activeToken = await resolveToken(uid); }
+
+        if (activeToken && !cancelled) await fetchGoogleEvents(activeToken, uid, today.getFullYear(), today.getMonth());
+        if (!cancelled) setIsLoaded(true);
       }
-      const uid = session.user.id;
-      if (!cancelled) {
-        setUser(session.user);
-        setUserId(uid);
-        verifierStatutUser(uid);
-        chargerQuotaUtilisateur(uid);
-      }
 
-      const savedEvents = localStorage.getItem(getStorageKey(uid));
-      if (savedEvents && !cancelled) { try { setEvents(JSON.parse(savedEvents)); } catch {} }
-      if (!cancelled) await fetchSupabaseEvents(uid);
-
-      let activeToken: string | null = null;
-      const hashToken = extractProviderTokenFromHash();
-      if (hashToken) { clearHash(); activeToken = hashToken; await storeToken(uid, hashToken); }
-      else if (session.provider_token) { activeToken = session.provider_token; await storeToken(uid, session.provider_token); }
-      else { activeToken = await resolveToken(uid); }
-
-      if (activeToken && !cancelled) await fetchGoogleEvents(activeToken, uid, today.getFullYear(), today.getMonth());
-      if (!cancelled) setIsLoaded(true);
+      const savedConvo = localStorage.getItem(getCalendarConvoKey(uid));
+      if (savedConvo && !cancelled) setChatMessages(JSON.parse(savedConvo).map((r: string) => ({ raw: r })));
     };
 
     bootstrap();
@@ -512,6 +520,9 @@ function CalendarContent() {
         const providerToken = hashToken || session.provider_token;
         if (providerToken) { clearHash(); await storeToken(uid, providerToken); await fetchGoogleEvents(providerToken, uid, today.getFullYear(), today.getMonth()); }
         else { const token = await resolveToken(uid); if (token) await fetchGoogleEvents(token, uid, today.getFullYear(), today.getMonth()); }
+
+        const savedConvo = localStorage.getItem(getCalendarConvoKey(uid));
+        if (savedConvo) setChatMessages(JSON.parse(savedConvo).map((r: string) => ({ raw: r })));
       }
     });
 
@@ -531,7 +542,7 @@ function CalendarContent() {
   };
 
   const saveEvent = async () => {
-    if (!selectedDateKey || !title.trim() || !userId) return;
+    if (!selectedDateKey || !title.trim()) return;
 
     const tempId = Date.now().toString();
     const ev: EventData = { id: tempId, title, start, end, notes };
@@ -539,6 +550,8 @@ function CalendarContent() {
     setEvents(prev => ({ ...prev, [selectedDateKey]: [...(prev[selectedDateKey] || []), ev] }));
     setShowAddForm(false);
     setTitle(""); setStart(""); setEnd(""); setNotes("");
+
+    if (!userId) return;
 
     try {
       const cloudId = await pushEventToGoogle(userId, selectedDateKey, ev);
@@ -570,16 +583,16 @@ function CalendarContent() {
   };
 
   const deleteEvent = async (dateKey: string, id: string, googleId?: string) => {
-    if (!userId) return;
-    if (googleId) await deleteFromGoogle(userId, googleId);
-    await supabase.from("echo_calendar").delete().eq("id", id).eq("user_id", userId);
+    if (userId) {
+      if (googleId) await deleteFromGoogle(userId, googleId);
+      await supabase.from("echo_calendar").delete().eq("id", id).eq("user_id", userId);
+    }
     setEvents(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).filter(e => e.id !== id) }));
   };
 
   // ── ECHO CHAT AGENTIC INTÉGRÉ ──
   const handleSendEcho = async () => {
     if (!chatInput.trim()) return;
-    if (!userId) { setShowSignInModal(true); return; }
 
     const autorise = await consommerUnCredit();
     if (!autorise) return;
@@ -590,10 +603,11 @@ function CalendarContent() {
 
     setChatState("thinking");
     setChatMessages([...baseMessages, { raw: "Echo: ..." }]);
+    saveConvoLocally(baseMessages);
     setChatInput("");
 
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
       const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -608,7 +622,10 @@ function CalendarContent() {
 
       const data = await response.json();
       setChatState("speaking");
-      setChatMessages([...baseMessages, { raw: `Echo: ${data.response || ""}` }]);
+
+      const finalMessages = [...baseMessages, { raw: `Echo: ${data.response || ""}` }];
+      setChatMessages(finalMessages);
+      saveConvoLocally(finalMessages);
 
       if (data.action?.type === "ADD_CALENDAR_EVENT") {
         const payload = data.action.payload;
@@ -621,26 +638,32 @@ function CalendarContent() {
         const tempId = Date.now().toString();
         const ev: EventData = { id: tempId, title: eventTitle, start: startTime, end: endTime, notes: notesStr, isFromEcho: true };
 
-        const cloudId = await pushEventToGoogle(userId, dateKey, ev);
-        const finalId = cloudId || tempId;
+        if (userId) {
+          const cloudId = await pushEventToGoogle(userId, dateKey, ev);
+          const finalId = cloudId || tempId;
 
-        await supabase.from("echo_calendar").insert({
-          id: finalId,
-          user_id: userId,
-          title: eventTitle,
-          start_date: dateKey,
-          end_date: dateKey,
-          start_time: startTime || null,
-          end_time: endTime || null,
-          notes: notesStr,
-          is_from_echo: true,
-        });
+          await supabase.from("echo_calendar").insert({
+            id: finalId,
+            user_id: userId,
+            title: eventTitle,
+            start_date: dateKey,
+            end_date: dateKey,
+            start_time: startTime || null,
+            end_time: endTime || null,
+            notes: notesStr,
+            is_from_echo: true,
+          });
 
-        await fetchSupabaseEvents(userId);
+          await fetchSupabaseEvents(userId);
+        } else {
+          setEvents(prev => ({ ...prev, [dateKey]: [...(prev[dateKey] || []), ev] }));
+        }
       }
     } catch (err) {
       console.error("[Calendar Agentic] Erreur:", err);
-      setChatMessages([...baseMessages, { raw: "Echo: Erreur lors de l'enregistrement de l'événement." }]);
+      const errorMessages = [...baseMessages, { raw: "Echo: Connexion au serveur impossible." }];
+      setChatMessages(errorMessages);
+      saveConvoLocally(errorMessages);
     } finally {
       setTimeout(() => setChatState("idle"), 5000);
     }
@@ -856,17 +879,21 @@ function CalendarContent() {
                   {fr ? "Dictez un rendez-vous (ex: 'Ajoute un médecin demain à 14h')..." : "Schedule an event (e.g. 'Add dentist tomorrow at 2 PM')..."}
                 </p>
               </div>
-            ) : chatMessages.map((msg, idx) => (
-              <div key={idx} className={`text-xs font-mono ${msg.raw.startsWith("You:") || msg.raw.startsWith("Toi:") ? "text-right" : "text-left"}`}>
-                <div className={`inline-block p-3.5 rounded-2xl max-w-[85%] leading-relaxed ${
-                  msg.raw.startsWith("You:") || msg.raw.startsWith("Toi:")
-                    ? "bg-zinc-900 border border-zinc-800 text-zinc-200"
-                    : "bg-cyan-950/50 border border-cyan-500/40 text-cyan-200"
-                }`}>
-                  {msg.raw.replace(/^(Echo|You|Toi):\s*/i, "")}
+            ) : chatMessages.map((msg, idx) => {
+              const isUser = msg.raw.startsWith("You:") || msg.raw.startsWith("Toi:");
+              const cleanText = msg.raw.replace(/^(Echo|You|Toi):\s*/i, "");
+              return (
+                <div key={idx} className={`text-xs font-mono ${isUser ? "text-right" : "text-left"}`}>
+                  <div className={`inline-block p-3.5 rounded-2xl max-w-[85%] leading-relaxed whitespace-pre-wrap ${
+                    isUser
+                      ? "bg-zinc-900 border border-zinc-800 text-zinc-200"
+                      : "bg-cyan-950/50 border border-cyan-500/40 text-cyan-200"
+                  }`}>
+                    {cleanText}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={bottomRef} />
           </div>
 
