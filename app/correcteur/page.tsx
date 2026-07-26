@@ -22,7 +22,8 @@ interface StepResult {
 const MAX_FREE_CREDITS = 8;
 const REGEN_1H_MS = 60 * 60 * 1000; // 1 heure
 
-const API_BASE = process.env.NEXT_PUBLIC_CORRECTEUR_API || "http://localhost:5003";
+// On utilise TOUJOURS la variable globale de ton .env.local :
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
 
 const MicrosoftLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
@@ -374,19 +375,54 @@ function CorrecteurContent() {
   const runAllPipeline = async () => {
     if (!user) { setShowSignInModal(true); return; }
     setErrorMsg(null);
-    if (!originalText.trim()) { setErrorMsg(fr ? "Veuillez d'abord fournir le texte original." : "Please provide the original text first."); return; }
+    if (!originalText.trim()) { 
+      setErrorMsg(fr ? "Veuillez d'abord fournir le texte original." : "Please provide the original text first."); 
+      return; 
+    }
 
     const autorise = await consommerUnCredit();
     if (!autorise) return;
 
     setRunningAll(true);
     setVersions([]);
+
     try {
       const accumulated: StepResult[] = [];
+      let lastText = ""; // 👈 On garde le texte en mémoire locale pour la boucle
+      let lastErrors: string[] = [];
+
       for (let s = 1; s <= stopAtStep; s++) {
         const stepNum = s as StepNum;
         setRunningStep(stepNum);
-        const result = await executeStep(stepNum);
+
+        // Appel direct avec la mémoire locale instantanée
+        const res = await fetch(`${API_BASE}/api/correcteur/step`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            original: originalText,
+            family: "deepseek",
+            step: stepNum,
+            previous_text: stepNum === 1 ? "" : lastText, // 👈 Utilise le texte de la passe précédente
+            previous_errors: stepNum === 1 ? [] : lastErrors,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || `Erreur à l'étape ${stepNum}.`);
+
+        const result: StepResult = {
+          step: stepNum,
+          texte: data.texte,
+          erreurs: data.erreurs || [],
+          timestamp: new Date().toLocaleTimeString(fr ? "fr-CA" : "en-US"),
+        };
+
+        // Mise à jour de la mémoire locale pour le prochain tour de boucle
+        lastText = result.texte;
+        lastErrors = result.erreurs;
+
+        // Mise à jour de l'affichage UI
         accumulated.push(result);
         setVersions([...accumulated]);
         setActiveStepTab(stepNum);

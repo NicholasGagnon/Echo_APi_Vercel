@@ -76,7 +76,8 @@ const GoogleLogo = () => (
   </svg>
 );
 
-const API_BASE = process.env.NEXT_PUBLIC_CONTENU_API || "http://localhost:5004";
+// On utilise TOUJOURS la variable globale de ton .env.local :
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
 
 // RÈGLE : Max 4 crédits. Recharge de 1 crédit toutes les 3 heures (10 800 000 ms)
 const MAX_FREE_CREDITS = 4;
@@ -509,27 +510,38 @@ export default function ContenuPage() {
     setTimeout(() => setCopiedStep(null), 2000);
   };
 
-  const nettoyerEtFixerTexte = () => {
+  const nettoyerEtFixerTexte = async () => {
     if (!texteFinal) return;
 
     let t = texteFinal;
-    t = t.replace(/\s*(#{1}\s*CHAPITRE\s+\d+[^\n]*)/gi, "\n\n$1\n\n");
-    t = t.replace(/\s*(#{2}\s*[^\n#]+)/g, "\n\n$1\n\n");
-    t = t.replace(/([.!?])\s+([A-ZÀ-Ÿ][A-ZÀ-Ÿ\s]{2,}\s*:)/g, "$1\n\n$2");
+
+    // 1. Transformer les Chapitres en Titres H1 Markdown (# CHAPITRE)
+    t = t.replace(/\s*(?:#{1,3}\s*)?(CHAPITRE\s+\d+[^\n]*)/gi, "\n\n# $1\n\n");
+
+    // 2. Transformer les sous-titres ou sections majeurs en H2 (## Titre)
+    t = t.replace(/\n([A-ZÀ-Ÿ0-9\s\-\':]{4,80})\n/g, "\n\n## $1\n\n");
+
+    // 3. Forcer un saut de ligne double devant les puces ou listes numérotées
+    t = t.replace(/([.!?])\s*([0-9]+\.\s+|[-•*]\s+)/g, "$1\n\n$2");
+
+    // 4. Nettoyer les espaces multiples et sauts de ligne excessifs
     t = t.replace(/[ \t]+/g, " ");
     t = t.replace(/\n{3,}/g, "\n\n");
 
-    setTexteFinal(t.trim());
-    setNbMots(t.trim().split(/\s+/).length);
-  };
+    const textePropre = t.trim();
 
-  if (!authChecked) {
-    return (
-      <div className="h-screen w-screen bg-zinc-950 flex items-center justify-center font-mono text-xs text-zinc-500">
-        {fr ? "Initialisation du Studio d'Édition..." : "Initializing Editorial Studio..."}
-      </div>
-    );
-  }
+    setTexteFinal(textePropre);
+    setNbMots(textePropre.split(/\s+/).length);
+
+    // Mettre à jour dans Supabase si un projet est ouvert
+    if (currentId && user) {
+      await supabase
+        .from("contenu_historique")
+        .update({ texte_final: textePropre })
+        .eq("id", currentId);
+      chargerHistorique(user.id);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
