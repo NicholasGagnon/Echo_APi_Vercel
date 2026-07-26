@@ -13,6 +13,9 @@ type Currency = "CAD" | "USD" | "EUR";
 type Status = "pending" | "paid" | "late";
 type FontTemplate = "modern" | "classic" | "minimal" | "bold" | "elegant";
 
+const MAX_FREE_CREDITS = 5;
+const REGEN_3H_MS = 3 * 60 * 60 * 1000;
+
 const MicrosoftLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
     <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
@@ -139,6 +142,10 @@ function FastBillingContent() {
   const [user, setUser] = useState<any>(null);
   const [userTier, setUserTier] = useState<string>("free");
 
+  // Quotas
+  const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
+  const [nextRegenIn, setNextRegenIn] = useState<number>(0);
+
   // Devise & Stripe
   const [currency, setCurrency] = useState<Currency>("CAD");
   const [showPremiumModal, setShowPremiumModal] = useState(false);
@@ -186,6 +193,9 @@ function FastBillingContent() {
       if (session?.user) {
         setUser(session.user);
         verifierStatutUser(session.user.id);
+        chargerQuotaUtilisateur(session.user.id);
+      } else {
+        verifierQuotaAnonyme();
       }
     });
 
@@ -193,9 +203,11 @@ function FastBillingContent() {
       if (session?.user) {
         setUser(session.user);
         verifierStatutUser(session.user.id);
+        chargerQuotaUtilisateur(session.user.id);
       } else {
         setUser(null);
         setUserTier("free");
+        verifierQuotaAnonyme();
       }
     });
 
@@ -209,6 +221,7 @@ function FastBillingContent() {
     if (searchParams.get("premium") === "success" && user) {
       const timer = setTimeout(() => {
         verifierStatutUser(user.id);
+        chargerQuotaUtilisateur(user.id);
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -216,16 +229,123 @@ function FastBillingContent() {
 
   const verifierStatutUser = async (uid: string) => {
     try {
-      const { data: cData } = await supabase.from("contenu_quotas").select("tier").eq("user_id", uid).maybeSingle();
-      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
-        setUserTier(cData.tier); return;
-      }
-      const { data: wData } = await supabase.from("world_quotas").select("tier").eq("user_id", uid).maybeSingle();
-      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
-        setUserTier(wData.tier); return;
+      const { data: fData } = await supabase.from("fastbilling_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (fData?.tier && fData.tier !== "free" && fData.tier !== "connected_free") {
+        setUserTier(fData.tier); return;
       }
       setUserTier("free");
     } catch { setUserTier("free"); }
+  };
+
+  const chargerQuotaUtilisateur = async (uid: string) => {
+    try {
+      const { data } = await supabase
+        .from("fastbilling_quotas")
+        .select("*")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      const now = Date.now();
+      if (data) {
+        const tier = (data.tier || "free");
+        setUserTier(tier);
+
+        if (tier === "premium" || tier === "advantage") {
+          setAvailableQuota(999);
+          return;
+        }
+
+        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
+        const elapsed = now - lastRegen;
+        const recovered = Math.floor(elapsed / REGEN_3H_MS);
+        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + recovered);
+
+        setAvailableQuota(available);
+
+        if (available < MAX_FREE_CREDITS) {
+          setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
+        }
+      } else {
+        await supabase.from("fastbilling_quotas").insert({
+          user_id: uid,
+          available_credits: MAX_FREE_CREDITS,
+          tier: "free",
+          last_regen_at: new Date().toISOString(),
+        });
+        setAvailableQuota(MAX_FREE_CREDITS);
+        setUserTier("free");
+      }
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const verifierQuotaAnonyme = () => {
+    try {
+      const savedAnon = parseInt(localStorage.getItem("fb_anon_used") || "0");
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const consommerUnCredit = async (): Promise<boolean> => {
+    if (userTier === "premium" || userTier === "advantage") return true;
+
+    if (!user) {
+      const currentUsed = parseInt(localStorage.getItem("fb_anon_used") || "0");
+      if (currentUsed >= MAX_FREE_CREDITS) {
+        setShowSignInModal(true);
+        return false;
+      }
+      localStorage.setItem("fb_anon_used", String(currentUsed + 1));
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
+      return true;
+    }
+
+    const now = Date.now();
+    const { data } = await supabase
+      .from("fastbilling_quotas")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
+
+    if (data && userTier === "free") {
+      const elapsed = now - lastRegen;
+      const recovered = Math.floor(elapsed / REGEN_3H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
+      if (recovered > 0) lastRegen = now;
+    }
+
+    if (avail < 1) {
+      const elapsed = now - lastRegen;
+      setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
+      setShowPremiumModal(true);
+      return false;
+    }
+
+    const newAvail = avail - 1;
+    setAvailableQuota(newAvail);
+
+    await supabase.from("fastbilling_quotas").upsert({
+      user_id: user.id,
+      available_credits: newAvail,
+      tier: userTier,
+      last_regen_at: new Date(lastRegen).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+    return true;
+  };
+
+  const formatRegenTime = (ms: number) => {
+    const minutes = Math.ceil(ms / 60000);
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
   };
 
   const handleStripeCheckout = async () => {
@@ -263,6 +383,9 @@ function FastBillingContent() {
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!freeText.trim()) return;
+
+    const autorise = await consommerUnCredit();
+    if (!autorise) return;
 
     setLoading(true); setInvoice(null);
 
@@ -317,7 +440,6 @@ function FastBillingContent() {
     } finally { setLoading(false); }
   };
 
-  // 🚀 EXPORT PDF SÉCURISÉ
   const handleExport = async (format: "docx" | "pdf") => {
     if (!invoice || !invoiceRef.current) return;
 
@@ -452,7 +574,6 @@ function FastBillingContent() {
     }
   };
 
-  // 🚀 FACTURE EN STYLES PURS POUR RENDU ET HTML2CANVAS SANS BUG
   const renderInvoice = () => {
     if (!invoice) return null;
     const st = STATUS_CONFIG[invoice.status];
@@ -585,23 +706,21 @@ function FastBillingContent() {
                 ))}
               </div>
 
-              {isPaidTier ? (
-                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
-                  <span className="font-bold text-[11px] uppercase tracking-wider">
-                    {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
-                  </span>
-                </div>
-              ) : (
-                <div 
-                  onClick={() => setShowPremiumModal(true)} 
-                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
-                >
+              {/* INDICE DU QUOTA ET BANNIÈRE ILLIMITÉ */}
+              <div 
+                onClick={() => !isPaidTier && setShowPremiumModal(true)} 
+                className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+              >
+                <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Factures :" : "Invoices:"}</span>
+                <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
+                  {isPaidTier ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+                </span>
+                {!isPaidTier && (
                   <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
-                    ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                    ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                   </span>
-                </div>
-              )}
+                )}
+              </div>
 
               <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
                 <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
@@ -640,12 +759,9 @@ function FastBillingContent() {
           </div>
         </header>
 
-        {/* HERO BANNER DE L'OUTIL */}
+        {/* HERO BANNER DE L'OUTIL SANS LE BADGE "MODULE 04" */}
         <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-8">
-            <div className="inline-block text-[10px] font-mono tracking-widest text-cyan-600 font-bold uppercase mb-2 border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 rounded">
-              {fr ? "MODULE 04 // FACTURATION AUTOMATISÉE" : "MODULE 04 // AUTOMATED INVOICING"}
-            </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 leading-[1.0] mb-3 uppercase">
               FastBilling
             </h1>
@@ -841,12 +957,12 @@ function FastBillingContent() {
 
             <div className="text-4xl mb-3">⚡</div>
             <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
-              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+              {fr ? "Quota de 5 Factures Atteint" : "5-Invoice Limit Reached"}
             </h2>
             <p className="text-xs text-zinc-400 mb-4 font-sans">
               {fr
-                ? "Débloquez l'accès illimité à l'ensemble des modules d'intelligence artificielle."
-                : "Unlock unlimited access to all artificial intelligence modules."}
+                ? `Prochain crédit dans environ ${formatRegenTime(nextRegenIn)}. Ou débloquez l'accès illimité dès maintenant.`
+                : `Next credit in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access now.`}
             </p>
 
             <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
@@ -886,7 +1002,7 @@ function FastBillingContent() {
             >
               {isCheckoutLoading
                 ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
-                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
+                : (fr ? `Passer en Illimité (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Unlock Unlimited (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
           </div>
         </div>

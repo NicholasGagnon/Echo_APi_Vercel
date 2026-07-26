@@ -77,13 +77,14 @@ const GoogleLogo = () => (
 );
 
 const API_BASE = process.env.NEXT_PUBLIC_CONTENU_API || "http://localhost:5004";
-const REGEN_24H_MS = 24 * 60 * 60 * 1000;
+
+// RÈGLE : Max 4 crédits. Recharge de 1 crédit toutes les 3 heures (10 800 000 ms)
+const MAX_FREE_CREDITS = 4;
+const REGEN_3H_MS = 3 * 60 * 60 * 1000;
 
 type CurrencyCode = "CAD" | "USD" | "EUR";
-
 const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
 
-// PRIX FIXES ANCRÉS À 3.99 DANS TOUTES LES DEVISES
 const PRICES: Record<CurrencyCode, { amount: string; symbol: string; cents: number }> = {
   CAD: { amount: "3.99", symbol: "CA$", cents: 399 },
   USD: { amount: "3.99", symbol: "US$", cents: 399 },
@@ -105,7 +106,7 @@ export default function ContenuPage() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Quotas, Devise & Abonnements
-  const [availableQuota, setAvailableQuota] = useState<number>(3);
+  const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
   const [userTier, setUserTier] = useState<"free" | "advantage" | "premium">("free");
   const [nextRegenIn, setNextRegenIn] = useState<number>(0);
   const [showPremiumModal, setShowPremiumModal] = useState<boolean>(false);
@@ -183,38 +184,38 @@ export default function ContenuPage() {
           return;
         }
 
-        const lastRegen = new Date(data.last_regen).getTime();
+        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
         const elapsed = now - lastRegen;
-        const recovered = Math.floor(elapsed / REGEN_24H_MS);
-        const available = Math.min(3, (data.available ?? 3) + recovered);
+        const recovered = Math.floor(elapsed / REGEN_3H_MS);
+        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + recovered);
 
         setAvailableQuota(available);
 
-        if (available < 3) {
-          const nextMs = REGEN_24H_MS - (elapsed % REGEN_24H_MS);
+        if (available < MAX_FREE_CREDITS) {
+          const nextMs = REGEN_3H_MS - (elapsed % REGEN_3H_MS);
           setNextRegenIn(nextMs);
         }
       } else {
         await supabase.from("contenu_quotas").insert({
           user_id: uid,
-          available: 3,
+          available_credits: MAX_FREE_CREDITS,
           tier: "free",
-          last_regen: new Date().toISOString(),
+          last_regen_at: new Date().toISOString(),
         });
-        setAvailableQuota(3);
+        setAvailableQuota(MAX_FREE_CREDITS);
         setUserTier("free");
       }
     } catch {
-      setAvailableQuota(3);
+      setAvailableQuota(MAX_FREE_CREDITS);
     }
   };
 
   const verifierQuotaAnonyme = () => {
     try {
       const savedAnon = parseInt(localStorage.getItem("contenu_anon_used") || "0");
-      setAvailableQuota(Math.max(0, 3 - savedAnon));
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
     } catch {
-      setAvailableQuota(3);
+      setAvailableQuota(MAX_FREE_CREDITS);
     }
   };
 
@@ -223,12 +224,12 @@ export default function ContenuPage() {
 
     if (!user) {
       const currentUsed = parseInt(localStorage.getItem("contenu_anon_used") || "0");
-      if (currentUsed >= 3) {
+      if (currentUsed >= MAX_FREE_CREDITS) {
         setShowAuthModal(true);
         return false;
       }
       localStorage.setItem("contenu_anon_used", String(currentUsed + 1));
-      setAvailableQuota(Math.max(0, 3 - (currentUsed + 1)));
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
       return true;
     }
 
@@ -239,19 +240,19 @@ export default function ContenuPage() {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    let avail = data?.available ?? 3;
-    let lastRegen = data ? new Date(data.last_regen).getTime() : now;
+    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
 
     if (data && userTier === "free") {
       const elapsed = now - lastRegen;
-      const recovered = Math.floor(elapsed / REGEN_24H_MS);
-      avail = Math.min(3, avail + recovered);
+      const recovered = Math.floor(elapsed / REGEN_3H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
       if (recovered > 0) lastRegen = now;
     }
 
     if (avail < 1) {
       const elapsed = now - lastRegen;
-      setNextRegenIn(REGEN_24H_MS - (elapsed % REGEN_24H_MS));
+      setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
       setShowPremiumModal(true);
       return false;
     }
@@ -261,9 +262,9 @@ export default function ContenuPage() {
 
     await supabase.from("contenu_quotas").upsert({
       user_id: user.id,
-      available: newAvail,
+      available_credits: newAvail,
       tier: userTier,
-      last_regen: new Date(lastRegen).toISOString(),
+      last_regen_at: new Date(lastRegen).toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" });
 
@@ -533,12 +534,11 @@ export default function ContenuPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
       
-      {/* ── HEADER BLANC UNIFIÉ ── */}
+      {/* ── HEADER ── */}
       <section className="bg-white text-zinc-900 relative z-30">
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
             
-            {/* LOGO ECHOSAI & BOUTON RETOUR TOTEM BRILLANT */}
             <div className="flex items-center gap-6">
               <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-zinc-900 uppercase">
                 ECHOSAI
@@ -553,10 +553,7 @@ export default function ContenuPage() {
               </Link>
             </div>
             
-            {/* DEVISE, BOUTON ILLIMITÉ, LANGUES ET PROFIL */}
             <div className="flex items-center gap-4 text-xs font-mono relative">
-              
-              {/* SÉLECTEUR DE DEVISE (CAD, USD, EUR) */}
               <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
                 {CURRENCIES.map((c) => (
                   <button
@@ -569,18 +566,18 @@ export default function ContenuPage() {
                 ))}
               </div>
 
-              {/* BOUTON ILLIMITÉ NETTEMENT SÉPARÉ */}
+              {/* INDICE DU QUOTA ET BANNÈRE ILLIMITÉ */}
               <div 
                 onClick={() => userTier === "free" && setShowPremiumModal(true)} 
                 className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
               >
                 <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Livres :" : "Books:"}</span>
                 <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
-                  {userTier === "premium" || userTier === "advantage" ? "∞ ILLIMITÉ" : `${3 - availableQuota}/3 ${fr ? "utilisés" : "used"}`}
+                  {userTier === "premium" || userTier === "advantage" ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
                 </span>
                 {userTier === "free" && (
                   <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
-                    ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                    ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                   </span>
                 )}
               </div>
@@ -635,7 +632,7 @@ export default function ContenuPage() {
         </div>
       </section>
 
-      {/* ── COURBE BLANCHE ET CONTOUR CYAN ── */}
+      {/* ── SEPARATEUR VISUEL ── */}
       <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
         <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
@@ -650,10 +647,8 @@ export default function ContenuPage() {
       <section className="bg-zinc-950 text-zinc-50 pb-16 pt-0 relative z-10 -mt-6">
         <div className="max-w-7xl mx-auto px-6 space-y-8">
 
-          {/* ZONE SUPÉRIEURE : SIDEBAR + CHOIX DES FORMATS */}
           <div className="flex flex-col lg:flex-row gap-8 items-start">
-
-            {/* SIDEBAR HISTORIQUE (BIBLIOTHÈQUE) */}
+            {/* BIBLIOTHÈQUE */}
             <aside className="w-full lg:w-80 border-2 border-cyan-500/30 bg-black/90 rounded-2xl p-5 shrink-0 space-y-4 shadow-[0_0_25px_rgba(6,182,212,0.1)]">
               <button
                 onClick={nouveauProjet}
@@ -699,7 +694,7 @@ export default function ContenuPage() {
               </div>
             </aside>
 
-            {/* CARTE FORMATS */}
+            {/* SELECTION FORMATS */}
             <div className="flex-1 space-y-3 w-full">
               <span className="font-mono text-xs text-cyan-400 font-extrabold tracking-wider uppercase block">
                 01. {fr ? "CHOISISSEZ LE FORMAT ET LE VOLUME DU MANUSCRIT" : "CHOOSE MANUSCRIPT FORMAT & VOLUME"}
@@ -735,13 +730,10 @@ export default function ContenuPage() {
                 })}
               </div>
             </div>
-
           </div>
 
-          {/* ── ZONE PLEINE PAGE ── */}
+          {/* FORMULAIRE & ACTIONS */}
           <div key={formKey} className="w-full space-y-8">
-
-            {/* FORMULAIRE SUJET (PLEINE PAGE) */}
             <div className="bg-black/90 border-2 border-cyan-500/40 rounded-3xl p-6 shadow-[0_0_30px_rgba(6,182,212,0.15)] space-y-4 w-full">
               <div className="flex items-center justify-between">
                 <span className="font-mono text-xs text-cyan-400 font-extrabold tracking-wider uppercase block">
@@ -749,9 +741,9 @@ export default function ContenuPage() {
                 </span>
                 
                 <span className="text-xs font-mono text-zinc-400">
-                  {fr ? "Quota : " : "Quota: "}
+                  {fr ? "Crédits disponibles : " : "Available credits: "}
                   <strong className={availableQuota === 0 ? "text-red-400" : "text-cyan-400"}>
-                    {userTier === "premium" || userTier === "advantage" ? "∞" : `${3 - availableQuota}/3 ${fr ? "utilisés" : "used"}`}
+                    {userTier === "premium" || userTier === "advantage" ? "∞ Illimité" : `${availableQuota}/${MAX_FREE_CREDITS}`}
                   </strong>
                 </span>
               </div>
@@ -769,7 +761,6 @@ export default function ContenuPage() {
                 className="w-full bg-zinc-900/90 border border-zinc-800 focus:border-cyan-400 rounded-2xl p-4 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none resize-none transition-colors"
               />
 
-              {/* BARRE DE PROGRESSION EN DIRECT */}
               {runningStep > 0 && (
                 <div className="space-y-2 pt-2 border-t border-zinc-800/80 animate-in fade-in duration-300">
                   <div className="flex justify-between items-center text-xs font-mono font-bold text-cyan-400">
@@ -805,7 +796,7 @@ export default function ContenuPage() {
               </div>
             )}
 
-            {/* ÉTAPE 1 : BRIEF MAÎTRE */}
+            {/* BRIEF MAÎTRE */}
             {(promptMaitre || runningStep === 1) && (
               <div className="bg-black/90 border border-zinc-800 rounded-2xl p-6 space-y-3 w-full shadow-lg">
                 <div className="flex items-center justify-between">
@@ -831,7 +822,7 @@ export default function ContenuPage() {
               </div>
             )}
 
-            {/* ÉTAPE 2 : CARTOGRAPHIE */}
+            {/* CARTOGRAPHIE */}
             {(listePoints || runningStep === 2) && (
               <div className="bg-black/90 border border-zinc-800 rounded-2xl p-6 space-y-3 w-full shadow-lg">
                 <div className="flex items-center justify-between">
@@ -857,7 +848,7 @@ export default function ContenuPage() {
               </div>
             )}
 
-            {/* ÉTAPE 3 : MANUSCRIT FINAL */}
+            {/* MANUSCRIT FINAL */}
             {(texteFinal || runningStep === 3) && (
               <div className="bg-black/90 border-2 border-emerald-500/40 rounded-3xl p-8 space-y-5 shadow-[0_0_40px_rgba(16,185,129,0.15)] w-full">
                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
@@ -877,7 +868,6 @@ export default function ContenuPage() {
                       <button
                         onClick={nettoyerEtFixerTexte}
                         className="text-xs px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/40 hover:bg-amber-500/20 text-amber-300 font-mono font-bold cursor-pointer transition-all"
-                        title="Sépare automatiquement les chapitres collés et applique les sauts de ligne"
                       >
                         🧹 {fr ? "Nettoyer & Réaligner" : "Clean & Realign"}
                       </button>
@@ -901,7 +891,6 @@ export default function ContenuPage() {
                   </div>
                 </div>
 
-                {/* RENDU ET LECTURE PLEINE PAGE */}
                 {runningStep === 3 ? (
                   <div className="w-full h-80 bg-zinc-900/60 border border-emerald-800/40 rounded-2xl p-6 text-sm text-zinc-400 italic animate-pulse font-mono flex flex-col items-center justify-center gap-3 text-center">
                     <span className="text-emerald-400 font-bold text-base">{statusMessage}</span>
@@ -923,12 +912,11 @@ export default function ContenuPage() {
                 )}
               </div>
             )}
-
           </div>
         </div>
       </section>
 
-      {/* ── MODALE OFFRE UNIFIÉE ECHOAI PREMIUM (DYNAMIQUE SELON LA DEVISE, PRIX ANCRÉ À 3.99) ── */}
+      {/* MODALE D'ABONNEMENT */}
       {showPremiumModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
@@ -936,15 +924,14 @@ export default function ContenuPage() {
 
             <div className="text-4xl mb-3">⚡</div>
             <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
-              {fr ? "Quota de 3 Livres Atteint" : "3-Book Limit Reached"}
+              {fr ? "Quota Gratuit Épuisé" : "Free Quota Reached"}
             </h2>
             <p className="text-xs text-zinc-400 mb-4 font-sans">
               {fr
-                ? `Vous récupérerez 1 crédit dans environ ${formatRegenTime(nextRegenIn)}. Ou passez à l'illimité dès maintenant.`
-                : `You will gain 1 credit in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access now.`}
+                ? `Prochain crédit disponible dans environ ${formatRegenTime(nextRegenIn)}. Ou débloquez l'accès illimité.`
+                : `Next credit available in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access now.`}
             </p>
 
-            {/* SÉLECTEUR DE DEVISE AU SEIN DE LA MODALE */}
             <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
               {CURRENCIES.map((c) => (
                 <button
@@ -961,18 +948,17 @@ export default function ContenuPage() {
               ))}
             </div>
 
-            {/* CARTE D'OFFRE ADAPTATIVE */}
             <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ACCÈS ILLIMITÉ</span>
                 <span className="text-white font-black text-sm font-mono">
                   {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
                 </span>
               </div>
               <ul className="text-zinc-300 text-xs space-y-2 font-mono">
-                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
-                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
-                <li className="flex items-center gap-2 text-zinc-400">✓ Sauvegarde permanente de vos projets</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> sur les 12 outils</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Vitesse maximale prioritaires</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ Historique et sauvegardes</li>
               </ul>
             </div>
 
@@ -983,13 +969,13 @@ export default function ContenuPage() {
             >
               {isCheckoutLoading
                 ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
-                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
+                : (fr ? `Passer en Illimité (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Unlock Unlimited (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
           </div>
         </div>
       )}
 
-      {/* ── MODALE D'AUTHENTIFICATION ── */}
+      {/* MODALE CONNEXION */}
       {showAuthModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">

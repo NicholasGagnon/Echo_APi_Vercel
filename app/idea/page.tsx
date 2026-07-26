@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
 type Lang = "fr" | "en";
 type Currency = "CAD" | "USD" | "EUR";
 
+const MAX_FREE_CREDITS = 2;
+const REGEN_1H_MS = 60 * 60 * 1000; // 1 heure
+
 const MicrosoftLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
     <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
@@ -161,11 +164,14 @@ const ScoreBar = ({ score, color }: { score: number; color: string }) => (
 function IdeaContent() {
   const { lang, setLang } = useApp();
   const fr = lang === "fr";
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [user, setUser] = useState<any>(null);
   const [userTier, setUserTier] = useState<string>("free");
+
+  // Quotas & Timer
+  const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
+  const [nextRegenIn, setNextRegenIn] = useState<number>(0);
 
   // Currency & Stripe Premium
   const [currency, setCurrency] = useState<Currency>("CAD");
@@ -195,7 +201,10 @@ function IdeaContent() {
       if (session?.user) {
         setUser(session.user);
         verifierStatutUser(session.user.id);
+        chargerQuotaUtilisateur(session.user.id);
         restoreAnalysis(session.user.id);
+      } else {
+        verifierQuotaAnonyme();
       }
     });
 
@@ -203,10 +212,12 @@ function IdeaContent() {
       if (session?.user) {
         setUser(session.user);
         verifierStatutUser(session.user.id);
+        chargerQuotaUtilisateur(session.user.id);
         restoreAnalysis(session.user.id);
       } else {
         setUser(null);
         setUserTier("free");
+        verifierQuotaAnonyme();
       }
     });
 
@@ -220,6 +231,7 @@ function IdeaContent() {
     if (searchParams.get("premium") === "success" && user) {
       const timer = setTimeout(() => {
         verifierStatutUser(user.id);
+        chargerQuotaUtilisateur(user.id);
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -227,16 +239,121 @@ function IdeaContent() {
 
   const verifierStatutUser = async (uid: string) => {
     try {
-      const { data: cData } = await supabase.from("contenu_quotas").select("tier").eq("user_id", uid).maybeSingle();
-      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
-        setUserTier(cData.tier); return;
-      }
-      const { data: wData } = await supabase.from("world_quotas").select("tier").eq("user_id", uid).maybeSingle();
-      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
-        setUserTier(wData.tier); return;
+      const { data: iData } = await supabase.from("idea_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (iData?.tier && iData.tier !== "free" && iData.tier !== "connected_free") {
+        setUserTier(iData.tier); return;
       }
       setUserTier("free");
     } catch { setUserTier("free"); }
+  };
+
+  const chargerQuotaUtilisateur = async (uid: string) => {
+    try {
+      const { data } = await supabase
+        .from("idea_quotas")
+        .select("*")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      const now = Date.now();
+      if (data) {
+        const tier = (data.tier || "free");
+        setUserTier(tier);
+
+        if (tier === "premium" || tier === "advantage") {
+          setAvailableQuota(999);
+          return;
+        }
+
+        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
+        const elapsed = now - lastRegen;
+        const recovered = Math.floor(elapsed / REGEN_1H_MS);
+        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + recovered);
+
+        setAvailableQuota(available);
+
+        if (available < MAX_FREE_CREDITS) {
+          setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
+        }
+      } else {
+        await supabase.from("idea_quotas").insert({
+          user_id: uid,
+          available_credits: MAX_FREE_CREDITS,
+          tier: "free",
+          last_regen_at: new Date().toISOString(),
+        });
+        setAvailableQuota(MAX_FREE_CREDITS);
+        setUserTier("free");
+      }
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const verifierQuotaAnonyme = () => {
+    try {
+      const savedAnon = parseInt(localStorage.getItem("idea_anon_used") || "0");
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const consommerUnCredit = async (): Promise<boolean> => {
+    if (userTier === "premium" || userTier === "advantage") return true;
+
+    if (!user) {
+      const currentUsed = parseInt(localStorage.getItem("idea_anon_used") || "0");
+      if (currentUsed >= MAX_FREE_CREDITS) {
+        setShowSignInModal(true);
+        return false;
+      }
+      localStorage.setItem("idea_anon_used", String(currentUsed + 1));
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
+      return true;
+    }
+
+    const now = Date.now();
+    const { data } = await supabase
+      .from("idea_quotas")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
+
+    if (data && userTier === "free") {
+      const elapsed = now - lastRegen;
+      const recovered = Math.floor(elapsed / REGEN_1H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
+      if (recovered > 0) lastRegen = now;
+    }
+
+    if (avail < 1) {
+      const elapsed = now - lastRegen;
+      setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
+      setShowPremiumModal(true);
+      return false;
+    }
+
+    const newAvail = avail - 1;
+    setAvailableQuota(newAvail);
+
+    await supabase.from("idea_quotas").upsert({
+      user_id: user.id,
+      available_credits: newAvail,
+      tier: userTier,
+      last_regen_at: new Date(lastRegen).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+    return true;
+  };
+
+  const formatRegenTime = (ms: number) => {
+    const minutes = Math.ceil(ms / 60000);
+    return `${minutes} min`;
   };
 
   const restoreAnalysis = async (userId: string) => {
@@ -302,6 +419,10 @@ function IdeaContent() {
       return;
     }
     if (!idea.trim() || idea.trim().length < 10) return;
+
+    const autorise = await consommerUnCredit();
+    if (!autorise) return;
+
     setLoading(true); setError(null); setResult(null);
     try {
       const res = await fetch(`${api}/2/analyse-idee`, {
@@ -429,23 +550,21 @@ function IdeaContent() {
                 ))}
               </div>
 
-              {isPaidTier ? (
-                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
-                  <span className="font-bold text-[11px] uppercase tracking-wider">
-                    {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
-                  </span>
-                </div>
-              ) : (
-                <div 
-                  onClick={() => setShowPremiumModal(true)} 
-                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
-                >
+              {/* INDICE DU QUOTA ET BANNIÈRE ILLIMITÉ */}
+              <div 
+                onClick={() => !isPaidTier && setShowPremiumModal(true)} 
+                className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+              >
+                <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Analyses :" : "Analyses:"}</span>
+                <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
+                  {isPaidTier ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+                </span>
+                {!isPaidTier && (
                   <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
-                    ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                    ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                   </span>
-                </div>
-              )}
+                )}
+              </div>
 
               <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
                 <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
@@ -804,12 +923,12 @@ function IdeaContent() {
 
             <div className="text-4xl mb-3">⚡</div>
             <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
-              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+              {fr ? "Quota de 2 Analyses Atteint" : "2-Analysis Limit Reached"}
             </h2>
             <p className="text-xs text-zinc-400 mb-4 font-sans">
               {fr
-                ? "Débloquez l'accès illimité à l'ensemble des modules d'intelligence artificielle."
-                : "Unlock unlimited access to all artificial intelligence modules."}
+                ? `Prochain crédit dans environ ${formatRegenTime(nextRegenIn)}. Ou débloquez l'accès illimité dès maintenant.`
+                : `Next credit in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access now.`}
             </p>
 
             <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
@@ -849,7 +968,7 @@ function IdeaContent() {
             >
               {isCheckoutLoading
                 ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
-                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
+                : (fr ? `Passer en Illimité (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Unlock Unlimited (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
           </div>
         </div>

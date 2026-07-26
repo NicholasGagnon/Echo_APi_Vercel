@@ -27,6 +27,10 @@ interface DebateSession {
   created_at: string;
 }
 
+// ── CONSTANTES DU QUOTA ────────────────────────────────────────────────────────
+const MAX_FREE_CREDITS = 5;
+const REGEN_3H_MS = 3 * 60 * 60 * 1000;
+
 // ── LOGOS ─────────────────────────────────────────────────────────────────────
 const MicrosoftLogo = () => (
   <svg className="w-5 h-5 shrink-0" viewBox="0 0 23 23" fill="none">
@@ -271,27 +275,20 @@ function WorldContent() {
   const [sessions, setSessions]       = useState<DebateSession[]>([]);
 
   // ── QUOTA & DEVISE ───────────────────────────────────────────────────────────
-  const [worldAvailable, setWorldAvailable] = useState(3);
-  const [worldMax, setWorldMax]             = useState(3);
+  const [worldAvailable, setWorldAvailable] = useState<number>(MAX_FREE_CREDITS);
   const [worldTier, setWorldTier]           = useState<"free"|"advantage"|"premium">("free");
   const [showQuotaPopup, setShowQuotaPopup] = useState(false);
   const [showAuthInPopup, setShowAuthInPopup] = useState(false);
-  const [nextRegenIn, setNextRegenIn]       = useState(0);
+  const [nextRegenIn, setNextRegenIn]       = useState<number>(0);
   const [currency, setCurrency]             = useState<CurrencyCode>("CAD");
   const [anonQuestions, setAnonQuestions]   = useState(0);
 
   const CURRENCIES: CurrencyCode[] = ["CAD","USD","EUR","CNY"];
   const PRICES: Record<string, {amount:string;symbol:string}> = {
-    CAD: { amount:"9.99",  symbol:"CA$" },
-    USD: { amount:"7.99",  symbol:"US$" },
-    EUR: { amount:"7.49",  symbol:"€"   },
-    CNY: { amount:"59.00", symbol:"¥ CNY" },
-  };
-  const PRICES_ADVANTAGE: Record<string, {amount:string;symbol:string}> = {
     CAD: { amount:"3.99",  symbol:"CA$" },
-    USD: { amount:"2.99",  symbol:"US$" },
-    EUR: { amount:"2.79",  symbol:"€"   },
-    CNY: { amount:"21.00", symbol:"¥ CNY" },
+    USD: { amount:"3.99",  symbol:"US$" },
+    EUR: { amount:"3.99",  symbol:"€"   },
+    CNY: { amount:"28.00", symbol:"¥ CNY" },
   };
 
   const [authMode, setAuthMode] = useState<"none" | "signin" | "signup">("none");
@@ -327,8 +324,7 @@ function WorldContent() {
       const anonQ = parseInt(localStorage.getItem("world_anon_questions") || "0");
       setAnonQuestions(anonQ);
       if (!user) {
-        const remaining = Math.max(0, 3 - anonQ);
-        setWorldAvailable(remaining);
+        setWorldAvailable(Math.max(0, MAX_FREE_CREDITS - anonQ));
       }
     } catch {}
 
@@ -361,6 +357,7 @@ function WorldContent() {
         setUser(session.user);
         const s = sessionStorage.getItem("world_stage") as Stage | null;
         setStage(s && s !== "auth" && s !== "language" ? s : "continent");
+        await loadWorldQuotaState(session.user.id);
       } else {
         setUser(null);
         setStage("language");
@@ -444,7 +441,7 @@ function WorldContent() {
     setAuthLoading(true);
     await supabase.auth.signInWithOAuth({
       provider: "azure",
-      options: { redirectTo: `${window.location.origin}/world`, scopes: "openid profile email" },
+      options: { redirectTo: `${window.location.origin}/world`, scopes: "openid profile email User.Read" },
     });
   };
 
@@ -453,75 +450,87 @@ function WorldContent() {
     try {
       const { data } = await supabase.from("world_quotas")
         .select("*").eq("user_id", uid).maybeSingle();
+      
+      const now = Date.now();
       if (data) {
         const tier = (data.tier || "free") as "free"|"advantage"|"premium";
         setWorldTier(tier);
-        const max = tier === "premium" ? 400 : tier === "advantage" ? 100 : 3;
-        setWorldMax(max);
-        if (tier === "free") {
-          const now = Date.now();
-          const elapsed = now - new Date(data.last_regen).getTime();
-          const recovered = Math.floor(elapsed / 3600000);
-          const available = Math.min(3, (data.available || 0) + recovered);
-          setWorldAvailable(available);
-        } else {
-          setWorldAvailable(data.available || (tier === "advantage" ? 100 : 400));
+        if (tier === "advantage" || tier === "premium") {
+          setWorldAvailable(999);
+          return;
         }
+
+        const lastRegen = new Date(data.last_regen || data.created_at).getTime();
+        const elapsed = now - lastRegen;
+        const recovered = Math.floor(elapsed / REGEN_3H_MS);
+        const available = Math.min(MAX_FREE_CREDITS, (data.available ?? MAX_FREE_CREDITS) + recovered);
+
+        setWorldAvailable(available);
+
+        if (available < MAX_FREE_CREDITS) {
+          setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
+        }
+      } else {
+        await supabase.from("world_quotas").insert({
+          user_id: uid, available: MAX_FREE_CREDITS, tier: "free",
+          last_regen: new Date().toISOString(),
+        });
+        setWorldAvailable(MAX_FREE_CREDITS);
+        setWorldTier("free");
       }
-    } catch {}
+    } catch {
+      setWorldAvailable(MAX_FREE_CREDITS);
+    }
   };
 
   const consumeWorldQuota = async (): Promise<boolean> => {
+    if (worldTier === "premium" || worldTier === "advantage") return true;
+
     if (!user) {
       const newAnon = anonQuestions + 1;
-      if (anonQuestions >= 3) {
+      if (anonQuestions >= MAX_FREE_CREDITS) {
         setShowAuthInPopup(true);
         setShowQuotaPopup(true);
         return false;
       }
       setAnonQuestions(newAnon);
-      setWorldAvailable(Math.max(0, 3 - newAnon));
+      setWorldAvailable(Math.max(0, MAX_FREE_CREDITS - newAnon));
       try { localStorage.setItem("world_anon_questions", String(newAnon)); } catch {}
       return true;
     }
-    if (worldTier === "premium" || worldTier === "advantage") {
-      const newVal = Math.max(0, worldAvailable - 1);
-      if (newVal < 0) { setShowQuotaPopup(true); return false; }
-      setWorldAvailable(newVal);
-      await supabase.from("world_quotas").upsert({
-        user_id: user.id, available: newVal, tier: worldTier,
-        last_regen: new Date().toISOString(), cycle_start: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id" });
-      return true;
-    }
+
+    const now = Date.now();
     const { data } = await supabase.from("world_quotas")
       .select("*").eq("user_id", user.id).maybeSingle();
-    const now = Date.now();
-    let available = 0;
-    let lastRegen = now;
-    if (data) {
-      const elapsed = now - new Date(data.last_regen).getTime();
-      const recovered = Math.floor(elapsed / 3600000);
-      available = Math.min(3, (data.available || 0) + recovered);
-      lastRegen = recovered > 0 ? now : new Date(data.last_regen).getTime();
-    } else {
-      available = 3;
-    }
-    if (available < 1) {
+
+    let avail = data?.available ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen).getTime() : now;
+
+    if (data && worldTier === "free") {
       const elapsed = now - lastRegen;
-      setNextRegenIn(3600000 - (elapsed % 3600000));
+      const recovered = Math.floor(elapsed / REGEN_3H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
+      if (recovered > 0) lastRegen = now;
+    }
+
+    if (avail < 1) {
+      const elapsed = now - lastRegen;
+      setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
       setShowQuotaPopup(true);
       return false;
     }
-    const newVal = available - 1;
+
+    const newVal = avail - 1;
     setWorldAvailable(newVal);
+
     await supabase.from("world_quotas").upsert({
-      user_id: user.id, available: newVal, tier: "free",
+      user_id: user.id,
+      available: newVal,
+      tier: worldTier,
       last_regen: new Date(lastRegen).toISOString(),
-      cycle_start: data?.cycle_start || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: "user_id" });
+
     return true;
   };
 
@@ -1056,23 +1065,20 @@ function WorldContent() {
               ))}
             </div>
 
-            {isPaidTier ? (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
-                <span className="font-bold text-[10px] uppercase tracking-wider">
-                  ✓ {lang === "fr" ? "PLAN PREMIUM ACTIF" : "PREMIUM ACTIVE"}
-                </span>
-              </div>
-            ) : (
-              <div 
-                onClick={() => setShowQuotaPopup(true)} 
-                className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
-              >
+            <div 
+              onClick={() => !isPaidTier && setShowQuotaPopup(true)} 
+              className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
+            >
+              <span className="text-[10px] text-zinc-400 font-bold uppercase">{lang === "fr" ? "Débats :" : "Debates:"}</span>
+              <span className={`font-bold font-mono ${worldAvailable === 0 ? "text-red-400" : "text-cyan-400"}`}>
+                {isPaidTier ? "∞ ILLIMITÉ" : `${worldAvailable}/${MAX_FREE_CREDITS} ${lang === "fr" ? "disponibles" : "available"}`}
+              </span>
+              {!isPaidTier && (
                 <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse">
-                  ★ PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                 </span>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="flex border border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px]">
               <button onClick={() => setLang("fr")} className={`px-2 py-0.5 ${lang === "fr" ? "bg-white text-zinc-950 font-bold" : "bg-zinc-900 text-zinc-400 hover:text-zinc-200"}`}>FR</button>
@@ -1244,11 +1250,13 @@ function WorldContent() {
         <div ref={bottomRef} />
       </div>
 
-      {/* ── POP-UP QUOTA ── */}
+      {/* ── POP-UP QUOTA UNIFIÉE ── */}
       {showQuotaPopup && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[999999]">
-          <div className="relative w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-center gap-2 mb-4">
+          <div className="relative w-full max-w-sm bg-zinc-950 border border-amber-500/50 rounded-2xl p-6 shadow-2xl text-center">
+            <button type="button" onClick={() => setShowQuotaPopup(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+
+            <div className="flex items-center justify-center gap-2 mb-3">
               <img src="/echo2.png" alt="Echo" className="w-5 h-5 rounded object-contain opacity-70" />
               <span className="text-zinc-500 text-xs font-mono uppercase tracking-widest">WORLD</span>
             </div>
@@ -1256,12 +1264,12 @@ function WorldContent() {
             {showAuthInPopup ? (
               <div className="space-y-3">
                 <div className="text-center mb-3">
-                  <div className="text-2xl mb-2">🎁</div>
+                  <div className="text-2xl mb-2">⚡</div>
                   <h3 className="text-white font-black text-base mb-1">
-                    {lang === "fr" ? "3 questions de plus" : lang === "en" ? "3 more questions" : "再3个问题"}
+                    {lang === "fr" ? "Quota Gratuit Atteint" : lang === "en" ? "Free Quota Reached" : "已达免费上限"}
                   </h3>
                   <p className="text-zinc-400 text-xs">
-                    {lang === "fr" ? "Connecte-toi pour continuer gratuitement" : lang === "en" ? "Sign in to continue for free" : "登录后免费继续"}
+                    {lang === "fr" ? "Connecte-toi pour conserver tes crédits" : lang === "en" ? "Sign in to keep your credits" : "登录以保留您的额度"}
                   </p>
                 </div>
                 <button onClick={handleGoogle} disabled={authLoading}
@@ -1274,63 +1282,67 @@ function WorldContent() {
                   <MicrosoftLogo />
                   <span className="text-white text-sm font-medium flex-1 text-left">{t.microsoft}</span>
                 </button>
-                <button onClick={() => { setShowQuotaPopup(false); setShowAuthInPopup(false); setAuthMode("none"); }}
-                  className="w-full py-2 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors text-center mt-1">
-                  {lang === "fr" ? "Fermer" : lang === "en" ? "Close" : "关闭"}
-                </button>
               </div>
             ) : (
-              <div className="text-center">
-                {worldAvailable === 0 ? (
-                  <div className="mb-4">
-                    <div className="text-3xl mb-2">⏳</div>
-                    <h3 className="text-white font-black text-base mb-1">
-                      {lang === "fr" ? "Limite atteinte" : lang === "en" ? "Limit reached" : "已达上限"}
-                    </h3>
-                    <p className="text-zinc-500 text-xs mb-3">
-                      {lang === "fr" ? `Reviens dans ${formatRegen(nextRegenIn)}` : lang === "en" ? `Come back in ${formatRegen(nextRegenIn)}` : `${formatRegen(nextRegenIn)}后再来`}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-zinc-400 text-sm mb-4">
-                    {lang === "fr" ? "Passez à un plan supérieur" : lang === "en" ? "Upgrade your plan" : "升级您的计划"}
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="flex flex-col rounded-xl p-4 text-center" style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
-                    <div className="text-amber-400 font-black text-sm mb-1">
-                      {lang === "fr" ? "Avantage" : lang === "en" ? "Advantage" : "优势"}
-                    </div>
-                    <div className="text-white font-black text-xl mb-0.5">
-                      {PRICES_ADVANTAGE[currency].symbol}{PRICES_ADVANTAGE[currency].amount}
-                    </div>
-                    <div className="text-zinc-500 text-xs mb-3">100 {lang === "fr" ? "q/mois" : lang === "en" ? "q/month" : "问题/月"}</div>
-                    <button onClick={async () => {
-                      if (!user) return;
-                      const res = await fetch("/api/stripe/create-checkout-site2", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan: "world_advantage", currency, userId: user.id, userEmail: user.email }) });
-                      const d = await res.json(); if (d.url) window.location.href = d.url;
-                    }} className="w-full py-2 rounded-lg font-bold text-xs text-black mt-auto" style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)" }}>
-                      {lang === "fr" ? "Choisir" : lang === "en" ? "Select" : "选择"}
+              <div>
+                <div className="text-3xl mb-2">⚡</div>
+                <h3 className="text-white font-black text-base mb-1">
+                  {lang === "fr" ? "Quota de 5 Débats Atteint" : lang === "en" ? "5-Debates Limit Reached" : "已达5次辩论上限"}
+                </h3>
+                <p className="text-zinc-400 text-xs mb-4">
+                  {lang === "fr"
+                    ? `Prochain crédit dans environ ${formatRegen(nextRegenIn)}. Ou débloquez l'accès illimité.`
+                    : lang === "en"
+                    ? `Next credit in about ${formatRegen(nextRegenIn)}. Or unlock unlimited access.`
+                    : `${formatRegen(nextRegenIn)}后获得新额度。或解锁无限访问。`}
+                </p>
+
+                <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+                  {CURRENCIES.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setCurrency(c)}
+                      className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                        currency === c
+                          ? "bg-amber-500 text-zinc-950 border-amber-400"
+                          : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                      }`}
+                    >
+                      {c} ({PRICES[c].symbol})
                     </button>
-                  </div>
-                  <div className="flex flex-col rounded-xl p-4 text-center" style={{ background: "#2d1a00", border: "1px solid #f59e0b60" }}>
-                    <div className="text-amber-400 font-black text-sm mb-1">{lang === "zh" ? "高级版" : "Premium"}</div>
-                    <div className="text-white font-black text-xl mb-0.5">
-                      {PRICES[currency].symbol}{PRICES[currency].amount}
-                    </div>
-                    <div className="text-zinc-500 text-xs mb-3">400 {lang === "fr" ? "q/mois" : lang === "en" ? "q/month" : "问题/月"}</div>
-                    <button onClick={async () => {
-                      if (!user) return;
-                      const res = await fetch("/api/stripe/create-checkout-site2", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan: "world", currency, userId: user.id, userEmail: user.email }) });
-                      const d = await res.json(); if (d.url) window.location.href = d.url;
-                    }} className="w-full py-2 rounded-lg font-bold text-xs text-black mt-auto" style={{ background: "linear-gradient(135deg, #f59e0b, #ef4444)" }}>
-                      {lang === "fr" ? "Choisir" : lang === "en" ? "Select" : "选择"}
-                    </button>
-                  </div>
+                  ))}
                 </div>
-                <button onClick={() => setShowQuotaPopup(false)}
-                  className="w-full py-2 text-zinc-700 hover:text-zinc-400 text-xs font-mono transition-colors">
-                  {lang === "fr" ? "Fermer" : lang === "en" ? "Close" : "关闭"}
+
+                <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-4 mb-5 text-left space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                    <span className="text-white font-black text-sm font-mono">
+                      {PRICES[currency].symbol}{PRICES[currency].amount}/{lang === "fr" ? "mois" : "mo"}
+                    </span>
+                  </div>
+                  <ul className="text-zinc-300 text-[11px] space-y-1.5 font-mono">
+                    <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> sur tous les outils</li>
+                    <li className="flex items-center gap-2 text-emerald-400">✓ Priorité de traitement rapide</li>
+                  </ul>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    if (!user) {
+                      setShowAuthInPopup(true);
+                      return;
+                    }
+                    const res = await fetch("/api/stripe/create-checkout-site2", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ plan: "world_advantage", currency, userId: user.id, userEmail: user.email }),
+                    });
+                    const d = await res.json();
+                    if (d.url) window.location.href = d.url;
+                  }}
+                  className="w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_20px_rgba(245,158,11,0.3)] cursor-pointer"
+                >
+                  {lang === "fr" ? `Passer en Illimité (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Unlock Unlimited (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`}
                 </button>
               </div>
             )}
