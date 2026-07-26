@@ -255,44 +255,55 @@ function ChatContent() {
   };
 
   // ✅ CORRECTION CRITIQUE : UPSERT + Création dynamique si ID = "new"
-  const saveConversationToDB = async (uid: string, convId: string | null, raws: string[], currentSummary: string): Promise<string> => {
-    const isNew = !convId || convId === "new";
-    const recordPayload: any = {
-      user_id: uid,
-      source: CONV_SOURCE,
-      messages: raws,
-      summary: currentSummary,
-      updated_at: new Date().toISOString(),
-    };
+    const saveConversationToDB = async (uid: string, convId: string | null, raws: string[], currentSummary: string): Promise<string> => {
+    const isNew = !convId || convId === "new" || convId.startsWith("local-");
+    const updatedTitle = deriveTitle(raws, lang);
 
-    if (!isNew && !convId.startsWith("local-")) {
-      recordPayload.id = convId;
+    let savedId = convId || "new";
+
+    if (isNew) {
+      // 1. Première sauvegarde : INSERT pour générer un ID unique Supabase
+      const { data, error } = await supabase
+        .from("echo_conversations")
+        .insert({
+          user_id: uid,
+          source: CONV_SOURCE,
+          messages: raws,
+          summary: currentSummary,
+          updated_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (!error && data?.id) {
+        savedId = data.id;
+      } else {
+        console.error("[SUPABASE INSERT ERROR]", error);
+      }
+    } else {
+      // 2. Mises à jour suivantes : UPSERT sur l'ID existant
+      const { error } = await supabase
+        .from("echo_conversations")
+        .upsert({
+          id: convId,
+          user_id: uid,
+          source: CONV_SOURCE,
+          messages: raws,
+          summary: currentSummary,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id" });
+
+      if (error) console.error("[SUPABASE UPSERT ERROR]", error);
     }
 
-    const { data, error } = await supabase
-      .from("echo_conversations")
-      .upsert(recordPayload, { onConflict: "id" })
-      .select("id")
-      .single();
-
-    if (error) {
-      console.error("[SUPABASE SAVE ERROR]", error);
-      return convId || "new";
-    }
-
-    const savedId = data?.id || convId;
-
-    // Met à jour la liste dans le state UI
+    // Mise à jour synchrone de l'état local dans le panneau latéral
     setConversations(prev => {
-      const updatedTitle = deriveTitle(raws, lang);
       const exists = prev.some(c => c.id === savedId);
-
       if (exists) {
         return prev.map(c => c.id === savedId ? { ...c, messages: raws, title: updatedTitle, updatedAt: Date.now() } : c);
-      } else {
-        const newConvo: Conversation = { id: savedId, title: updatedTitle, messages: raws, summary: currentSummary, updatedAt: Date.now() };
-        return [newConvo, ...prev.filter(c => c.id !== "new")];
       }
+      const newConvo: Conversation = { id: savedId, title: updatedTitle, messages: raws, summary: currentSummary, updatedAt: Date.now() };
+      return [newConvo, ...prev.filter(c => c.id !== "new")];
     });
 
     setActiveConversationId(savedId);
@@ -384,8 +395,7 @@ function ChatContent() {
       }
     }
   };
-
-  const sendMessage = async () => {
+const sendMessage = async () => {
     if (!input.trim() && !selectedImage) return;
 
     const autorise = await consommerUnCredit();
@@ -399,6 +409,9 @@ function ChatContent() {
     const baseMessages = [...messages, userEntry];
     setEchoState("thinking");
     setMessages([...baseMessages, { raw: "Echo: ..." }]);
+
+    // Sauvegarde immédiate dans le navigateur pour parer aux rafraîchissements pendant la frappe
+    localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(serializeMsgs(baseMessages)));
 
     setInput("");
     setSelectedImage(null);
@@ -425,7 +438,10 @@ function ChatContent() {
       const generatedMsgs = [...baseMessages, { raw: `Echo: ${data.response || ""}` }];
       setMessages(generatedMsgs);
 
-      // ✅ SAUVEGARDE SYNC (CONNECTÉ : SUPABASE, ANONYME : LOCALSTORAGE)
+      // Sauvegarde du buffer local rafraîchi
+      localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(serializeMsgs(generatedMsgs)));
+
+      // Enregistrement persistant dans Supabase ou LocalStorage selon le statut de connexion
       if (userId) {
         await saveConversationToDB(userId, activeConversationId, serializeMsgs(generatedMsgs), "");
       } else {
