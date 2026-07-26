@@ -1332,7 +1332,7 @@ function WorldContent() {
                       setShowAuthInPopup(true);
                       return;
                     }
-                    const res = await fetch("/api/stripe/create-checkout-site2", {
+                    const res = await fetch("/api/stripe/create-checkout", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ plan: "world_advantage", currency, userId: user.id, userEmail: user.email }),

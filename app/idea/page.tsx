@@ -389,7 +389,7 @@ function IdeaContent() {
 
     setIsCheckoutLoading(true);
     try {
-      const res = await fetch("/api/stripe/create-checkout-site2", {
+      const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

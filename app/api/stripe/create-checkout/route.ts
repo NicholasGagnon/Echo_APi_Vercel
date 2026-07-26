@@ -25,31 +25,35 @@ export async function POST(req: Request) {
       );
     }
 
-    const origin = req.headers.get("origin") ?? "http://localhost:3000";
+    const origin = req.headers.get("origin") ?? "https://echosai.ca";
+    const referer = req.headers.get("referer");
+
+    // Détermine l'URL de retour : utilise la page exacte d'origine (ex: /idea, /books) ou le domaine
+    const returnUrl = referer || origin;
 
     const session = await stripe.checkout.sessions.create({
-  payment_method_types: ["card"],
-  mode: "subscription",
-  customer_email: userEmail,
-  allow_promotion_codes: true,
-  line_items: [
-    {
-      price: priceId,
-      quantity: 1,
-    },
-  ],
-  // 🎯 REDIRECTION VERS TA PAGE DE TEST AU LIEU DE CONTRATACHAT
-  success_url: `${origin}/test-stripe?subscription=success`,
-  cancel_url: `${origin}/test-stripe?subscription=canceled`,
-  metadata: {
-    userId: userId,
-  },
-  subscription_data: {
-    metadata: {
-      userId: userId,
-    },
-  },
-});
+      payment_method_types: ["card"],
+      mode: "subscription",
+      customer_email: userEmail,
+      allow_promotion_codes: true,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      // 🎯 REDIRECTION DYNAMIQUE VERS L'OUTIL EN COURS
+      success_url: `${returnUrl}?premium=success`,
+      cancel_url: `${returnUrl}?premium=canceled`,
+      metadata: {
+        userId: userId,
+      },
+      subscription_data: {
+        metadata: {
+          userId: userId,
+        },
+      },
+    });
 
     return NextResponse.json({ url: session.url });
   } catch (error: any) {

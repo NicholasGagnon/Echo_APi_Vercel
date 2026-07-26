@@ -769,7 +769,7 @@ function ChatContent() {
               onClick={async () => {
                 if (!userId) { setShowPremiumModal(false); setShowSignInModal(true); return; }
                 try {
-                  const res = await fetch("/api/stripe/create-checkout-site2", {
+                  const res = await fetch("/api/stripe/create-checkout", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ plan: "world_advantage", currency: currency.toUpperCase(), userId, userEmail: user?.email }),

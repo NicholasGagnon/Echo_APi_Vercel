@@ -625,7 +625,7 @@ function BudgetContent() {
                 if (!user) { setShowPremiumModal(false); setShowSignInModal(true); return; }
                 setIsCheckoutLoading(true);
                 try {
-                  const res = await fetch("/api/stripe/create-checkout-site2", {
+                  const res = await fetch("/api/stripe/create-checkout", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ plan: "world_advantage", currency: currency.toUpperCase(), userId: user.id, userEmail: user.email }),
