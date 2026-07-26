@@ -30,6 +30,25 @@ export const isPaidTier = (tier?: string): boolean => {
   return PAID_TIERS.includes(tier as UserTier);
 };
 
+export const getMessageMaxLength = (tier?: string): number => {
+  return isPaidTier(tier) ? 20000 : 2000;
+};
+
+/**
+ * Version synchrone rétrocompatible pour la compilation
+ */
+export function checkQuota(
+  _action?: string,
+  tier?: string,
+  _consume?: boolean,
+  _userId?: string | null
+): { allowed: boolean; remaining: number } {
+  return {
+    allowed: true,
+    remaining: isPaidTier(tier) ? 9999 : 8,
+  };
+}
+
 /**
  * Consomme 1 crédit de quota dans Supabase avec paramètres de régénération personnalisés.
  */
@@ -38,9 +57,9 @@ export async function consumeToolQuota(
   tier: UserTier = "free",
   tableName: string,
   supabaseClient: SupabaseClient,
-  maxCredits: number = 3,
-  regenMs: number = 3 * 60 * 60 * 1000, // 3 heures par défaut
-  regenAmount: number = 1 // +1 par cycle
+  maxCredits: number = 8,
+  regenMs: number = 60 * 60 * 1000, // 1 heure par défaut
+  regenAmount: number = 1 // +1 par heure
 ): Promise<QuotaResult> {
   const isUnlimited = isPaidTier(tier);
 

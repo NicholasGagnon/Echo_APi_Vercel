@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
-import { checkQuota, getMessageMaxLength, UserTier } from "../../utils/quota";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +12,9 @@ type Lang = "fr" | "en";
 type Currency = "CAD" | "USD" | "EUR";
 type CalorieLog = { id: string; foodName: string; calories: number; date: string };
 type VitalityMessage = { raw: string; imageB64?: string };
+
+const MAX_FREE_CREDITS = 8;
+const REGEN_1H_MS = 60 * 60 * 1000; // 1 heure
 
 const MicrosoftLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
@@ -39,13 +41,17 @@ const PRICES: Record<Currency, { amount: string; symbol: string }> = {
 };
 
 function VitalityContent() {
-  const { lang, setLang, userTier } = useApp();
+  const { lang, setLang } = useApp();
   const fr = lang === "fr";
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [user, setUser] = useState<any>(null);
   const [currentUserTier, setCurrentUserTier] = useState<string>("free");
+
+  // Quotas
+  const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
+  const [nextRegenIn, setNextRegenIn] = useState<number>(0);
 
   // Devises & Premium
   const [currency, setCurrency] = useState<Currency>("CAD");
@@ -54,17 +60,13 @@ function VitalityContent() {
 
   // Auth Modals
   const [showSignInModal, setShowSignInModal] = useState(false);
-  const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
-  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
 
   // Core Vitality
   const [caloriesList, setCaloriesList] = useState<CalorieLog[]>([]);
   const [calorieGoal, setCalorieGoal] = useState(2300);
-  const [isEditingCalories, setIsEditingCalories] = useState(false);
-  const [inputCalorieGoal, setInputCalorieGoal] = useState("2300");
   const [manualFoodName, setManualFoodName] = useState("");
   const [manualCalories, setManualCalories] = useState("");
 
@@ -72,27 +74,14 @@ function VitalityContent() {
   const [userWeight, setUserWeight] = useState("");
   const [userHeight, setUserHeight] = useState("");
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [weightUnit, setWeightUnit] = useState<"kg"|"lbs">("kg");
-  const [heightUnit, setHeightUnit] = useState<"cm"|"ft">("cm");
-  const [modalWeight, setModalWeight] = useState("");
-  const [modalHeight, setModalHeight] = useState("");
-  const [modalHeightInches, setModalHeightInches] = useState("");
-  const [modalAge, setModalAge] = useState("30");
-  const [modalGender, setModalGender] = useState("homme");
 
   // Agent Echo
   const [inputEcho, setInputEcho] = useState("");
   const [echoMessages, setEchoMessages] = useState<VitalityMessage[]>([]);
-  const [memorySummary, setMemorySummary] = useState("");
   const [echoState, setEchoState] = useState("idle");
-  const [isListening, setIsListening] = useState(false);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  const safeTier = (userTier || "connected_free") as UserTier;
-  const isImageButtonLocked = safeTier === "connected_free" || safeTier === "basic";
 
   const getCalorieGoalKey = (uid: string|null) => uid ? `echo-calorie-goal-${uid}` : "echo-calorie-goal";
   const getVitalityProfileKey = (uid: string|null) => uid ? `echo-vitality-profile-${uid}` : "echo-vitality-profile";
@@ -104,15 +93,17 @@ function VitalityContent() {
       if (session?.user) {
         setUser(session.user);
         verifierStatutUser(session.user.id);
+        chargerQuotaUtilisateur(session.user.id);
         const { data: calRows } = await supabase.from("echo_calories").select("*").eq("user_id", uid).order("date", { ascending: false });
         setCaloriesList((calRows||[]).map(r => ({ id: r.id, foodName: r.food_name, calories: r.calories, date: r.date })));
       } else {
+        verifierQuotaAnonyme();
         const guestCal = localStorage.getItem("echo-calorie-logs-guest");
         if (guestCal) setCaloriesList(JSON.parse(guestCal));
       }
 
       const savedCGoal = localStorage.getItem(getCalorieGoalKey(uid)) || localStorage.getItem("echo-calorie-goal");
-      if (savedCGoal) { setCalorieGoal(Number(savedCGoal)); setInputCalorieGoal(savedCGoal); }
+      if (savedCGoal) { setCalorieGoal(Number(savedCGoal)); }
 
       const savedConvo = localStorage.getItem(getVitalityConvoKey(uid));
       if (savedConvo) setEchoMessages(JSON.parse(savedConvo).map((r: string) => ({ raw: r })));
@@ -121,7 +112,6 @@ function VitalityContent() {
       if (savedProfile) {
         const p = JSON.parse(savedProfile);
         setUserWeight(p.weight||""); setUserHeight(p.height||"");
-        setModalWeight(p.weight||""); setModalHeight(p.height||"");
       }
     });
 
@@ -129,9 +119,11 @@ function VitalityContent() {
       if (session?.user) {
         setUser(session.user);
         verifierStatutUser(session.user.id);
+        chargerQuotaUtilisateur(session.user.id);
       } else {
         setUser(null);
         setCurrentUserTier("free");
+        verifierQuotaAnonyme();
       }
     });
 
@@ -140,16 +132,121 @@ function VitalityContent() {
 
   const verifierStatutUser = async (uid: string) => {
     try {
-      const { data: cData } = await supabase.from("contenu_quotas").select("tier").eq("user_id", uid).maybeSingle();
-      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
-        setCurrentUserTier(cData.tier); return;
-      }
-      const { data: wData } = await supabase.from("world_quotas").select("tier").eq("user_id", uid).maybeSingle();
-      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
-        setCurrentUserTier(wData.tier); return;
+      const { data: vData } = await supabase.from("vitality_quotas").select("tier").eq("user_id", uid).maybeSingle();
+      if (vData?.tier && vData.tier !== "free" && vData.tier !== "connected_free") {
+        setCurrentUserTier(vData.tier); return;
       }
       setCurrentUserTier("free");
     } catch { setCurrentUserTier("free"); }
+  };
+
+  const chargerQuotaUtilisateur = async (uid: string) => {
+    try {
+      const { data } = await supabase
+        .from("vitality_quotas")
+        .select("*")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      const now = Date.now();
+      if (data) {
+        const tier = (data.tier || "free");
+        setCurrentUserTier(tier);
+
+        if (tier === "premium" || tier === "advantage") {
+          setAvailableQuota(999);
+          return;
+        }
+
+        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
+        const elapsed = now - lastRegen;
+        const recovered = Math.floor(elapsed / REGEN_1H_MS);
+        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + recovered);
+
+        setAvailableQuota(available);
+
+        if (available < MAX_FREE_CREDITS) {
+          setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
+        }
+      } else {
+        await supabase.from("vitality_quotas").insert({
+          user_id: uid,
+          available_credits: MAX_FREE_CREDITS,
+          tier: "free",
+          last_regen_at: new Date().toISOString(),
+        });
+        setAvailableQuota(MAX_FREE_CREDITS);
+        setCurrentUserTier("free");
+      }
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const verifierQuotaAnonyme = () => {
+    try {
+      const savedAnon = parseInt(localStorage.getItem("vitality_anon_used") || "0");
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
+  const consommerUnCredit = async (): Promise<boolean> => {
+    if (currentUserTier === "premium" || currentUserTier === "advantage") return true;
+
+    if (!user) {
+      const currentUsed = parseInt(localStorage.getItem("vitality_anon_used") || "0");
+      if (currentUsed >= MAX_FREE_CREDITS) {
+        setShowSignInModal(true);
+        return false;
+      }
+      localStorage.setItem("vitality_anon_used", String(currentUsed + 1));
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
+      return true;
+    }
+
+    const now = Date.now();
+    const { data } = await supabase
+      .from("vitality_quotas")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
+
+    if (data && currentUserTier === "free") {
+      const elapsed = now - lastRegen;
+      const recovered = Math.floor(elapsed / REGEN_1H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
+      if (recovered > 0) lastRegen = now;
+    }
+
+    if (avail < 1) {
+      const elapsed = now - lastRegen;
+      setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
+      setShowPremiumModal(true);
+      return false;
+    }
+
+    const newAvail = avail - 1;
+    setAvailableQuota(newAvail);
+
+    await supabase.from("vitality_quotas").upsert({
+      user_id: user.id,
+      available_credits: newAvail,
+      tier: currentUserTier,
+      last_regen_at: new Date(lastRegen).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+    return true;
+  };
+
+  const formatRegenTime = (ms: number) => {
+    const minutes = Math.ceil(ms / 60000);
+    return `${minutes} min`;
   };
 
   const addCalorie = async (cal: Omit<CalorieLog, "id">) => {
@@ -196,6 +293,9 @@ function VitalityContent() {
 
     if (!user) { setShowSignInModal(true); return; }
 
+    const autorise = await consommerUnCredit();
+    if (!autorise) return;
+
     const userEntry: VitalityMessage = { raw: `You: ${textToSubmit}`, imageB64: imageBase64 ?? undefined };
     const baseMessages = [...echoMessages, userEntry];
 
@@ -213,7 +313,7 @@ function VitalityContent() {
           message: textToSubmit,
           image: imageBase64 ?? null,
           history: baseMessages.map(m => m.raw),
-          userTier: safeTier,
+          userTier: isPaidTier ? "premium" : "free",
           currentCalories: caloriesList,
           calorieGoal,
           vitalityProfile: { weight: userWeight, height: userHeight },
@@ -276,23 +376,21 @@ function VitalityContent() {
                 ))}
               </div>
 
-              {isPaidTier ? (
-                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
-                  <span className="font-bold text-[11px] uppercase tracking-wider">
-                    {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
-                  </span>
-                </div>
-              ) : (
-                <div 
-                  onClick={() => setShowPremiumModal(true)} 
-                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
-                >
+              {/* INDICE DU QUOTA ET BANNIÈRE ILLIMITÉ */}
+              <div 
+                onClick={() => !isPaidTier && setShowPremiumModal(true)} 
+                className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+              >
+                <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Vitalité :" : "Vitality:"}</span>
+                <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-emerald-400"}`}>
+                  {isPaidTier ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+                </span>
+                {!isPaidTier && (
                   <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
-                    ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                    ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                   </span>
-                </div>
-              )}
+                )}
+              </div>
 
               <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
                 <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
@@ -327,9 +425,6 @@ function VitalityContent() {
 
         <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-8">
-            <div className="inline-block text-[10px] font-mono tracking-widest text-emerald-600 font-bold uppercase mb-2 border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 rounded">
-              {fr ? "MODULE 07 // CALORIES & SUIVI NUTRITION" : "MODULE 07 // CALORIES & NUTRITION TRACKER"}
-            </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 leading-[1.0] mb-3 uppercase">
               ECHO VITALITY
             </h1>
@@ -431,9 +526,17 @@ function VitalityContent() {
 
           {/* COLONNE DROITE (ECHO COMPAGNON AGENTIC) */}
           <div className="lg:col-span-6 bg-black/90 border-2 border-emerald-500/40 rounded-3xl p-6 flex flex-col justify-between h-[600px] shadow-[0_0_30px_rgba(16,185,129,0.1)]">
-            <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-mono font-black text-emerald-400 uppercase tracking-wider">AGENT VITALITÉ AGENTIC</span>
+            <div className="border-b border-zinc-800 pb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-xs font-mono font-black text-emerald-400 uppercase tracking-wider">AGENT VITALITÉ AGENTIC</span>
+              </div>
+              <span className="text-xs font-mono text-zinc-400">
+                {fr ? "Crédits : " : "Credits: "}
+                <strong className={availableQuota === 0 ? "text-red-400" : "text-emerald-400"}>
+                  {isPaidTier ? "∞ Illimité" : `${availableQuota}/${MAX_FREE_CREDITS}`}
+                </strong>
+              </span>
             </div>
 
             <div className="flex-1 overflow-y-auto py-4 space-y-4 custom-scrollbar">
@@ -467,6 +570,117 @@ function VitalityContent() {
 
         </div>
       </section>
+
+      {/* ── MODALE PREMIUM ── */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Quota de 8 Requêtes Atteint" : "8-Request Limit Reached"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr
+                ? `Prochain crédit dans environ ${formatRegenTime(nextRegenIn)}. Ou débloquez l'accès illimité dès maintenant.`
+                : `Next credit in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access now.`}
+            </p>
+
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c ? "bg-amber-500 text-zinc-950 border-amber-400" : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
+              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ Sauvegarde permanente de vos projets</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={async () => {
+                if (!user) { setShowPremiumModal(false); setShowSignInModal(true); return; }
+                setIsCheckoutLoading(true);
+                try {
+                  const res = await fetch("/api/stripe/create-checkout-site2", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ plan: "world_advantage", currency: currency.toUpperCase(), userId: user.id, userEmail: user.email }),
+                  });
+                  const data = await res.json();
+                  if (data.url) window.location.href = data.url;
+                } catch { alert("Erreur de paiement."); } finally { setIsCheckoutLoading(false); }
+              }}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
+            >
+              {isCheckoutLoading ? "CHARGEMENT DE STRIPE..." : `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE CONNEXION ── */}
+      {showSignInModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-4">
+              <div>
+                <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{fr ? "Connectez-vous pour enregistrer votre profil." : "Sign in to save your profile."}</p>
+              </div>
+              <button type="button" onClick={() => setShowSignInModal(false)} className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button type="button" onClick={async () => { await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/vitality` } }); }} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+              </button>
+              <button type="button" onClick={async () => { await supabase.auth.signInWithOAuth({ provider: "azure", options: { redirectTo: `${window.location.origin}/vitality` } }); }} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+              </button>
+            </div>
+
+            <div className="h-px bg-zinc-900 my-3" />
+
+            <div className="space-y-3">
+              <input type="email" placeholder="nom@domaine.com" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500" />
+              <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500" />
+              {authError && <p className="text-red-400 text-xs font-mono">⚠️ {authError}</p>}
+
+              <button
+                onClick={async () => {
+                  setAuthError(null);
+                  const { error } = await supabase.auth.signInWithPassword({ email, password });
+                  if (error) setAuthError(error.message);
+                  else setShowSignInModal(false);
+                }}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                {fr ? "Se connecter" : "Log in"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   );
