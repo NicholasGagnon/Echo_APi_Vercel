@@ -8,6 +8,7 @@ import { marked } from "marked";
 import TurndownService from "turndown";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
+import { consumeToolQuota, isPaidTier, UserTier } from "../../utils/quota";
 
 const turndownService = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
 
@@ -73,7 +74,7 @@ const FORMATS: FormatOption[] = [
     sousTitre: "Ouvrage complet et structuré avec cas pratiques ou petit livre.",
     sousTitreEn: "Comprehensive structured guide with case studies.",
     pagesEstimees: "40 à 100 pages",
-    motsCible: "~10 000 à 40 000 mots",
+    motsCible: "~10 000 à 30 000 mots",
     nbBlocs: 6,
     nbPoints: 800,
     icon: "📚",
@@ -85,7 +86,7 @@ const FORMATS: FormatOption[] = [
     sousTitre: "Configuration haute densité pour les ouvrages d'envergure.",
     sousTitreEn: "High-density configuration for large scale manuscripts.",
     pagesEstimees: "150 à 300 pages",
-    motsCible: "~50 000 à 65 000 mots",
+    motsCible: "~40 000 à 75 000 mots",
     nbBlocs: 18,
     nbPoints: 1800,
     icon: "📘",
@@ -112,9 +113,8 @@ const GoogleLogo = () => (
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
 
-// Quota max fixé à 2
-const MAX_FREE_CREDITS = 2;
-const REGEN_3H_MS = 3 * 60 * 60 * 1000;
+const MAX_FREE_CREDITS = 2; // 2 max
+const REGEN_3H_MS = 3 * 60 * 60 * 1000; // 3 heures
 
 type CurrencyCode = "CAD" | "USD" | "EUR";
 const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
@@ -140,7 +140,7 @@ function ContenuContent() {
 
   // Quotas, Devise & Abonnements
   const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
-  const [userTier, setUserTier] = useState<"free" | "advantage" | "premium">("free");
+  const [userTier, setUserTier] = useState<UserTier>("free");
   const [nextRegenIn, setNextRegenIn] = useState<number>(0);
   const [showPremiumModal, setShowPremiumModal] = useState<boolean>(false);
   const [currency, setCurrency] = useState<CurrencyCode>("CAD");
@@ -215,7 +215,8 @@ function ContenuContent() {
         chargerHistorique(session.user.id);
         chargerQuotaUtilisateur(session.user.id);
       } else {
-        verifierQuotaAnonyme();
+        setUser(null);
+        setAvailableQuota(MAX_FREE_CREDITS);
         loadLocalDrafts();
       }
     });
@@ -229,7 +230,7 @@ function ContenuContent() {
       } else {
         setUser(null);
         setHistorique([]);
-        verifierQuotaAnonyme();
+        setAvailableQuota(MAX_FREE_CREDITS);
         loadLocalDrafts();
       }
     });
@@ -250,6 +251,7 @@ function ContenuContent() {
     } catch {}
   };
 
+  // Charge le quota en utilisant la table Supabase `contenu_quotas`
   const chargerQuotaUtilisateur = async (uid: string) => {
     try {
       const { data } = await supabase
@@ -258,93 +260,56 @@ function ContenuContent() {
         .eq("user_id", uid)
         .maybeSingle();
 
+      const tier = (data?.tier || "free") as UserTier;
+      setUserTier(tier);
+
+      if (isPaidTier(tier)) {
+        setAvailableQuota(999);
+        return;
+      }
+
       const now = Date.now();
-      if (data) {
-        const tier = (data.tier || "free") as "free" | "advantage" | "premium";
-        setUserTier(tier);
+      const lastRegen = data ? new Date(data.last_regen_at || data.created_at).getTime() : now;
+      const elapsed = now - lastRegen;
+      const recovered = Math.floor(elapsed / REGEN_3H_MS);
+      const available = Math.min(MAX_FREE_CREDITS, (data?.available_credits ?? MAX_FREE_CREDITS) + recovered);
 
-        if (tier === "premium" || tier === "advantage") {
-          setAvailableQuota(999);
-          return;
-        }
+      setAvailableQuota(available);
 
-        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
-        const elapsed = now - lastRegen;
-        const recovered = Math.floor(elapsed / REGEN_3H_MS);
-        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + recovered);
-
-        setAvailableQuota(available);
-
-        if (available < MAX_FREE_CREDITS) {
-          const nextMs = REGEN_3H_MS - (elapsed % REGEN_3H_MS);
-          setNextRegenIn(nextMs);
-        }
-      } else {
-        await supabase.from("contenu_quotas").insert({
-          user_id: uid,
-          available_credits: MAX_FREE_CREDITS,
-          tier: "free",
-          last_regen_at: new Date().toISOString(),
-        });
-        setAvailableQuota(MAX_FREE_CREDITS);
-        setUserTier("free");
+      if (available < MAX_FREE_CREDITS) {
+        setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
       }
     } catch {
       setAvailableQuota(MAX_FREE_CREDITS);
     }
   };
 
-  const verifierQuotaAnonyme = () => {
-    try {
-      const savedAnon = parseInt(localStorage.getItem("contenu_anon_used") || "0");
-      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
-    } catch {
-      setAvailableQuota(MAX_FREE_CREDITS);
-    }
-  };
-
+  // Consomme le crédit avec la fonction consumeToolQuota
   const consommerUnCredit = async (): Promise<boolean> => {
-    if (userTier === "premium" || userTier === "advantage") return true;
-
     if (!user) {
       setShowAuthModal(true);
       return false;
     }
 
-    const now = Date.now();
-    const { data } = await supabase
-      .from("contenu_quotas")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    const res = await consumeToolQuota(
+      user.id,
+      userTier,
+      "contenu_quotas",
+      supabase,
+      MAX_FREE_CREDITS,
+      REGEN_3H_MS,
+      1
+    );
 
-    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
-    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
-
-    if (data && userTier === "free") {
-      const elapsed = now - lastRegen;
-      const recovered = Math.floor(elapsed / REGEN_3H_MS);
-      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
-      if (recovered > 0) lastRegen = now;
-    }
-
-    if (avail < 1) {
-      const elapsed = now - lastRegen;
-      setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
+    if (!res.allowed) {
+      if (res.nextRegenMs > 0) setNextRegenIn(res.nextRegenMs);
       setShowPremiumModal(true);
       return false;
     }
 
-    const newAvail = avail - 1;
-    setAvailableQuota(newAvail);
-
-    await supabase.from("contenu_quotas").upsert({
-      user_id: user.id,
-      available_credits: newAvail,
-      tier: userTier,
-      last_regen_at: new Date(lastRegen).toISOString(),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" });
+    if (!res.isUnlimited) {
+      setAvailableQuota(res.remaining);
+    }
 
     return true;
   };
@@ -452,7 +417,7 @@ function ContenuContent() {
   const lancerFabrication = async () => {
     setError(null);
 
-    // VÉRIFICATION OBLIGATOIRE : Utilisateur doit être connecté pour lancer la fabrication
+    // OBLIGATION STRICTE : L'utilisateur doit être connecté avant même de tenter la consommation
     if (!user) {
       setShowAuthModal(true);
       return;
@@ -673,16 +638,16 @@ function ContenuContent() {
                 ))}
               </div>
 
-              {/* INDICE DU QUOTA ET BANIÈRE ILLIMITÉ */}
+              {/* INDICE DU QUOTA ET BANNIÈRE ILLIMITÉ */}
               <div 
-                onClick={() => userTier === "free" && setShowPremiumModal(true)} 
+                onClick={() => !isPaidTier(userTier) && setShowPremiumModal(true)} 
                 className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
               >
                 <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Livres :" : "Books:"}</span>
                 <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
-                  {userTier === "premium" || userTier === "advantage" ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+                  {isPaidTier(userTier) ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
                 </span>
-                {userTier === "free" && (
+                {!isPaidTier(userTier) && (
                   <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
                     ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                   </span>
@@ -861,7 +826,7 @@ function ContenuContent() {
                 <span className="text-xs font-mono text-zinc-400">
                   {fr ? "Crédits disponibles : " : "Available credits: "}
                   <strong className={availableQuota === 0 ? "text-red-400" : "text-cyan-400"}>
-                    {userTier === "premium" || userTier === "advantage" ? "∞ Illimité" : `${availableQuota}/${MAX_FREE_CREDITS}`}
+                    {isPaidTier(userTier) ? "∞ Illimité" : `${availableQuota}/${MAX_FREE_CREDITS}`}
                   </strong>
                 </span>
               </div>
