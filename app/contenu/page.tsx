@@ -1,10 +1,57 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { marked } from "marked";
+import TurndownService from "turndown";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
+
+const turndownService = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
+
+// Convertit du markdown brut en HTML consommable par Tiptap
+function markdownToHtml(md: string): string {
+  return marked.parse(md || "", { breaks: true, gfm: true }) as string;
+}
+
+// Convertit le HTML de l'éditeur Tiptap en markdown (pour la sauvegarde / mode brut)
+function htmlToMarkdown(html: string): string {
+  return turndownService.turndown(html || "");
+}
+
+// Nettoyage structurel du markdown : corrige les titres, aère les listes,
+// enlève les espaces/retours à la ligne superflus. Fonctionne ligne par ligne
+// (^...$ multiligne) plutôt que sur des motifs entourés de \n, ce qui est
+// beaucoup plus tolérant au texte réellement généré.
+function nettoyerMarkdown(brut: string): string {
+  if (!brut) return brut;
+
+  let t = brut.replace(/\r\n/g, "\n");
+
+  // Repart d'une base propre : enlève les # déjà présents en début de ligne
+  t = t.replace(/^#{1,6}\s*/gm, "");
+
+  // Détecte les chapitres ("CHAPITRE 1 ...") -> Titre de niveau 1
+  t = t.replace(/^[ \t]*(CHAPITRE\s+\d+[^\n]*)$/gim, "\n\n# $1\n\n");
+
+  // Détecte les titres/sous-titres : lignes courtes, tout en majuscules,
+  // sans ponctuation de fin de phrase -> Titre de niveau 2
+  t = t.replace(/^([A-ZÀ-Ÿ0-9][A-ZÀ-Ÿ0-9\s\-':,]{3,79})$/gm, (match, p1) => {
+    if (/^CHAPITRE\s+\d+/i.test(p1)) return match;
+    return `\n\n## ${p1.trim()}\n\n`;
+  });
+
+  // Sépare une liste collée directement après une phrase précédente
+  t = t.replace(/([.!?])\s*(\d+\.\s+|[-•*]\s+)/g, "$1\n\n$2");
+
+  // Normalise espaces et retours à la ligne
+  t = t.replace(/[ \t]{2,}/g, " ");
+  t = t.replace(/\n{3,}/g, "\n\n");
+
+  return t.trim();
+}
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +75,10 @@ const FORMATS: FormatOption[] = [
     titreEn: "Blog Article / Lead Magnet",
     sousTitre: "Contenu concis, percutant et hautement optimisé.",
     sousTitreEn: "Concise, punchy, and highly optimized content.",
-    pagesEstimees: "5 à 10 pages",
-    motsCible: "~1 000 à 3 000 mots",
+    pagesEstimees: "5 à 20 pages",
+    motsCible: "~1 000 à 6 000 mots",
     nbBlocs: 1,
-    nbPoints: 100,
+    nbPoints: 200,
     icon: "📝",
   },
   {
@@ -41,9 +88,9 @@ const FORMATS: FormatOption[] = [
     sousTitre: "Ouvrage complet et structuré avec cas pratiques ou petit livre.",
     sousTitreEn: "Comprehensive structured guide with case studies.",
     pagesEstimees: "40 à 100 pages",
-    motsCible: "~10 000 à 30 000 mots",
+    motsCible: "~10 000 à 40 000 mots",
     nbBlocs: 6,
-    nbPoints: 600,
+    nbPoints: 800,
     icon: "📚",
   },
   {
@@ -55,7 +102,7 @@ const FORMATS: FormatOption[] = [
     pagesEstimees: "100 à 300 pages",
     motsCible: "~40 000 à 80 000 mots",
     nbBlocs: 12,
-    nbPoints: 1200,
+    nbPoints: 1600,
     icon: "📘",
   },
 ];
@@ -139,6 +186,45 @@ function ContenuContent() {
   const [copiedStep, setCopiedStep] = useState<string | null>(null);
 
   const LOCAL_STORAGE_KEY = "echo-contenu-drafts";
+
+  // Empêche l'effet de sync texteFinal -> editor de tourner en boucle
+  // quand c'est l'éditeur lui-même qui vient de modifier texteFinal.
+  const skipNextSyncRef = useRef(false);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+    ],
+    content: "",
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class:
+          "print-book prose prose-zinc max-w-none prose-headings:font-black prose-h1:text-3xl prose-h2:text-2xl prose-p:text-base prose-p:leading-relaxed focus:outline-none min-h-[400px]",
+      },
+    },
+    onUpdate: ({ editor }) => {
+      const md = htmlToMarkdown(editor.getHTML());
+      skipNextSyncRef.current = true;
+      setTexteFinal(md);
+      setNbMots(md.split(/\s+/).filter(Boolean).length);
+    },
+  });
+
+  // Garde l'éditeur Tiptap synchronisé quand texteFinal change depuis
+  // l'extérieur (fin de génération, chargement d'un projet, mode brut...).
+  useEffect(() => {
+    if (!editor) return;
+    if (skipNextSyncRef.current) {
+      skipNextSyncRef.current = false;
+      return;
+    }
+    const currentMd = htmlToMarkdown(editor.getHTML());
+    if (currentMd.trim() === (texteFinal || "").trim()) return;
+    editor.commands.setContent(markdownToHtml(texteFinal || ""), { emitUpdate: false });
+  }, [texteFinal, editor]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -557,20 +643,22 @@ Total: formatSelectionne.nbBlocs,
   };
 
   const nettoyerEtFixerTexte = async () => {
-    if (!texteFinal) return;
+    if (!texteFinal || !editor) return;
 
-    let t = texteFinal;
+    // On nettoie toujours à partir du markdown le plus à jour :
+    // si l'utilisateur vient d'éditer dans Tiptap, on repart de son HTML,
+    // sinon on repart de texteFinal (ex: mode brut).
+    const mdActuel = htmlToMarkdown(editor.getHTML()).trim() || texteFinal;
+    const textePropre = nettoyerMarkdown(mdActuel);
 
-    t = t.replace(/\s*(?:#{1,3}\s*)?(CHAPITRE\s+\d+[^\n]*)/gi, "\n\n# $1\n\n");
-    t = t.replace(/\n([A-ZÀ-Ÿ0-9\s\-\':]{4,80})\n/g, "\n\n## $1\n\n");
-    t = t.replace(/([.!?])\s*([0-9]+\.\s+|[-•*]\s+)/g, "$1\n\n$2");
-    t = t.replace(/[ \t]+/g, " ");
-    t = t.replace(/\n{3,}/g, "\n\n");
-
-    const textePropre = t.trim();
+    // Injecte le résultat nettoyé directement dans l'éditeur : c'est ce qui
+    // fait "bouger" visuellement les ## etc., puisque Tiptap re-render un
+    // vrai document structuré au lieu d'une chaîne markdown affichée telle quelle.
+    skipNextSyncRef.current = false;
+    editor.commands.setContent(markdownToHtml(textePropre), { emitUpdate: false });
 
     setTexteFinal(textePropre);
-    setNbMots(textePropre.split(/\s+/).length);
+    setNbMots(textePropre.split(/\s+/).filter(Boolean).length);
 
     if (currentId) {
       if (user) {
@@ -964,10 +1052,11 @@ Total: formatSelectionne.nbBlocs,
                     <span className="text-xs text-zinc-500 font-mono">{fr ? "Génération longue en cours... veuillez ne pas fermer la page." : "High density writing in progress... please hold."}</span>
                   </div>
                 ) : modeApercu ? (
-                  <div className="w-full max-h-[850px] overflow-y-auto bg-white text-zinc-900 border border-zinc-200 rounded-2xl p-10 shadow-inner select-text">
-                    <div className="print-book prose prose-zinc max-w-none prose-headings:font-black prose-h1:text-3xl prose-h2:text-2xl prose-p:text-base prose-p:leading-relaxed">
-                      <ReactMarkdown>{texteFinal}</ReactMarkdown>
-                    </div>
+                  <div
+                    onClick={() => editor?.chain().focus().run()}
+                    className="w-full max-h-[850px] overflow-y-auto bg-white text-zinc-900 border border-zinc-200 rounded-2xl p-10 shadow-inner select-text cursor-text"
+                  >
+                    <EditorContent editor={editor} />
                   </div>
                 ) : (
                   <textarea
