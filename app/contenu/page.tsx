@@ -11,42 +11,27 @@ import { supabase } from "../lib/supabase";
 
 const turndownService = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
 
-// Convertit du markdown brut en HTML consommable par Tiptap
 function markdownToHtml(md: string): string {
   return marked.parse(md || "", { breaks: true, gfm: true }) as string;
 }
 
-// Convertit le HTML de l'éditeur Tiptap en markdown (pour la sauvegarde / mode brut)
 function htmlToMarkdown(html: string): string {
   return turndownService.turndown(html || "");
 }
 
-// Nettoyage structurel du markdown : corrige les titres, aère les listes,
-// enlève les espaces/retours à la ligne superflus. Fonctionne ligne par ligne
-// (^...$ multiligne) plutôt que sur des motifs entourés de \n, ce qui est
-// beaucoup plus tolérant au texte réellement généré.
 function nettoyerMarkdown(brut: string): string {
   if (!brut) return brut;
 
   let t = brut.replace(/\r\n/g, "\n");
 
-  // Repart d'une base propre : enlève les # déjà présents en début de ligne
   t = t.replace(/^#{1,6}\s*/gm, "");
-
-  // Détecte les chapitres ("CHAPITRE 1 ...") -> Titre de niveau 1
   t = t.replace(/^[ \t]*(CHAPITRE\s+\d+[^\n]*)$/gim, "\n\n# $1\n\n");
-
-  // Détecte les titres/sous-titres : lignes courtes, tout en majuscules,
-  // sans ponctuation de fin de phrase -> Titre de niveau 2
   t = t.replace(/^([A-ZÀ-Ÿ0-9][A-ZÀ-Ÿ0-9\s\-':,]{3,79})$/gm, (match, p1) => {
     if (/^CHAPITRE\s+\d+/i.test(p1)) return match;
     return `\n\n## ${p1.trim()}\n\n`;
   });
 
-  // Sépare une liste collée directement après une phrase précédente
   t = t.replace(/([.!?])\s*(\d+\.\s+|[-•*]\s+)/g, "$1\n\n$2");
-
-  // Normalise espaces et retours à la ligne
   t = t.replace(/[ \t]{2,}/g, " ");
   t = t.replace(/\n{3,}/g, "\n\n");
 
@@ -127,7 +112,8 @@ const GoogleLogo = () => (
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
 
-const MAX_FREE_CREDITS = 4;
+// Quota max fixé à 2
+const MAX_FREE_CREDITS = 2;
 const REGEN_3H_MS = 3 * 60 * 60 * 1000;
 
 type CurrencyCode = "CAD" | "USD" | "EUR";
@@ -187,8 +173,6 @@ function ContenuContent() {
 
   const LOCAL_STORAGE_KEY = "echo-contenu-drafts";
 
-  // Empêche l'effet de sync texteFinal -> editor de tourner en boucle
-  // quand c'est l'éditeur lui-même qui vient de modifier texteFinal.
   const skipNextSyncRef = useRef(false);
 
   const editor = useEditor({
@@ -213,8 +197,6 @@ function ContenuContent() {
     },
   });
 
-  // Garde l'éditeur Tiptap synchronisé quand texteFinal change depuis
-  // l'extérieur (fin de génération, chargement d'un projet, mode brut...).
   useEffect(() => {
     if (!editor) return;
     if (skipNextSyncRef.current) {
@@ -228,7 +210,6 @@ function ContenuContent() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      const uid = session?.user?.id || null;
       if (session?.user) {
         setUser(session.user);
         chargerHistorique(session.user.id);
@@ -326,14 +307,8 @@ function ContenuContent() {
     if (userTier === "premium" || userTier === "advantage") return true;
 
     if (!user) {
-      const currentUsed = parseInt(localStorage.getItem("contenu_anon_used") || "0");
-      if (currentUsed >= MAX_FREE_CREDITS) {
-        setShowAuthModal(true);
-        return false;
-      }
-      localStorage.setItem("contenu_anon_used", String(currentUsed + 1));
-      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
-      return true;
+      setShowAuthModal(true);
+      return false;
     }
 
     const now = Date.now();
@@ -476,6 +451,13 @@ function ContenuContent() {
 
   const lancerFabrication = async () => {
     setError(null);
+
+    // VÉRIFICATION OBLIGATOIRE : Utilisateur doit être connecté pour lancer la fabrication
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
     if (!sujet.trim()) {
       setError(fr ? "Veuillez saisir votre sujet d'ouvrage." : "Please enter your book topic.");
       return;
@@ -549,7 +531,7 @@ function ContenuContent() {
             prompt_maitre: pMaitre,
             tranche: tranches[i],
             numero: i + 1,
-Total: formatSelectionne.nbBlocs,
+            total: formatSelectionne.nbBlocs,
             type_contenu: formatSelectionne.id,
           }),
         });
@@ -619,13 +601,6 @@ Total: formatSelectionne.nbBlocs,
 
         if (newRow?.id) setCurrentId(newRow.id);
         chargerHistorique(user.id);
-      } else {
-        const localId = `local-${Date.now()}`;
-        const newLocalRecord = { id: localId, ...record };
-        setCurrentId(localId);
-        const updated = [newLocalRecord, ...historique];
-        setHistorique(updated);
-        saveLocalDrafts(updated);
       }
 
     } catch (e: any) {
@@ -645,33 +620,21 @@ Total: formatSelectionne.nbBlocs,
   const nettoyerEtFixerTexte = async () => {
     if (!texteFinal || !editor) return;
 
-    // On nettoie toujours à partir du markdown le plus à jour :
-    // si l'utilisateur vient d'éditer dans Tiptap, on repart de son HTML,
-    // sinon on repart de texteFinal (ex: mode brut).
     const mdActuel = htmlToMarkdown(editor.getHTML()).trim() || texteFinal;
     const textePropre = nettoyerMarkdown(mdActuel);
 
-    // Injecte le résultat nettoyé directement dans l'éditeur : c'est ce qui
-    // fait "bouger" visuellement les ## etc., puisque Tiptap re-render un
-    // vrai document structuré au lieu d'une chaîne markdown affichée telle quelle.
     skipNextSyncRef.current = false;
     editor.commands.setContent(markdownToHtml(textePropre), { emitUpdate: false });
 
     setTexteFinal(textePropre);
     setNbMots(textePropre.split(/\s+/).filter(Boolean).length);
 
-    if (currentId) {
-      if (user) {
-        await supabase
-          .from("contenu_historique")
-          .update({ texte_final: textePropre })
-          .eq("id", currentId);
-        chargerHistorique(user.id);
-      } else {
-        const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: textePropre } : h);
-        setHistorique(updated);
-        saveLocalDrafts(updated);
-      }
+    if (currentId && user) {
+      await supabase
+        .from("contenu_historique")
+        .update({ texte_final: textePropre })
+        .eq("id", currentId);
+      chargerHistorique(user.id);
     }
   };
 
@@ -710,7 +673,7 @@ Total: formatSelectionne.nbBlocs,
                 ))}
               </div>
 
-              {/* INDICE DU QUOTA ET BANNÈRE ILLIMITÉ */}
+              {/* INDICE DU QUOTA ET BANIÈRE ILLIMITÉ */}
               <div 
                 onClick={() => userTier === "free" && setShowPremiumModal(true)} 
                 className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
@@ -1063,13 +1026,6 @@ Total: formatSelectionne.nbBlocs,
                     value={texteFinal}
                     onChange={(e) => {
                       setTexteFinal(e.target.value);
-                      if (currentId) {
-                        if (!user) {
-                          const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: e.target.value } : h);
-                          setHistorique(updated);
-                          saveLocalDrafts(updated);
-                        }
-                      }
                     }}
                     rows={25}
                     className="w-full bg-zinc-900/90 border border-emerald-800/40 rounded-2xl p-6 text-sm leading-relaxed outline-none resize-y font-mono text-zinc-100"

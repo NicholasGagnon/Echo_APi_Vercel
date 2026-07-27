@@ -15,7 +15,7 @@
     "@tiptap/extension-text-style": "^3.27.1",
     "@tiptap/pm": "^3.27.1",
     "@tiptap/react": "^3.27.1",
-    "@tiptap/starter-kit": "^3.29.0",
+    "@tiptap/starter-kit": "^3.29.1",
     "@vercel/analytics": "^2.0.1",
     "dotenv": "^17.4.2",
     "html2canvas": "^1.4.1",
