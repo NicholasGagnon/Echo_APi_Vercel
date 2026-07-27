@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef, useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../../context/AppContext";
 
@@ -13,8 +12,8 @@ type Conversation = { id: string; title: string; messages: string[]; summary: st
 type Currency = "CAD" | "USD" | "EUR";
 
 const MAX_FREE_CREDITS = 20;
-const REGEN_1H_MS = 60 * 60 * 1000; // 1 heure
-const REGEN_ADD_AMOUNT = 3; // +3 crédits par heure
+const REGEN_1H_MS = 60 * 60 * 1000;
+const REGEN_ADD_AMOUNT = 3;
 
 const CONV_SOURCE = "echo";
 const LOCAL_CONV_KEY = "echo-conversation-v2";
@@ -72,6 +71,14 @@ function ChatContent() {
   const [currency, setCurrency] = useState<Currency>("CAD");
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
+  
+  // Auth Form State
+  const [authEmailMode, setAuthEmailMode] = useState<"signin" | "signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
 
   // Tailles
   const [chatFontSize, setChatFontSize] = useState(15);
@@ -254,15 +261,13 @@ function ChatContent() {
     })) as Conversation[];
   };
 
-  // ✅ CORRECTION CRITIQUE : UPSERT + Création dynamique si ID = "new"
-    const saveConversationToDB = async (uid: string, convId: string | null, raws: string[], currentSummary: string): Promise<string> => {
+  const saveConversationToDB = async (uid: string, convId: string | null, raws: string[], currentSummary: string): Promise<string> => {
     const isNew = !convId || convId === "new" || convId.startsWith("local-");
     const updatedTitle = deriveTitle(raws, lang);
 
     let savedId = convId || "new";
 
     if (isNew) {
-      // 1. Première sauvegarde : INSERT pour générer un ID unique Supabase
       const { data, error } = await supabase
         .from("echo_conversations")
         .insert({
@@ -281,7 +286,6 @@ function ChatContent() {
         console.error("[SUPABASE INSERT ERROR]", error);
       }
     } else {
-      // 2. Mises à jour suivantes : UPSERT sur l'ID existant
       const { error } = await supabase
         .from("echo_conversations")
         .upsert({
@@ -296,7 +300,6 @@ function ChatContent() {
       if (error) console.error("[SUPABASE UPSERT ERROR]", error);
     }
 
-    // Mise à jour synchrone de l'état local dans le panneau latéral
     setConversations(prev => {
       const exists = prev.some(c => c.id === savedId);
       if (exists) {
@@ -395,7 +398,8 @@ function ChatContent() {
       }
     }
   };
-const sendMessage = async () => {
+
+  const sendMessage = async () => {
     if (!input.trim() && !selectedImage) return;
 
     const autorise = await consommerUnCredit();
@@ -410,7 +414,6 @@ const sendMessage = async () => {
     setEchoState("thinking");
     setMessages([...baseMessages, { raw: "Echo: ..." }]);
 
-    // Sauvegarde immédiate dans le navigateur pour parer aux rafraîchissements pendant la frappe
     localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(serializeMsgs(baseMessages)));
 
     setInput("");
@@ -438,10 +441,8 @@ const sendMessage = async () => {
       const generatedMsgs = [...baseMessages, { raw: `Echo: ${data.response || ""}` }];
       setMessages(generatedMsgs);
 
-      // Sauvegarde du buffer local rafraîchi
       localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(serializeMsgs(generatedMsgs)));
 
-      // Enregistrement persistant dans Supabase ou LocalStorage selon le statut de connexion
       if (userId) {
         await saveConversationToDB(userId, activeConversationId, serializeMsgs(generatedMsgs), "");
       } else {
@@ -472,13 +473,57 @@ const sendMessage = async () => {
     r.start();
   };
 
+  // Auth Handlers
+  const handleGoogleAuth = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/chat` },
+    });
+  };
+
+  const handleMicrosoftAuth = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: { redirectTo: `${window.location.origin}/chat` },
+    });
+  };
+
+  const handleEmailAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthSuccess(null);
+    setAuthLoading(true);
+
+    if (authEmailMode === "signin") {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: authEmail.trim(),
+        password: authPassword,
+      });
+      if (error) setAuthError(error.message);
+      else setShowSignInModal(false);
+    } else {
+      const { data, error } = await supabase.auth.signUp({
+        email: authEmail.trim(),
+        password: authPassword,
+        options: { emailRedirectTo: `${window.location.origin}/chat` },
+      });
+      if (error) setAuthError(error.message);
+      else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setAuthError(fr ? "Compte existant." : "Account already exists.");
+      } else {
+        setAuthSuccess(fr ? "Vérifiez votre boîte mail !" : "Check your inbox!");
+      }
+    }
+    setAuthLoading(false);
+  };
+
   const isPaidTier = currentUserTier && currentUserTier !== "free" && currentUserTier !== "connected_free";
 
   return (
-    <main className="h-screen w-screen bg-black text-zinc-50 font-sans selection:bg-cyan-500/20 relative overflow-hidden flex flex-col">
+    <main className="h-screen w-screen bg-[#0f0f0f] text-zinc-100 font-sans selection:bg-cyan-500/20 relative overflow-hidden flex flex-col">
 
       {/* ── HEADER UNIFIÉ ÉCOSYSTÈME ── */}
-      <header className="border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-40 shrink-0">
+      <header className="bg-[#0f0f0f] sticky top-0 z-40 shrink-0">
         <div className="max-w-[1600px] mx-auto px-6 py-3 flex justify-between items-center relative">
           
           <div className="flex items-center gap-6">
@@ -496,7 +541,7 @@ const sendMessage = async () => {
           </div>
           
           <div className="flex items-center gap-4 text-xs font-mono relative">
-            <div className="flex border border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-900">
+            <div className="flex rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-900">
               {(["CAD", "USD", "EUR"] as Currency[]).map((c) => (
                 <button
                   key={c}
@@ -508,10 +553,10 @@ const sendMessage = async () => {
               ))}
             </div>
 
-            {/* QUOTA COMPTEUR */}
+            {/* QUOTA COMPTEUR LUMINEUX */}
             <div 
               onClick={() => !isPaidTier && setShowPremiumModal(true)} 
-              className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+              className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-zinc-900 text-white shadow-lg hover:shadow-[0_0_20px_rgba(245,158,11,0.2)] transition-all"
             >
               <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Messages :" : "Messages:"}</span>
               <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
@@ -524,7 +569,7 @@ const sendMessage = async () => {
               )}
             </div>
 
-            <div className="flex border border-zinc-800 rounded-lg overflow-hidden font-mono text-[10px]">
+            <div className="flex rounded-lg overflow-hidden font-mono text-[10px]">
               <button onClick={() => setLang("fr")} className={`px-2 py-1 ${fr ? "bg-zinc-800 text-white font-bold" : "text-zinc-500 hover:text-zinc-300"}`}>FR</button>
               <button onClick={() => setLang("en")} className={`px-2 py-1 ${!fr ? "bg-zinc-800 text-white font-bold" : "text-zinc-500 hover:text-zinc-300"}`}>EN</button>
             </div>
@@ -539,23 +584,23 @@ const sendMessage = async () => {
             ) : (
               <button
                 onClick={() => setShowSignInModal(true)}
-                className="px-3 py-1.5 border border-zinc-800 text-zinc-300 hover:text-white rounded-xl hover:bg-zinc-900 transition-all font-bold tracking-tight shadow-sm"
+                className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg transition-all text-xs font-bold shadow-sm"
               >
-                {fr ? "Connexion" : "Sign In"}
+                {fr ? "Se connecter" : "Sign in"}
               </button>
             )}
           </div>
         </div>
       </header>
 
-      {/* ── LAYOUT 3 COLONNES VOLETS CONTINUS ── */}
-      <div className="flex-1 flex overflow-hidden min-h-0 relative bg-black">
+      {/* ── LAYOUT 3 COLONNES VOLETS CONTINUS SANS BORDURES DURES ── */}
+      <div className="flex-1 flex overflow-hidden min-h-0 relative bg-[#0f0f0f]">
 
         {/* 1. PANNEAU CONVERSATIONS GAUCHE */}
         {isConvoPanelOpen ? (
-          <div className="w-64 border-r border-zinc-900 bg-black flex flex-col shrink-0 h-full">
-            <div className="p-3 border-b border-zinc-900 flex items-center justify-between">
-              <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-400 font-bold">
+          <div className="w-64 bg-[#0f0f0f] flex flex-col shrink-0 h-full">
+            <div className="p-3 flex items-center justify-between">
+              <span className="text-[10px] uppercase font-mono tracking-widest text-zinc-500 font-bold">
                 {fr ? "CONVERSATIONS" : "CONVERSATIONS"}
               </span>
               <button onClick={() => setIsConvoPanelOpen(false)} className="text-zinc-500 hover:text-white text-xs p-1">◂</button>
@@ -571,7 +616,7 @@ const sendMessage = async () => {
               + {fr ? "Nouvelle conversation" : "New conversation"}
             </button>
 
-            <div className="flex-1 overflow-y-auto px-2 space-y-1 scrollbar-thin scrollbar-thumb-zinc-800">
+            <div className="flex-1 overflow-y-auto px-2 space-y-1 scrollbar-none">
               {conversations.map(c => (
                 <div
                   key={c.id}
@@ -580,7 +625,7 @@ const sendMessage = async () => {
                     setMessages(deserializeMsgs(c.messages));
                   }}
                   className={`p-2.5 rounded-xl text-xs font-mono transition-all cursor-pointer truncate ${
-                    activeConversationId === c.id ? "bg-cyan-950/60 border border-cyan-500/40 text-cyan-300" : "text-zinc-400 hover:bg-zinc-900/80"
+                    activeConversationId === c.id ? "bg-cyan-950/40 text-cyan-300" : "text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200"
                   }`}
                 >
                   {c.title}
@@ -591,22 +636,22 @@ const sendMessage = async () => {
         ) : (
           <button
             onClick={() => setIsConvoPanelOpen(true)}
-            className="w-8 border-r border-zinc-900 bg-black flex items-center justify-center text-zinc-500 hover:text-white transition-colors h-full shrink-0 cursor-pointer"
+            className="w-8 bg-[#0f0f0f] flex items-center justify-center text-zinc-500 hover:text-white transition-colors h-full shrink-0 cursor-pointer"
           >
             ▸
           </button>
         )}
 
         {/* 2. ZONE CENTRALE (MESSAGES + SAISIE ANCRÉE) */}
-        <section className="flex-1 flex flex-col min-w-0 bg-black relative h-full overflow-hidden">
+        <section className="flex-1 flex flex-col min-w-0 bg-[#0f0f0f] relative h-full overflow-hidden">
           
           {/* MESSAGES DÉROULANTS */}
-          <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800">
+          <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 scrollbar-none">
             <div className="max-w-3xl w-full mx-auto flex flex-col space-y-6">
               
               {messages.length === 0 && (
                 <div className="h-64 flex flex-col items-center justify-center gap-3 text-center my-auto">
-                  <div className="w-12 h-12 rounded-2xl border border-cyan-500/30 bg-cyan-950/30 flex items-center justify-center text-cyan-400 font-mono text-xl">
+                  <div className="w-12 h-12 rounded-2xl bg-cyan-950/20 flex items-center justify-center text-cyan-400 font-mono text-xl">
                     ✦
                   </div>
                   <p className="text-xs font-mono text-zinc-500 italic">
@@ -622,10 +667,10 @@ const sendMessage = async () => {
 
                 if (isEcho) return (
                   <div key={index} className="flex gap-4 items-start w-full">
-                    <div className="w-10 h-10 rounded-full border border-cyan-500/40 bg-zinc-900 flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center shrink-0">
                       <img src="/echo3.png" alt="Echo" className="w-full h-full object-cover rounded-full" />
                     </div>
-                    <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-5 space-y-2 flex-1 shadow-lg">
+                    <div className="bg-zinc-900/60 rounded-3xl p-5 space-y-2 flex-1 shadow-md">
                       <div className="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-widest">ECHO IA</div>
                       <div className="text-zinc-200 leading-relaxed font-sans whitespace-pre-wrap" style={{ fontSize: chatFontSize }}>
                         {cleanText}
@@ -636,9 +681,9 @@ const sendMessage = async () => {
 
                 if (isUser) return (
                   <div key={index} className="flex justify-end w-full ml-auto">
-                    <div className="bg-cyan-950/50 border border-cyan-500/40 rounded-3xl p-5 space-y-2 max-w-xl">
+                    <div className="bg-cyan-950/30 rounded-3xl p-5 space-y-2 max-w-xl">
                       {msg.imageB64 && (
-                        <img src={msg.imageB64} alt="Upload" className="max-w-xs max-h-60 rounded-2xl border border-cyan-500/40 object-cover mb-2" />
+                        <img src={msg.imageB64} alt="Upload" className="max-w-xs max-h-60 rounded-2xl object-cover mb-2" />
                       )}
                       <div className="text-cyan-100 leading-relaxed font-sans whitespace-pre-wrap" style={{ fontSize: chatFontSize - 1 }}>
                         {cleanText}
@@ -654,12 +699,12 @@ const sendMessage = async () => {
           </div>
 
           {/* SAISIE ANCRÉE EN BAS */}
-          <div className="border-t border-zinc-900 p-4 bg-black/95 shrink-0">
+          <div className="p-4 bg-[#0f0f0f] shrink-0">
             <div className="max-w-3xl mx-auto space-y-3">
               
               {selectedImage && (
-                <div className="flex items-center gap-3 bg-cyan-950/40 border border-cyan-500/40 rounded-2xl p-2.5 max-w-md">
-                  <img src={selectedImage} alt="Preview" className="w-10 h-10 rounded-xl object-cover border border-cyan-400" />
+                <div className="flex items-center gap-3 bg-cyan-950/30 rounded-2xl p-2.5 max-w-md">
+                  <img src={selectedImage} alt="Preview" className="w-10 h-10 rounded-xl object-cover" />
                   <span className="text-xs font-mono text-cyan-300 truncate flex-1">{selectedImageName}</span>
                   <button onClick={() => { setSelectedImage(null); setSelectedImageName(""); }} className="text-zinc-500 hover:text-red-400 text-xs font-bold px-2">✕</button>
                 </div>
@@ -672,7 +717,7 @@ const sendMessage = async () => {
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 placeholder={t.chat.placeholder}
                 style={{ height: inputHeight, minHeight: 44 }}
-                className="w-full bg-zinc-900/90 border border-zinc-800 focus:border-cyan-400 rounded-2xl p-4 text-sm font-mono text-zinc-100 outline-none resize-y transition-all leading-relaxed shadow-inner"
+                className="w-full bg-zinc-900/60 focus:bg-zinc-900 focus:outline-none rounded-2xl p-4 text-sm font-mono text-zinc-100 resize-y transition-all leading-relaxed placeholder:text-zinc-600"
               />
 
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -681,10 +726,10 @@ const sendMessage = async () => {
                   <button
                     type="button"
                     onClick={() => imageInputRef.current?.click()}
-                    className={`px-4 py-3 rounded-xl font-mono font-bold text-xs flex items-center gap-2 border transition-all cursor-pointer ${
+                    className={`px-4 py-3 rounded-xl font-mono font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
                       selectedImage
-                        ? "bg-emerald-950/60 border-emerald-500/50 text-emerald-400"
-                        : "bg-zinc-900 border-zinc-800 hover:border-cyan-500/40 text-zinc-300"
+                        ? "bg-emerald-950/40 text-emerald-400"
+                        : "bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                     }`}
                   >
                     <span>🖼️</span>
@@ -693,8 +738,8 @@ const sendMessage = async () => {
 
                   <button
                     onClick={lancerDictation}
-                    className={`px-4 py-3 rounded-xl font-mono font-bold text-xs flex items-center gap-2 border transition-all cursor-pointer ${
-                      isListening ? "bg-red-600 border-red-500 text-white animate-pulse" : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-cyan-500/40"
+                    className={`px-4 py-3 rounded-xl font-mono font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+                      isListening ? "bg-red-600 text-white animate-pulse" : "bg-zinc-900/80 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                     }`}
                   >
                     🎤 {fr ? "Parler" : "Speak"}
@@ -712,14 +757,14 @@ const sendMessage = async () => {
                   <button
                     type="button"
                     onClick={decreaseFontSize}
-                    className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-900 hover:border-cyan-500/50 text-zinc-400 hover:text-white font-mono text-xs font-bold transition-colors cursor-pointer"
+                    className="w-10 h-10 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white font-mono text-xs font-bold transition-colors cursor-pointer"
                   >
                     A-
                   </button>
                   <button
                     type="button"
                     onClick={increaseFontSize}
-                    className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-900 hover:border-cyan-500/50 text-zinc-400 hover:text-white font-mono text-xs font-bold transition-colors cursor-pointer"
+                    className="w-10 h-10 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white font-mono text-xs font-bold transition-colors cursor-pointer"
                   >
                     A+
                   </button>
@@ -727,7 +772,7 @@ const sendMessage = async () => {
                     type="button"
                     onClick={shrinkInput}
                     title={fr ? "Réduire la hauteur" : "Shrink input"}
-                    className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-900 hover:border-cyan-500/50 text-zinc-400 hover:text-white font-mono text-xs font-bold transition-colors cursor-pointer"
+                    className="w-10 h-10 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white font-mono text-xs font-bold transition-colors cursor-pointer"
                   >
                     ➖
                   </button>
@@ -735,7 +780,7 @@ const sendMessage = async () => {
                     type="button"
                     onClick={resetInput}
                     title={fr ? "Réinitialiser" : "Reset input"}
-                    className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-900 hover:border-cyan-500/50 text-zinc-400 hover:text-white font-mono text-xs font-bold transition-colors cursor-pointer"
+                    className="w-10 h-10 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white font-mono text-xs font-bold transition-colors cursor-pointer"
                   >
                     ↺
                   </button>
@@ -748,21 +793,21 @@ const sendMessage = async () => {
         </section>
 
         {/* 3. PANNEAU MODES D'ANALYSE DROIT */}
-        <div className="w-64 border-l border-zinc-900 bg-black p-4 shrink-0 flex flex-col space-y-3 h-full overflow-hidden">
-          <div className="text-[10px] font-mono font-black text-zinc-500 uppercase tracking-widest pb-2 border-b border-zinc-900">
+        <div className="w-64 bg-[#0f0f0f] p-4 shrink-0 flex flex-col space-y-3 h-full overflow-hidden">
+          <div className="text-[10px] font-mono font-black text-zinc-500 uppercase tracking-widest pb-2">
             MODES D'ANALYSE
           </div>
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-zinc-800">
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-none">
             {buttonsOrder.map(id => {
               const isSelected = selectedButtons.includes(id);
               return (
                 <button
                   key={id}
                   onClick={() => handleButtonClick(id)}
-                  className={`w-full py-2.5 px-3 rounded-xl text-xs font-mono font-bold border text-left transition-all cursor-pointer ${
+                  className={`w-full py-2.5 px-3 rounded-xl text-xs font-mono font-bold text-left transition-all cursor-pointer ${
                     isSelected
-                      ? "bg-cyan-500 text-zinc-950 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]"
-                      : "bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
+                      ? "bg-cyan-500 text-zinc-950 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                      : "bg-zinc-900/60 text-zinc-400 hover:text-white hover:bg-zinc-800/80"
                   }`}
                 >
                   {fr ? buttonsLabels[id].fr : buttonsLabels[id].en}
@@ -773,6 +818,69 @@ const sendMessage = async () => {
         </div>
 
       </div>
+
+      {/* ── MODALE SIGN IN / CONNEXION ── */}
+      {showSignInModal && (
+        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowSignInModal(false)}>
+          <div className="bg-zinc-950 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-zinc-800" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-5">
+              <div className="text-3xl mb-2">🔐</div>
+              <h3 className="font-bold text-base text-white">{fr ? "Connexion" : "Sign in"}</h3>
+            </div>
+            
+            <div className="flex flex-col gap-2 mb-4">
+              <button onClick={handleGoogleAuth} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-zinc-800 bg-zinc-900 text-sm font-semibold text-zinc-200 hover:bg-zinc-800 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
+                Google
+              </button>
+              <button onClick={handleMicrosoftAuth} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-sm font-semibold text-white hover:bg-zinc-800 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
+                Microsoft
+              </button>
+            </div>
+
+            <div className="relative mb-4">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800"/></div>
+              <div className="relative flex justify-center"><span className="bg-zinc-950 px-2 text-xs text-zinc-500">{fr ? "ou par email" : "or by email"}</span></div>
+            </div>
+
+            <form onSubmit={handleEmailAuthSubmit} className="flex flex-col gap-2">
+              <input 
+                type="email" 
+                placeholder={fr ? "ton@email.com" : "your@email.com"} 
+                value={authEmail} 
+                onChange={e => setAuthEmail(e.target.value)} 
+                required
+                className="w-full border border-zinc-800 rounded-xl px-3 py-2 text-sm bg-zinc-900 text-white outline-none focus:border-cyan-500" 
+              />
+              <input 
+                type="password" 
+                placeholder="••••••••" 
+                value={authPassword} 
+                onChange={e => setAuthPassword(e.target.value)} 
+                required
+                className="w-full border border-zinc-800 rounded-xl px-3 py-2 text-sm bg-zinc-900 text-white outline-none focus:border-cyan-500" 
+              />
+              {authError && <p className="text-xs text-red-400">{authError}</p>}
+              {authSuccess && <p className="text-xs text-emerald-400">{authSuccess}</p>}
+              <button 
+                type="submit" 
+                disabled={authLoading} 
+                className="w-full py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold text-sm transition-colors disabled:opacity-50"
+              >
+                {authLoading ? "…" : authEmailMode === "signin" ? (fr ? "Se connecter" : "Sign in") : (fr ? "Créer un compte" : "Create account")}
+              </button>
+            </form>
+
+            <button 
+              onClick={() => { setAuthEmailMode(m => m === "signin" ? "signup" : "signin"); setAuthError(null); setAuthSuccess(null); }}
+              className="w-full mt-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-2"
+            >
+              {authEmailMode === "signin" ? (fr ? "Pas de compte ? Créer" : "No account? Create one") : (fr ? "Déjà un compte ?" : "Already have an account?")}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── MODALE PREMIUM ── */}
       {showPremiumModal && (
@@ -844,7 +952,7 @@ const sendMessage = async () => {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-cyan-400 font-mono text-xs">Initialisation du Chat...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#0f0f0f] flex items-center justify-center text-cyan-400 font-mono text-xs">Initialisation du Chat...</div>}>
       <ChatContent />
     </Suspense>
   );

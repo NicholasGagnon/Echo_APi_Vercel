@@ -14,7 +14,7 @@ type CalorieLog = { id: string; foodName: string; calories: number; date: string
 type VitalityMessage = { raw: string; imageB64?: string };
 
 const MAX_FREE_CREDITS = 8;
-const REGEN_1H_MS = 60 * 60 * 1000; // 1 heure
+const REGEN_1H_MS = 60 * 60 * 1000;
 
 const MicrosoftLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
@@ -30,7 +30,7 @@ const GoogleLogo = () => (
     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
     <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
   </svg>
 );
 
@@ -49,11 +49,9 @@ function VitalityContent() {
   const [user, setUser] = useState<any>(null);
   const [currentUserTier, setCurrentUserTier] = useState<string>("free");
 
-  // Quotas
+  // Quotas & Premium
   const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
   const [nextRegenIn, setNextRegenIn] = useState<number>(0);
-
-  // Devises & Premium
   const [currency, setCurrency] = useState<Currency>("CAD");
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
@@ -67,25 +65,38 @@ function VitalityContent() {
   // Core Vitality
   const [caloriesList, setCaloriesList] = useState<CalorieLog[]>([]);
   const [calorieGoal, setCalorieGoal] = useState(2300);
+  const [isEditingCalories, setIsEditingCalories] = useState(false);
+  const [inputCalorieGoal, setInputCalorieGoal] = useState("2300");
   const [manualFoodName, setManualFoodName] = useState("");
   const [manualCalories, setManualCalories] = useState("");
 
-  // Profil Métabolique
+  // Profil Métabolique & Calculateur Déficit
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [userWeight, setUserWeight] = useState("");
   const [userHeight, setUserHeight] = useState("");
-  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [weightUnit, setWeightUnit] = useState<"kg" | "lbs">("kg");
+  const [heightUnit, setHeightUnit] = useState<"cm" | "ft">("cm");
+  const [modalWeight, setModalWeight] = useState("");
+  const [modalHeight, setModalHeight] = useState("");
+  const [modalHeightInches, setModalHeightInches] = useState("");
+  const [modalAge, setModalAge] = useState("30");
+  const [modalGender, setModalGender] = useState("homme");
 
-  // Agent Echo
+  // Agent Echo & Mémoire
   const [inputEcho, setInputEcho] = useState("");
   const [echoMessages, setEchoMessages] = useState<VitalityMessage[]>([]);
+  const [memorySummary, setMemorySummary] = useState("");
   const [echoState, setEchoState] = useState("idle");
+  const [isListening, setIsListening] = useState(false);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const getCalorieGoalKey = (uid: string | null) => (uid ? `echo-calorie-goal-${uid}` : "echo-calorie-goal");
   const getVitalityProfileKey = (uid: string | null) => (uid ? `echo-vitality-profile-${uid}` : "echo-vitality-profile");
   const getVitalityConvoKey = (uid: string | null) => (uid ? `echo-vitality-conversation-${uid}` : "echo-vitality-conversation");
+  const getVitalitySummaryKey = (uid: string | null) => (uid ? `echo-vitality-summary-${uid}` : "echo-vitality-summary");
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -103,15 +114,19 @@ function VitalityContent() {
       }
 
       const savedCGoal = localStorage.getItem(getCalorieGoalKey(uid)) || localStorage.getItem("echo-calorie-goal");
-      if (savedCGoal) { setCalorieGoal(Number(savedCGoal)); }
+      if (savedCGoal) { setCalorieGoal(Number(savedCGoal)); setInputCalorieGoal(savedCGoal); }
 
       const savedConvo = localStorage.getItem(getVitalityConvoKey(uid));
       if (savedConvo) setEchoMessages(JSON.parse(savedConvo).map((r: string) => ({ raw: r })));
+
+      const savedSummary = localStorage.getItem(getVitalitySummaryKey(uid));
+      if (savedSummary) setMemorySummary(savedSummary);
 
       const savedProfile = localStorage.getItem(getVitalityProfileKey(uid));
       if (savedProfile) {
         const p = JSON.parse(savedProfile);
         setUserWeight(p.weight || ""); setUserHeight(p.height || "");
+        setModalWeight(p.weight || ""); setModalHeight(p.height || "");
       }
     });
 
@@ -287,9 +302,92 @@ function VitalityContent() {
     setManualFoodName(""); setManualCalories("");
   };
 
+  const compressImage = (base64: string): Promise<string> =>
+    new Promise(resolve => {
+      const img = document.createElement("img");
+      img.onload = () => {
+        const MAX = 1200; let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
+        const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.75));
+      };
+      img.src = base64;
+    });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setImageName(file.name);
+    const reader = new FileReader();
+    reader.onloadend = async () => { const c = await compressImage(reader.result as string); setImageBase64(c); };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const lancerDictation = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { alert("Reconnaissance vocale non supportée sur ce navigateur."); return; }
+    const r = new SR();
+    r.lang = lang === "fr" ? "fr-FR" : "en-US";
+    r.onstart = () => setIsListening(true);
+    r.onend = () => setIsListening(false);
+    r.onerror = () => setIsListening(false);
+    r.onresult = (e: any) => setInputEcho(p => p + (p ? " " : "") + e.results[0][0].transcript);
+    r.start();
+  };
+
+  const runMemoryCron = async (raws: string[]): Promise<string> => {
+    if (raws.length <= 10) return memorySummary;
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
+      const res = await fetch(`${API_URL}/memory-summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ summary: memorySummary, messages: raws.slice(0, 500), userTier: isPaidTier ? "premium" : "free" }),
+      });
+      const data = await res.json();
+      const newSummary = data.summary || memorySummary;
+      setMemorySummary(newSummary);
+      const uid = user?.id || null;
+      localStorage.setItem(getVitalitySummaryKey(uid), newSummary);
+      return newSummary;
+    } catch {
+      return memorySummary;
+    }
+  };
+
   const saveConvoLocally = (msgs: VitalityMessage[]) => {
     const uid = user?.id || null;
     localStorage.setItem(getVitalityConvoKey(uid), JSON.stringify(msgs.map(m => m.raw)));
+  };
+
+  const saveCalorieGoal = () => {
+    const nextGoal = parseInt(inputCalorieGoal) || 2300;
+    setCalorieGoal(nextGoal);
+    setIsEditingCalories(false);
+    const uid = user?.id || null;
+    localStorage.setItem(getCalorieGoalKey(uid), nextGoal.toString());
+  };
+
+  const handleSubmitModalProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    let weightInKg = parseFloat(modalWeight);
+    if (weightUnit === "lbs") weightInKg = weightInKg / 2.20462;
+    let heightInCm = parseFloat(modalHeight);
+    if (heightUnit === "ft") heightInCm = (parseFloat(modalHeight) || 0) * 30.48 + (parseFloat(modalHeightInches) || 0) * 2.54;
+    const a = parseInt(modalAge);
+    if (!weightInKg || !heightInCm || !a) return;
+    let bmr = (10 * weightInKg) + (6.25 * heightInCm) - (5 * a);
+    bmr = modalGender === "homme" ? bmr + 5 : bmr - 161;
+    const tdee = Math.round(bmr * 1.35);
+    setUserWeight(String(Math.round(weightInKg)));
+    setUserHeight(String(Math.round(heightInCm)));
+    setCalorieGoal(tdee); setInputCalorieGoal(String(tdee));
+    const uid = user?.id || null;
+    localStorage.setItem(getCalorieGoalKey(uid), tdee.toString());
+    localStorage.setItem(getVitalityProfileKey(uid), JSON.stringify({ weight: Math.round(weightInKg), height: Math.round(heightInCm) }));
+    setShowProfileModal(false);
+    handleSendEcho(`[SYNCHRONISATION PROFIL] : Poids: ${Math.round(weightInKg)}kg, Taille: ${Math.round(heightInCm)}cm, Age: ${a}ans, Sexe: ${modalGender}. TDEE estimé: ${tdee} kcal. Calcule et recommande mon objectif de déficit calorique optimal.`);
   };
 
   const totalCaloriesEaten = caloriesList.reduce((s, i) => s + i.calories, 0);
@@ -303,7 +401,13 @@ function VitalityContent() {
     const autorise = await consommerUnCredit();
     if (!autorise) return;
 
-    const userEntry: VitalityMessage = { raw: `${fr ? "Toi" : "You"}: ${textToSubmit}`, imageB64: imageBase64 ?? undefined };
+    const currentImage = imageBase64;
+    const currentName = imageName;
+    const userRaw = forcedText ? `You: ${forcedText}` : textToSubmit
+      ? `You: ${textToSubmit}`
+      : `You: Analyse cette image${currentName ? ` (${currentName})` : ""}`;
+
+    const userEntry: VitalityMessage = { raw: userRaw, imageB64: currentImage ?? undefined };
     const baseMessages = [...echoMessages, userEntry];
 
     setEchoState("thinking");
@@ -313,15 +417,18 @@ function VitalityContent() {
     if (!forcedText) setInputEcho("");
     setImageBase64(null); setImageName(null);
 
+    const currentSummary = await runMemoryCron(baseMessages.map(m => m.raw));
+
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
       const response = await fetch(`${API_URL}/vitality`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: textToSubmit,
-          image: imageBase64 ?? null,
+          message: textToSubmit || `Analyse cette image${currentName ? ` (${currentName})` : ""}`,
+          image: currentImage ?? null,
           history: baseMessages.map(m => m.raw),
+          summary: currentSummary,
           userTier: isPaidTier ? "premium" : "free",
           currentCalories: caloriesList,
           calorieGoal,
@@ -337,13 +444,31 @@ function VitalityContent() {
       setEchoMessages(finalMessages);
       saveConvoLocally(finalMessages);
 
-      if (data.action?.type === "ADD_CALORIE_LOG") {
-        const payload = data.action.payload;
-        await addCalorie({
-          foodName: payload.foodName || payload.food_name || textToSubmit || "Repas",
-          calories: parseInt(payload.calories ?? payload.kcal) || 0,
-          date: new Date().toLocaleDateString("fr-CA"),
-        });
+      if (data.action) {
+        const { type, payload } = data.action;
+
+        if (type === "ADD_CALORIE_LOG") {
+          const rawFoodName = payload.foodName || payload.food_name || payload.meal || payload.title || payload.name || textToSubmit || "Aliment";
+          const finalFood = rawFoodName.length > 60 ? rawFoodName.slice(0, 60) : rawFoodName;
+          const finalCalories = parseInt(payload.calories ?? payload.kcal) || 0;
+          await addCalorie({ foodName: finalFood, calories: finalCalories, date: new Date().toLocaleDateString("fr-CA") });
+        }
+
+        if (type === "DELETE_CALORIE_LOG" && payload.id) {
+          await deleteCalorie(payload.id);
+        }
+
+        if (type === "SET_CALORIE_GOAL" || type === "UPDATE_CALORIE_GOAL") {
+          const nextGoal = parseInt(payload.goal ?? payload.calorieGoal ?? payload.calories);
+          if (payload.weight) setUserWeight(String(payload.weight));
+          if (payload.height) setUserHeight(String(payload.height));
+          if (Number.isFinite(nextGoal) && nextGoal > 0) {
+            setCalorieGoal(nextGoal);
+            setInputCalorieGoal(nextGoal.toString());
+            const uid = user?.id || null;
+            localStorage.setItem(getCalorieGoalKey(uid), nextGoal.toString());
+          }
+        }
       }
     } catch {
       const errorMessages = [...baseMessages, { raw: "Echo: Connexion au serveur impossible." }];
@@ -452,7 +577,7 @@ function VitalityContent() {
         </div>
       </section>
 
-      {/* ── SEPARATION VAGUE BLANCHE ET STRIC CYAN ── */}
+      {/* ── SÉPARATION VAGUE BLANCHE ET STRIC VERT ── */}
       <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
         <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
@@ -472,9 +597,24 @@ function VitalityContent() {
             <div className="bg-black/90 border-2 border-emerald-500/40 rounded-3xl p-6 shadow-[0_0_30px_rgba(16,185,129,0.15)] space-y-4">
               <div className="flex justify-between items-center">
                 <span className="font-mono text-xs text-emerald-400 font-extrabold uppercase">OBJECTIF NUTRITIONNEL</span>
-                <span className="text-xs font-mono font-bold text-zinc-400">
-                  Objectif: <strong className="text-emerald-400">{calorieGoal} kcal</strong>
-                </span>
+                {isEditingCalories ? (
+                  <input
+                    type="number"
+                    value={inputCalorieGoal}
+                    onChange={e => setInputCalorieGoal(e.target.value)}
+                    onBlur={saveCalorieGoal}
+                    onKeyDown={e => e.key === "Enter" && saveCalorieGoal()}
+                    className="w-20 bg-zinc-900 border border-zinc-700 text-center text-xs text-white rounded p-1 font-mono font-bold focus:outline-none"
+                    autoFocus
+                  />
+                ) : (
+                  <span
+                    onClick={() => setIsEditingCalories(true)}
+                    className="text-xs font-mono font-bold text-zinc-400 cursor-pointer hover:text-emerald-400 transition-colors"
+                  >
+                    Objectif: <strong className="text-emerald-400">{calorieGoal} kcal</strong> ✏️
+                  </span>
+                )}
               </div>
 
               <div className="text-3xl font-black text-emerald-400 font-mono">
@@ -557,8 +697,12 @@ function VitalityContent() {
               {echoMessages.map((msg, idx) => {
                 const isUser = msg.raw.startsWith("You:") || msg.raw.startsWith("Toi:");
                 const cleanText = msg.raw.replace(/^(Echo|You|Toi):\s*/i, "");
+                if (cleanText.startsWith("[SYNCHRONISATION PROFIL]")) return null;
                 return (
                   <div key={idx} className={`text-xs font-mono ${isUser ? "text-right" : "text-left"}`}>
+                    {msg.imageB64 && (
+                      <img src={msg.imageB64} alt="upload" className="max-w-[140px] max-h-[100px] rounded-xl border border-zinc-700 object-cover shadow-md mb-1 ml-auto" />
+                    )}
                     <div className={`inline-block p-3 rounded-2xl max-w-[85%] whitespace-pre-wrap ${isUser ? "bg-zinc-900 border border-zinc-800 text-zinc-200" : "bg-emerald-950/40 border border-emerald-500/30 text-emerald-300"}`}>
                       {cleanText}
                     </div>
@@ -569,14 +713,54 @@ function VitalityContent() {
             </div>
 
             <div className="space-y-3 pt-3 border-t border-zinc-800">
-              <textarea
-                value={inputEcho}
-                onChange={e => setInputEcho(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendEcho(); } }}
-                rows={2}
-                placeholder={fr ? "Entrez vos repas ou posez une question (ex: Pizza 600 kcal)..." : "Log a meal or ask a question (e.g., Pizza 600 kcal)..."}
-                className="w-full bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl p-3 text-xs font-mono text-zinc-100 outline-none resize-none"
-              />
+              {imageBase64 && (
+                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-[11px] text-emerald-400 font-mono">
+                  <div className="flex items-center gap-2 truncate">
+                    <img src={imageBase64} alt="preview" className="w-7 h-7 rounded object-cover border border-emerald-500/30" />
+                    <span className="truncate">{imageName || "Image prête"}</span>
+                  </div>
+                  <button onClick={() => { setImageBase64(null); setImageName(null); }} className="text-zinc-400 hover:text-red-400 font-bold ml-2">✕</button>
+                </div>
+              )}
+              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+
+              <div className="flex gap-2 items-end">
+                <textarea
+                  value={inputEcho}
+                  onChange={e => setInputEcho(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendEcho(); } }}
+                  rows={2}
+                  placeholder={fr ? "Entrez vos repas ou posez une question (ex: Pizza 600 kcal)..." : "Log a meal or ask a question (e.g., Pizza 600 kcal)..."}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 focus:border-emerald-500 rounded-xl p-3 text-xs font-mono text-zinc-100 outline-none resize-none"
+                />
+                
+                <div className="flex flex-col gap-1.5 w-12 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`h-8 w-full rounded-xl flex items-center justify-center border font-mono text-[10px] transition-all cursor-pointer ${
+                      imageBase64
+                        ? "border-emerald-500 bg-emerald-500/20 text-emerald-300"
+                        : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700"
+                    }`}
+                  >
+                    IMG
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={lancerDictation}
+                    className={`h-8 w-full rounded-xl flex items-center justify-center border font-mono text-[10px] transition-all cursor-pointer ${
+                      isListening
+                        ? "bg-red-600 border-red-500 text-white animate-pulse"
+                        : "border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hover:border-emerald-400"
+                    }`}
+                  >
+                    MIC
+                  </button>
+                </div>
+              </div>
+
               <button
                 onClick={() => handleSendEcho()}
                 className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-mono font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] cursor-pointer"
@@ -588,6 +772,71 @@ function VitalityContent() {
 
         </div>
       </section>
+
+      {/* ── MODALE CALCUL METABOLIQUE / DÉFICIT CALORIQUE ── */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <form onSubmit={handleSubmitModalProfile} className="bg-zinc-950 border border-zinc-800 p-6 rounded-3xl max-w-sm w-full shadow-2xl flex flex-col gap-4 text-xs font-sans text-zinc-100 relative">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-3">
+              <h3 className="text-sm font-mono font-black text-emerald-400 uppercase tracking-wider">Configuration Métabolique</h3>
+              <button type="button" onClick={() => setShowProfileModal(false)} className="text-zinc-500 hover:text-white font-bold text-sm">✕</button>
+            </div>
+
+            <p className="text-zinc-400 text-[11px] font-sans leading-relaxed">
+              Entrez vos données corporelles. Echo calculera vos besoins énergétiques (BMR / TDEE) et ajustera votre objectif de déficit calorique.
+            </p>
+
+            <div className="space-y-1">
+              <div className="flex justify-between items-center mb-1">
+                <label className="font-mono text-zinc-400 text-[10px] uppercase font-bold">Poids</label>
+                <div className="flex bg-zinc-900 rounded-lg p-0.5 border border-zinc-800 text-[10px] font-mono">
+                  {(["kg", "lbs"] as const).map(u => (
+                    <button key={u} type="button" onClick={() => setWeightUnit(u)} className={`px-2 py-0.5 rounded uppercase font-bold ${weightUnit === u ? "bg-emerald-500 text-zinc-950" : "text-zinc-500"}`}>{u}</button>
+                  ))}
+                </div>
+              </div>
+              <input required type="number" step="0.1" value={modalWeight} onChange={e => setModalWeight(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 font-mono text-sm text-zinc-100 focus:outline-none focus:border-emerald-500" />
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between items-center mb-1">
+                <label className="font-mono text-zinc-400 text-[10px] uppercase font-bold">Taille</label>
+                <div className="flex bg-zinc-900 rounded-lg p-0.5 border border-zinc-800 text-[10px] font-mono">
+                  {(["cm", "ft"] as const).map(u => (
+                    <button key={u} type="button" onClick={() => setHeightUnit(u)} className={`px-2 py-0.5 rounded uppercase font-bold ${heightUnit === u ? "bg-emerald-500 text-zinc-950" : "text-zinc-500"}`}>{u}</button>
+                  ))}
+                </div>
+              </div>
+              {heightUnit === "cm" ? (
+                <input required type="number" value={modalHeight} onChange={e => setModalHeight(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 font-mono text-sm text-zinc-100 focus:outline-none focus:border-emerald-500" />
+              ) : (
+                <div className="grid grid-cols-2 gap-2 font-mono">
+                  <input required type="number" placeholder="ft" value={modalHeight} onChange={e => setModalHeight(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-sm text-center text-zinc-100 focus:outline-none focus:border-emerald-500" />
+                  <input type="number" placeholder="in" value={modalHeightInches} onChange={e => setModalHeightInches(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-sm text-center text-zinc-100 focus:outline-none focus:border-emerald-500" />
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-mono text-zinc-400 text-[10px] uppercase font-bold mb-1">Âge</label>
+                <input required type="number" value={modalAge} onChange={e => setModalAge(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 font-mono text-sm text-zinc-100 focus:outline-none focus:border-emerald-500" />
+              </div>
+              <div>
+                <label className="block font-mono text-zinc-400 text-[10px] uppercase font-bold mb-1">Sexe</label>
+                <select value={modalGender} onChange={e => setModalGender(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 font-mono text-xs text-zinc-100 focus:outline-none focus:border-emerald-500 h-[38px] cursor-pointer">
+                  <option value="homme">Homme</option>
+                  <option value="femme">Femme</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-mono font-black py-3 rounded-xl transition shadow-[0_0_15px_rgba(16,185,129,0.3)] uppercase tracking-wider text-xs mt-2 cursor-pointer">
+              Calculer & Synchroniser Echo
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* ── MODALE PREMIUM ── */}
       {showPremiumModal && (

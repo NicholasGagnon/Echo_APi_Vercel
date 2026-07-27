@@ -304,18 +304,19 @@ function OutilTotemContent() {
   };
 
   const tools = [
-    { id: "01", text: fr ? "📖 Créer un nouveau livre de 200 pages à partir d'une simple idée, prêt pour l'impression." : "📖 Create a new 200-page book from a simple idea, print-ready.", side: "left", href: "/contenu", badge: "CRÉATION" },
-    { id: "02", text: fr ? "🌍 Créez un débat entre 3 IA représentant la Chine, les États-Unis et l'Europe, puis choisissez votre allégeance, qui aura le dernier mot." : "🌍 Create a debate between 3 AIs representing China, the US, and Europe, then choose your allegiance.", side: "right", href: "/world", badge: "DÉBAT" },
-    { id: "03", text: fr ? "⭐ Découvrez les vrais avis cachés de votre prochain achat derrière le marketing, en collant simplement une URL." : "⭐ Discover real hidden reviews behind marketing before your next purchase, simply by pasting a URL.", side: "left", href: "/avis", badge: "ACHAT" },
-    { id: "04", text: fr ? "📄 Créez une facture professionnelle en 30 secondes avec un simple prompt, prête à être exportée en PDF." : "📄 Create a professional invoice in 30 seconds with a simple prompt, ready to export as PDF.", side: "right", href: "/fastbilling", badge: "FACTURE" },
-    { id: "05", text: fr ? "📅 Gérez votre calendrier et ajoutez automatiquement vos rendez-vous grâce à un agent IA." : "📅 Manage your calendar and automatically add appointments using an AI agent.", side: "left", href: "/calendar", badge: "CALENDRIER" },
-    { id: "06", text: fr ? "💰 Gérez votre budget et laissez un agent IA enregistrer vos dépenses, organiser vos finances et suivre votre évolution." : "💰 Manage your budget and let an AI agent log expenses, organize finances, and track your progress.", side: "right", href: "/budget", badge: "BUDGET" },
-    { id: "07", text: fr ? "🔥 Suivez facilement vos apports caloriques, vos repas et votre déficit pour atteindre vos objectifs de perte de poids." : "🔥 Easily track your caloric intake, meals, and deficit to reach your weight loss goals.", side: "left", href: "/vitality", badge: "FITNESS" },
-    { id: "08", text: fr ? "🔎 Effectuez des recherches intelligentes qui analysent le web au lieu de simplement afficher des liens." : "🔎 Perform smart searches that analyze the web instead of simply displaying links.", side: "right", href: "/horizonweb", badge: "MOTEUR WEB" },
-    { id: "09", text: fr ? "✨ Corrigez et améliorez vos documents pour les rendre prêts à l'impression en moins de 2 minutes." : "✨ Fix and improve your documents to make them print-ready in under 2 minutes.", side: "left", href: "/correcteur", badge: "CORRIGER" },
-    { id: "10", text: fr ? "📚 Écrivez votre livre avec un compagnon IA dans un espace calme, conçu pour rester concentré et créatif." : "📚 Write your book with an AI companion in a quiet space designed to stay focused and creative.", side: "right", href: "/books", badge: "AUTEUR" },
-    { id: "11", text: fr ? "💡 Faites analyser votre idée et obtenez un premier avis sur son potentiel en moins de 30 secondes." : "💡 Get your idea analyzed and receive an initial opinion on its potential in under 30 seconds.", side: "left", href: "/idea", badge: "ANALYSE" },
-    { id: "12", text: fr ? "💬 Discutez avec une IA rapide plus libre dans ses échanges." : "💬 Chat with a fast AI that is more unconstrained in dialogue.", side: "right", href: "/chat", badge: "CHAT" }
+    { id: "01", side: "left", href: "/contenu", badge: "CRÉATION", image: "/200pages.png" },
+    { id: "02", side: "right", href: "/world", badge: "DÉBAT", image: "/pubworldfr2.png" },
+    { id: "03", side: "left", href: "/avis", badge: "ACHAT", image: "/avisfr.png" },
+    { id: "04", side: "right", href: "/fastbilling", badge: "FACTURE", image: "/facturemini.png" },
+    { id: "05", side: "left", href: "/calendar", badge: "CALENDRIER", image: "/calendrierfr2.png" },
+    { id: "06", side: "right", href: "/budget", badge: "BUDGET", image: "/budget.png" },
+    { id: "07", side: "left", href: "/vitality", badge: "FITNESS", image: "/vita.png" },
+    { id: "08", side: "right", href: "/horizonweb", badge: "MOTEUR WEB", image: "/horizon.png" },
+    { id: "09", side: "left", href: "/correcteur", badge: "CORRIGER", image: "/correcteur.png" },
+    { id: "10", side: "right", href: "/books", badge: "AUTEUR", image: "/auteur.png" },
+    { id: "11", side: "left", href: "/idea", badge: "ANALYSE", image: "/idee.png" },
+    { id: "12", side: "right", href: "/chat", badge: "CHAT", image: "/chat.png" },
+    { id: "13", side: "left", href: "/contratachat", badge: "CONTRAT", image: "/contrat.png" }
   ];
 
   const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
@@ -443,15 +444,19 @@ function OutilTotemContent() {
                     <Link 
                       href={tool.href} 
                       onClick={(e) => handleToolClick(e, tool.href)}
-                      className="block relative p-6 rounded-2xl border-2 border-cyan-500/40 bg-black/95 transition-all duration-300 ease-out shadow-[0_0_20px_rgba(6,182,212,0.18)] group-hover:border-cyan-300 group-hover:shadow-[0_0_45px_rgba(6,182,212,0.95)] group-hover:scale-[1.03] group-hover:bg-cyan-950/60 overflow-hidden min-h-[90px] flex items-center cursor-pointer"
+                      className="block relative rounded-2xl border-2 border-cyan-500/40 bg-black/95 transition-all duration-300 ease-out shadow-[0_0_20px_rgba(6,182,212,0.18)] group-hover:border-cyan-300 group-hover:shadow-[0_0_45px_rgba(6,182,212,0.95)] group-hover:scale-[1.03] group-hover:bg-cyan-950/60 overflow-hidden min-h-[520px] flex items-center cursor-pointer p-4"
                     >
                       <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-cyan-300/25 to-cyan-500/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none" />
 
-                      <div className="flex items-center justify-between w-full relative z-10 gap-4">
-                        <p className="text-base sm:text-lg font-extrabold text-zinc-100 group-hover:text-cyan-200 group-hover:drop-shadow-[0_0_12px_rgba(6,182,212,0.9)] transition-all">
-                          {tool.text}
-                        </p>
-                        <span className="text-xs font-mono px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-400/60 text-cyan-300 font-bold shrink-0 shadow-[0_0_12px_rgba(6,182,212,0.3)]">
+                      <div className="flex items-start justify-between w-full relative z-10 gap-4">
+                        <div className="w-full flex justify-center">
+                          <img 
+                            src={tool.image} 
+                            alt="Aperçu outil" 
+                            className="w-full max-h-150 object-cover object-top rounded-xl shadow-lg border border-cyan-500/20"
+                          />
+                        </div>
+                        <span className="text-xs font-mono px-3 py-1 rounded-lg bg-cyan-500/20 border border-cyan-400/60 text-cyan-300 font-bold shrink-0 shadow-[0_0_12px_rgba(6,182,212,0.3)] self-start">
                           {tool.badge}
                         </span>
                       </div>

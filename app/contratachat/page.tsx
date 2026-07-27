@@ -1,9 +1,39 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import React, { useState, useRef, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
 
-type Lang = "fr" | "en";
+export const dynamic = "force-dynamic";
+
+const MicrosoftLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
+    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
+  </svg>
+);
+
+const GoogleLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+  </svg>
+);
+
+type CurrencyCode = "CAD" | "USD" | "EUR";
+const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
+const PRICES: Record<CurrencyCode, { amount: string; symbol: string }> = {
+  CAD: { amount: "3.99", symbol: "CA$" },
+  USD: { amount: "3.99", symbol: "US$" },
+  EUR: { amount: "3.99", symbol: "€" },
+};
+
 type TypeBien = "vehicule" | "bijoux" | "electro" | "animal" | "autre";
 
 const TYPE_BIEN: Record<TypeBien, { icon: string; labelFr: string; labelEn: string }> = {
@@ -14,197 +44,294 @@ const TYPE_BIEN: Record<TypeBien, { icon: string; labelFr: string; labelEn: stri
   autre:    { icon: "📦", labelFr: "Autre",      labelEn: "Other" },
 };
 
-const T = {
-  fr: {
-    tagline: "📄 Un contrat de vente en 30 secondes.",
-    sub: "Entre les informations. L'IA génère le contrat légal complet.",
-    vendeur: "Vendeur", acheteur: "Acheteur",
-    nomComplet: "Nom complet", adresse: "Adresse complète",
-    description: "Description précise du bien",
-    descHint: "Marque, modèle, année, état, numéro de série si applicable…",
-    prixModalites: "Prix et modalités de paiement",
-    prixHint: "Ex: 1 500 $ comptant / 200 $ par semaine pendant 8 semaines / 500 $ de dépôt + solde à la livraison",
-    typeBien: "Type de bien",
-    generate: "Générer le contrat",
-    generating: "L'IA prépare votre contrat…",
-    exportPdf: "⬇ Exporter en PDF",
-    preview: "Prévisualiser",
-    connected: "Connecté", logout: "Se déconnecter",
-    signin: "Se connecter",
-    dark: "☾", light: "☀",
-    modalSignin: "🛸 Connexion", modalSignup: "🛸 Créer un compte",
-    submitSignin: "Se connecter", submitSignup: "Créer mon compte",
-    switchToSignup: "Pas de compte ? Créer", switchToSignin: "Déjà un compte ?",
-    subscribeBtn: "⚡ Passer Premium (3.99$/m)",
-    subscribedActive: "✓ Abonnement Premium Actif",
-  },
-  en: {
-    tagline: "📄 A bill of sale in 30 seconds.",
-    sub: "Enter the information. AI generates the complete legal contract.",
-    vendeur: "Seller", acheteur: "Buyer",
-    nomComplet: "Full name", adresse: "Full address",
-    description: "Precise description of the item",
-    descHint: "Brand, model, year, condition, serial number if applicable…",
-    prixModalites: "Price and payment terms",
-    prixHint: "Ex: $1,500 cash / $200/week for 8 weeks / $500 deposit + balance on delivery",
-    typeBien: "Type of item",
-    generate: "Generate contract",
-    generating: "AI is preparing your contract…",
-    exportPdf: "⬇ Export as PDF",
-    preview: "Preview",
-    connected: "Connected", logout: "Sign out",
-    signin: "Sign in",
-    dark: "☾", light: "☀",
-    modalSignin: "🛸 Sign In", modalSignup: "🛸 Create Account",
-    submitSignin: "Sign in", submitSignup: "Create my account",
-    switchToSignup: "No account? Create one", switchToSignin: "Already have an account?",
-    subscribeBtn: "⚡ Upgrade to Premium ($3.99/m)",
-    subscribedActive: "✓ Premium Subscription Active",
-  },
-};
-
 type ContratData = {
   vendeur_nom: string; vendeur_adresse: string;
   acheteur_nom: string; acheteur_adresse: string;
   description_bien: string; prix_total: string;
   modalites_paiement: string; date: string; notes: string;
-  type_bien: TypeBien;
+  type_bien: TypeBien; model_used?: string;
 };
 
-export default function ContratPage() {
-  const [dark, setDark]                 = useState(false);
-  const [lang, setLang]                 = useState<Lang>("fr");
-  const [user, setUser]                 = useState<any>(null);
-  const [isPremium, setIsPremium]       = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [subLoading, setSubLoading]     = useState(false);
+function ContratContent() {
+  const { lang, setLang } = useApp();
+  const fr = lang === "fr";
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [showAuthPopup, setShowAuthPopup]   = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailMode, setEmailMode]         = useState<"signin"|"signup">("signin");
-  const [authEmail, setAuthEmail]         = useState("");
-  const [authPassword, setAuthPassword]   = useState("");
-  const [authError, setAuthError]         = useState<string|null>(null);
-  const [authSuccess, setAuthSuccess]     = useState<string|null>(null);
+  // User & Auth State
+  const [user, setUser] = useState<any>(null);
+  const [userTier, setUserTier] = useState<string>("free");
 
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [targetHref, setTargetHref] = useState<string | null>(null);
+
+  const [currency, setCurrency] = useState<CurrencyCode>("CAD");
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signInSuccess, setSignInSuccess] = useState<string | null>(null);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
+  const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
+
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [resendEmail, setResendEmail] = useState("");
+
+  // Tool State
   const [loading, setLoading] = useState(false);
   const [contrat, setContrat] = useState<ContratData | null>(null);
-  const [error, setError]     = useState<string | null>(null);
-  const contratRef            = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const contratRef = useRef<HTMLDivElement>(null);
 
-  // Champs
-  const [vendeurNom, setVendeurNom]           = useState("");
-  const [vendeurAdresse, setVendeurAdresse]   = useState("");
-  const [acheteurNom, setAcheteurNom]         = useState("");
+  const [vendeurNom, setVendeurNom] = useState("");
+  const [vendeurAdresse, setVendeurAdresse] = useState("");
+  const [acheteurNom, setAcheteurNom] = useState("");
   const [acheteurAdresse, setAcheteurAdresse] = useState("");
-  const [description, setDescription]        = useState("");
-  const [prixModalites, setPrixModalites]     = useState("");
-  const [typeBien, setTypeBien]               = useState<TypeBien>("vehicule");
-
-  const t = T[lang];
-  const bg    = dark ? "#1a1917" : "#f0ece4";
-  const surf  = dark ? "#242220" : "#fffdf9";
-  const surf2 = dark ? "#2d2b28" : "#f5f1e8";
-  const bord  = dark ? "#3a3835" : "#e2ddd5";
-  const txt   = dark ? "#f0ece4" : "#1a1917";
-  const muted = dark ? "#8a8680" : "#7a7570";
-  const acc   = "#e07b39";
+  const [description, setDescription] = useState("");
+  const [prixModalites, setPrixModalites] = useState("");
+  const [typeBien, setTypeBien] = useState<TypeBien>("vehicule");
 
   const api = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
-  // Vérifier le statut Premium dans Supabase
-  const checkSubscriptionStatus = async (uid: string) => {
-    try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("user_tier")
-        .eq("id", uid)
-        .maybeSingle();
-
-      if (data && data.user_tier === "premium") {
-        setIsPremium(true);
-      } else {
-        setIsPremium(false);
-      }
-    } catch {
-      setIsPremium(false);
-    }
-  };
-
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setUser(data.user);
-        checkSubscriptionStatus(data.user.id);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
       }
     });
 
-    const { data: l } = supabase.auth.onAuthStateChange((_, s) => {
-      const currentUser = s?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        checkSubscriptionStatus(currentUser.id);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        verifierStatutUser(session.user.id);
       } else {
-        setIsPremium(false);
+        setUser(null);
+        setUserTier("free");
       }
     });
 
-    return () => { l.subscription.unsubscribe(); };
+    return () => subscription.unsubscribe();
   }, []);
 
-  const handleGoogle    = async () => { await supabase.auth.signInWithOAuth({ provider: "google",  options: { redirectTo: `${window.location.origin}/contratachat`, scopes: "openid profile email", queryParams: { prompt: "select_account" } } }); };
-  const handleMicrosoft = async () => { await supabase.auth.signInWithOAuth({ provider: "azure",   options: { redirectTo: `${window.location.origin}/contratachat`, scopes: "openid profile email User.Read" } }); };
-  const handleLogout    = async () => { await supabase.auth.signOut(); setUser(null); setIsPremium(false); setShowUserMenu(false); };
-
-  const handleEmailAuth = async (e: React.FormEvent) => {
-    e.preventDefault(); setAuthError(null); setAuthSuccess(null);
-    if (emailMode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
-      if (error) setAuthError(error.message); else setShowEmailModal(false);
-    } else {
-      const { data, error } = await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword, options: { emailRedirectTo: `${window.location.origin}/contratachat` } });
-      if (error) setAuthError(error.message);
-      else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) setAuthError("Compte existant.");
-      else setAuthSuccess(lang === "fr" ? "Vérifiez votre boîte mail !" : "Check your inbox!");
+  useEffect(() => {
+    if (searchParams.get("premium") === "success" && user) {
+      const timer = setTimeout(() => {
+        verifierStatutUser(user.id);
+      }, 1500);
+      return () => clearTimeout(timer);
     }
-  };
+  }, [searchParams, user]);
 
-  // 🛠️ FONCTION DE PAIEMENT CORRIGÉE AVEC AFFICHEUR D'ERREUR DÉTAILLÉ
-  const handleSubscribe = async () => {
-    if (!user) {
-      setShowAuthPopup(true);
-      return;
-    }
-    setSubLoading(true);
+  const verifierStatutUser = async (uid: string) => {
     try {
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, userEmail: user.email }),
-      });
+      const { data: cData, error: cErr } = await supabase
+        .from("contenu_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(`Erreur Stripe (${res.status}) : ${data.message || "Problème de configuration"}`);
+      if (!cErr && cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
+        setUserTier(cData.tier);
         return;
       }
 
+      const { data: wData, error: wErr } = await supabase
+        .from("world_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (!wErr && wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
+        setUserTier(wData.tier);
+        return;
+      }
+
+      setUserTier("free");
+    } catch (e) {
+      console.warn("Erreur verif statut:", e);
+    }
+  };
+
+  const handleGoogleConnect = async () => {
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/contratachat`;
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: redirectUrl, scopes: "openid profile email", queryParams: { prompt: "select_account" } },
+    });
+  };
+
+  const handleMicrosoftConnect = async () => {
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/contratachat`;
+    await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: { redirectTo: redirectUrl, scopes: "openid profile email User.Read" },
+    });
+  };
+
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      setShowPremiumModal(false);
+      setShowSignInModal(true);
+      return;
+    }
+
+    setIsCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: "world_advantage",
+          currency: currency.toUpperCase(),
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+      const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert("Aucune URL de paiement renvoyée par le serveur.");
+        alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
       }
-    } catch (err: any) {
-      alert(`Erreur réseau : ${err.message || "Impossible de contacter l'API"}`);
+    } catch {
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
     } finally {
-      setSubLoading(false);
+      setIsCheckoutLoading(false);
     }
+  };
+
+  const handleEmailSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSignInError(null);
+    setSignInSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setSignInError(fr ? "Veuillez entrer vos identifiants." : "Please enter your credentials.");
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) {
+      setSignInError(error.message);
+    } else {
+      setShowSignInModal(false);
+      clearInputs();
+      if (targetHref) {
+        router.push(targetHref);
+      }
+    }
+  };
+
+  const startResendCountdown = () => {
+    setResendCountdown(120);
+    const interval = setInterval(() => {
+      setResendCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleEmailSignUp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSignUpError(null);
+    setSignUpSuccess(null);
+    if (!email.trim() || !password.trim()) {
+      setSignUpError(fr ? "Veuillez entrer un courriel et un mot de passe." : "Please enter an email and password.");
+      return;
+    }
+    const trimmedEmail = email.trim();
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/contratachat`;
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password,
+      options: { emailRedirectTo: redirectUrl },
+    });
+
+    if (error) {
+      if (error.message.includes("rate") || (error as any).status === 429) {
+        setSignUpError(fr ? "Trop de tentatives. Veuillez patienter." : "Too many attempts. Please wait.");
+      } else if (error.message.includes("already") || error.message.includes("registered")) {
+        setSignUpError(fr ? "Un compte avec ce courriel existe déjà. Connectez-vous." : "An account with this email already exists. Sign in instead.");
+      } else {
+        setSignUpError(error.message);
+      }
+    } else {
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setSignUpError(fr ? "Un compte avec ce courriel existe déjà." : "An account with this email already exists.");
+        return;
+      }
+      setResendEmail(trimmedEmail);
+      setSignUpSuccess(
+        fr
+          ? "Lien de confirmation envoyé ! Veuillez vérifier votre boîte de réception ainsi que votre dossier de courriels indésirables (spam)."
+          : "Confirmation link sent! Please check your inbox and your spam/junk folder."
+      );
+      startResendCountdown();
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (resendCountdown > 0 || !resendEmail) return;
+    setSignUpError(null);
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/contratachat`;
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: resendEmail,
+      options: { emailRedirectTo: redirectUrl },
+    });
+    if (error) {
+      setSignUpError(error.message);
+    } else {
+      setSignUpSuccess(
+        fr
+          ? "Un nouveau lien a été envoyé. Pensez à vérifier votre dossier de courriels indésirables (spam)."
+          : "A new link has been sent. Remember to check your spam/junk folder."
+      );
+      startResendCountdown();
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setSignInError(null);
+    setSignInSuccess(null);
+    if (!email.trim()) {
+      setSignInError(fr ? "Veuillez entrer votre courriel d'abord." : "Please enter your email address first.");
+      return;
+    }
+    const redirectUrl = targetHref ? `${window.location.origin}${targetHref}` : `${window.location.origin}/contratachat`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: redirectUrl,
+    });
+    if (error) {
+      setSignInError(error.message);
+    } else {
+      setSignInSuccess(
+        fr
+          ? "Lien de réinitialisation envoyé ! Pensez à vérifier vos indésirables."
+          : "Reset link sent! Please check your spam folder."
+      );
+    }
+  };
+
+  const clearInputs = () => {
+    setEmail("");
+    setPassword("");
+    setSignInError(null);
+    setSignInSuccess(null);
+    setSignUpError(null);
+    setSignUpSuccess(null);
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description.trim()) return;
+    if (!description.trim() || !prixModalites.trim()) return;
     setLoading(true); setError(null); setContrat(null);
     try {
       const dateStr = new Date().toISOString().split("T")[0];
@@ -213,7 +340,7 @@ Vendeur: ${vendeurNom} - ${vendeurAdresse}
 Acheteur: ${acheteurNom} - ${acheteurAdresse}
 Bien: ${description}
 Prix et modalités: ${prixModalites}
-Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
+Type: ${TYPE_BIEN[typeBien][fr ? "labelFr" : "labelEn"]}
       `.trim();
       const res = await fetch(`${api}/1/generate-contrat`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -223,7 +350,7 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
       if (data.error) throw new Error(data.error);
       setContrat({ ...data, type_bien: typeBien });
     } catch (err: any) {
-      setError(err.message || "Erreur inattendue.");
+      setError(err.message || (fr ? "Erreur inattendue." : "Unexpected error."));
     } finally { setLoading(false); }
   };
 
@@ -238,379 +365,550 @@ Type: ${TYPE_BIEN[typeBien][lang === "fr" ? "labelFr" : "labelEn"]}
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
     const dateStr = contrat?.date || new Date().toISOString().split("T")[0];
-    pdf.save(`Contrat-${vendeurNom.replace(/\s+/g, "_")}-${dateStr}.pdf`);
+    pdf.save(`Contrat-${vendeurNom.replace(/\s+/g, "_") || "vente"}-${dateStr}.pdf`);
   };
 
   const renderContrat = () => {
     if (!contrat) return null;
     const tb = TYPE_BIEN[contrat.type_bien || typeBien];
     return (
-      <div ref={contratRef} style={{ background: "#fff", color: "#18181b", fontFamily: "'Georgia', serif", borderRadius: 12, overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 4px 24px rgba(0,0,0,.08)", padding: "40px 48px", lineHeight: 1.8 }}>
-        <div style={{ textAlign: "center", marginBottom: 32, borderBottom: "2px solid #1a1917", paddingBottom: 20 }}>
-          <div style={{ fontSize: 11, letterSpacing: 4, textTransform: "uppercase", color: "#6b7280", marginBottom: 8 }}>Québec, Canada</div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>
-            Contrat de vente entre particuliers
+      <div ref={contratRef} className="bg-white text-zinc-900 font-serif rounded-2xl overflow-hidden border border-zinc-200 shadow-2xl p-8 md:p-12 leading-relaxed">
+        <div className="text-center mb-8 border-b-2 border-zinc-900 pb-5">
+          <div className="text-[11px] tracking-[0.25em] uppercase text-zinc-500 mb-2 font-sans">Québec, Canada</div>
+          <h1 className="text-xl md:text-2xl font-black tracking-wide uppercase mb-1 font-sans">
+            {fr ? "Contrat de vente entre particuliers" : "Bill of sale between individuals"}
           </h1>
-          <div style={{ fontSize: 13, color: "#6b7280" }}>
-            {tb.icon} {lang === "fr" ? tb.labelFr : tb.labelEn} · {lang === "fr" ? "Date" : "Date"} : <strong>{contrat.date}</strong>
+          <div className="text-xs text-zinc-500 font-sans">
+            {tb.icon} {fr ? tb.labelFr : tb.labelEn} · Date : <strong>{contrat.date}</strong>
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 28 }}>
-          <div style={{ background: "#f9fafb", borderRadius: 10, padding: "16px 20px", border: "1px solid #e5e7eb" }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>{lang === "fr" ? "Vendeur" : "Seller"}</div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{contrat.vendeur_nom || vendeurNom}</div>
-            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4, lineHeight: 1.6 }}>{contrat.vendeur_adresse || vendeurAdresse}</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-7 font-sans">
+          <div className="bg-zinc-50 rounded-xl p-5 border border-zinc-200">
+            <div className="text-[9px] font-bold text-zinc-500 tracking-wider uppercase mb-2">{fr ? "Vendeur" : "Seller"}</div>
+            <div className="text-sm font-bold text-zinc-900">{contrat.vendeur_nom || vendeurNom}</div>
+            <div className="text-xs text-zinc-600 mt-1 leading-relaxed">{contrat.vendeur_adresse || vendeurAdresse}</div>
           </div>
-          <div style={{ background: "#f9fafb", borderRadius: 10, padding: "16px 20px", border: "1px solid #e5e7eb" }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>{lang === "fr" ? "Acheteur" : "Buyer"}</div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{contrat.acheteur_nom || acheteurNom}</div>
-            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4, lineHeight: 1.6 }}>{contrat.acheteur_adresse || acheteurAdresse}</div>
+          <div className="bg-zinc-50 rounded-xl p-5 border border-zinc-200">
+            <div className="text-[9px] font-bold text-zinc-500 tracking-wider uppercase mb-2">{fr ? "Acheteur" : "Buyer"}</div>
+            <div className="text-sm font-bold text-zinc-900">{contrat.acheteur_nom || acheteurNom}</div>
+            <div className="text-xs text-zinc-600 mt-1 leading-relaxed">{contrat.acheteur_adresse || acheteurAdresse}</div>
           </div>
         </div>
 
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>{lang === "fr" ? "Description du bien" : "Item description"}</div>
-          <div style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "16px 20px", fontSize: 13, lineHeight: 1.8 }}>
+        <div className="mb-6 font-sans">
+          <div className="text-[10px] font-bold text-zinc-500 tracking-wider uppercase mb-2">{fr ? "Description du bien" : "Item description"}</div>
+          <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-5 text-xs md:text-sm leading-relaxed text-zinc-800">
             {contrat.description_bien || description}
           </div>
         </div>
 
-        <div style={{ marginBottom: 28, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "16px 20px" }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "#065f46", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>{lang === "fr" ? "Prix et modalités de paiement" : "Price & payment terms"}</div>
-          <div style={{ fontSize: 16, fontWeight: 900, color: "#065f46", marginBottom: 6 }}>{contrat.prix_total}</div>
-          <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.7 }}>{contrat.modalites_paiement || prixModalites}</div>
+        <div className="mb-7 bg-emerald-50 border border-emerald-200 rounded-xl p-5 font-sans">
+          <div className="text-[10px] font-bold text-emerald-800 tracking-wider uppercase mb-2">{fr ? "Prix et modalités de paiement" : "Price & payment terms"}</div>
+          <div className="text-base font-black text-emerald-900 mb-1">{contrat.prix_total}</div>
+          <div className="text-xs text-zinc-700 leading-relaxed">{contrat.modalites_paiement || prixModalites}</div>
         </div>
 
         {contrat.notes && (
-          <div style={{ marginBottom: 28, padding: "14px 20px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, fontSize: 12, color: "#92400e", lineHeight: 1.7 }}>
-            <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>Notes</div>
+          <div className="mb-7 p-5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed font-sans">
+            <div className="font-bold mb-1 text-[10px] uppercase tracking-wider">{fr ? "Notes" : "Notes"}</div>
             {contrat.notes}
           </div>
         )}
 
-        <div style={{ marginBottom: 28, borderTop: "1px solid #e5e7eb", paddingTop: 24 }}>
-          <div style={{ fontSize: 12, lineHeight: 1.9, color: "#374151" }}>
-            <p style={{ marginBottom: 12 }}>
-              <strong>{lang === "fr" ? "Clause de renonciation" : "Waiver clause"} :</strong>{" "}
-              {lang === "fr"
+        <div className="mb-7 border-t border-zinc-200 pt-6 font-sans">
+          <div className="text-xs leading-relaxed text-zinc-700 space-y-3">
+            <p>
+              <strong>{fr ? "Clause de renonciation" : "Waiver clause"} :</strong>{" "}
+              {fr
                 ? "L'acheteur déclare avoir vérifié le bien et l'accepte dans l'état où il se trouve. Le présent bien est vendu sans aucune garantie légale, aux risques et périls de l'acheteur."
                 : "The buyer declares having inspected the item and accepts it in its current condition. This item is sold without any legal warranty, at the buyer's sole risk."}
             </p>
-            <p style={{ marginBottom: 12 }}>
-              <strong>{lang === "fr" ? "Clause de vente sans garantie légale" : "Sale without legal warranty"} :</strong>{" "}
-              {lang === "fr"
+            <p>
+              <strong>{fr ? "Clause de vente sans garantie légale" : "Sale without legal warranty"} :</strong>{" "}
+              {fr
                 ? "Le vendeur affirme que le bien fourni est sa propriété, libre de toutes charges et restrictions. Le bien est livré dans l'état dans lequel il a été décrit lors de la conclusion de ce contrat."
                 : "The seller affirms that the item is their property, free of all charges and restrictions. The item is delivered in the condition described at the time this contract was concluded."}
             </p>
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, marginTop: 32, paddingTop: 24, borderTop: "1px solid #e5e7eb" }}>
+        <div className="grid grid-cols-2 gap-10 mt-8 pt-6 border-t border-zinc-200 font-sans">
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", letterSpacing: 2, textTransform: "uppercase", marginBottom: 20 }}>{lang === "fr" ? "Signature vendeur" : "Seller signature"}</div>
-            <div style={{ borderBottom: "1px solid #18181b", minWidth: 180, marginBottom: 6 }}>&nbsp;</div>
-            <div style={{ fontSize: 11, color: "#6b7280" }}>{contrat.vendeur_nom || vendeurNom}</div>
+            <div className="text-[10px] font-bold text-zinc-500 tracking-wider uppercase mb-6">{fr ? "Signature vendeur" : "Seller signature"}</div>
+            <div className="border-b border-zinc-900 min-w-[180px] mb-1.5">&nbsp;</div>
+            <div className="text-xs text-zinc-500">{contrat.vendeur_nom || vendeurNom}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", letterSpacing: 2, textTransform: "uppercase", marginBottom: 20 }}>{lang === "fr" ? "Signature acheteur" : "Buyer signature"}</div>
-            <div style={{ borderBottom: "1px solid #18181b", minWidth: 180, marginBottom: 6 }}>&nbsp;</div>
-            <div style={{ fontSize: 11, color: "#6b7280" }}>{contrat.acheteur_nom || acheteurNom}</div>
+            <div className="text-[10px] font-bold text-zinc-500 tracking-wider uppercase mb-6">{fr ? "Signature acheteur" : "Buyer signature"}</div>
+            <div className="border-b border-zinc-900 min-w-[180px] mb-1.5">&nbsp;</div>
+            <div className="text-xs text-zinc-500">{contrat.acheteur_nom || acheteurNom}</div>
           </div>
         </div>
 
-        <div style={{ marginTop: 32, paddingTop: 16, borderTop: "1px solid #f3f4f6", display: "flex", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 10, color: "#9ca3af" }}>Généré par echosai.ca/contratachat</div>
-          <div style={{ fontSize: 10, color: "#9ca3af" }}>{contrat.date}</div>
+        <div className="mt-8 pt-4 border-t border-zinc-100 flex justify-between font-sans text-[10px] text-zinc-400">
+          <div>Généré par echosai.ca/contratachat</div>
+          <div>{contrat.date}</div>
         </div>
       </div>
     );
   };
 
-  const oauthBtn = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-    width: "100%", padding: "9px 12px", border: "none",
-    borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 600, ...extra,
-  });
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
 
   return (
-    <div style={{ background: bg, color: txt, minHeight: "100dvh", fontFamily: "'Inter', system-ui, sans-serif", transition: "background .3s" }}>
-      <div className="ct-layout" style={{ display: "grid", gridTemplateColumns: "180px 1fr 220px", maxWidth: 1200, margin: "0 auto", padding: "0 10px", minHeight: "100dvh" }}>
-
-        {/* COL GAUCHE */}
-        <aside className="ct-col-left" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 12, paddingRight: 10, alignItems: "center" }}>
-          {[
-            { href: "https://echosai.ca/2/talk", src: "/talkmini.png", label: "Talk", color: "#a78bfa" },
-            { href: "https://echosai.ca/avis",   src: "/avismini.png", label: "Avis", color: "#f59e0b" },
-            { href: "https://echosai.ca/idea",   src: "/ideamini.png", label: "Idea", color: "#00c8ff" },
-          ].map((item, i) => (
-            <a key={i} href={item.href} target="_blank" rel="noopener noreferrer"
-              style={{ display: "block", width: "100%", borderRadius: 14, overflow: "hidden", border: `2px solid ${item.color}`, boxShadow: `0 0 18px ${item.color}35`, textDecoration: "none", background: surf }}>
-              <div style={{ overflow: "hidden", aspectRatio: "2 / 3" }}>
-                <img src={item.src} alt={item.label}
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform .35s ease" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1.1)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }} />
-              </div>
-            </a>
-          ))}
-        </aside>
-
-        {/* CENTRE */}
-        <div className="ct-col-centre" style={{ display: "flex", flexDirection: "column", padding: "14px 14px 60px" }}>
-
-          {/* Header */}
-          <div style={{ marginBottom: 14 }}>
-            <h1 style={{ fontWeight: 900, fontSize: 22, letterSpacing: -.5, lineHeight: 1.15, marginBottom: 3 }}>{t.tagline}</h1>
-            <p style={{ fontSize: 12, color: muted }}>{t.sub}</p>
-          </div>
-
-          {/* Formulaire */}
-          <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
-
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>{t.typeBien}</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {(Object.entries(TYPE_BIEN) as [TypeBien, typeof TYPE_BIEN[TypeBien]][]).map(([key, val]) => (
-                  <button key={key} type="button" onClick={() => setTypeBien(key)}
-                    style={{ padding: "6px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all .15s",
-                      border: `1px solid ${typeBien === key ? acc : bord}`,
-                      background: typeBien === key ? (dark ? "rgba(224,123,57,.15)" : "rgba(224,123,57,.1)") : surf2,
-                      color: typeBien === key ? acc : muted }}>
-                    {val.icon} {lang === "fr" ? val.labelFr : val.labelEn}
+    <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
+      {/* SECTION DU HAUT : BLANCHE AVEC HEADER ET TITRE DE L'OUTIL */}
+      <section className="bg-white text-zinc-900 relative z-30">
+        <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
+            <div className="flex items-center gap-6">
+              <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-zinc-900 uppercase">
+                ECHOSAI
+              </Link>
+            </div>
+            
+            <div className="flex items-center gap-4 text-xs font-mono relative">
+              {/* SÉLECTEUR DE DEVISES */}
+              <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
+                {CURRENCIES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCurrency(c)}
+                    className={`px-2 py-1 font-bold transition-colors ${currency === c ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"}`}
+                  >
+                    {c}
                   </button>
                 ))}
               </div>
-            </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{t.vendeur}</div>
-                <input value={vendeurNom} onChange={e => setVendeurNom(e.target.value)} placeholder={t.nomComplet}
-                  style={{ width: "100%", background: surf, border: `1.5px solid ${bord}`, borderRadius: 9, padding: "10px 12px", fontSize: 12, color: txt, outline: "none", marginBottom: 6 }}
-                  onFocus={e => (e.target.style.borderColor = acc)} onBlur={e => (e.target.style.borderColor = bord)} />
-                <textarea value={vendeurAdresse} onChange={e => setVendeurAdresse(e.target.value)} placeholder={t.adresse} rows={2}
-                  style={{ width: "100%", background: surf, border: `1.5px solid ${bord}`, borderRadius: 9, padding: "10px 12px", fontSize: 12, color: txt, outline: "none", resize: "none", fontFamily: "inherit" }}
-                  onFocus={e => (e.target.style.borderColor = acc)} onBlur={e => (e.target.style.borderColor = bord)} />
-              </div>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{t.acheteur}</div>
-                <input value={acheteurNom} onChange={e => setAcheteurNom(e.target.value)} placeholder={t.nomComplet}
-                  style={{ width: "100%", background: surf, border: `1.5px solid ${bord}`, borderRadius: 9, padding: "10px 12px", fontSize: 12, color: txt, outline: "none", marginBottom: 6 }}
-                  onFocus={e => (e.target.style.borderColor = acc)} onBlur={e => (e.target.style.borderColor = bord)} />
-                <textarea value={acheteurAdresse} onChange={e => setAcheteurAdresse(e.target.value)} placeholder={t.adresse} rows={2}
-                  style={{ width: "100%", background: surf, border: `1.5px solid ${bord}`, borderRadius: 9, padding: "10px 12px", fontSize: 12, color: txt, outline: "none", resize: "none", fontFamily: "inherit" }}
-                  onFocus={e => (e.target.style.borderColor = acc)} onBlur={e => (e.target.style.borderColor = bord)} />
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{t.description}</div>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={t.descHint} rows={4} required
-                style={{ width: "100%", background: surf, border: `1.5px solid ${bord}`, borderRadius: 9, padding: "10px 12px", fontSize: 12, color: txt, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.7 }}
-                onFocus={e => (e.target.style.borderColor = acc)} onBlur={e => (e.target.style.borderColor = bord)} />
-            </div>
-
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 5 }}>{t.prixModalites}</div>
-              <textarea value={prixModalites} onChange={e => setPrixModalites(e.target.value)} placeholder={t.prixHint} rows={3} required
-                style={{ width: "100%", background: surf, border: `1.5px solid ${bord}`, borderRadius: 9, padding: "10px 12px", fontSize: 12, color: txt, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.7 }}
-                onFocus={e => (e.target.style.borderColor = acc)} onBlur={e => (e.target.style.borderColor = bord)} />
-            </div>
-
-            {error && <div style={{ padding: "8px 12px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 9, fontSize: 11, color: "#b91c1c" }}>⚠️ {error}</div>}
-
-            <button type="submit" disabled={loading || !description.trim() || !prixModalites.trim()}
-              style={{ width: "100%", background: loading ? muted : `linear-gradient(135deg, ${acc}, #c4632a)`, color: "#fff", border: "none", borderRadius: 11, padding: "13px 0", fontWeight: 900, fontSize: 14, cursor: loading || !description.trim() ? "not-allowed" : "pointer", transition: "opacity .2s" }}>
-              {loading
-                ? <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-                    <span style={{ width: 18, height: 18, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin .7s linear infinite", display: "inline-block" }} />
-                    {t.generating}
+              {/* BADGE D'ACTIVATION / ACCÈS PREMIUM */}
+              {isPaidTier ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                  <span className="font-bold text-[11px] uppercase tracking-wider">
+                    {fr ? "✓ PLAN PREMIUM ACTIF" : "✓ PREMIUM ACTIVE"}
                   </span>
-                : t.generate}
-            </button>
-          </form>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setShowPremiumModal(true)} 
+                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+                >
+                  <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                    ★ ECHOAI PREMIUM ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  </span>
+                </div>
+              )}
 
-          {/* CONTRAT PREVIEW */}
-          {contrat && (
-            <div style={{ animation: "fadeIn .4s ease" }}>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-                <button onClick={handleExportPdf}
-                  style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 9, padding: "8px 18px", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                  {t.exportPdf}
-                </button>
+              {/* SÉLECTEUR FR/EN */}
+              <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
+                <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
+                <button onClick={() => setLang("en")} className={`px-2 py-1 ${lang === "en" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>EN</button>
               </div>
-              <div style={{ position: "relative" }}>
-                {renderContrat()}
-                {!user && (
-                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%", background: `linear-gradient(to bottom, transparent, ${dark ? "rgba(15,14,11,.97)" : "rgba(245,242,238,.97)"})`, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 20, borderRadius: "0 0 12px 12px" }}>
-                    <div style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: acc, marginBottom: 4 }}>
-                        🔒 {lang === "fr" ? "Connecte-toi pour exporter" : "Sign in to export"}
-                      </div>
-                      <div style={{ fontSize: 11, color: muted, marginBottom: 10 }}>PDF · Sauvegarde automatique</div>
-                      <button onClick={() => setShowAuthPopup(true)}
-                        style={{ background: acc, color: "#fff", border: "none", borderRadius: 9, padding: "9px 22px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-                        {lang === "fr" ? "Créer un compte gratuit →" : "Create a free account →"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
-          <div style={{ marginTop: "auto", paddingTop: 10, fontSize: 10, color: muted, opacity: .4, textAlign: "center" }}>
-            © Contrat de vente · echosai.ca ·{" "}
-            <a href="mailto:support@echosai.ca" style={{ color: muted, textDecoration: "none", opacity: .6 }}>
-              ✉ support
-            </a>
-          </div>
-        </div>
-
-        {/* COL DROITE */}
-        <aside className="ct-col-right" style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 10, paddingLeft: 10 }}>
-          
-          {/* BOUTON PREMIUM UNIQUE */}
-          <div style={{ background: surf, border: `1px solid ${isPremium ? "#16a34a" : bord}`, borderRadius: 12, padding: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-            {isPremium ? (
-              <button disabled style={{ width: "100%", background: "#16a34a", color: "#fff", border: "none", borderRadius: 9, padding: "11px 0", fontWeight: 800, fontSize: 12, cursor: "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#86efac" }} />
-                {t.subscribedActive}
-              </button>
-            ) : (
-              <button onClick={handleSubscribe} disabled={subLoading}
-                style={{ width: "100%", background: `linear-gradient(135deg, ${acc}, #c4632a)`, color: "#fff", border: "none", borderRadius: 9, padding: "11px 0", fontWeight: 800, fontSize: 12, cursor: "pointer", transition: "transform .1s ease" }}>
-                {subLoading ? "Paiement en cours..." : t.subscribeBtn}
-              </button>
-            )}
-          </div>
-
-          {/* Thème + langue */}
-          <div style={{ display: "flex", gap: 5 }}>
-            <button onClick={() => setDark(d => !d)} style={{ flex: 1, background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "6px 8px", cursor: "pointer", fontSize: 13, color: muted }}>{dark ? t.light : t.dark}</button>
-            <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")} style={{ flex: 1, background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "6px 8px", cursor: "pointer", fontSize: 11, color: txt, fontWeight: 700 }}>
-              {lang === "fr" ? "EN" : "FR"}
-            </button>
-          </div>
-
-          {/* Connecté */}
-          {user ? (
-            <div style={{ position: "relative" }}>
-              <button onClick={() => setShowUserMenu(v => !v)} style={{ width: "100%", background: isPremium ? "#16a34a" : surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 11, color: isPremium ? "#fff" : txt, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: isPremium ? "#86efac" : acc }} />
-                {t.connected}
-                <span style={{ marginLeft: "auto", fontSize: 8, opacity: .7 }}>{showUserMenu ? "▲" : "▼"}</span>
-              </button>
-              {showUserMenu && (
-                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: surf, border: `1px solid ${bord}`, borderRadius: 9, overflow: "hidden", zIndex: 100 }}>
-                  <button onClick={handleLogout} style={{ width: "100%", padding: "8px 12px", fontSize: 11, color: "#ef4444", background: "none", border: "none", cursor: "pointer", fontWeight: 600, textAlign: "left" }}>↩ {t.logout}</button>
+              {/* IDENTIFIANT UTILISATEUR OU BOUTONS D'AUTH */}
+              {user ? (
+                <div className="flex items-center gap-4">
+                  <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200">
+                    🟢 {user.email}
+                  </span>
+                  <button onClick={() => supabase.auth.signOut()} className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold">
+                    [ {fr ? "Déconnexion" : "Sign Out"} ]
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => setShowSignInModal(true)} className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm">
+                    {fr ? "Connexion" : "Sign In"}
+                  </button>
+                  <button onClick={() => setShowSignUpModal(true)} className="px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-bold tracking-tight shadow-sm">
+                    {fr ? "S'inscrire" : "Sign Up"}
+                  </button>
                 </div>
               )}
             </div>
-          ) : (
-            <button onClick={() => setShowAuthPopup(true)} style={{ width: "100%", background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
-              {t.signin}
-            </button>
-          )}
-
-        </aside>
-      </div>
-
-      {/* BARRE MOBILE */}
-      <div className="ct-mobile-bar" style={{ "--surf": dark ? "#1a1917" : "#fffdf9", "--bord": dark ? "rgba(255,255,255,.08)" : "#e2ddd5" } as React.CSSProperties}>
-        <button onClick={() => setDark(d => !d)} style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 13, color: muted, cursor: "pointer" }}>{dark ? t.light : t.dark}</button>
-        <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")} style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 11, color: txt, fontWeight: 700, cursor: "pointer" }}>
-          {lang === "fr" ? "EN" : "FR"}
-        </button>
-        
-        {isPremium ? (
-          <button disabled style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 11, fontWeight: 800 }}>
-            ✓ Premium
-          </button>
-        ) : (
-          <button onClick={handleSubscribe} disabled={subLoading} style={{ background: acc, color: "#fff", border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>
-            ⚡ Premium (3.99$)
-          </button>
-        )}
-
-        {user
-          ? <button onClick={handleLogout} style={{ background: isPremium ? "#16a34a" : surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "7px 11px", fontSize: 11, color: isPremium ? "#fff" : txt, fontWeight: 700, cursor: "pointer" }}>{t.connected}</button>
-          : <button onClick={() => setShowAuthPopup(true)} style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{t.signin}</button>
-        }
-      </div>
-
-      {/* POPUP AUTH */}
-      {showAuthPopup && (
-        <div onClick={() => setShowAuthPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, backdropFilter: "blur(6px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 20, padding: "28px 28px 22px", width: 320, display: "flex", flexDirection: "column", gap: 12, position: "relative" }}>
-            <button onClick={() => setShowAuthPopup(false)} style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 18 }}>✕</button>
-            <div style={{ textAlign: "center", marginBottom: 4 }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: txt, marginBottom: 4 }}>{lang === "fr" ? "Connecte-toi pour continuer" : "Sign in to continue"}</div>
-              <div style={{ fontSize: 12, color: muted }}>{lang === "fr" ? "Gratuit · Aucune carte requise" : "Free · No card required"}</div>
-            </div>
-            <button onClick={() => { handleGoogle(); setShowAuthPopup(false); }} style={{ ...oauthBtn({ background: "#fff", color: "#374151" }) }}>
-              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.63z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.18 2.18 5.94l3.66 2.84c.87-2.6 3.3-4.4 6.16-4.4z" fill="#EA4335"/></svg>
-              {lang === "fr" ? "Continuer avec Google" : "Continue with Google"}
-            </button>
-            <button onClick={() => { handleMicrosoft(); setShowAuthPopup(false); }} style={{ ...oauthBtn({ background: dark ? "#2d2b28" : "#1a1917", color: "#fff" }) }}>
-              <svg width="16" height="16" viewBox="0 0 23 23" fill="none"><path d="M0 0H11V11H0V0Z" fill="#F25022"/><path d="M12 0H23V11H12V0Z" fill="#7FBA00"/><path d="M0 12H11V23H0V12Z" fill="#00A4EF"/><path d="M12 12H23V23H12V12Z" fill="#FFB900"/></svg>
-              {lang === "fr" ? "Continuer avec Microsoft" : "Continue with Microsoft"}
-            </button>
-            <button onClick={() => { setEmailMode("signin"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }} style={{ ...oauthBtn({ background: "#0ea5e9", color: "#fff" }) }}>
-              ✉ {lang === "fr" ? "Se connecter par email" : "Sign in with email"}
-            </button>
-            <button onClick={() => { setEmailMode("signup"); setAuthError(null); setAuthSuccess(null); setShowEmailModal(true); setShowAuthPopup(false); }} style={{ ...oauthBtn({ background: surf2 }) }}>
-              ✦ {lang === "fr" ? "Créer un compte gratuit" : "Create a free account"}
-            </button>
           </div>
-        </div>
-      )}
+        </header>
 
-      {/* MODAL EMAIL */}
-      {showEmailModal && (
-        <div onClick={() => setShowEmailModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, backdropFilter: "blur(6px)" }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: surf, border: `1px solid ${bord}`, borderRadius: 16, padding: "22px 26px", width: 300, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{emailMode === "signin" ? t.modalSignin : t.modalSignup}</div>
-              <button onClick={() => setShowEmailModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 16 }}>✕</button>
-            </div>
-            {authError   && <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "7px 10px", fontSize: 11, color: "#b91c1c" }}>⚠️ {authError}</div>}
-            {authSuccess && <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "7px 10px", fontSize: 11, color: "#15803d" }}>✓ {authSuccess}</div>}
-            <form onSubmit={handleEmailAuth} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              <input type="email" placeholder="nom@domaine.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 12, color: txt, outline: "none" }} />
-              <input type="password" placeholder="••••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required style={{ background: surf2, border: `1px solid ${bord}`, borderRadius: 8, padding: "8px 11px", fontSize: 12, color: txt, outline: "none" }} />
-              <button type="submit" style={{ background: acc, color: "#fff", border: "none", borderRadius: 8, padding: "9px 0", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
-                {emailMode === "signin" ? t.submitSignin : t.submitSignup}
+        <div className="max-w-4xl mx-auto px-6 py-10 text-center">
+          <div className="inline-block text-[10px] font-mono tracking-widest text-zinc-400 uppercase mb-2 border border-zinc-200 px-2 py-0.5 rounded">
+            {fr ? "AGENT D'ÉCRITURE LÉGALE" : "LEGAL DRAFTING AGENT"}
+          </div>
+          <h2 className="text-3xl md:text-5xl font-black tracking-tighter text-zinc-900 leading-tight mb-2 uppercase">
+            {fr ? "📄 Un contrat de vente en 30 secondes." : "📄 A bill of sale in 30 seconds."}
+          </h2>
+          <p className="text-zinc-500 max-w-lg mx-auto text-xs md:text-sm font-sans leading-relaxed">
+            {fr ? "Entre les informations. L'IA génère le contrat légal complet." : "Enter the information. AI generates the complete legal contract."}
+          </p>
+        </div>
+      </section>
+
+      {/* TRANSITION COURBE + LUEUR DE COULEUR */}
+      <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
+        <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
+        </svg>
+
+        <svg className="absolute top-0 left-0 w-full h-full text-transparent fill-none pointer-events-none z-22" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,60 Q360,0 720,50 Q1080,90 1440,30" stroke="#06b6d4" strokeWidth="6" className="drop-shadow-[0_0_12px_#06b6d4]" />
+        </svg>
+      </div>
+
+      {/* SECTION DU BAS : FORMULAIRE ET PRÉVISUALISATION DU CONTRAT */}
+      <section className="bg-zinc-950 text-zinc-50 pb-16 pt-0 relative z-10 -mt-6">
+        <div className="max-w-3xl mx-auto px-4">
+          <div className="relative rounded-2xl border-2 border-cyan-500/40 bg-black/95 p-6 md:p-8 shadow-[0_0_25px_rgba(6,182,212,0.18)]">
+            
+            <form onSubmit={handleGenerate} className="space-y-6">
+              
+              {/* Type de bien */}
+              <div>
+                <label className="block text-[11px] font-mono font-bold text-cyan-400 uppercase tracking-wider mb-2">
+                  {fr ? "Type de bien" : "Item type"}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {(Object.entries(TYPE_BIEN) as [TypeBien, typeof TYPE_BIEN[TypeBien]][]).map(([key, val]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setTypeBien(key)}
+                      className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all border ${
+                        typeBien === key
+                          ? "bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.4)]"
+                          : "bg-zinc-900/80 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                      }`}
+                    >
+                      {val.icon} {fr ? val.labelFr : val.labelEn}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Vendeur & Acheteur */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <label className="block text-[11px] font-mono font-bold text-cyan-400 uppercase tracking-wider">
+                    {fr ? "Vendeur" : "Seller"}
+                  </label>
+                  <input
+                    type="text"
+                    value={vendeurNom}
+                    onChange={(e) => setVendeurNom(e.target.value)}
+                    placeholder={fr ? "Nom complet" : "Full name"}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                  />
+                  <textarea
+                    value={vendeurAdresse}
+                    onChange={(e) => setVendeurAdresse(e.target.value)}
+                    placeholder={fr ? "Adresse complète" : "Full address"}
+                    rows={2}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors resize-none font-sans"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <label className="block text-[11px] font-mono font-bold text-cyan-400 uppercase tracking-wider">
+                    {fr ? "Acheteur" : "Buyer"}
+                  </label>
+                  <input
+                    type="text"
+                    value={acheteurNom}
+                    onChange={(e) => setAcheteurNom(e.target.value)}
+                    placeholder={fr ? "Nom complet" : "Full name"}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                  />
+                  <textarea
+                    value={acheteurAdresse}
+                    onChange={(e) => setAcheteurAdresse(e.target.value)}
+                    placeholder={fr ? "Adresse complète" : "Full address"}
+                    rows={2}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors resize-none font-sans"
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-[11px] font-mono font-bold text-cyan-400 uppercase tracking-wider mb-1.5">
+                  {fr ? "Description précise du bien" : "Precise description of the item"}
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder={fr ? "Marque, modèle, année, état, numéro de série si applicable…" : "Brand, model, year, condition, serial number if applicable…"}
+                  rows={4}
+                  required
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors font-sans leading-relaxed"
+                />
+              </div>
+
+              {/* Prix et modalités */}
+              <div>
+                <label className="block text-[11px] font-mono font-bold text-cyan-400 uppercase tracking-wider mb-1.5">
+                  {fr ? "Prix et modalités de paiement" : "Price and payment terms"}
+                </label>
+                <textarea
+                  value={prixModalites}
+                  onChange={(e) => setPrixModalites(e.target.value)}
+                  placeholder={fr ? "Ex: 1 500 $ comptant / 200 $ par semaine pendant 8 semaines / 500 $ de dépôt + solde à la livraison" : "Ex: $1,500 cash / $200/week for 8 weeks / $500 deposit + balance on delivery"}
+                  rows={3}
+                  required
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors font-mono leading-relaxed"
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">
+                  ⚠️ {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !description.trim() || !prixModalites.trim()}
+                className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono font-black py-4 rounded-xl text-xs uppercase tracking-wider transition-colors shadow-[0_0_20px_rgba(6,182,212,0.4)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+                    {fr ? "Génération du contrat via la cascade IA..." : "AI Cascade generating contract..."}
+                  </span>
+                ) : (
+                  fr ? "Générer le contrat" : "Generate contract"
+                )}
               </button>
             </form>
-            <button onClick={() => { setEmailMode(emailMode === "signin" ? "signup" : "signin"); setAuthError(null); setAuthSuccess(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: muted, fontSize: 10, textDecoration: "underline" }}>
-              {emailMode === "signin" ? t.switchToSignup : t.switchToSignin}
+
+            {/* CONTRAT PREVIEW */}
+            {contrat && (
+              <div className="mt-10 space-y-4 animate-in fade-in duration-300">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-mono text-cyan-400 font-bold uppercase tracking-wider">
+                    {fr ? "Aperçu du contrat généré" : "Generated contract preview"} {contrat.model_used && `(${contrat.model_used})`}
+                  </span>
+                  <button
+                    onClick={handleExportPdf}
+                    className="bg-red-600 hover:bg-red-500 text-white font-mono font-bold text-xs px-4 py-2 rounded-xl transition-colors shadow-md flex items-center gap-2 cursor-pointer"
+                  >
+                    {fr ? "⬇ Exporter en PDF" : "⬇ Export as PDF"}
+                  </button>
+                </div>
+
+                <div className="relative">
+                  {renderContrat()}
+
+                  {!user && (
+                    <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent flex items-end justify-center pb-6 rounded-b-2xl">
+                      <div className="text-center p-4">
+                        <div className="text-sm font-bold text-cyan-300 mb-1">
+                          🔒 {fr ? "Connecte-toi pour exporter" : "Sign in to export"}
+                        </div>
+                        <p className="text-xs text-zinc-400 mb-3">PDF · Sauvegarde automatique</p>
+                        <button
+                          onClick={() => setShowSignInModal(true)}
+                          className="bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono font-bold px-6 py-2.5 rounded-xl text-xs uppercase tracking-wider transition-colors"
+                        >
+                          {fr ? "Créer un compte gratuit →" : "Create a free account →"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-12 border border-zinc-900 bg-zinc-900/40 rounded-2xl p-6 font-mono text-[11px] text-zinc-500 text-center">
+            <span className="text-cyan-400 font-bold">ECHO_TOTEM_NETWORK // CONTRAT_MODULE</span> — Générateur de contrats d’achat sécurisé. © 2026 Echo Totem Network — Tous droits réservés.
+          </div>
+        </div>
+      </section>
+
+      {/* MODAL STRIPE / PREMIUM */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Abonnement EchoAI Premium" : "EchoAI Premium Subscription"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr
+                ? "Débloquez l'accès illimité à l'ensemble des modules d'intelligence artificielle."
+                : "Unlock unlimited access to all artificial intelligence modules."}
+            </p>
+
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c
+                      ? "bg-amber-500 text-zinc-950 border-amber-400"
+                      : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ECHOAI PREMIUM</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
+              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> à tous les outils EchoAI</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ Génération haute vitesse prioritaire</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ Sauvegarde permanente de vos projets</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
+            >
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
+                : (fr ? `Activer EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Activate EchoAI Premium (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
           </div>
         </div>
       )}
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        textarea, input { font-family: inherit; }
-        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
-        @media (max-width: 768px) {
-          .ct-layout { grid-template-columns: 1fr !important; }
-          .ct-col-left, .ct-col-right { display: none !important; }
-          .ct-col-centre { padding: 14px 14px 80px !important; }
-          .ct-mobile-bar { display: flex !important; }
-        }
-        @media (min-width: 769px) { .ct-mobile-bar { display: none !important; } }
-        .ct-mobile-bar {
-          position: fixed; bottom: 0; left: 0; right: 0; display: none;
-          background: var(--surf, #1a1917); border-top: 1px solid var(--bord, rgba(255,255,255,.08));
-          padding: 8px 14px 12px; gap: 8px; z-index: 50; align-items: center; justify-content: space-between;
-        }
-      `}</style>
-    </div>
+      {/* MODAL CONNEXION (SIGN IN) */}
+      {showSignInModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <form onSubmit={handleEmailSignIn} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Connectez-vous pour déployer cet outil." : "Sign in to deploy this tool."}
+                  </p>
+                </div>
+                <button type="button" onClick={() => { setShowSignInModal(false); clearInputs(); }} className="text-zinc-400 hover:text-white text-sm p-1">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              <div className="h-px bg-zinc-900 my-2" />
+
+              {signInError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {signInError}</div>}
+              {signInSuccess && <div className="bg-emerald-950/50 border border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-400">✓ {signInSuccess}</div>}
+
+              <div className="space-y-3">
+                <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+                <button onClick={handleForgotPassword} type="button" className="text-xs text-zinc-500 hover:text-cyan-400 transition-colors">
+                  {fr ? "Mot de passe oublié ?" : "Forgot password?"}
+                </button>
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors">
+                {fr ? "Se connecter & Accéder" : "Log in & Deploy"}
+              </button>
+
+              <p className="text-center text-zinc-500 text-xs pt-1">
+                {fr ? "Pas encore de compte ? " : "Don't have an account? "}
+                <button type="button" onClick={() => { setShowSignInModal(false); setShowSignUpModal(true); clearInputs(); }} className="text-cyan-400 underline">
+                  {fr ? "S'inscrire" : "Sign up"}
+                </button>
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL INSCRIPTION (SIGN UP) */}
+      {showSignUpModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <form onSubmit={handleEmailSignUp} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Créer un compte" : "Create account"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Inscrivez-vous pour débloquer les modules." : "Sign up to unlock modules."}
+                  </p>
+                </div>
+                <button type="button" onClick={() => { setShowSignUpModal(false); clearInputs(); }} className="text-zinc-400 hover:text-white text-sm p-1">✕</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800">
+                  <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              <div className="h-px bg-zinc-900 my-2" />
+
+              {signUpError && <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400">⚠️ {signUpError}</div>}
+              {signUpSuccess && (
+                <div className="bg-emerald-950/50 border border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-400 space-y-3">
+                  <p>✓ {signUpSuccess}</p>
+                  <button type="button" onClick={handleResendEmail} disabled={resendCountdown > 0}
+                    className="w-full py-2 rounded-lg text-xs font-bold transition-all border disabled:opacity-50 disabled:cursor-not-allowed border-emerald-500/50 text-emerald-400 hover:bg-emerald-950/40">
+                    {resendCountdown > 0
+                      ? (fr ? `Renvoyer dans ${resendCountdown}s` : `Resend in ${resendCountdown}s`)
+                      : (fr ? "↺ Renvoyer le lien de confirmation" : "↺ Resend confirmation link")}
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <input type="email" placeholder="name@domain.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+                <div>
+                  <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500" />
+                  <p className="text-zinc-500 text-[10px] mt-1">{fr ? "Minimum 6 caractères." : "Minimum 6 characters."}</p>
+                </div>
+              </div>
+
+              <button type="submit" className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors">
+                {fr ? "Créer mon compte" : "Create my account"}
+              </button>
+
+              <p className="text-center text-zinc-500 text-xs pt-1">
+                {fr ? "Déjà un compte ? " : "Already have an account? "}
+                <button type="button" onClick={() => { setShowSignUpModal(false); setShowSignInModal(true); clearInputs(); }} className="text-cyan-400 underline">
+                  {fr ? "Se connecter" : "Sign in"}
+                </button>
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+
+export default function ContratPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-cyan-400 font-mono text-xs">Chargement...</div>}>
+      <ContratContent />
+    </Suspense>
   );
 }
