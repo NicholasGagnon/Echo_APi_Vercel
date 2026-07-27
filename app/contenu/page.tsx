@@ -8,33 +8,44 @@ import { marked } from "marked";
 import TurndownService from "turndown";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
-import { consumeToolQuota, isPaidTier, UserTier } from "../../utils/quota";
 
 const turndownService = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
 
+// Convertit du markdown brut en HTML consommable par Tiptap
 function markdownToHtml(md: string): string {
   return marked.parse(md || "", { breaks: true, gfm: true }) as string;
 }
 
+// Convertit le HTML de l'éditeur Tiptap en markdown (pour la sauvegarde / mode brut)
 function htmlToMarkdown(html: string): string {
   return turndownService.turndown(html || "");
 }
 
+// Nettoyage structurel du markdown : corrige les titres, aère les listes,
+// enlève les espaces/retours à la ligne superflus. Fonctionne ligne par ligne
+// (^...$ multiligne) plutôt que sur des motifs entourés de \n, ce qui est
+// beaucoup plus tolérant au texte réellement généré.
 function nettoyerMarkdown(brut: string): string {
   if (!brut) return brut;
 
   let t = brut.replace(/\r\n/g, "\n");
 
-  t = t.replace(/^#{1,6}\s*/gm, "");
-  t = t.replace(/^[ \t]*(CHAPITRE\s+\d+[^\n]*)$/gim, "\n\n# $1\n\n");
-  t = t.replace(/^([A-ZÀ-Ÿ0-9][A-ZÀ-Ÿ0-9\s\-':,]{3,79})$/gm, (match, p1) => {
-    if (/^CHAPITRE\s+\d+/i.test(p1)) return match;
-    return `\n\n## ${p1.trim()}\n\n`;
-  });
+  // Le texte généré arrive parfois SANS aucun retour à la ligne, avec les
+  // marqueurs # / ## / ### insérés au milieu du flux
+  // ("... texte ## Titre suite..."). On force un saut de paragraphe
+  // AVANT chaque marqueur de titre, où qu'il se trouve dans le texte.
+  t = t.replace(/\s*(#{1,6})\s+/g, "\n\n$1 ");
 
+  // Détecte "CHAPITRE X ..." même s'il n'est pas déjà précédé d'un #
+  t = t.replace(/(^|\n\n)(?!#)([ \t]*CHAPITRE\s+\d+[^\n#]*)/gi, "$1# $2");
+
+  // Sépare une liste collée directement après une phrase précédente
   t = t.replace(/([.!?])\s*(\d+\.\s+|[-•*]\s+)/g, "$1\n\n$2");
+
+  // Normalise espaces et retours à la ligne
   t = t.replace(/[ \t]{2,}/g, " ");
   t = t.replace(/\n{3,}/g, "\n\n");
+  t = t.replace(/\n[ \t]+/g, "\n");
 
   return t.trim();
 }
@@ -61,10 +72,10 @@ const FORMATS: FormatOption[] = [
     titreEn: "Blog Article / Lead Magnet",
     sousTitre: "Contenu concis, percutant et hautement optimisé.",
     sousTitreEn: "Concise, punchy, and highly optimized content.",
-    pagesEstimees: "5 à 20 pages",
-    motsCible: "~1 000 à 6 000 mots",
+    pagesEstimees: "5 à 10 pages",
+    motsCible: "~1 000 à 3 000 mots",
     nbBlocs: 1,
-    nbPoints: 200,
+    nbPoints: 100,
     icon: "📝",
   },
   {
@@ -74,20 +85,20 @@ const FORMATS: FormatOption[] = [
     sousTitre: "Ouvrage complet et structuré avec cas pratiques ou petit livre.",
     sousTitreEn: "Comprehensive structured guide with case studies.",
     pagesEstimees: "40 à 100 pages",
-    motsCible: "~10 000 à 30 000 mots",
+    motsCible: "~10 000 à 20 000 mots",
     nbBlocs: 6,
-    nbPoints: 800,
+    nbPoints: 600,
     icon: "📚",
   },
   {
     id: "livre_200",
     titre: "Livre Majeur (Grand Format)",
     titreEn: "Major Book (Full Length)",
-    sousTitre: "Configuration haute densité pour les ouvrages d'envergure.",
-    sousTitreEn: "High-density configuration for large scale manuscripts.",
-    pagesEstimees: "150 à 300 pages",
-    motsCible: "~40 000 à 75 000 mots",
-    nbBlocs: 18,
+    sousTitre: "Double configuration pour les ouvrages d'envergure.",
+    sousTitreEn: "Double configuration for large scale manuscripts.",
+    pagesEstimees: "100 à 300 pages",
+    motsCible: "~30 000 à 50 000 mots",
+    nbBlocs: 12,
     nbPoints: 1200,
     icon: "📘",
   },
@@ -113,8 +124,8 @@ const GoogleLogo = () => (
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
 
-const MAX_FREE_CREDITS = 2; // 2 max
-const REGEN_3H_MS = 3 * 60 * 60 * 1000; // 3 heures
+const MAX_FREE_CREDITS = 4;
+const REGEN_3H_MS = 3 * 60 * 60 * 1000;
 
 type CurrencyCode = "CAD" | "USD" | "EUR";
 const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
@@ -140,7 +151,7 @@ function ContenuContent() {
 
   // Quotas, Devise & Abonnements
   const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
-  const [userTier, setUserTier] = useState<UserTier>("free");
+  const [userTier, setUserTier] = useState<"free" | "advantage" | "premium">("free");
   const [nextRegenIn, setNextRegenIn] = useState<number>(0);
   const [showPremiumModal, setShowPremiumModal] = useState<boolean>(false);
   const [currency, setCurrency] = useState<CurrencyCode>("CAD");
@@ -173,6 +184,8 @@ function ContenuContent() {
 
   const LOCAL_STORAGE_KEY = "echo-contenu-drafts";
 
+  // Empêche l'effet de sync texteFinal -> editor de tourner en boucle
+  // quand c'est l'éditeur lui-même qui vient de modifier texteFinal.
   const skipNextSyncRef = useRef(false);
 
   const editor = useEditor({
@@ -197,6 +210,8 @@ function ContenuContent() {
     },
   });
 
+  // Garde l'éditeur Tiptap synchronisé quand texteFinal change depuis
+  // l'extérieur (fin de génération, chargement d'un projet, mode brut...).
   useEffect(() => {
     if (!editor) return;
     if (skipNextSyncRef.current) {
@@ -210,13 +225,13 @@ function ContenuContent() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      const uid = session?.user?.id || null;
       if (session?.user) {
         setUser(session.user);
         chargerHistorique(session.user.id);
         chargerQuotaUtilisateur(session.user.id);
       } else {
-        setUser(null);
-        setAvailableQuota(MAX_FREE_CREDITS);
+        verifierQuotaAnonyme();
         loadLocalDrafts();
       }
     });
@@ -230,7 +245,7 @@ function ContenuContent() {
       } else {
         setUser(null);
         setHistorique([]);
-        setAvailableQuota(MAX_FREE_CREDITS);
+        verifierQuotaAnonyme();
         loadLocalDrafts();
       }
     });
@@ -251,7 +266,6 @@ function ContenuContent() {
     } catch {}
   };
 
-  // Charge le quota en utilisant la table Supabase `contenu_quotas`
   const chargerQuotaUtilisateur = async (uid: string) => {
     try {
       const { data } = await supabase
@@ -260,56 +274,99 @@ function ContenuContent() {
         .eq("user_id", uid)
         .maybeSingle();
 
-      const tier = (data?.tier || "free") as UserTier;
-      setUserTier(tier);
-
-      if (isPaidTier(tier)) {
-        setAvailableQuota(999);
-        return;
-      }
-
       const now = Date.now();
-      const lastRegen = data ? new Date(data.last_regen_at || data.created_at).getTime() : now;
-      const elapsed = now - lastRegen;
-      const recovered = Math.floor(elapsed / REGEN_3H_MS);
-      const available = Math.min(MAX_FREE_CREDITS, (data?.available_credits ?? MAX_FREE_CREDITS) + recovered);
+      if (data) {
+        const tier = (data.tier || "free") as "free" | "advantage" | "premium";
+        setUserTier(tier);
 
-      setAvailableQuota(available);
+        if (tier === "premium" || tier === "advantage") {
+          setAvailableQuota(999);
+          return;
+        }
 
-      if (available < MAX_FREE_CREDITS) {
-        setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
+        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
+        const elapsed = now - lastRegen;
+        const recovered = Math.floor(elapsed / REGEN_3H_MS);
+        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + recovered);
+
+        setAvailableQuota(available);
+
+        if (available < MAX_FREE_CREDITS) {
+          const nextMs = REGEN_3H_MS - (elapsed % REGEN_3H_MS);
+          setNextRegenIn(nextMs);
+        }
+      } else {
+        await supabase.from("contenu_quotas").insert({
+          user_id: uid,
+          available_credits: MAX_FREE_CREDITS,
+          tier: "free",
+          last_regen_at: new Date().toISOString(),
+        });
+        setAvailableQuota(MAX_FREE_CREDITS);
+        setUserTier("free");
       }
     } catch {
       setAvailableQuota(MAX_FREE_CREDITS);
     }
   };
 
-  // Consomme le crédit avec la fonction consumeToolQuota
+  const verifierQuotaAnonyme = () => {
+    try {
+      const savedAnon = parseInt(localStorage.getItem("contenu_anon_used") || "0");
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+    }
+  };
+
   const consommerUnCredit = async (): Promise<boolean> => {
+    if (userTier === "premium" || userTier === "advantage") return true;
+
     if (!user) {
-      setShowAuthModal(true);
-      return false;
+      const currentUsed = parseInt(localStorage.getItem("contenu_anon_used") || "0");
+      if (currentUsed >= MAX_FREE_CREDITS) {
+        setShowAuthModal(true);
+        return false;
+      }
+      localStorage.setItem("contenu_anon_used", String(currentUsed + 1));
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
+      return true;
     }
 
-    const res = await consumeToolQuota(
-      user.id,
-      userTier,
-      "contenu_quotas",
-      supabase,
-      MAX_FREE_CREDITS,
-      REGEN_3H_MS,
-      1
-    );
+    const now = Date.now();
+    const { data } = await supabase
+      .from("contenu_quotas")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-    if (!res.allowed) {
-      if (res.nextRegenMs > 0) setNextRegenIn(res.nextRegenMs);
+    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
+
+    if (data && userTier === "free") {
+      const elapsed = now - lastRegen;
+      const recovered = Math.floor(elapsed / REGEN_3H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
+      if (recovered > 0) lastRegen = now;
+    }
+
+    if (avail < 1) {
+      const elapsed = now - lastRegen;
+      setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
       setShowPremiumModal(true);
       return false;
     }
 
-    if (!res.isUnlimited) {
-      setAvailableQuota(res.remaining);
-    }
+    const newAvail = avail - 1;
+    setAvailableQuota(newAvail);
+
+    await supabase.from("contenu_quotas").upsert({
+      user_id: user.id,
+      available_credits: newAvail,
+      tier: userTier,
+      last_regen_at: new Date(lastRegen).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
 
     return true;
   };
@@ -416,13 +473,6 @@ function ContenuContent() {
 
   const lancerFabrication = async () => {
     setError(null);
-
-    // OBLIGATION STRICTE : L'utilisateur doit être connecté avant même de tenter la consommation
-    if (!user) {
-      setShowAuthModal(true);
-      return;
-    }
-
     if (!sujet.trim()) {
       setError(fr ? "Veuillez saisir votre sujet d'ouvrage." : "Please enter your book topic.");
       return;
@@ -496,7 +546,7 @@ function ContenuContent() {
             prompt_maitre: pMaitre,
             tranche: tranches[i],
             numero: i + 1,
-            total: formatSelectionne.nbBlocs,
+Total: formatSelectionne.nbBlocs,
             type_contenu: formatSelectionne.id,
           }),
         });
@@ -566,6 +616,13 @@ function ContenuContent() {
 
         if (newRow?.id) setCurrentId(newRow.id);
         chargerHistorique(user.id);
+      } else {
+        const localId = `local-${Date.now()}`;
+        const newLocalRecord = { id: localId, ...record };
+        setCurrentId(localId);
+        const updated = [newLocalRecord, ...historique];
+        setHistorique(updated);
+        saveLocalDrafts(updated);
       }
 
     } catch (e: any) {
@@ -585,21 +642,33 @@ function ContenuContent() {
   const nettoyerEtFixerTexte = async () => {
     if (!texteFinal || !editor) return;
 
+    // On nettoie toujours à partir du markdown le plus à jour :
+    // si l'utilisateur vient d'éditer dans Tiptap, on repart de son HTML,
+    // sinon on repart de texteFinal (ex: mode brut).
     const mdActuel = htmlToMarkdown(editor.getHTML()).trim() || texteFinal;
     const textePropre = nettoyerMarkdown(mdActuel);
 
+    // Injecte le résultat nettoyé directement dans l'éditeur : c'est ce qui
+    // fait "bouger" visuellement les ## etc., puisque Tiptap re-render un
+    // vrai document structuré au lieu d'une chaîne markdown affichée telle quelle.
     skipNextSyncRef.current = false;
     editor.commands.setContent(markdownToHtml(textePropre), { emitUpdate: false });
 
     setTexteFinal(textePropre);
     setNbMots(textePropre.split(/\s+/).filter(Boolean).length);
 
-    if (currentId && user) {
-      await supabase
-        .from("contenu_historique")
-        .update({ texte_final: textePropre })
-        .eq("id", currentId);
-      chargerHistorique(user.id);
+    if (currentId) {
+      if (user) {
+        await supabase
+          .from("contenu_historique")
+          .update({ texte_final: textePropre })
+          .eq("id", currentId);
+        chargerHistorique(user.id);
+      } else {
+        const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: textePropre } : h);
+        setHistorique(updated);
+        saveLocalDrafts(updated);
+      }
     }
   };
 
@@ -638,16 +707,16 @@ function ContenuContent() {
                 ))}
               </div>
 
-              {/* INDICE DU QUOTA ET BANNIÈRE ILLIMITÉ */}
+              {/* INDICE DU QUOTA ET BANNÈRE ILLIMITÉ */}
               <div 
-                onClick={() => !isPaidTier(userTier) && setShowPremiumModal(true)} 
+                onClick={() => userTier === "free" && setShowPremiumModal(true)} 
                 className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
               >
                 <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Livres :" : "Books:"}</span>
                 <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
-                  {isPaidTier(userTier) ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+                  {userTier === "premium" || userTier === "advantage" ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
                 </span>
-                {!isPaidTier(userTier) && (
+                {userTier === "free" && (
                   <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
                     ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
                   </span>
@@ -826,7 +895,7 @@ function ContenuContent() {
                 <span className="text-xs font-mono text-zinc-400">
                   {fr ? "Crédits disponibles : " : "Available credits: "}
                   <strong className={availableQuota === 0 ? "text-red-400" : "text-cyan-400"}>
-                    {isPaidTier(userTier) ? "∞ Illimité" : `${availableQuota}/${MAX_FREE_CREDITS}`}
+                    {userTier === "premium" || userTier === "advantage" ? "∞ Illimité" : `${availableQuota}/${MAX_FREE_CREDITS}`}
                   </strong>
                 </span>
               </div>
@@ -991,6 +1060,13 @@ function ContenuContent() {
                     value={texteFinal}
                     onChange={(e) => {
                       setTexteFinal(e.target.value);
+                      if (currentId) {
+                        if (!user) {
+                          const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: e.target.value } : h);
+                          setHistorique(updated);
+                          saveLocalDrafts(updated);
+                        }
+                      }
                     }}
                     rows={25}
                     className="w-full bg-zinc-900/90 border border-emerald-800/40 rounded-2xl p-6 text-sm leading-relaxed outline-none resize-y font-mono text-zinc-100"
