@@ -88,7 +88,7 @@ const FORMATS: FormatOption[] = [
     pagesEstimees: "150 à 300 pages",
     motsCible: "~40 000 à 75 000 mots",
     nbBlocs: 18,
-    nbPoints: 1800,
+    nbPoints: 1200,
     icon: "📘",
   },
 ];
