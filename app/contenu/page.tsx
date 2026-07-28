@@ -158,7 +158,7 @@ function ContenuContent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Synchronisation au chargement d'un projet
+  // Synchronisation du texte dans l'éditeur visuel
   useEffect(() => {
     if (editorRef.current && texteFinal) {
       if (texteFinal.includes("<p>") || texteFinal.includes("<b>")) {
@@ -561,7 +561,7 @@ function ContenuContent() {
     setTimeout(() => setCopiedStep(null), 2000);
   };
 
-  // 🧹 NETTOYAGE EXACT COMME DANS LE TEST : VRAI GRAS + SAUTS DE LIGNE EN DIV HTML
+  // 🧹 NETTOYAGE UNIQUE : TITRES EN MAJUSCULES EN GRAS ET 2 SAUTS DE LIGNE
   const handleNettoyageComplet = async () => {
     const rawText = editorRef.current ? editorRef.current.innerText : texteFinal;
     if (!rawText) return;
@@ -573,26 +573,22 @@ function ContenuContent() {
       let stripped = line.trim();
       if (!stripped) return;
 
-      // Nettoie les préfixes parasites répétitifs
       stripped = stripped.replace(/^(LE CONSTAT|L'ACTION CONCRÈTE|L'INVITATION|À RETENIR)\s*:\s*/i, "");
-
       if (!stripped) return;
 
-      // Détecte si la ligne ou son début est un TITRE en MAJUSCULES
       const match = stripped.match(/^([A-ZÀ-ÖØ-ß0-9\s' \-,:!\.]{5,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ]|\n|$)/);
 
       if (match && match[1].trim() === match[1].trim().toUpperCase()) {
         let titre = match[1].trim().replace(/[\.:]$/, "").trim();
         const reste = stripped.slice(match[0].length).trim();
 
-        // Titre en VRAI GRAS (<b>)
-        finalHtml.push(`<p><b>${titre}</b></p>`);
+        finalHtml.push(`<p style="margin-bottom: 1.25em;"><b>${titre}</b></p>`);
 
         if (reste) {
-          finalHtml.push(`<p>${reste}</p>`);
+          finalHtml.push(`<p style="margin-bottom: 1.25em;">${reste}</p>`);
         }
       } else {
-        finalHtml.push(`<p>${stripped}</p>`);
+        finalHtml.push(`<p style="margin-bottom: 1.25em;">${stripped}</p>`);
       }
     });
 
@@ -623,7 +619,7 @@ function ContenuContent() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
       
-      {/* HEADER */}
+      {/* ── HEADER ── */}
       <section className="bg-white text-zinc-900 relative z-30">
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
@@ -947,7 +943,7 @@ function ContenuContent() {
               </div>
             )}
 
-            {/* MANUSCRIT FINAL AVEC ÉDITEUR HTML LOCAL (TITRES EN VRAI GRAS) */}
+            {/* MANUSCRIT FINAL */}
             {(texteFinal || runningStep === 3) && (
               <div className="bg-black/90 border-2 border-emerald-500/40 rounded-3xl p-8 space-y-5 shadow-[0_0_40px_rgba(16,185,129,0.15)] w-full">
                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
@@ -966,7 +962,7 @@ function ContenuContent() {
                     {texteFinal && (
                       <button
                         onClick={handleNettoyageComplet}
-                        className="text-xs px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/40 hover:bg-amber-500/20 text-amber-300 font-mono font-bold cursor-pointer transition-all"
+                        className="text-xs px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-mono font-bold cursor-pointer transition-all"
                       >
                         🧹 {fr ? "Nettoyer & Réaligner" : "Clean & Realign"}
                       </button>
@@ -989,12 +985,11 @@ function ContenuContent() {
                     <span className="text-xs text-zinc-500 font-mono">{fr ? "Génération longue en cours... veuillez ne pas fermer la page." : "High density writing in progress... please hold."}</span>
                   </div>
                 ) : (
-                  /* Zone HTML d'édition directe : rend le gras <b> réel et la mise en forme Word */
                   <div
                     ref={editorRef}
                     contentEditable
                     suppressContentEditableWarning
-                    className="w-full min-h-[500px] max-h-[850px] overflow-y-auto bg-white text-zinc-900 border border-zinc-200 rounded-2xl p-10 shadow-inner select-text cursor-text text-sm font-sans leading-relaxed whitespace-pre-wrap outline-none focus:border-cyan-500"
+                    className="w-full min-h-[500px] max-h-[850px] overflow-y-auto bg-white text-zinc-900 border border-zinc-200 rounded-2xl p-10 shadow-inner select-text cursor-text text-sm font-sans leading-relaxed outline-none"
                   />
                 )}
               </div>
