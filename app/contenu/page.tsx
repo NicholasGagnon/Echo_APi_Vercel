@@ -126,6 +126,7 @@ function ContenuContent() {
   const [error, setError] = useState<string | null>(null);
   const [copiedStep, setCopiedStep] = useState<string | null>(null);
 
+  const editorRef = useRef<HTMLDivElement>(null);
   const LOCAL_STORAGE_KEY = "echo-contenu-drafts";
 
   useEffect(() => {
@@ -156,6 +157,17 @@ function ContenuContent() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Synchronisation au chargement d'un projet
+  useEffect(() => {
+    if (editorRef.current && texteFinal) {
+      if (texteFinal.includes("<p>") || texteFinal.includes("<b>")) {
+        editorRef.current.innerHTML = texteFinal;
+      } else {
+        editorRef.current.innerText = texteFinal;
+      }
+    }
+  }, [texteFinal]);
 
   const loadLocalDrafts = () => {
     try {
@@ -311,6 +323,7 @@ function ContenuContent() {
     setProgressPercent(0);
     setStatusMessage("");
     setFormKey((p) => p + 1);
+    if (editorRef.current) editorRef.current.innerHTML = "";
   };
 
   const supprimerProjet = async (id: string, e: React.MouseEvent) => {
@@ -503,6 +516,10 @@ function ContenuContent() {
       setTexteFinal(tFinal);
       setNbMots(tFinal.split(/\s+/).filter(Boolean).length);
 
+      if (editorRef.current) {
+        editorRef.current.innerText = tFinal;
+      }
+
       const record = {
         titre: sujet.slice(0, 40) || "Sans titre",
         sujet_depart: sujet,
@@ -538,59 +555,65 @@ function ContenuContent() {
   };
 
   const copierTexte = (texte: string, stepName: string) => {
-    navigator.clipboard.writeText(texte);
+    const rawToCopy = editorRef.current ? editorRef.current.innerText : texte;
+    navigator.clipboard.writeText(rawToCopy);
     setCopiedStep(stepName);
     setTimeout(() => setCopiedStep(null), 2000);
   };
 
-  // 🧹 NETTOYAGE UNIQUE
+  // 🧹 NETTOYAGE EXACT COMME DANS LE TEST : VRAI GRAS + SAUTS DE LIGNE EN DIV HTML
   const handleNettoyageComplet = async () => {
-    if (!texteFinal) return;
+    const rawText = editorRef.current ? editorRef.current.innerText : texteFinal;
+    if (!rawText) return;
 
-    const lines = texteFinal.split("\n");
-    const cleanedBlocks: string[] = [];
+    const lines = rawText.split("\n");
+    const finalHtml: string[] = [];
 
     lines.forEach((line) => {
       let stripped = line.trim();
       if (!stripped) return;
 
-      // Nettoie les préfixes parasites répétitifs s'il en reste
+      // Nettoie les préfixes parasites répétitifs
       stripped = stripped.replace(/^(LE CONSTAT|L'ACTION CONCRÈTE|L'INVITATION|À RETENIR)\s*:\s*/i, "");
 
       if (!stripped) return;
 
-      // Détecte si la ligne ou son début est en MAJUSCULES
+      // Détecte si la ligne ou son début est un TITRE en MAJUSCULES
       const match = stripped.match(/^([A-ZÀ-ÖØ-ß0-9\s' \-,:!\.]{5,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ]|\n|$)/);
 
       if (match && match[1].trim() === match[1].trim().toUpperCase()) {
         let titre = match[1].trim().replace(/[\.:]$/, "").trim();
         const reste = stripped.slice(match[0].length).trim();
 
-        cleanedBlocks.push(titre);
+        // Titre en VRAI GRAS (<b>)
+        finalHtml.push(`<p><b>${titre}</b></p>`);
 
         if (reste) {
-          cleanedBlocks.push(reste);
+          finalHtml.push(`<p>${reste}</p>`);
         }
       } else {
-        cleanedBlocks.push(stripped);
+        finalHtml.push(`<p>${stripped}</p>`);
       }
     });
 
-    // Deux sauts de ligne systématiques entre chaque bloc
-    const textePropre = cleanedBlocks.join("\n\n");
+    const htmlFormatted = finalHtml.join("<br/>");
 
-    setTexteFinal(textePropre);
-    setNbMots(textePropre.split(/\s+/).filter(Boolean).length);
+    if (editorRef.current) {
+      editorRef.current.innerHTML = htmlFormatted;
+    }
+
+    setTexteFinal(htmlFormatted);
+    setNbMots(rawText.split(/\s+/).filter(Boolean).length);
 
     if (currentId) {
       if (user) {
         await supabase
           .from("contenu_historique")
-          .update({ texte_final: textePropre })
+          .update({ texte_final: htmlFormatted })
           .eq("id", currentId);
         chargerHistorique(user.id);
       } else {
-        const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: textePropre } : h);
+        const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: htmlFormatted } : h);
         setHistorique(updated);
         saveLocalDrafts(updated);
       }
@@ -924,7 +947,7 @@ function ContenuContent() {
               </div>
             )}
 
-            {/* MANUSCRIT FINAL — MODE BRUT UNIQUE */}
+            {/* MANUSCRIT FINAL AVEC ÉDITEUR HTML LOCAL (TITRES EN VRAI GRAS) */}
             {(texteFinal || runningStep === 3) && (
               <div className="bg-black/90 border-2 border-emerald-500/40 rounded-3xl p-8 space-y-5 shadow-[0_0_40px_rgba(16,185,129,0.15)] w-full">
                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
@@ -966,21 +989,12 @@ function ContenuContent() {
                     <span className="text-xs text-zinc-500 font-mono">{fr ? "Génération longue en cours... veuillez ne pas fermer la page." : "High density writing in progress... please hold."}</span>
                   </div>
                 ) : (
-                  <textarea
-                    value={texteFinal}
-                    onChange={(e) => {
-                      setTexteFinal(e.target.value);
-                      setNbMots(e.target.value.split(/\s+/).filter(Boolean).length);
-                      if (currentId) {
-                        if (!user) {
-                          const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: e.target.value } : h);
-                          setHistorique(updated);
-                          saveLocalDrafts(updated);
-                        }
-                      }
-                    }}
-                    rows={25}
-                    className="w-full bg-zinc-900/90 border border-emerald-800/40 rounded-2xl p-6 text-sm leading-relaxed outline-none resize-y font-mono text-zinc-100"
+                  /* Zone HTML d'édition directe : rend le gras <b> réel et la mise en forme Word */
+                  <div
+                    ref={editorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    className="w-full min-h-[500px] max-h-[850px] overflow-y-auto bg-white text-zinc-900 border border-zinc-200 rounded-2xl p-10 shadow-inner select-text cursor-text text-sm font-sans leading-relaxed whitespace-pre-wrap outline-none focus:border-cyan-500"
                   />
                 )}
               </div>
