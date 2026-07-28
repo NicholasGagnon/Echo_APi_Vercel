@@ -158,16 +158,16 @@ function ContenuContent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Synchronisation du texte dans l'éditeur visuel
+  // 🟢 SYNCHRONISATION ROBUSTE : GARANTIT QUE LE TEXTE EST TOUJOURS DANS LA ZONE D'ÉDITION
   useEffect(() => {
-    if (editorRef.current && texteFinal) {
+    if (editorRef.current && texteFinal && runningStep === 0) {
       if (texteFinal.includes("<p>") || texteFinal.includes("<b>")) {
         editorRef.current.innerHTML = texteFinal;
       } else {
         editorRef.current.innerText = texteFinal;
       }
     }
-  }, [texteFinal]);
+  }, [texteFinal, runningStep]);
 
   const loadLocalDrafts = () => {
     try {
@@ -326,6 +326,16 @@ function ContenuContent() {
     if (editorRef.current) editorRef.current.innerHTML = "";
   };
 
+  const chargerOuvrageHistorique = (item: any) => {
+    setCurrentId(item.id);
+    setSujet(item.sujet_depart || "");
+    setPromptMaitre(item.prompt_maitre || "");
+    setListePoints(item.liste_500_points || "");
+    const text = item.texte_final || "";
+    setTexteFinal(text);
+    setNbMots(text ? text.split(/\s+/).filter(Boolean).length : null);
+  };
+
   const supprimerProjet = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm(fr ? "Supprimer cet ouvrage définitivement ?" : "Delete this manuscript permanently?")) return;
@@ -402,6 +412,7 @@ function ContenuContent() {
     setListePoints("");
     setTexteFinal("");
     setNbMots(null);
+    if (editorRef.current) editorRef.current.innerText = "";
 
     try {
       setRunningStep(1);
@@ -516,10 +527,6 @@ function ContenuContent() {
       setTexteFinal(tFinal);
       setNbMots(tFinal.split(/\s+/).filter(Boolean).length);
 
-      if (editorRef.current) {
-        editorRef.current.innerText = tFinal;
-      }
-
       const record = {
         titre: sujet.slice(0, 40) || "Sans titre",
         sujet_depart: sujet,
@@ -561,8 +568,8 @@ function ContenuContent() {
     setTimeout(() => setCopiedStep(null), 2000);
   };
 
-  // 🧹 NETTOYAGE UNIQUE : TITRES EN MAJUSCULES EN GRAS ET 2 SAUTS DE LIGNE
-  const handleNettoyageComplet = async () => {
+  // 🧹 NETTOYAGE TEST : DÉTECTION DES TITRES EN MAJUSCULES -> VRAI GRAS + SAUTS DE LIGNE
+  const handleNettoyageComplet = () => {
     const rawText = editorRef.current ? editorRef.current.innerText : texteFinal;
     if (!rawText) return;
 
@@ -570,10 +577,7 @@ function ContenuContent() {
     const finalHtml: string[] = [];
 
     lines.forEach((line) => {
-      let stripped = line.trim();
-      if (!stripped) return;
-
-      stripped = stripped.replace(/^(LE CONSTAT|L'ACTION CONCRÈTE|L'INVITATION|À RETENIR)\s*:\s*/i, "");
+      const stripped = line.trim();
       if (!stripped) return;
 
       const match = stripped.match(/^([A-ZÀ-ÖØ-ß0-9\s' \-,:!\.]{5,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ]|\n|$)/);
@@ -582,13 +586,13 @@ function ContenuContent() {
         let titre = match[1].trim().replace(/[\.:]$/, "").trim();
         const reste = stripped.slice(match[0].length).trim();
 
-        finalHtml.push(`<p style="margin-bottom: 1.25em;"><b>${titre}</b></p>`);
+        finalHtml.push(`<p><b>${titre}</b></p>`);
 
         if (reste) {
-          finalHtml.push(`<p style="margin-bottom: 1.25em;">${reste}</p>`);
+          finalHtml.push(`<p>${reste}</p>`);
         }
       } else {
-        finalHtml.push(`<p style="margin-bottom: 1.25em;">${stripped}</p>`);
+        finalHtml.push(`<p>${stripped}</p>`);
       }
     });
 
@@ -600,26 +604,12 @@ function ContenuContent() {
 
     setTexteFinal(htmlFormatted);
     setNbMots(rawText.split(/\s+/).filter(Boolean).length);
-
-    if (currentId) {
-      if (user) {
-        await supabase
-          .from("contenu_historique")
-          .update({ texte_final: htmlFormatted })
-          .eq("id", currentId);
-        chargerHistorique(user.id);
-      } else {
-        const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: htmlFormatted } : h);
-        setHistorique(updated);
-        saveLocalDrafts(updated);
-      }
-    }
   };
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
       
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <section className="bg-white text-zinc-900 relative z-30">
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
@@ -755,14 +745,7 @@ function ContenuContent() {
                   historique.map((item) => (
                     <div
                       key={item.id}
-                      onClick={() => {
-                        setCurrentId(item.id);
-                        setSujet(item.sujet_depart || "");
-                        setPromptMaitre(item.prompt_maitre || "");
-                        setListePoints(item.liste_500_points || "");
-                        setTexteFinal(item.texte_final || "");
-                        setNbMots(item.texte_final ? item.texte_final.split(/\s+/).filter(Boolean).length : null);
-                      }}
+                      onClick={() => chargerOuvrageHistorique(item)}
                       className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer flex justify-between items-center group ${
                         currentId === item.id
                           ? "bg-cyan-950/60 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
@@ -962,9 +945,9 @@ function ContenuContent() {
                     {texteFinal && (
                       <button
                         onClick={handleNettoyageComplet}
-                        className="text-xs px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-mono font-bold cursor-pointer transition-all"
+                        className="text-xs px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-mono font-bold uppercase transition-all"
                       >
-                        🧹 {fr ? "Nettoyer & Réaligner" : "Clean & Realign"}
+                        🧹 NETTOYER LE TEXTE (SAUTS + TITRES EN GRAS)
                       </button>
                     )}
 
@@ -979,19 +962,20 @@ function ContenuContent() {
                   </div>
                 </div>
 
-                {runningStep === 3 ? (
-                  <div className="w-full h-80 bg-zinc-900/60 border border-emerald-800/40 rounded-2xl p-6 text-sm text-zinc-400 italic animate-pulse font-mono flex flex-col items-center justify-center gap-3 text-center">
+                {runningStep === 3 && (
+                  <div className="w-full py-4 bg-zinc-900/60 border border-emerald-800/40 rounded-2xl text-sm text-zinc-400 italic animate-pulse font-mono flex flex-col items-center justify-center gap-2 text-center">
                     <span className="text-emerald-400 font-bold text-base">{statusMessage}</span>
                     <span className="text-xs text-zinc-500 font-mono">{fr ? "Génération longue en cours... veuillez ne pas fermer la page." : "High density writing in progress... please hold."}</span>
                   </div>
-                ) : (
-                  <div
-                    ref={editorRef}
-                    contentEditable
-                    suppressContentEditableWarning
-                    className="w-full min-h-[500px] max-h-[850px] overflow-y-auto bg-white text-zinc-900 border border-zinc-200 rounded-2xl p-10 shadow-inner select-text cursor-text text-sm font-sans leading-relaxed outline-none"
-                  />
                 )}
+
+                {/* 🟢 LA ZONE D'ÉDITION RESTE PERMANENTE ET N'EST PLUS DÉTRUITE PAR REACT */}
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  className="w-full h-[600px] bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-sm font-sans text-zinc-200 focus:outline-none focus:border-cyan-500 leading-relaxed overflow-y-auto whitespace-pre-wrap"
+                />
               </div>
             )}
           </div>
