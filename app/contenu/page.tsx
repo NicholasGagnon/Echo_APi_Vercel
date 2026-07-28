@@ -2,53 +2,8 @@
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import { marked } from "marked";
-import TurndownService from "turndown";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
-
-const turndownService = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
-
-// Convertit du markdown brut en HTML consommable par Tiptap
-function markdownToHtml(md: string): string {
-  return marked.parse(md || "", { breaks: true, gfm: true }) as string;
-}
-
-// Convertit le HTML de l'éditeur Tiptap en markdown (pour la sauvegarde / mode brut)
-function htmlToMarkdown(html: string): string {
-  return turndownService.turndown(html || "");
-}
-
-// Nettoyage structurel du markdown : corrige les titres, aère les listes,
-// enlève les espaces/retours à la ligne superflus. Fonctionne ligne par ligne
-// (^...$ multiligne) plutôt que sur des motifs entourés de \n, ce qui est
-// beaucoup plus tolérant au texte réellement généré.
-function nettoyerMarkdown(brut: string): string {
-  if (!brut) return brut;
-
-  let t = brut.replace(/\r\n/g, "\n");
-
-  // Le texte généré arrive parfois SANS aucun retour à la ligne, avec les
-  // marqueurs # / ## / ### insérés au milieu du flux
-  // ("... texte ## Titre suite..."). On force un saut de paragraphe
-  // AVANT chaque marqueur de titre, où qu'il se trouve dans le texte.
-  t = t.replace(/\s*(#{1,6})\s+/g, "\n\n$1 ");
-
-  // Détecte "CHAPITRE X ..." même s'il n'est pas déjà précédé d'un #
-  t = t.replace(/(^|\n\n)(?!#)([ \t]*CHAPITRE\s+\d+[^\n#]*)/gi, "$1# $2");
-
-  // Sépare une liste collée directement après une phrase précédente
-  t = t.replace(/([.!?])\s*(\d+\.\s+|[-•*]\s+)/g, "$1\n\n$2");
-
-  // Normalise espaces et retours à la ligne
-  t = t.replace(/[ \t]{2,}/g, " ");
-  t = t.replace(/\n{3,}/g, "\n\n");
-  t = t.replace(/\n[ \t]+/g, "\n");
-
-  return t.trim();
-}
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +27,7 @@ const FORMATS: FormatOption[] = [
     titreEn: "Blog Article / Lead Magnet",
     sousTitre: "Contenu concis, percutant et hautement optimisé.",
     sousTitreEn: "Concise, punchy, and highly optimized content.",
-    pagesEstimees: "5 à 10 pages",
+    pagesEstimees: "2 à 5 pages",
     motsCible: "~1 000 à 3 000 mots",
     nbBlocs: 1,
     nbPoints: 100,
@@ -84,7 +39,7 @@ const FORMATS: FormatOption[] = [
     titreEn: "Training Manual or Guide",
     sousTitre: "Ouvrage complet et structuré avec cas pratiques ou petit livre.",
     sousTitreEn: "Comprehensive structured guide with case studies.",
-    pagesEstimees: "40 à 100 pages",
+    pagesEstimees: "20 à 50 pages",
     motsCible: "~10 000 à 20 000 mots",
     nbBlocs: 6,
     nbPoints: 600,
@@ -96,7 +51,7 @@ const FORMATS: FormatOption[] = [
     titreEn: "Major Book (Full Length)",
     sousTitre: "Double configuration pour les ouvrages d'envergure.",
     sousTitreEn: "Double configuration for large scale manuscripts.",
-    pagesEstimees: "100 à 300 pages",
+    pagesEstimees: "50 à 150 pages",
     motsCible: "~30 000 à 50 000 mots",
     nbBlocs: 12,
     nbPoints: 1200,
@@ -123,7 +78,6 @@ const GoogleLogo = () => (
 );
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
-
 const MAX_FREE_CREDITS = 4;
 const REGEN_3H_MS = 3 * 60 * 60 * 1000;
 
@@ -141,15 +95,12 @@ function ContenuContent() {
   const fr = lang === "fr";
 
   const [formKey, setFormKey] = useState(0);
-  
-  // Auth & Storage
   const [user, setUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Quotas, Devise & Abonnements
   const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
   const [userTier, setUserTier] = useState<"free" | "advantage" | "premium">("free");
   const [nextRegenIn, setNextRegenIn] = useState<number>(0);
@@ -157,25 +108,18 @@ function ContenuContent() {
   const [currency, setCurrency] = useState<CurrencyCode>("CAD");
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
-  // Projets
   const [historique, setHistorique] = useState<any[]>([]);
   const [loadingHistorique, setLoadingHistorique] = useState(false);
 
-  // Formulaire & Sélection
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [sujet, setSujet] = useState("");
   const [formatSelectionne, setFormatSelectionne] = useState<FormatOption>(FORMATS[1]);
 
-  // Sorties
   const [promptMaitre, setPromptMaitre] = useState("");
   const [listePoints, setListePoints] = useState("");
   const [texteFinal, setTexteFinal] = useState("");
   const [nbMots, setNbMots] = useState<number | null>(null);
 
-  // Mode d'affichage
-  const [modeApercu, setModeApercu] = useState(true);
-
-  // UX Avancement
   const [runningStep, setRunningStep] = useState<number>(0);
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [statusMessage, setStatusMessage] = useState("");
@@ -184,48 +128,8 @@ function ContenuContent() {
 
   const LOCAL_STORAGE_KEY = "echo-contenu-drafts";
 
-  // Empêche l'effet de sync texteFinal -> editor de tourner en boucle
-  // quand c'est l'éditeur lui-même qui vient de modifier texteFinal.
-  const skipNextSyncRef = useRef(false);
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
-    ],
-    content: "",
-    immediatelyRender: false,
-    editorProps: {
-      attributes: {
-        class:
-          "print-book prose prose-zinc max-w-none prose-headings:font-black prose-h1:text-3xl prose-h2:text-2xl prose-p:text-base prose-p:leading-relaxed focus:outline-none min-h-[400px]",
-      },
-    },
-    onUpdate: ({ editor }) => {
-      const md = htmlToMarkdown(editor.getHTML());
-      skipNextSyncRef.current = true;
-      setTexteFinal(md);
-      setNbMots(md.split(/\s+/).filter(Boolean).length);
-    },
-  });
-
-  // Garde l'éditeur Tiptap synchronisé quand texteFinal change depuis
-  // l'extérieur (fin de génération, chargement d'un projet, mode brut...).
-  useEffect(() => {
-    if (!editor) return;
-    if (skipNextSyncRef.current) {
-      skipNextSyncRef.current = false;
-      return;
-    }
-    const currentMd = htmlToMarkdown(editor.getHTML());
-    if (currentMd.trim() === (texteFinal || "").trim()) return;
-    editor.commands.setContent(markdownToHtml(texteFinal || ""), { emitUpdate: false });
-  }, [texteFinal, editor]);
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      const uid = session?.user?.id || null;
       if (session?.user) {
         setUser(session.user);
         chargerHistorique(session.user.id);
@@ -546,7 +450,7 @@ function ContenuContent() {
             prompt_maitre: pMaitre,
             tranche: tranches[i],
             numero: i + 1,
-Total: formatSelectionne.nbBlocs,
+            total: formatSelectionne.nbBlocs,
             type_contenu: formatSelectionne.id,
           }),
         });
@@ -554,7 +458,7 @@ Total: formatSelectionne.nbBlocs,
         if (!resBloc.ok || dataBloc.error) throw new Error(dataBloc.error || `Erreur sur le volume ${i + 1}`);
 
         blocsBruts.push(dataBloc.texte_bloc);
-        cumulMotsActuel += dataBloc.texte_bloc.split(/\s+/).length;
+        cumulMotsActuel += dataBloc.texte_bloc.split(/\s+/).filter(Boolean).length;
       }
 
       setProgressPercent(95);
@@ -597,7 +501,7 @@ Total: formatSelectionne.nbBlocs,
 
       setProgressPercent(100);
       setTexteFinal(tFinal);
-      setNbMots(tFinal.split(/\s+/).length);
+      setNbMots(tFinal.split(/\s+/).filter(Boolean).length);
 
       const record = {
         titre: sujet.slice(0, 40) || "Sans titre",
@@ -639,20 +543,41 @@ Total: formatSelectionne.nbBlocs,
     setTimeout(() => setCopiedStep(null), 2000);
   };
 
-  const nettoyerEtFixerTexte = async () => {
-    if (!texteFinal || !editor) return;
+  // 🧹 NETTOYAGE UNIQUE
+  const handleNettoyageComplet = async () => {
+    if (!texteFinal) return;
 
-    // On nettoie toujours à partir du markdown le plus à jour :
-    // si l'utilisateur vient d'éditer dans Tiptap, on repart de son HTML,
-    // sinon on repart de texteFinal (ex: mode brut).
-    const mdActuel = htmlToMarkdown(editor.getHTML()).trim() || texteFinal;
-    const textePropre = nettoyerMarkdown(mdActuel);
+    const lines = texteFinal.split("\n");
+    const cleanedBlocks: string[] = [];
 
-    // Injecte le résultat nettoyé directement dans l'éditeur : c'est ce qui
-    // fait "bouger" visuellement les ## etc., puisque Tiptap re-render un
-    // vrai document structuré au lieu d'une chaîne markdown affichée telle quelle.
-    skipNextSyncRef.current = false;
-    editor.commands.setContent(markdownToHtml(textePropre), { emitUpdate: false });
+    lines.forEach((line) => {
+      let stripped = line.trim();
+      if (!stripped) return;
+
+      // Nettoie les préfixes parasites répétitifs s'il en reste
+      stripped = stripped.replace(/^(LE CONSTAT|L'ACTION CONCRÈTE|L'INVITATION|À RETENIR)\s*:\s*/i, "");
+
+      if (!stripped) return;
+
+      // Détecte si la ligne ou son début est en MAJUSCULES
+      const match = stripped.match(/^([A-ZÀ-ÖØ-ß0-9\s' \-,:!\.]{5,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ]|\n|$)/);
+
+      if (match && match[1].trim() === match[1].trim().toUpperCase()) {
+        let titre = match[1].trim().replace(/[\.:]$/, "").trim();
+        const reste = stripped.slice(match[0].length).trim();
+
+        cleanedBlocks.push(titre);
+
+        if (reste) {
+          cleanedBlocks.push(reste);
+        }
+      } else {
+        cleanedBlocks.push(stripped);
+      }
+    });
+
+    // Deux sauts de ligne systématiques entre chaque bloc
+    const textePropre = cleanedBlocks.join("\n\n");
 
     setTexteFinal(textePropre);
     setNbMots(textePropre.split(/\s+/).filter(Boolean).length);
@@ -675,7 +600,7 @@ Total: formatSelectionne.nbBlocs,
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
       
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <section className="bg-white text-zinc-900 relative z-30">
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
@@ -707,7 +632,6 @@ Total: formatSelectionne.nbBlocs,
                 ))}
               </div>
 
-              {/* INDICE DU QUOTA ET BANNÈRE ILLIMITÉ */}
               <div 
                 onClick={() => userTier === "free" && setShowPremiumModal(true)} 
                 className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
@@ -773,7 +697,7 @@ Total: formatSelectionne.nbBlocs,
         </div>
       </section>
 
-      {/* ── SEPARATEUR VISUEL ── */}
+      {/* SÉPARATEUR */}
       <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
         <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
@@ -784,12 +708,12 @@ Total: formatSelectionne.nbBlocs,
         </svg>
       </div>
 
-      {/* ── SECTION PRINCIPALE ── */}
+      {/* SECTION PRINCIPALE */}
       <section className="bg-zinc-950 text-zinc-50 pb-16 pt-0 relative z-10 -mt-6">
         <div className="max-w-7xl mx-auto px-6 space-y-8">
 
           <div className="flex flex-col lg:flex-row gap-8 items-start">
-            {/* BIBLIOTHÈQUE ET OPTIONS DOCUMENT */}
+            {/* BIBLIOTHÈQUE DU STUDIO */}
             <aside className="w-full lg:w-80 border-2 border-cyan-500/30 bg-black/90 rounded-2xl p-5 shrink-0 space-y-4 shadow-[0_0_25px_rgba(6,182,212,0.1)]">
               <button
                 onClick={nouveauProjet}
@@ -818,7 +742,7 @@ Total: formatSelectionne.nbBlocs,
                         setPromptMaitre(item.prompt_maitre || "");
                         setListePoints(item.liste_500_points || "");
                         setTexteFinal(item.texte_final || "");
-                        setNbMots(item.texte_final ? item.texte_final.split(/\s+/).length : null);
+                        setNbMots(item.texte_final ? item.texte_final.split(/\s+/).filter(Boolean).length : null);
                       }}
                       className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer flex justify-between items-center group ${
                         currentId === item.id
@@ -1000,17 +924,17 @@ Total: formatSelectionne.nbBlocs,
               </div>
             )}
 
-            {/* MANUSCRIT FINAL */}
+            {/* MANUSCRIT FINAL — MODE BRUT UNIQUE */}
             {(texteFinal || runningStep === 3) && (
               <div className="bg-black/90 border-2 border-emerald-500/40 rounded-3xl p-8 space-y-5 shadow-[0_0_40px_rgba(16,185,129,0.15)] w-full">
                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-sm text-emerald-400 font-extrabold uppercase">
-                      {fr ? "MANUSCRIT FINAL (Rendu d'Édition)" : "FINAL MANUSCRIPT (Print Render)"}
+                      {fr ? "MANUSCRIT FINAL" : "FINAL MANUSCRIPT"}
                     </span>
                     {nbMots && (
                       <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
-                        {nbMots.toLocaleString()} {fr ? "mots" : "words"} (~{Math.round(nbMots / 280)} {fr ? "pages" : "pages"})
+                        {nbMots.toLocaleString()} {fr ? "mots" : "words"} (~{Math.round(nbMots / 500)} {fr ? "pages" : "pages"})
                       </span>
                     )}
                   </div>
@@ -1018,19 +942,12 @@ Total: formatSelectionne.nbBlocs,
                   <div className="flex items-center gap-3">
                     {texteFinal && (
                       <button
-                        onClick={nettoyerEtFixerTexte}
+                        onClick={handleNettoyageComplet}
                         className="text-xs px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/40 hover:bg-amber-500/20 text-amber-300 font-mono font-bold cursor-pointer transition-all"
                       >
                         🧹 {fr ? "Nettoyer & Réaligner" : "Clean & Realign"}
                       </button>
                     )}
-
-                    <button
-                      onClick={() => setModeApercu(!modeApercu)}
-                      className="text-xs px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-700 hover:border-emerald-400 text-zinc-300 font-mono font-bold cursor-pointer transition-all"
-                    >
-                      {modeApercu ? (fr ? "📝 Mode Brut" : "📝 Raw Mode") : (fr ? "📖 Mode Livre" : "📖 Book Mode")}
-                    </button>
 
                     {texteFinal && (
                       <button
@@ -1048,18 +965,12 @@ Total: formatSelectionne.nbBlocs,
                     <span className="text-emerald-400 font-bold text-base">{statusMessage}</span>
                     <span className="text-xs text-zinc-500 font-mono">{fr ? "Génération longue en cours... veuillez ne pas fermer la page." : "High density writing in progress... please hold."}</span>
                   </div>
-                ) : modeApercu ? (
-                  <div
-                    onClick={() => editor?.chain().focus().run()}
-                    className="w-full max-h-[850px] overflow-y-auto bg-white text-zinc-900 border border-zinc-200 rounded-2xl p-10 shadow-inner select-text cursor-text"
-                  >
-                    <EditorContent editor={editor} />
-                  </div>
                 ) : (
                   <textarea
                     value={texteFinal}
                     onChange={(e) => {
                       setTexteFinal(e.target.value);
+                      setNbMots(e.target.value.split(/\s+/).filter(Boolean).length);
                       if (currentId) {
                         if (!user) {
                           const updated = historique.map(h => h.id === currentId ? { ...h, texte_final: e.target.value } : h);
