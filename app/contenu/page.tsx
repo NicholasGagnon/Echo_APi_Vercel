@@ -158,7 +158,7 @@ function ContenuContent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 🟢 SYNCHRONISATION ROBUSTE : GARANTIT QUE LE TEXTE EST TOUJOURS DANS LA ZONE D'ÉDITION
+  // Synchronisation continue du texte vers l'éditeur
   useEffect(() => {
     if (editorRef.current && texteFinal && runningStep === 0) {
       if (texteFinal.includes("<p>") || texteFinal.includes("<b>")) {
@@ -568,31 +568,41 @@ function ContenuContent() {
     setTimeout(() => setCopiedStep(null), 2000);
   };
 
-  // 🧹 NETTOYAGE TEST : DÉTECTION DES TITRES EN MAJUSCULES -> VRAI GRAS + SAUTS DE LIGNE
+  // 🧹 NETTOYAGE EXHAUSTIF SUR TOUT LE MANUSCRIT (TRAITE 100% DES TITRES DU LIVRE)
   const handleNettoyageComplet = () => {
     const rawText = editorRef.current ? editorRef.current.innerText : texteFinal;
     if (!rawText) return;
 
-    const lines = rawText.split("\n");
+    // Nettoyage préalable des préfixes parasites s'il en reste
+    const textPropre = rawText.replace(/^(LE CONSTAT|L'ACTION CONCRÈTE|L'INVITATION|À RETENIR)\s*:\s*/gim, "");
+
+    const lines = textPropre.split("\n");
     const finalHtml: string[] = [];
 
     lines.forEach((line) => {
       const stripped = line.trim();
       if (!stripped) return;
 
-      const match = stripped.match(/^([A-ZÀ-ÖØ-ß0-9\s' \-,:!\.]{5,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ]|\n|$)/);
+      // 1. Détection des lignes qui sont entièrement en MAJUSCULES (ex: "LE PREMIER CONTACT", "L'INCOMPRÉHENSION TOTALE")
+      const isPureTitle = /^[A-ZÀ-ÖØ-ß0-9\s' \-,:!\.]{4,120}$/.test(stripped) && /[A-ZÀ-ÖØ-ß]/.test(stripped);
 
-      if (match && match[1].trim() === match[1].trim().toUpperCase()) {
-        let titre = match[1].trim().replace(/[\.:]$/, "").trim();
-        const reste = stripped.slice(match[0].length).trim();
-
-        finalHtml.push(`<p><b>${titre}</b></p>`);
-
-        if (reste) {
-          finalHtml.push(`<p>${reste}</p>`);
-        }
+      if (isPureTitle) {
+        finalHtml.push(`<p><b>${stripped}</b></p>`);
       } else {
-        finalHtml.push(`<p>${stripped}</p>`);
+        // 2. Détection des titres en MAJUSCULES collés au début d'un paragraphe
+        const match = stripped.match(/^([A-ZÀ-ÖØ-ß0-9\s' \-,:!\.]{4,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ])/);
+        if (match && match[1].trim() === match[1].trim().toUpperCase() && /[A-ZÀ-ÖØ-ß]/.test(match[1])) {
+          const titre = match[1].trim().replace(/[\.:]$/, "").trim();
+          const reste = stripped.slice(match[0].length).trim();
+
+          finalHtml.push(`<p><b>${titre}</b></p>`);
+          if (reste) {
+            finalHtml.push(`<p>${reste}</p>`);
+          }
+        } else {
+          // Paragraphe classique
+          finalHtml.push(`<p>${stripped}</p>`);
+        }
       }
     });
 
@@ -969,7 +979,6 @@ function ContenuContent() {
                   </div>
                 )}
 
-                {/* 🟢 LA ZONE D'ÉDITION RESTE PERMANENTE ET N'EST PLUS DÉTRUITE PAR REACT */}
                 <div
                   ref={editorRef}
                   contentEditable
