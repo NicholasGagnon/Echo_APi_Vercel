@@ -158,7 +158,6 @@ function ContenuContent() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Synchronisation continue du texte vers l'éditeur
   useEffect(() => {
     if (editorRef.current && texteFinal && runningStep === 0) {
       if (texteFinal.includes("<p>") || texteFinal.includes("<b>")) {
@@ -561,48 +560,62 @@ function ContenuContent() {
     }
   };
 
+  // 🟢 COPIE EN RICHE TEXTE (HTML) POUR QUE LE GRAS SOIT CONSERVÉ DANS WORD
   const copierTexte = (texte: string, stepName: string) => {
-    const rawToCopy = editorRef.current ? editorRef.current.innerText : texte;
-    navigator.clipboard.writeText(rawToCopy);
+    if (stepName === "step3" && editorRef.current) {
+      const range = document.createRange();
+      range.selectNodeContents(editorRef.current);
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.execCommand("copy");
+        selection.removeAllRanges();
+      }
+    } else {
+      navigator.clipboard.writeText(texte);
+    }
     setCopiedStep(stepName);
     setTimeout(() => setCopiedStep(null), 2000);
   };
 
-  // 🧹 NETTOYAGE EXHAUSTIF SUR TOUT LE MANUSCRIT (TRAITE 100% DES TITRES DU LIVRE)
+  // 🧹 NETTOYAGE EXACT DE TEXTEPAGE : STRUCTURE <p><b>...</b></p> ET JOIN("<br/>") POUR WORD
   const handleNettoyageComplet = () => {
     const rawText = editorRef.current ? editorRef.current.innerText : texteFinal;
     if (!rawText) return;
 
-    // Nettoyage préalable des préfixes parasites s'il en reste
-    const textPropre = rawText.replace(/^(LE CONSTAT|L'ACTION CONCRÈTE|L'INVITATION|À RETENIR)\s*:\s*/gim, "");
+    let text = rawText;
 
-    const lines = textPropre.split("\n");
+    // 1. Suppression des étiquettes répétitives
+    text = text.replace(/^(LE CONSTAT|L'ACTION CONCRÈTE|L'INVITATION|À RETENIR)\s*:\s*/gim, "");
+
+    // 2. Détection de TOUT titre en MAJUSCULES (y compris apostrophes ’ et ') noyé dans le texte
+    text = text.replace(
+      /(^|[.\?!:]\s+|\n)\s*([A-ZÀ-ÖØ-ß0-9\s'’\-,:!\.]{4,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ]|\n|$)/g,
+      (match, prefix, possibleTitle) => {
+        const title = possibleTitle.trim();
+        const isUpper = title === title.toUpperCase() && /[A-ZÀ-ÖØ-ß]{3,}/.test(title);
+        if (isUpper && title.length >= 4) {
+          return `${prefix}\n\n${title}\n\n`;
+        }
+        return match;
+      }
+    );
+
+    // 3. Transformation exacte comme TextePage
+    const lines = text.split("\n");
     const finalHtml: string[] = [];
 
     lines.forEach((line) => {
       const stripped = line.trim();
       if (!stripped) return;
 
-      // 1. Détection des lignes qui sont entièrement en MAJUSCULES (ex: "LE PREMIER CONTACT", "L'INCOMPRÉHENSION TOTALE")
-      const isPureTitle = /^[A-ZÀ-ÖØ-ß0-9\s' \-,:!\.]{4,120}$/.test(stripped) && /[A-ZÀ-ÖØ-ß]/.test(stripped);
+      const isTitle = stripped === stripped.toUpperCase() && /[A-ZÀ-ÖØ-ß]{3,}/.test(stripped) && stripped.length <= 120;
 
-      if (isPureTitle) {
+      if (isTitle) {
         finalHtml.push(`<p><b>${stripped}</b></p>`);
       } else {
-        // 2. Détection des titres en MAJUSCULES collés au début d'un paragraphe
-        const match = stripped.match(/^([A-ZÀ-ÖØ-ß0-9\s' \-,:!\.]{4,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ])/);
-        if (match && match[1].trim() === match[1].trim().toUpperCase() && /[A-ZÀ-ÖØ-ß]/.test(match[1])) {
-          const titre = match[1].trim().replace(/[\.:]$/, "").trim();
-          const reste = stripped.slice(match[0].length).trim();
-
-          finalHtml.push(`<p><b>${titre}</b></p>`);
-          if (reste) {
-            finalHtml.push(`<p>${reste}</p>`);
-          }
-        } else {
-          // Paragraphe classique
-          finalHtml.push(`<p>${stripped}</p>`);
-        }
+        finalHtml.push(`<p>${stripped}</p>`);
       }
     });
 
