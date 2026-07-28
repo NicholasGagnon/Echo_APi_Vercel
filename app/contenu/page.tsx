@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "../../context/AppContext";
 import { supabase } from "../lib/supabase";
 
@@ -93,6 +94,7 @@ const PRICES: Record<CurrencyCode, { amount: string; symbol: string; cents: numb
 function ContenuContent() {
   const { lang, setLang } = useApp();
   const fr = lang === "fr";
+  const searchParams = useSearchParams();
 
   const [formKey, setFormKey] = useState(0);
   const [user, setUser] = useState<any>(null);
@@ -102,7 +104,7 @@ function ContenuContent() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
-  const [userTier, setUserTier] = useState<"free" | "advantage" | "premium">("free");
+  const [userTier, setUserTier] = useState<string>("free");
   const [nextRegenIn, setNextRegenIn] = useState<number>(0);
   const [showPremiumModal, setShowPremiumModal] = useState<boolean>(false);
   const [currency, setCurrency] = useState<CurrencyCode>("CAD");
@@ -134,7 +136,7 @@ function ContenuContent() {
       if (session?.user) {
         setUser(session.user);
         chargerHistorique(session.user.id);
-        chargerQuotaUtilisateur(session.user.id);
+        verifierStatutUser(session.user.id);
       } else {
         verifierQuotaAnonyme();
         loadLocalDrafts();
@@ -146,10 +148,11 @@ function ContenuContent() {
         setUser(session.user);
         setShowAuthModal(false);
         chargerHistorique(session.user.id);
-        chargerQuotaUtilisateur(session.user.id);
+        verifierStatutUser(session.user.id);
       } else {
         setUser(null);
         setHistorique([]);
+        setUserTier("free");
         verifierQuotaAnonyme();
         loadLocalDrafts();
       }
@@ -157,6 +160,16 @@ function ContenuContent() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // 🟢 DÉTECTION DU RETOUR DE PAIEMENT STRIPE (RAFRAÎCHISSEMENT IMMÉDIAT)
+  useEffect(() => {
+    if (searchParams.get("premium") === "success" && user) {
+      const timer = setTimeout(() => {
+        verifierStatutUser(user.id);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, user]);
 
   useEffect(() => {
     if (editorRef.current && texteFinal && runningStep === 0) {
@@ -181,34 +194,59 @@ function ContenuContent() {
     } catch {}
   };
 
-  const chargerQuotaUtilisateur = async (uid: string) => {
+  // 🟢 VÉRIFICATION MULTI-TABLES DU STATUT (PROFILES + CONTENU_QUOTAS + WORLD_QUOTAS)
+  const verifierStatutUser = async (uid: string) => {
     try {
-      const { data } = await supabase
+      // 1. Vérification table profiles globale
+      const { data: pData } = await supabase
+        .from("profiles")
+        .select("user_tier")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (pData?.user_tier && pData.user_tier !== "free" && pData.user_tier !== "connected_free") {
+        setUserTier(pData.user_tier);
+        setAvailableQuota(9999);
+        return;
+      }
+
+      // 2. Vérification table contenu_quotas
+      const { data: cData } = await supabase
         .from("contenu_quotas")
         .select("*")
         .eq("user_id", uid)
         .maybeSingle();
 
+      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
+        setUserTier(cData.tier);
+        setAvailableQuota(9999);
+        return;
+      }
+
+      // 3. Vérification table world_quotas
+      const { data: wData } = await supabase
+        .from("world_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
+        setUserTier(wData.tier);
+        setAvailableQuota(9999);
+        return;
+      }
+
+      // Quota gratuit par défaut
       const now = Date.now();
-      if (data) {
-        const tier = (data.tier || "free") as "free" | "advantage" | "premium";
-        setUserTier(tier);
-
-        if (tier === "premium" || tier === "advantage") {
-          setAvailableQuota(999);
-          return;
-        }
-
-        const lastRegen = new Date(data.last_regen_at || data.created_at).getTime();
+      if (cData) {
+        const lastRegen = new Date(cData.last_regen_at || cData.created_at).getTime();
         const elapsed = now - lastRegen;
         const recovered = Math.floor(elapsed / REGEN_3H_MS);
-        const available = Math.min(MAX_FREE_CREDITS, (data.available_credits ?? MAX_FREE_CREDITS) + recovered);
+        const available = Math.min(MAX_FREE_CREDITS, (cData.available_credits ?? MAX_FREE_CREDITS) + recovered);
 
         setAvailableQuota(available);
-
         if (available < MAX_FREE_CREDITS) {
-          const nextMs = REGEN_3H_MS - (elapsed % REGEN_3H_MS);
-          setNextRegenIn(nextMs);
+          setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
         }
       } else {
         await supabase.from("contenu_quotas").insert({
@@ -218,10 +256,12 @@ function ContenuContent() {
           last_regen_at: new Date().toISOString(),
         });
         setAvailableQuota(MAX_FREE_CREDITS);
-        setUserTier("free");
       }
+
+      setUserTier("free");
     } catch {
       setAvailableQuota(MAX_FREE_CREDITS);
+      setUserTier("free");
     }
   };
 
@@ -234,19 +274,16 @@ function ContenuContent() {
     }
   };
 
-  const consommerUnCredit = async (): Promise<boolean> => {
-    if (userTier === "premium" || userTier === "advantage") return true;
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
 
+  const consommerUnCredit = async (): Promise<boolean> => {
+    // 🟢 SÉCURITÉ : CONNEXION OBLIGATOIRE POUR FABRIQUER
     if (!user) {
-      const currentUsed = parseInt(localStorage.getItem("contenu_anon_used") || "0");
-      if (currentUsed >= MAX_FREE_CREDITS) {
-        setShowAuthModal(true);
-        return false;
-      }
-      localStorage.setItem("contenu_anon_used", String(currentUsed + 1));
-      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
-      return true;
+      setShowAuthModal(true);
+      return false;
     }
+
+    if (isPaidTier) return true;
 
     const now = Date.now();
     const { data } = await supabase
@@ -399,6 +436,11 @@ function ContenuContent() {
 
   const lancerFabrication = async () => {
     setError(null);
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
     if (!sujet.trim()) {
       setError(fr ? "Veuillez saisir votre sujet d'ouvrage." : "Please enter your book topic.");
       return;
@@ -543,24 +585,16 @@ function ContenuContent() {
 
         if (newRow?.id) setCurrentId(newRow.id);
         chargerHistorique(user.id);
-      } else {
-        const localId = `local-${Date.now()}`;
-        const newLocalRecord = { id: localId, ...record };
-        setCurrentId(localId);
-        const updated = [newLocalRecord, ...historique];
-        setHistorique(updated);
-        saveLocalDrafts(updated);
       }
 
     } catch (e: any) {
-      setError(e.message || "Un obstacle est survenu lors de la confection.");
+      setError(e.message || (fr ? "Un obstacle est survenu lors de la confection." : "An error occurred during generation."));
     } finally {
       setRunningStep(0);
       setStatusMessage("");
     }
   };
 
-  // 🟢 COPIE EN RICHE TEXTE (HTML) POUR QUE LE GRAS SOIT CONSERVÉ DANS WORD
   const copierTexte = (texte: string, stepName: string) => {
     if (stepName === "step3" && editorRef.current) {
       const range = document.createRange();
@@ -579,17 +613,14 @@ function ContenuContent() {
     setTimeout(() => setCopiedStep(null), 2000);
   };
 
-  // 🧹 NETTOYAGE EXACT DE TEXTEPAGE : STRUCTURE <p><b>...</b></p> ET JOIN("<br/>") POUR WORD
   const handleNettoyageComplet = () => {
     const rawText = editorRef.current ? editorRef.current.innerText : texteFinal;
     if (!rawText) return;
 
     let text = rawText;
 
-    // 1. Suppression des étiquettes répétitives
     text = text.replace(/^(LE CONSTAT|L'ACTION CONCRÈTE|L'INVITATION|À RETENIR)\s*:\s*/gim, "");
 
-    // 2. Détection de TOUT titre en MAJUSCULES (y compris apostrophes ’ et ') noyé dans le texte
     text = text.replace(
       /(^|[.\?!:]\s+|\n)\s*([A-ZÀ-ÖØ-ß0-9\s'’\-,:!\.]{4,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ]|\n|$)/g,
       (match, prefix, possibleTitle) => {
@@ -602,7 +633,6 @@ function ContenuContent() {
       }
     );
 
-    // 3. Transformation exacte comme TextePage
     const lines = text.split("\n");
     const finalHtml: string[] = [];
 
@@ -664,20 +694,28 @@ function ContenuContent() {
                 ))}
               </div>
 
-              <div 
-                onClick={() => userTier === "free" && setShowPremiumModal(true)} 
-                className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
-              >
-                <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Livres :" : "Books:"}</span>
-                <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
-                  {userTier === "premium" || userTier === "advantage" ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
-                </span>
-                {userTier === "free" && (
-                  <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
-                    ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
+              {/* 🟢 AFFICHAGE FIDÈLE DU PLAN EN LIGNE COMME SUR LA PAGE TOTEM */}
+              {isPaidTier ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                  <span className="font-bold text-[11px] uppercase tracking-wider">
+                    {fr ? "✓ PLAN PREMIUM ACTIF (∞ ILLIMITÉ)" : "✓ PREMIUM ACTIVE (∞ UNLIMITED)"}
                   </span>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setShowPremiumModal(true)} 
+                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+                >
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Livres :" : "Books:"}</span>
+                  <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
+                    {`${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+                  </span>
+                  <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                    ★ {fr ? "ILLIMITÉ" : "UNLIMITED"} ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  </span>
+                </div>
+              )}
 
               <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
                 <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
@@ -776,9 +814,9 @@ function ContenuContent() {
                       }`}
                     >
                       <div className="truncate flex-1 pr-2">
-                        <span className="block text-xs font-bold truncate">📖 {item.titre || "Ouvrage"}</span>
+                        <span className="block text-xs font-bold truncate">📖 {item.titre || (fr ? "Ouvrage" : "Manuscript")}</span>
                         <span className="block text-[9px] font-mono text-zinc-500 mt-0.5">
-                          {new Date(item.created_at).toLocaleDateString("fr-CA")}
+                          {new Date(item.created_at).toLocaleDateString(fr ? "fr-CA" : "en-US")}
                         </span>
                       </div>
 
@@ -844,7 +882,7 @@ function ContenuContent() {
                 <span className="text-xs font-mono text-zinc-400">
                   {fr ? "Crédits disponibles : " : "Available credits: "}
                   <strong className={availableQuota === 0 ? "text-red-400" : "text-cyan-400"}>
-                    {userTier === "premium" || userTier === "advantage" ? "∞ Illimité" : `${availableQuota}/${MAX_FREE_CREDITS}`}
+                    {isPaidTier ? (fr ? "∞ Illimité" : "∞ Unlimited") : `${availableQuota}/${MAX_FREE_CREDITS}`}
                   </strong>
                 </span>
               </div>
@@ -970,7 +1008,7 @@ function ContenuContent() {
                         onClick={handleNettoyageComplet}
                         className="text-xs px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-mono font-bold uppercase transition-all"
                       >
-                        🧹 NETTOYER LE TEXTE (SAUTS + TITRES EN GRAS)
+                        🧹 {fr ? "NETTOYER LE TEXTE (SAUTS + TITRES EN GRAS)" : "CLEAN TEXT (SPACES + BOLD TITLES)"}
                       </button>
                     )}
 
@@ -1038,15 +1076,15 @@ function ContenuContent() {
 
             <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ ACCÈS ILLIMITÉ</span>
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ {fr ? "ACCÈS ILLIMITÉ" : "UNLIMITED ACCESS"}</span>
                 <span className="text-white font-black text-sm font-mono">
                   {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
                 </span>
               </div>
               <ul className="text-zinc-300 text-xs space-y-2 font-mono">
-                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>Accès Illimité</strong> sur les 12 outils</li>
-                <li className="flex items-center gap-2 text-emerald-400">✓ Vitesse maximale prioritaires</li>
-                <li className="flex items-center gap-2 text-zinc-400">✓ Historique et sauvegardes</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>{fr ? "Accès Illimité" : "Unlimited Access"}</strong> {fr ? "sur les 12 outils" : "on all 12 tools"}</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ {fr ? "Vitesse maximale prioritaire" : "Priority maximum speed"}</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ {fr ? "Historique et sauvegardes" : "History & Cloud Backups"}</li>
               </ul>
             </div>
 
