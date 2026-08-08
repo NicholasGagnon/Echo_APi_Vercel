@@ -127,6 +127,31 @@ function ChatContent() {
   const serializeMsgs = (msgs: ChatMessage[]) => msgs.map(m => m.raw);
   const deserializeMsgs = (raws: string[]): ChatMessage[] => raws.map(r => ({ raw: r }));
 
+  // ── FONCTIONS WARMUP API ──────────────────────────────────────────────────
+  const isWarmedUpRef = useRef(false);
+
+  const triggerApiWarmup = async () => {
+    if (isWarmedUpRef.current) return;
+    isWarmedUpRef.current = true;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    try {
+      // Pings de réveil asynchrones vers le serveur Render / Flask
+      fetch(`${API_URL}/ping`).catch(() => {});
+      fetch(`${API_URL}/horizon-warmup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partial: "warmup" }),
+      }).catch(() => {});
+      fetch(`${API_URL}/world/warmup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ warmup: true }),
+      }).catch(() => {});
+    } catch (e) {
+      // Ignorer silencieusement en arrière-plan
+    }
+  };
+
   const verifierStatutUser = async (uid: string) => {
     try {
       const { data: cData } = await supabase.from("chat_quotas").select("tier").eq("user_id", uid).maybeSingle();
@@ -189,9 +214,8 @@ function ChatContent() {
     }
   };
 
-  // Quota débloqué : Autorise toujours l'envoi
   const consommerUnCredit = async (): Promise<boolean> => {
-    return true;
+    return true; // Quota débloqué
   };
 
   const formatRegenTime = (ms: number) => {
@@ -290,6 +314,9 @@ function ChatContent() {
   };
 
   useEffect(() => {
+    // Échauffement automatique de l'API au montage
+    triggerApiWarmup();
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const uid = session?.user?.id || null;
       setUserId(uid);
@@ -665,6 +692,8 @@ function ChatContent() {
               <textarea
                 ref={textareaRef}
                 value={input}
+                onFocus={triggerApiWarmup}
+                onMouseEnter={triggerApiWarmup}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === "Enter" && !e.shiftKey) {
