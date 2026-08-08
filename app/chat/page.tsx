@@ -102,11 +102,11 @@ function ChatContent() {
     if (textareaRef.current) textareaRef.current.style.height = `${DEFAULT_INPUT_HEIGHT}px`;
   };
 
-  // Media
+  // Media & Chat State
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageName, setSelectedImageName] = useState("");
   const [isListening, setIsListening] = useState(false);
-  const [echoState, setEchoState] = useState("idle");
+  const [, setEchoState] = useState("idle");
 
   const [selectedButtons, setSelectedButtons] = useState<string[]>([]);
 
@@ -189,55 +189,8 @@ function ChatContent() {
     }
   };
 
+  // Quota débloqué : Autorise toujours l'envoi
   const consommerUnCredit = async (): Promise<boolean> => {
-    if (currentUserTier === "premium" || currentUserTier === "advantage") return true;
-
-    if (!user) {
-      const currentUsed = parseInt(localStorage.getItem("chat_anon_used") || "0");
-      if (currentUsed >= MAX_FREE_CREDITS) {
-        setShowSignInModal(true);
-        return false;
-      }
-      localStorage.setItem("chat_anon_used", String(currentUsed + 1));
-      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - (currentUsed + 1)));
-      return true;
-    }
-
-    const now = Date.now();
-    const { data } = await supabase
-      .from("chat_quotas")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
-    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
-
-    if (data && currentUserTier === "free") {
-      const elapsed = now - lastRegen;
-      const cycles = Math.floor(elapsed / REGEN_1H_MS);
-      avail = Math.min(MAX_FREE_CREDITS, avail + (cycles * REGEN_ADD_AMOUNT));
-      if (cycles > 0) lastRegen = now;
-    }
-
-    if (avail < 1) {
-      const elapsed = now - lastRegen;
-      setNextRegenIn(REGEN_1H_MS - (elapsed % REGEN_1H_MS));
-      setShowPremiumModal(true);
-      return false;
-    }
-
-    const newAvail = avail - 1;
-    setAvailableQuota(newAvail);
-
-    await supabase.from("chat_quotas").upsert({
-      user_id: user.id,
-      available_credits: newAvail,
-      tier: currentUserTier,
-      last_regen_at: new Date(lastRegen).toISOString(),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" });
-
     return true;
   };
 
@@ -522,7 +475,7 @@ function ChatContent() {
   return (
     <main className="h-screen w-screen bg-[#0f0f0f] text-zinc-100 font-sans selection:bg-cyan-500/20 relative overflow-hidden flex flex-col">
 
-      {/* ── HEADER UNIFIÉ ÉCOSYSTÈME ── */}
+      {/* HEADER */}
       <header className="bg-[#0f0f0f] sticky top-0 z-40 shrink-0">
         <div className="max-w-[1600px] mx-auto px-6 py-3 flex justify-between items-center relative">
           
@@ -553,7 +506,7 @@ function ChatContent() {
               ))}
             </div>
 
-            {/* QUOTA COMPTEUR LUMINEUX */}
+            {/* QUOTA COMPTEUR */}
             <div 
               onClick={() => !isPaidTier && setShowPremiumModal(true)} 
               className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-zinc-900 text-white shadow-lg hover:shadow-[0_0_20px_rgba(245,158,11,0.2)] transition-all"
@@ -593,7 +546,7 @@ function ChatContent() {
         </div>
       </header>
 
-      {/* ── LAYOUT 3 COLONNES VOLETS CONTINUS SANS BORDURES DURES ── */}
+      {/* LAYOUT PRINCIPAL */}
       <div className="flex-1 flex overflow-hidden min-h-0 relative bg-[#0f0f0f]">
 
         {/* 1. PANNEAU CONVERSATIONS GAUCHE */}
@@ -642,10 +595,9 @@ function ChatContent() {
           </button>
         )}
 
-        {/* 2. ZONE CENTRALE (MESSAGES + SAISIE ANCRÉE) */}
+        {/* 2. ZONE CENTRALE (MESSAGES + SAISIE) */}
         <section className="flex-1 flex flex-col min-w-0 bg-[#0f0f0f] relative h-full overflow-hidden">
           
-          {/* MESSAGES DÉROULANTS */}
           <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 scrollbar-none">
             <div className="max-w-3xl w-full mx-auto flex flex-col space-y-6">
               
@@ -698,7 +650,7 @@ function ChatContent() {
             </div>
           </div>
 
-          {/* SAISIE ANCRÉE EN BAS */}
+          {/* ZONE DE SAISIE */}
           <div className="p-4 bg-[#0f0f0f] shrink-0">
             <div className="max-w-3xl mx-auto space-y-3">
               
@@ -714,8 +666,13 @@ function ChatContent() {
                 ref={textareaRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder={t.chat.placeholder}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                placeholder={t?.chat?.placeholder || (fr ? "Écrivez votre message..." : "Type a message...")}
                 style={{ height: inputHeight, minHeight: 44 }}
                 className="w-full bg-zinc-900/60 focus:bg-zinc-900 focus:outline-none rounded-2xl p-4 text-sm font-mono text-zinc-100 resize-y transition-all leading-relaxed placeholder:text-zinc-600"
               />
@@ -737,6 +694,7 @@ function ChatContent() {
                   </button>
 
                   <button
+                    type="button"
                     onClick={lancerDictation}
                     className={`px-4 py-3 rounded-xl font-mono font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
                       isListening ? "bg-red-600 text-white animate-pulse" : "bg-zinc-900/80 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
@@ -746,10 +704,11 @@ function ChatContent() {
                   </button>
 
                   <button
+                    type="button"
                     onClick={sendMessage}
                     className="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] cursor-pointer"
                   >
-                    {t.chat.send}
+                    {t?.chat?.send || (fr ? "Envoyer" : "Send")}
                   </button>
                 </div>
 
@@ -819,7 +778,7 @@ function ChatContent() {
 
       </div>
 
-      {/* ── MODALE SIGN IN / CONNEXION ── */}
+      {/* MODALE CONNEXION */}
       {showSignInModal && (
         <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setShowSignInModal(false)}>
           <div className="bg-zinc-950 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-zinc-800" onClick={e => e.stopPropagation()}>
@@ -882,7 +841,7 @@ function ChatContent() {
         </div>
       )}
 
-      {/* ── MODALE PREMIUM ── */}
+      {/* MODALE PREMIUM */}
       {showPremiumModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md">
           <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl text-zinc-100 text-center relative">
