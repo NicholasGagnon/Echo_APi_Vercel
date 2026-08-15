@@ -25,6 +25,27 @@ const PRICES: Record<Currency, { amount: string; symbol: string }> = {
   EUR: { amount: "3.99", symbol: "€" },
 };
 
+const LOCAL_CUSTOM_TITLES_KEY = "echo-chat-custom-titles";
+
+const loadCustomTitles = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem(LOCAL_CUSTOM_TITLES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+};
+
+const saveCustomTitle = (convId: string, customTitle: string) => {
+  try {
+    const current = loadCustomTitles();
+    current[convId] = customTitle;
+    localStorage.setItem(LOCAL_CUSTOM_TITLES_KEY, JSON.stringify(current));
+  } catch (e) {
+    console.error("saveCustomTitle error:", e);
+  }
+};
+
 const deriveTitle = (raws: string[], lang: string): string => {
   const first = raws.find(r => /^(You|Toi)\s*:/i.test(r));
   if (first) {
@@ -40,8 +61,17 @@ const saveLocalConvos = (convos: Conversation[]) => {
 };
 
 const loadLocalConvos = (): Conversation[] => {
-  try { const raw = localStorage.getItem(LOCAL_CONVOS_KEY); return raw ? JSON.parse(raw) : []; }
-  catch { return []; }
+  try {
+    const raw = localStorage.getItem(LOCAL_CONVOS_KEY);
+    const convos: Conversation[] = raw ? JSON.parse(raw) : [];
+    const customTitles = loadCustomTitles();
+    return convos.map(c => ({
+      ...c,
+      title: customTitles[c.id] || c.title || deriveTitle(c.messages || [], "fr"),
+    }));
+  } catch {
+    return [];
+  }
 };
 
 function ChatContent() {
@@ -66,6 +96,39 @@ function ChatContent() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isConvoPanelOpen, setIsConvoPanelOpen] = useState(true);
+  const [editingConvoId, setEditingConvoId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+
+  const handleStartRename = (e: React.MouseEvent, c: Conversation) => {
+    e.stopPropagation();
+    setEditingConvoId(c.id);
+    setEditingTitle(c.title);
+  };
+
+  const handleSaveRename = (convId: string) => {
+    const trimmed = editingTitle.trim();
+    if (!trimmed) {
+      setEditingConvoId(null);
+      return;
+    }
+
+    saveCustomTitle(convId, trimmed);
+
+    setConversations(prev => prev.map(c => c.id === convId ? { ...c, title: trimmed } : c));
+
+    // Sauvegarder dans localStorage pour les convos locales
+    const localConvos = loadLocalConvos();
+    if (localConvos.some(c => c.id === convId)) {
+      saveLocalConvos(localConvos.map(c => c.id === convId ? { ...c, title: trimmed } : c));
+    }
+
+    setEditingConvoId(null);
+  };
+
+  const handleCancelRename = () => {
+    setEditingConvoId(null);
+    setEditingTitle("");
+  };
 
   // Modales & Auth
   const [currency, setCurrency] = useState<Currency>("CAD");
@@ -229,9 +292,10 @@ function ChatContent() {
       .eq("user_id", uid).eq("source", CONV_SOURCE)
       .order("updated_at", { ascending: false });
     if (error) return [];
+    const customTitles = loadCustomTitles();
     return (data || []).map(row => ({
       id: row.id,
-      title: deriveTitle(row.messages || [], lang),
+      title: customTitles[row.id] || deriveTitle(row.messages || [], lang),
       messages: row.messages || [],
       summary: row.summary || "",
       updatedAt: new Date(row.updated_at).getTime(),
@@ -240,7 +304,9 @@ function ChatContent() {
 
   const saveConversationToDB = async (uid: string, convId: string | null, raws: string[], currentSummary: string): Promise<string> => {
     const isNew = !convId || convId === "new" || convId.startsWith("local-");
-    const updatedTitle = deriveTitle(raws, lang);
+    const customTitles = loadCustomTitles();
+    const existingCustomTitle = convId ? customTitles[convId] : undefined;
+    const updatedTitle = existingCustomTitle || deriveTitle(raws, lang);
 
     let savedId = convId || "new";
 
@@ -280,7 +346,7 @@ function ChatContent() {
     setConversations(prev => {
       const exists = prev.some(c => c.id === savedId);
       if (exists) {
-        return prev.map(c => c.id === savedId ? { ...c, messages: raws, title: updatedTitle, updatedAt: Date.now() } : c);
+        return prev.map(c => c.id === savedId ? { ...c, messages: raws, title: c.title || updatedTitle, updatedAt: Date.now() } : c);
       }
       const newConvo: Conversation = { id: savedId, title: updatedTitle, messages: raws, summary: currentSummary, updatedAt: Date.now() };
       return [newConvo, ...prev.filter(c => c.id !== "new")];
@@ -291,8 +357,41 @@ function ChatContent() {
   };
 
   const initForUser = async (uid: string | null) => {
+    // 🌍 Vérifier si un débat WORLD a été envoyé vers le chat
+    let importedWorldRaws: string[] | null = null;
+    let importedWorldTitle = "";
+    try {
+      const stored = sessionStorage.getItem("world_debate_to_chat");
+      if (stored) {
+        sessionStorage.removeItem("world_debate_to_chat");
+        const parsed = JSON.parse(stored);
+        if (parsed?.raws && Array.isArray(parsed.raws)) {
+          importedWorldRaws = parsed.raws;
+          importedWorldTitle = parsed.title || (fr ? "🌍 Débriefing Débat WORLD" : "🌍 WORLD Debate Debrief");
+        }
+      }
+    } catch {}
+
     if (!uid) {
       const localConvos = loadLocalConvos();
+
+      if (importedWorldRaws) {
+        const newLocalId = `local-${Date.now()}`;
+        const newConvo: Conversation = {
+          id: newLocalId,
+          title: importedWorldTitle,
+          messages: importedWorldRaws,
+          summary: "",
+          updatedAt: Date.now(),
+        };
+        const updated = [newConvo, ...localConvos.filter(c => c.id !== "new")];
+        setConversations(updated);
+        setActiveConversationId(newLocalId);
+        setMessages(deserializeMsgs(importedWorldRaws));
+        saveLocalConvos(updated);
+        localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(importedWorldRaws));
+        return;
+      }
 
       if (localConvos.length > 0) {
         setConversations(localConvos);
@@ -306,7 +405,25 @@ function ChatContent() {
       }
       return;
     }
+
     const list = await loadConversationsFromDB(uid);
+
+    if (importedWorldRaws) {
+      const savedId = await saveConversationToDB(uid, null, importedWorldRaws, "");
+      const newConvo: Conversation = {
+        id: savedId,
+        title: importedWorldTitle,
+        messages: importedWorldRaws,
+        summary: "",
+        updatedAt: Date.now(),
+      };
+      setConversations([newConvo, ...list.filter(c => c.id !== "new" && c.id !== savedId)]);
+      setActiveConversationId(savedId);
+      setMessages(deserializeMsgs(importedWorldRaws));
+      localStorage.setItem(LOCAL_CONV_KEY, JSON.stringify(importedWorldRaws));
+      return;
+    }
+
     const finalList = list.length > 0 ? list : [{ id: "new", title: fr ? "Nouvelle conversation" : "New conversation", messages: [], summary: "", updatedAt: Date.now() }];
     setConversations(finalList);
     setActiveConversationId(finalList[0].id);
@@ -597,20 +714,73 @@ function ChatContent() {
             </button>
 
             <div className="flex-1 overflow-y-auto px-2 space-y-1 scrollbar-none">
-              {conversations.map(c => (
-                <div
-                  key={c.id}
-                  onClick={() => {
-                    setActiveConversationId(c.id);
-                    setMessages(deserializeMsgs(c.messages));
-                  }}
-                  className={`p-2.5 rounded-xl text-xs font-mono transition-all cursor-pointer truncate ${
-                    activeConversationId === c.id ? "bg-cyan-950/40 text-cyan-300" : "text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200"
-                  }`}
-                >
-                  {c.title}
-                </div>
-              ))}
+              {conversations.map(c => {
+                const isActive = activeConversationId === c.id;
+                const isEditing = editingConvoId === c.id;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={c.id}
+                      className="p-1.5 rounded-xl bg-zinc-900 border border-cyan-500/50 flex items-center gap-1 shadow-sm"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        onChange={e => setEditingTitle(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") handleSaveRename(c.id);
+                          if (e.key === "Escape") handleCancelRename();
+                        }}
+                        autoFocus
+                        className="flex-1 bg-transparent px-1.5 py-0.5 text-xs font-mono text-white outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveRename(c.id)}
+                        className="px-1.5 py-0.5 rounded bg-cyan-600 hover:bg-cyan-500 text-[11px] font-bold text-white transition-colors"
+                        title={fr ? "Enregistrer" : "Save"}
+                      >
+                        ✓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelRename}
+                        className="px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-400 hover:text-white transition-colors"
+                        title={fr ? "Annuler" : "Cancel"}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      setActiveConversationId(c.id);
+                      setMessages(deserializeMsgs(c.messages));
+                    }}
+                    className={`group relative p-2.5 rounded-xl text-xs font-mono transition-all cursor-pointer flex items-center justify-between gap-1.5 ${
+                      isActive ? "bg-cyan-950/40 text-cyan-300 border border-cyan-500/20" : "text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200"
+                    }`}
+                  >
+                    <span className="truncate flex-1" title={c.title}>
+                      {c.title}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={e => handleStartRename(e, c)}
+                      className="opacity-0 group-hover:opacity-100 hover:text-cyan-300 text-zinc-500 text-[11px] p-1 rounded transition-opacity shrink-0"
+                      title={fr ? "Renommer" : "Rename"}
+                    >
+                      ✏️
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -658,18 +828,40 @@ function ChatContent() {
                   </div>
                 );
 
-                if (isUser) return (
-                  <div key={index} className="flex justify-end w-full ml-auto">
-                    <div className="bg-cyan-950/30 rounded-3xl p-5 space-y-2 max-w-xl">
-                      {msg.imageB64 && (
-                        <img src={msg.imageB64} alt="Upload" className="max-w-xs max-h-60 rounded-2xl object-cover mb-2" />
-                      )}
-                      <div className="text-cyan-100 leading-relaxed font-sans whitespace-pre-wrap" style={{ fontSize: chatFontSize - 1 }}>
-                        {cleanText}
+                if (isUser) {
+                  const isWorldDebrief = cleanText.includes("[CONTEXTE DE L'EXPÉRIENCE WORLD]");
+                  return (
+                    <div key={index} className="flex justify-end w-full ml-auto">
+                      <div className="bg-cyan-950/30 border border-cyan-500/20 rounded-3xl p-5 space-y-2 max-w-2xl">
+                        {msg.imageB64 && (
+                          <img src={msg.imageB64} alt="Upload" className="max-w-xs max-h-60 rounded-2xl object-cover mb-2" />
+                        )}
+                        {isWorldDebrief ? (
+                          <div className="space-y-2">
+                            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-cyan-900/60 text-cyan-300 text-[10px] font-mono font-bold uppercase">
+                              🌍 Débat WORLD importé avec succès
+                            </div>
+                            <p className="text-cyan-100 font-medium">
+                              {cleanText.split("\n\n[CONTEXTE")[0]}
+                            </p>
+                            <details className="text-xs text-zinc-400 font-mono bg-zinc-900/80 rounded-xl p-3 border border-zinc-800 cursor-pointer">
+                              <summary className="text-cyan-400 hover:text-cyan-300 font-bold select-none">
+                                📋 Voir la transcription du débat transmise à l'IA
+                              </summary>
+                              <div className="mt-2 text-zinc-300 whitespace-pre-wrap text-[11px] leading-relaxed max-h-60 overflow-y-auto pt-2 border-t border-zinc-800">
+                                {cleanText}
+                              </div>
+                            </details>
+                          </div>
+                        ) : (
+                          <div className="text-cyan-100 leading-relaxed font-sans whitespace-pre-wrap" style={{ fontSize: chatFontSize - 1 }}>
+                            {cleanText}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                );
+                  );
+                }
 
                 return null;
               })}

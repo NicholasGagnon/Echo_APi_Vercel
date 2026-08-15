@@ -750,6 +750,72 @@ main > aside + div {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   🌍 MODULE ARÈNE WORLD (Animations géopolitiques & Verdict suprême)
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes worldRadarPulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 0.3; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+@keyframes worldVerdictGlow {
+  0%, 100% {
+    box-shadow: 0 0 35px rgba(245, 158, 11, 0.25), inset 0 0 15px rgba(245, 158, 11, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 55px rgba(245, 158, 11, 0.45), inset 0 0 25px rgba(245, 158, 11, 0.25);
+  }
+}
+
+@keyframes worldHoloScan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
+}
+
+@keyframes worldAnnounceBanner {
+  0% { transform: translateY(-8px) scale(0.96); opacity: 0; filter: blur(4px); }
+  50% { transform: translateY(0) scale(1.02); opacity: 1; filter: blur(0); }
+  100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+}
+
+@keyframes worldCardPop {
+  0% { transform: translateY(12px) scale(0.97); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.world-radar-anim {
+  animation: worldRadarPulse 2s ease-in-out infinite;
+}
+
+.world-verdict-card {
+  animation: worldVerdictGlow 3.5s ease-in-out infinite;
+}
+
+.world-scanline {
+  position: relative;
+  overflow: hidden;
+}
+.world-scanline::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  animation: worldHoloScan 4s linear infinite;
+  pointer-events: none;
+}
+
+.world-announce-banner {
+  animation: worldAnnounceBanner 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.world-card-pop {
+  animation: worldCardPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+
+
+
+/* ─────────────────────────────────────────────────────────────────────────
    📚 MODULE D'IMPRESSION LIVRE (Prêt pour génération 100-200 pages)
    ───────────────────────────────────────────────────────────────────────── */
 

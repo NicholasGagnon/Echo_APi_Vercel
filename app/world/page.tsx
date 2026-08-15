@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
 
@@ -385,6 +386,17 @@ function WorldContent() {
     bottomRef.current?.scrollIntoView({ behavior: messages.length > 1 ? "smooth" : "instant" });
   }, [messages]);
 
+  // 🎯 Curseur en bas (focus sur le champ texte) à l'arrivée sur l'arène WORLD
+  useEffect(() => {
+    if (stage === "chat") {
+      const timer = setTimeout(() => {
+        textareaRef.current?.focus();
+        bottomRef.current?.scrollIntoView({ behavior: "instant" });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [stage, messages.length]);
+
   // ── Auth Handlers ────────────────────────────────────────────────────────────
   const startResend = () => {
     setResendCountdown(30);
@@ -643,6 +655,101 @@ function WorldContent() {
     }
   };
 
+  const router = useRouter();
+
+  const sendLastDebateToChat = () => {
+    if (messages.length === 0) return;
+
+    // Récupérer le dernier débat (depuis la dernière question "── question ──")
+    const lastSepIdx = messages.findLastIndex(m => m.text.startsWith("──"));
+    const lastQuestion = lastSepIdx !== -1
+      ? messages[lastSepIdx].text.replace(/^──\s*|\s*──$/g, "")
+      : (lang === "fr" ? "Débat World" : "World Debate");
+
+    const debateMsgs = lastSepIdx !== -1
+      ? messages.slice(lastSepIdx + 1).filter(m => !m.loading)
+      : messages.filter(m => !m.loading);
+
+    if (debateMsgs.length === 0) return;
+
+    // Contexte formatté avec le protocole WORLD
+    const debateTranscription = debateMsgs.map(m => {
+      const cLabel = CONTINENTS[m.continent].label[lang];
+      const tag = m.isFinal ? "★ VERDICT FINAL DU CONSEIL MONDIAL" : `TOUR ${m.round}`;
+      return `[${cLabel.toUpperCase()} · ${tag}]\n${m.text}`;
+    }).join("\n\n");
+
+    const contextIntro = `[CONTEXTE DE L'EXPÉRIENCE WORLD]
+CONCEPT DE WORLD
+
+WORLD est une expérience de débat entre trois allégeances symboliques représentant trois grandes sphères de développement de l'IA :
+
+🇨🇳 Chine — représente l'allégeance chinoise dans l'expérience.
+🇺🇸 Amérique du Nord — représente l'allégeance nord-américaine.
+🇪🇺 Europe — représente l'allégeance européenne.
+
+Ces catégories sont un dispositif narratif et expérimental de WORLD, et non des affirmations factuelles sur l'origine, les opinions ou les valeurs des modèles utilisés.
+
+Les modèles d'IA utilisés par WORLD sont placés dans ces rôles afin de créer trois perspectives distinctes. Il ne faut donc jamais présenter comme un fait qu'un modèle « est chinois », « est américain », « est européen », ou qu'il représente officiellement la culture, le gouvernement ou la population de son continent.
+
+Dans le débat, les trois allégeances sont encouragées à défendre leur perspective respective et à répondre aux arguments des autres. Le résultat est volontairement une confrontation de perspectives, pas une représentation objective des positions réelles de ces régions.
+
+Ton rôle ici est différent :
+
+Tu es l'interlocuteur qui reçoit le débat terminé. Tu ne fais pas partie des trois allégeances. Tu ne dois pas créer une quatrième position.
+
+Tu dois utiliser le débat comme contexte et aider l'utilisateur à comprendre ce qui s'est passé pendant le débat, ce que chaque allégeance a défendu, où elles se sont opposées, où elles se sont rejointes et pourquoi le verdict final est arrivé à cette conclusion.
+
+Ne transforme pas les positions exprimées pendant le débat en faits sur la Chine, l'Europe ou l'Amérique du Nord. Lorsque tu parles de leurs arguments, utilise des formulations comme « la position chinoise dans ce débat », « l'allégeance européenne » ou « le camp nord-américain ».
+
+Le débat est terminé.
+
+--- DÉBAT REÇU ---
+Question initiale: "${lastQuestion}"
+
+${debateTranscription}
+-------------------`;
+
+    const userPrompt = lang === "fr"
+      ? `J'aimerais analyser et débriefer ce débat mondial avec toi.`
+      : lang === "en"
+      ? `I'd like to debrief and analyze this world debate with you.`
+      : `我想和你一起分析和复盘这场全球辩论。`;
+
+    const echoPrompt = lang === "fr"
+      ? `J'ai bien reçu la transcription complète du débat sur la question : "${lastQuestion}". Tu as une question sur le débat ?`
+      : lang === "en"
+      ? `I have received the complete transcript of the debate regarding: "${lastQuestion}". Do you have a question about the debate?`
+      : `我已收到关于问题“${lastQuestion}”的完整辩论记录。你对这场辩论有什么疑问吗？`;
+
+    const userInitialMessage = `${userPrompt}
+
+${contextIntro}`;
+
+    const raws = [
+      `You: ${userInitialMessage}`,
+      `Echo: ${echoPrompt}`,
+    ];
+
+    try {
+      sessionStorage.setItem("world_debate_to_chat", JSON.stringify({
+        title: `🌍 ${lastQuestion.length > 30 ? lastQuestion.slice(0, 30) + "…" : lastQuestion}`,
+        raws,
+      }));
+      router.push("/chat");
+    } catch (e) {
+      console.error("[WORLD TO CHAT] Error saving session:", e);
+      router.push("/chat");
+    }
+  };
+
+  const [activeSpeakerStatus, setActiveSpeakerStatus] = useState<{
+    continent: Continent;
+    round: 1 | 2;
+    isFinal: boolean;
+    text: string;
+  } | null>(null);
+
   const handleSubmit = async () => {
     if (!question.trim() || !continent || isLoading) return;
     const allowed = await consumeWorldQuota();
@@ -669,8 +776,37 @@ function WorldContent() {
 
     let contextSoFar = `Question: ${currentQuestion}\n\n`;
 
-    for (const step of sequence) {
+    for (let stepIdx = 0; stepIdx < sequence.length; stepIdx++) {
+      const step = sequence[stepIdx];
       const { c, round, isFinal } = step;
+      const continentName = CONTINENTS[c].label[lang];
+
+      // 🎭 Annonce théâtrale au centre avant l'apparition de la carte
+      let announceText = "";
+      if (isFinal) {
+        announceText = lang === "fr"
+          ? `🌍 LE CONSEIL MONDIAL DOIT MAINTENANT TRANCHER`
+          : lang === "en"
+          ? `🌍 THE GLOBAL COUNCIL MUST NOW RENDER ITS VERDICT`
+          : `🌍 世界理事会现在必须做出裁决`;
+      } else if (round === 1) {
+        announceText = lang === "fr"
+          ? `🔵 ${continentName.toUpperCase()} PREND LA PAROLE`
+          : lang === "en"
+          ? `🔵 ${continentName.toUpperCase()} TAKES THE FLOOR`
+          : `🔵 ${continentName} 发表立场`;
+      } else {
+        announceText = lang === "fr"
+          ? `⚔️ ${continentName.toUpperCase()} RÉPLIQUE AUX ADVERSAIRES`
+          : lang === "en"
+          ? `⚔️ ${continentName.toUpperCase()} FORMULATES COUNTER-ARGUMENT`
+          : `⚔️ ${continentName} 发起反驳`;
+      }
+
+      setActiveSpeakerStatus({ continent: c, round, isFinal, text: announceText });
+      // Pause dramatique légère de 600ms pour savourer le passage de relais
+      await new Promise(r => setTimeout(r, 650));
+
       setMessages(prev => [...prev, { continent: c, round, text: "", isFinal, loading: true }]);
       const text = await callContinent(c, contextSoFar, isFinal, round);
       contextSoFar += `[${CONTINENTS[c].label.en} — round ${round}${isFinal ? " VERDICT" : ""}]: ${text}\n\n`;
@@ -683,6 +819,7 @@ function WorldContent() {
       await new Promise(r => setTimeout(r, 350));
     }
 
+    setActiveSpeakerStatus(null);
     setMessages(prev => {
       const completedMsgs = prev.filter(m => !m.loading);
       const sepIdx = completedMsgs.findLastIndex(m => m.text.startsWith("──"));
@@ -1115,41 +1252,45 @@ function WorldContent() {
         </div>
       </header>
 
-      {/* Messages */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-6 py-4 space-y-1">
+      {/* Messages Feed */}
+      <div className="relative z-10 flex-1 overflow-y-auto px-3 sm:px-6 py-6 space-y-5 max-w-5xl w-full mx-auto">
         {messages.length === 0 && !isLoading && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center space-y-6">
-              <p className="font-black text-white/10 tracking-tight"
-                style={{ fontSize: "clamp(1.2rem, 3vw, 2rem)" }}>
+          <div className="flex items-center justify-center h-full min-h-[50vh]">
+            <div className="text-center space-y-6 max-w-lg mx-auto">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 text-xs font-mono">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                {lang === "fr" ? "ARÈNE GÉOPOLITIQUE PRÊTE" : lang === "en" ? "GEOPOLITICAL ARENA READY" : "地缘政治竞技场就绪"}
+              </div>
+              <p className="font-black text-white/20 tracking-tight"
+                style={{ fontSize: "clamp(1.3rem, 3vw, 2.2rem)" }}>
                 {SLOGANS[lang].main}
               </p>
-              <div className="flex gap-6 justify-center items-end">
+              <div className="flex gap-4 sm:gap-6 justify-center items-end">
                 {(Object.keys(CONTINENTS) as Continent[]).map(k => {
                   const cc = CONTINENTS[k];
                   const isMe = k === continent;
                   return (
-                    <div key={k} className="flex flex-col items-center gap-2">
-                      <div className="overflow-hidden transition-all duration-300"
+                    <div key={k} className="flex flex-col items-center gap-2 group">
+                      <div className="overflow-hidden transition-all duration-300 transform group-hover:scale-105"
                         style={{
-                          width: isMe ? 80 : 56, height: isMe ? 52 : 36,
-                          borderRadius: "6px",
+                          width: isMe ? 84 : 60, height: isMe ? 54 : 38,
+                          borderRadius: "8px",
                           border: `2px solid ${isMe ? cc.color : cc.color + "30"}`,
-                          boxShadow: isMe ? `0 0 16px ${cc.glow}` : "none",
+                          boxShadow: isMe ? `0 0 20px ${cc.glow}` : "none",
                         }}>
                         <img src={cc.img} alt={cc.label[lang]} className="w-full h-full object-cover"
                           style={{ filter: isMe ? "saturate(1.2)" : "saturate(0.3) brightness(0.5)" }} />
                       </div>
-                      <span className="text-xs font-mono"
-                        style={{ color: isMe ? cc.color : "#3f3f46", fontSize: "10px" }}>
+                      <span className="text-xs font-mono font-bold tracking-wider"
+                        style={{ color: isMe ? cc.color : "#52525b" }}>
                         {cc.label[lang]}
                       </span>
                     </div>
                   );
                 })}
               </div>
-              <p className="text-zinc-700 text-xs font-mono">
-                {lang === "fr" ? "Posez votre question pour lancer le débat" : lang === "en" ? "Ask a question to start the debate" : "提问以开始辩论"}
+              <p className="text-zinc-500 text-xs font-mono bg-zinc-950/60 border border-zinc-900 rounded-xl py-2.5 px-4 inline-block">
+                {lang === "fr" ? "💡 Posez votre question ci-dessous pour déclencher les 6 délibérations" : lang === "en" ? "💡 Ask your question below to trigger the 6 deliberations" : "💡 在下方提出您的问题以触发6次审议"}
               </p>
             </div>
           </div>
@@ -1160,93 +1301,265 @@ function WorldContent() {
           const isMine = msg.continent === continent;
           const isSep = msg.text.startsWith("──");
 
-          if (isSep) return (
-            <div key={idx} className="flex items-center gap-3 py-4">
-              <div className="flex-1 h-px bg-zinc-900" />
-              <span className="text-zinc-700 text-xs font-mono px-2">{msg.text}</span>
-              <div className="flex-1 h-px bg-zinc-900" />
-            </div>
-          );
-
-          const order = messages
-            .filter((m, i) => i <= idx && !m.text.startsWith("──"))
-            .reduce<Continent[]>((acc, m) => acc.includes(m.continent) ? acc : [...acc, m.continent], []);
-          const posIdx = order.indexOf(msg.continent);
-          const isLeft   = posIdx === 0;
-          const isRight  = posIdx === 1;
-
-          return (
-            <div key={idx}
-              className="animate-in fade-in slide-in-from-bottom-1 duration-400 w-full py-1"
-              style={{
-                paddingLeft:  isLeft   ? "0"   : isRight ? "25%" : "12%",
-                paddingRight: isRight  ? "0"   : isLeft  ? "25%" : "12%",
-              }}
-            >
-              <div className="py-2.5"
-                style={{
-                  borderLeft: isMine && msg.isFinal
-                    ? `3px solid ${c.color}`
-                    : `1px solid ${c.color}20`,
-                  paddingLeft: "14px",
-                }}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className="shrink-0 overflow-hidden"
-                    style={{
-                      width: 38, height: 25, borderRadius: "4px",
-                      border: `1px solid ${c.color}`,
-                      boxShadow: isMine ? `0 0 6px ${c.glow}` : "none",
-                    }}>
-                    <img src={c.img} alt={c.label[lang]} className="w-full h-full object-cover"
-                      style={{ filter: "saturate(1.1) brightness(0.9)" }} />
-                  </div>
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider" style={{ color: c.color }}>
-                    {c.label[lang]}
+          if (isSep) {
+            const cleanQuestion = msg.text.replace(/^──\s*|\s*──$/g, "");
+            return (
+              <div key={idx} className="my-6 pt-2">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
+                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-cyan-400/80 bg-cyan-950/60 border border-cyan-500/30 px-3 py-0.5 rounded-full">
+                    {lang === "fr" ? "QUESTION SOUMISE AU MONDE" : lang === "en" ? "QUESTION SUBMITTED TO THE WORLD" : "向世界提出的问题"}
                   </span>
-                  <span className="text-zinc-800 text-xs font-mono">· {msg.round}</span>
-                  <span className="font-mono" style={{ color: c.color, opacity: 0.65, fontSize: "9px", letterSpacing: "0.04em" }}>
-                    🛰️ {lang === "zh"
-                      ? (msg.continent === "cn" ? "真实AI · 中国" : msg.continent === "na" ? "真实AI · 北美洲" : "真实AI · 欧洲")
-                      : lang === "fr"
-                      ? (msg.continent === "cn" ? "Vraie IA · Chine" : msg.continent === "na" ? "Vraie IA · Amérique du Nord" : "Vraie IA · Europe")
-                      : (msg.continent === "cn" ? "Real AI · China" : msg.continent === "na" ? "Real AI · North America" : "Real AI · Europe")}
-                  </span>
-                  {msg.isFinal && !msg.loading && (
-                    <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
-                      style={{ background: `${c.color}20`, color: c.color }}>
-                      {t.verdict}
-                    </span>
-                  )}
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
                 </div>
+                <div className="text-center bg-zinc-950/70 border border-zinc-800 rounded-2xl p-4 shadow-xl backdrop-blur-md">
+                  <p className="text-white font-medium text-base sm:text-lg tracking-wide italic">
+                    "{cleanQuestion}"
+                  </p>
+                </div>
+              </div>
+            );
+          }
 
-                {msg.loading ? (
-                  <div className="flex flex-col gap-1 py-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs animate-pulse" style={{ opacity: 0.4 }}>🛰️</span>
-                      <span className="font-mono"
-                        style={{ color: c.color, opacity: 0.45, fontSize: "10px", letterSpacing: "0.05em" }}>
-                        {lang === "zh"
-                          ? (msg.continent === "cn" ? "真实AI · 来自中国。连接已建立。" : msg.continent === "na" ? "真实AI · 来自北美洲。连接已建立。" : "真实AI · 来自欧洲。连接已建立。")
-                          : lang === "fr"
-                          ? (msg.continent === "cn" ? "Vraie IA · Chine. Connexion établie." : msg.continent === "na" ? "Vraie IA · Amérique du Nord. Connexion établie." : "Vraie IA · Europe. Connexion établie.")
-                          : (msg.continent === "cn" ? "Real AI · China. Connection established." : msg.continent === "na" ? "Real AI · North America. Connection established." : "Real AI · Europe. Connection established.")}
+          // Déterminer la position dans le tour du débat actif
+          const isVerdict = msg.isFinal;
+          const isRound1 = msg.round === 1;
+
+          // Calcul de la disposition en alternance (Haut-Gauche, Haut-Droite, Milieu-Gauche, Milieu-Droite...)
+          const validDebateMsgs = messages.slice(0, idx + 1).filter(m => !m.text.startsWith("──"));
+          const stepNumber = validDebateMsgs.length; // 1 à 6
+          const isAlignLeft = stepNumber % 2 === 1; // 1, 3, 5 à gauche
+
+          // Message 6 : LE VERDICT DU CONSEIL MONDIAL
+          if (isVerdict) {
+            return (
+              <div
+                key={idx}
+                className="mt-8 mb-4 animate-in fade-in zoom-in-95 duration-700 w-full"
+              >
+                <div
+                  className="relative overflow-hidden rounded-2xl border-2 p-5 sm:p-7 backdrop-blur-xl transition-all world-verdict-card world-scanline"
+                  style={{
+                    borderColor: c.color,
+                    background: `linear-gradient(135deg, rgba(0,0,0,0.92) 0%, ${c.color}15 50%, rgba(0,0,0,0.95) 100%)`,
+                    boxShadow: `0 0 45px ${c.glow}, inset 0 0 25px ${c.glow}`,
+                  }}
+                >
+                  {/* Effet néon en haut */}
+                  <div
+                    className="absolute top-0 inset-x-0 h-1 opacity-80"
+                    style={{ background: `linear-gradient(90deg, transparent, ${c.color}, #ffffff, ${c.color}, transparent)` }}
+                  />
+
+                  {/* En-tête du Verdict */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 pb-4 mb-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-12 h-8 sm:w-14 sm:h-9 rounded-lg overflow-hidden shrink-0 border-2 shadow-lg"
+                        style={{ borderColor: c.color }}
+                      >
+                        <img src={c.img} alt={c.label[lang]} className="w-full h-full object-cover" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs sm:text-sm font-mono font-black tracking-widest text-white uppercase">
+                            🌍 {lang === "fr" ? "CONSEIL MONDIAL" : lang === "en" ? "GLOBAL COUNCIL" : "世界理事会"}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                            {t.verdict}
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                          {lang === "fr"
+                            ? `Arbitrage suprême prononcé par ${c.label[lang]} (Votre Allégeance)`
+                            : lang === "en"
+                            ? `Final arbitration rendered by ${c.label[lang]} (Your Allegiance)`
+                            : `由${c.label[lang]}（您的阵营）做出的最终裁决`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right font-mono text-[10px] text-zinc-500">
+                      <span className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300">
+                        {lang === "fr" ? "DÉBAT CLÔTURÉ" : lang === "en" ? "DEBATE CONCLUDED" : "辩论结束"}
                       </span>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-sm leading-relaxed"
-                    style={{
-                      color: msg.isFinal ? "#f4f4f5" : "#a1a1aa",
-                      fontWeight: msg.isFinal ? 500 : 400,
-                      textShadow: msg.isFinal ? `0 0 30px ${c.glow}` : "none",
-                    }}>
-                    {msg.text}
-                  </p>
-                )}
+
+                  {/* Corps du message ou état de chargement */}
+                  {msg.loading ? (
+                    <div className="py-6 flex flex-col items-center justify-center gap-3 text-center">
+                      <div className="relative">
+                        <div className="w-10 h-10 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: c.color, borderTopColor: "transparent" }} />
+                        <span className="absolute inset-0 flex items-center justify-center text-xs">⚖️</span>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-mono font-bold tracking-wider uppercase text-white">
+                          {lang === "fr" ? "DÉLIBÉRATION DU VERDICT FINAL..." : lang === "en" ? "DELIBERATING FINAL VERDICT..." : "正在审议最终裁决..."}
+                        </p>
+                        <p className="text-[11px] font-mono" style={{ color: c.color }}>
+                          {lang === "fr" ? `Synthèse des 5 interventions adverses par ${c.label[lang]}` : lang === "en" ? `Synthesizing 5 preceding interventions by ${c.label[lang]}` : `${c.label[lang]}正在综合前5次发言`}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-sm sm:text-base leading-relaxed text-zinc-100 font-medium tracking-wide">
+                        {msg.text}
+                      </p>
+                      <div className="pt-4 border-t border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-400">
+                          <span style={{ color: c.color }}>✓ {lang === "fr" ? "Décision enregistrée" : lang === "en" ? "Decision sealed" : "决议已封存"}</span>
+                          <span>·</span>
+                          <span className="text-zinc-600">EchosAI World Protocol</span>
+                        </div>
+
+                        {/* 🚀 Bouton vers /chat pour débriefing interactif */}
+                        <button
+                          type="button"
+                          onClick={sendLastDebateToChat}
+                          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider text-black bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-300 hover:to-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all cursor-pointer transform hover:scale-[1.02]"
+                        >
+                          <span>💬</span>
+                          <span>
+                            {lang === "fr"
+                              ? "Débriefer ce débat avec l'IA →"
+                              : lang === "en"
+                              ? "Debrief this debate with AI →"
+                              : "与AI复盘辩论 →"}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          // Messages 1 à 5 (Débat & Répliques en cascade spatiale gauche/droite)
+          return (
+            <div
+              key={idx}
+              className={`w-full flex ${isAlignLeft ? "justify-start" : "justify-end"} animate-in fade-in slide-in-from-bottom-2 duration-400`}
+            >
+              <div
+                className="w-full sm:w-[88%] lg:w-[82%] relative rounded-2xl border bg-zinc-950/85 p-4 sm:p-5 backdrop-blur-md transition-all duration-300 hover:border-zinc-700 shadow-xl world-card-pop"
+                style={{
+                  borderColor: msg.loading ? c.color : `${c.color}40`,
+                  boxShadow: msg.loading ? `0 0 25px ${c.glow}` : `0 4px 20px rgba(0,0,0,0.4)`,
+                }}
+              >
+                {/* Ligne néon latérale */}
+                <div
+                  className="absolute top-3 bottom-3 w-1 rounded"
+                  style={{
+                    [isAlignLeft ? "left" : "right"]: 0,
+                    background: c.color,
+                    boxShadow: `0 0 10px ${c.color}`,
+                  }}
+                />
+
+                {/* Header de la carte de transmission */}
+                <div className={`flex items-center justify-between gap-2 mb-3 ${isAlignLeft ? "pl-2" : "pr-2"}`}>
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="w-9 h-6 rounded overflow-hidden shrink-0 border shadow-sm"
+                      style={{ borderColor: c.color }}
+                    >
+                      <img
+                        src={c.img}
+                        alt={c.label[lang]}
+                        className="w-full h-full object-cover"
+                        style={{ filter: "saturate(1.1)" }}
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs sm:text-sm font-mono font-bold uppercase tracking-wider text-white">
+                          {c.label[lang]}
+                        </span>
+                        <span
+                          className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border uppercase"
+                          style={{
+                            borderColor: `${c.color}60`,
+                            color: c.color,
+                            background: `${c.color}15`,
+                          }}
+                        >
+                          {isRound1
+                            ? (lang === "fr" ? "Tour 1 · Position" : lang === "en" ? "Round 1 · Position" : "第1轮 · 立场")
+                            : (lang === "fr" ? "Tour 2 · Réplique" : lang === "en" ? "Round 2 · Counter" : "第2轮 · 辩驳")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-zinc-500 hidden sm:inline">
+                      🛰️ {lang === "zh"
+                        ? (msg.continent === "cn" ? "真实AI · 中国" : msg.continent === "na" ? "真实AI · 北美洲" : "真实AI · 欧洲")
+                        : lang === "fr"
+                        ? (msg.continent === "cn" ? "Vraie IA · Chine" : msg.continent === "na" ? "Vraie IA · Amérique du Nord" : "Vraie IA · Europe")
+                        : (msg.continent === "cn" ? "Real AI · China" : msg.continent === "na" ? "Real AI · North America" : "Real AI · Europe")}
+                    </span>
+                    {isMine && (
+                      <span className="text-[9px] font-mono uppercase bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">
+                        {lang === "fr" ? "Votre camp" : lang === "en" ? "Your side" : "您的阵营"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Contenu ou État de transmission */}
+                <div className={isAlignLeft ? "pl-2" : "pr-2"}>
+                  {msg.loading ? (
+                    <div className="py-3 flex items-center gap-3">
+                      <div className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: c.color }} />
+                        <span className="relative inline-flex rounded-full h-3 w-3" style={{ background: c.color }} />
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="font-mono text-xs font-semibold text-white tracking-wide">
+                          {isRound1
+                            ? (lang === "fr" ? `🛰️ Transmission en direct de ${c.label[lang]}...` : lang === "en" ? `🛰️ Live transmission from ${c.label[lang]}...` : `🛰️ 来自${c.label[lang]}的实时传输...`)
+                            : (lang === "fr" ? `⚔️ ${c.label[lang]} prépare sa réplique aux autres puissances...` : lang === "en" ? `⚔️ ${c.label[lang]} formulating counter-argument...` : `⚔️ ${c.label[lang]}正在准备反驳...`)}
+                        </span>
+                        <p className="font-mono text-[10px] text-zinc-500">
+                          {lang === "fr" ? "Connexion neuronale établie · Analyse en cours" : lang === "en" ? "Neural link active · Analyzing position" : "神经网络连接已激活 · 正在分析立场"}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm leading-relaxed text-zinc-300 font-normal">
+                      {msg.text}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
+
+        {/* 🎭 BANDEAU D'ANNONCE EN DIRECT DU LOCUTEUR (CENTRE) */}
+        {activeSpeakerStatus && (
+          <div className="py-3 flex justify-center sticky bottom-2 z-20 pointer-events-none">
+            <div
+              className="world-announce-banner flex items-center gap-3 px-5 py-2.5 rounded-2xl border backdrop-blur-xl shadow-2xl"
+              style={{
+                background: activeSpeakerStatus.isFinal ? "rgba(0, 0, 0, 0.92)" : "rgba(9, 9, 11, 0.9)",
+                borderColor: CONTINENTS[activeSpeakerStatus.continent].color,
+                boxShadow: `0 0 30px ${CONTINENTS[activeSpeakerStatus.continent].glow}`,
+              }}
+            >
+              <span className="w-2.5 h-2.5 rounded-full animate-ping" style={{ background: CONTINENTS[activeSpeakerStatus.continent].color }} />
+              <span className="text-xs sm:text-sm font-mono font-black uppercase tracking-wider text-white">
+                {activeSpeakerStatus.text}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </div>
 
@@ -1352,6 +1665,18 @@ function WorldContent() {
 
       {/* Input */}
       <div className="relative z-10 shrink-0 border-t border-zinc-900/80 bg-black/60 backdrop-blur-sm p-3">
+        {messages.some(m => m.isFinal && !m.loading) && !isLoading && (
+          <div className="flex justify-center pb-2">
+            <button
+              type="button"
+              onClick={sendLastDebateToChat}
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/80 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 text-[11px] font-mono transition-all shadow-[0_0_12px_rgba(6,182,212,0.25)] hover:scale-105"
+            >
+              <span>💬</span>
+              <span>{lang === "fr" ? "Débriefer le dernier débat dans le Chat IA →" : lang === "en" ? "Debrief last debate in AI Chat →" : "在AI聊天中复盘上一场辩论 →"}</span>
+            </button>
+          </div>
+        )}
         <div className="flex gap-2 max-w-3xl mx-auto">
           <textarea
             ref={textareaRef}
