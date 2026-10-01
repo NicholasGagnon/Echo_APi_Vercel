@@ -1,898 +1,1174 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { supabase } from "../lib/supabase";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useApp } from "../../context/AppContext";
+import { supabase } from "../lib/supabase";
 
-// ── TYPES ─────────────────────────────────────────────────────────────────────
-type Stage = "language" | "auth" | "app";
-type Lang = "fr" | "en";
-type CurrencyCode = "CAD" | "USD" | "EUR";
+export const dynamic = "force-dynamic";
 
-interface AgentResult {
-  title: string;
-  badge: string;
-  source: string;
-  text: string;
-  loading: boolean;
-  done: boolean;
+interface FormatOption {
+  id: string;
+  titre: string;
+  titreEn: string;
+  sousTitre: string;
+  sousTitreEn: string;
+  pagesEstimees: string;
+  motsCible: string;
+  nbBlocs: number;
+  nbPoints: number;
+  icon: string;
 }
 
-// ── CONSTANTES DU QUOTA ────────────────────────────────────────────────────────
-const MAX_FREE_CREDITS = 5;
-const REGEN_3H_MS = 3 * 60 * 60 * 1000;
+const FORMATS: FormatOption[] = [
+  {
+    id: "blog",
+    titre: "Article de Blog / Lead Magnet",
+    titreEn: "Blog Article / Lead Magnet",
+    sousTitre: "Contenu concis, percutant et hautement optimisé.",
+    sousTitreEn: "Concise, punchy, and highly optimized content.",
+    pagesEstimees: "2 à 5 pages",
+    motsCible: "~1 000 à 3 000 mots",
+    nbBlocs: 1,
+    nbPoints: 100,
+    icon: "📝",
+  },
+  {
+    id: "guide_100",
+    titre: "Manuel de Formation ou Guide",
+    titreEn: "Training Manual or Guide",
+    sousTitre: "Ouvrage complet et structuré avec cas pratiques ou petit livre.",
+    sousTitreEn: "Comprehensive structured guide with case studies.",
+    pagesEstimees: "20 à 50 pages",
+    motsCible: "~10 000 à 20 000 mots",
+    nbBlocs: 6,
+    nbPoints: 600,
+    icon: "📚",
+  },
+  {
+    id: "livre_200",
+    titre: "Livre Majeur (Grand Format)",
+    titreEn: "Major Book (Full Length)",
+    sousTitre: "Double configuration pour les ouvrages d'envergure.",
+    sousTitreEn: "Double configuration for large scale manuscripts.",
+    pagesEstimees: "50 à 150 pages",
+    motsCible: "~30 000 à 50 000 mots",
+    nbBlocs: 12,
+    nbPoints: 1200,
+    icon: "📘",
+  },
+];
 
-// ── LOGOS ─────────────────────────────────────────────────────────────────────
 const MicrosoftLogo = () => (
-  <svg className="w-5 h-5 shrink-0" viewBox="0 0 23 23" fill="none">
-    <path d="M0 0H11V11H0V0Z" fill="#F25022" />
-    <path d="M12 0H23V11H12V0Z" fill="#7FBA00" />
-    <path d="M0 12H11V23H0V12Z" fill="#00A4EF" />
-    <path d="M12 12H23V23H12V12Z" fill="#FFB900" />
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
+    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
   </svg>
 );
 
 const GoogleLogo = () => (
-  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05" />
-    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335" />
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
   </svg>
 );
 
-// ── TEXTES ET TRADUCTIONS ─────────────────────────────────────────────────────
-const copy = {
-  fr: {
-    title: "SOLUTION",
-    tagline: "Trouvez la meilleure solution possible à votre problème.",
-    subtagline: "La théorie officielle confrontée à la réalité du terrain.",
-    langTitle: "Choisissez votre langue",
-    authTitle: "Connexion requise",
-    authSub: "Accédez au moteur de résolution multi-agents",
-    google: "Continuer avec Google",
-    microsoft: "Continuer avec Microsoft",
-    email: "Connexion par courriel",
-    signup: "Créer un compte",
-    inputPlaceholder: "Décrivez votre problème, bogue technique ou situation complexe...",
-    btnSubmit: "Résoudre",
-    btnSubmitting: "Analyse en cours...",
-    agent1Title: "IA 1 · DOCUMENTATION & RÈGLES",
-    agent1Badge: "THÉORIE OFFICIELLE",
-    agent1Waiting: "En attente de votre question pour consulter les documentations...",
-    agent2Title: "IA 2 · TERRAIN & RETOURS D'EXPÉRIENCE",
-    agent2Badge: "RÉALITÉ DU 5ᵉ COMMENTAIRE",
-    agent2Waiting: "En attente de votre question pour fouiller les forums...",
-    agent3Title: "IA 3 · ARBITRE & PLAN D'ACTION CASH",
-    agent3Badge: "VERDICT & SOLUTION ULTIME",
-    agent3Waiting: "L'arbitre tranchera après confrontation de la théorie et du terrain.",
-    step1Status: "📘 Extraction de la documentation et des règles officielles...",
-    step2Status: "🛠️ Fouille des pépites Reddit, GitHub & retours du terrain...",
-    step3Status: "⚡ Arbitrage en cours : élimination du blabla et synthèse cash...",
-    readyTitle: "Moteur de résolution prêt",
-    readyDesc: "Posez votre problème ci-dessous. Le système croise la documentation avec les solutions cachées du terrain.",
-  },
-  en: {
-    title: "SOLUTION",
-    tagline: "Find the best possible solution to your problem.",
-    subtagline: "Official theory confronted with real-world ground truth.",
-    langTitle: "Choose your language",
-    authTitle: "Sign in required",
-    authSub: "Access the multi-agent resolution engine",
-    google: "Continue with Google",
-    microsoft: "Continue with Microsoft",
-    email: "Sign in with email",
-    signup: "Create account",
-    inputPlaceholder: "Describe your problem, technical bug, or complex scenario...",
-    btnSubmit: "Resolve",
-    btnSubmitting: "Analyzing...",
-    agent1Title: "AI 1 · DOCUMENTATION & RULES",
-    agent1Badge: "OFFICIAL THEORY",
-    agent1Waiting: "Waiting for your query to review official manuals...",
-    agent2Title: "AI 2 · FIELD & COMMUNITY WORKAROUNDS",
-    agent2Badge: "THE 5th COMMENT TRUTH",
-    agent2Waiting: "Waiting for your query to dig into community forums...",
-    agent3Title: "AI 3 · ARBITER & NO-BULLSHIT ACTION PLAN",
-    agent3Badge: "FINAL VERDICT & SOLUTION",
-    agent3Waiting: "The arbiter will decide once theory and reality are confronted.",
-    step1Status: "📘 Scraping official docs and technical guidelines...",
-    step2Status: "🛠️ Uncovering hidden Reddit & GitHub community fixes...",
-    step3Status: "⚡ Arbitrating: removing fluff and drafting direct action...",
-    readyTitle: "Resolution Engine Ready",
-    readyDesc: "Submit your issue below. The engine confronts official manuals with actual community workarounds.",
-  },
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
+const MAX_FREE_CREDITS = 4;
+const REGEN_3H_MS = 3 * 60 * 60 * 1000;
+
+type CurrencyCode = "CAD" | "USD" | "EUR";
+const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
+
+const PRICES: Record<CurrencyCode, { amount: string; symbol: string; cents: number }> = {
+  CAD: { amount: "3.99", symbol: "CA$", cents: 399 },
+  USD: { amount: "3.99", symbol: "US$", cents: 399 },
+  EUR: { amount: "3.99", symbol: "€", cents: 399 },
 };
 
-const LANGS = [
-  { code: "fr" as Lang, label: "Français", sub: "France · Québec" },
-  { code: "en" as Lang, label: "English", sub: "International" },
-];
-
-function SolutionContent() {
+function ContenuContent() {
+  const { lang, setLang } = useApp();
+  const fr = lang === "fr";
   const searchParams = useSearchParams();
+
+  const [formKey, setFormKey] = useState(0);
   const [user, setUser] = useState<any>(null);
-  const [stage, setStage] = useState<Stage>("app");
-  const [lang, setLang] = useState<Lang>("fr");
-  const [problem, setProblem] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [statusBanner, setStatusBanner] = useState<string | null>(null);
-  const [successBanner, setSuccessBanner] = useState<string | null>(null);
-
-  // ── RÉSULTATS DES 3 AGENTS ──
-  const [agent1, setAgent1] = useState<AgentResult>({
-    title: "", badge: "", source: "", text: "", loading: false, done: false,
-  });
-  const [agent2, setAgent2] = useState<AgentResult>({
-    title: "", badge: "", source: "", text: "", loading: false, done: false,
-  });
-  const [agent3, setAgent3] = useState<AgentResult>({
-    title: "", badge: "", source: "", text: "", loading: false, done: false,
-  });
-
-  // ── QUOTA & DEVISE (CAD, USD, EUR) ──
-  const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
-  const [userTier, setUserTier] = useState<"free" | "advantage" | "premium">("free");
-  const [showQuotaPopup, setShowQuotaPopup] = useState(false);
-  const [showAuthInPopup, setShowAuthInPopup] = useState(false);
-  const [nextRegenIn, setNextRegenIn] = useState<number>(0);
-  const [currency, setCurrency] = useState<CurrencyCode>("CAD");
-  const [anonQuestions, setAnonQuestions] = useState(0);
-
-  const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
-  const PRICES: Record<CurrencyCode, { amount: string; symbol: string }> = {
-    CAD: { amount: "3.99", symbol: "CA$" },
-    USD: { amount: "3.99", symbol: "US$" },
-    EUR: { amount: "3.99", symbol: "€" },
-  };
-
-  // ── AUTH STATE ──
-  const [authMode, setAuthMode] = useState<"none" | "signin" | "signup">("none");
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
-  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authLoading2, setAuthLoading2] = useState(false);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const t = copy[lang];
-  const isPaidTier = userTier === "advantage" || userTier === "premium";
+  const [availableQuota, setAvailableQuota] = useState<number>(MAX_FREE_CREDITS);
+  const [userTier, setUserTier] = useState<string>("free");
+  const [nextRegenIn, setNextRegenIn] = useState<number>(0);
+  const [showPremiumModal, setShowPremiumModal] = useState<boolean>(false);
+  const [currency, setCurrency] = useState<CurrencyCode>("CAD");
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
-  // ── DÉTECTION DU RETOUR STRIPE ──
+  const [historique, setHistorique] = useState<any[]>([]);
+  const [loadingHistorique, setLoadingHistorique] = useState(false);
+
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [sujet, setSujet] = useState("");
+  const [formatSelectionne, setFormatSelectionne] = useState<FormatOption>(FORMATS[1]);
+
+  const [promptMaitre, setPromptMaitre] = useState("");
+  const [listePoints, setListePoints] = useState("");
+  const [texteFinal, setTexteFinal] = useState("");
+  const [nbMots, setNbMots] = useState<number | null>(null);
+
+  const [runningStep, setRunningStep] = useState<number>(0);
+  const [progressPercent, setProgressPercent] = useState<number>(0);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [copiedStep, setCopiedStep] = useState<string | null>(null);
+
+  const editorRef = useRef<HTMLDivElement>(null);
+  const LOCAL_STORAGE_KEY = "echo-contenu-drafts";
+
   useEffect(() => {
-    if (searchParams.get("premium") === "success") {
-      setUserTier("premium");
-      setAvailableQuota(999);
-      setSuccessBanner(lang === "fr" ? "★ Félicitations ! Votre accès Illimité est activé." : "★ Success! Unlimited access unlocked.");
-      setTimeout(() => setSuccessBanner(null), 8000);
-    }
-  }, [searchParams, lang]);
-
-  // ── PERSISTENCE & INITIALISATION ROBUSTE ──
-  useEffect(() => {
-    const savedLang = sessionStorage.getItem("solution_lang") as Lang | null;
-    const savedStage = sessionStorage.getItem("solution_stage") as Stage | null;
-    if (savedLang) setLang(savedLang);
-
-    try {
-      const anonQ = parseInt(localStorage.getItem("solution_anon_questions") || "0");
-      setAnonQuestions(anonQ);
-      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - anonQ));
-    } catch {}
-
-    const initAuth = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (session?.user) {
-          setUser(session.user);
-          await loadQuotaState(session.user.id);
-          if (savedStage && savedStage !== "auth" && savedStage !== "language") {
-            setStage(savedStage);
-          } else {
-            setStage("app");
-          }
-        }
-      } catch (err) {
-        console.warn("[SOLUTION] Mode local tolérant actif :", err);
-      }
-    };
-
-    initAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        const s = sessionStorage.getItem("solution_stage") as Stage | null;
-        setStage(s && s !== "auth" && s !== "language" ? s : "app");
-        await loadQuotaState(session.user.id);
+        chargerHistorique(session.user.id);
+        verifierStatutUser(session.user.id);
+      } else {
+        verifierQuotaAnonyme();
+        loadLocalDrafts();
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        setShowAuthModal(false);
+        chargerHistorique(session.user.id);
+        verifierStatutUser(session.user.id);
       } else {
         setUser(null);
+        setHistorique([]);
+        setUserTier("free");
+        verifierQuotaAnonyme();
+        loadLocalDrafts();
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => { sessionStorage.setItem("solution_stage", stage); }, [stage]);
-  useEffect(() => { sessionStorage.setItem("solution_lang", lang); }, [lang]);
+  // 🟢 DÉTECTION DU RETOUR DE PAIEMENT STRIPE (RAFRAÎCHISSEMENT IMMÉDIAT)
+  useEffect(() => {
+    if (searchParams.get("premium") === "success" && user) {
+      const timer = setTimeout(() => {
+        verifierStatutUser(user.id);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, user]);
 
-  // ── CHARGEMENT ET GESTION DES QUOTAS ──
-  const loadQuotaState = async (uid: string) => {
+  useEffect(() => {
+    if (editorRef.current && texteFinal && runningStep === 0) {
+      if (texteFinal.includes("<p>") || texteFinal.includes("<b>")) {
+        editorRef.current.innerHTML = texteFinal;
+      } else {
+        editorRef.current.innerText = texteFinal;
+      }
+    }
+  }, [texteFinal, runningStep]);
+
+  const loadLocalDrafts = () => {
     try {
-      const { data, error } = await supabase.from("solution_quotas").select("*").eq("user_id", uid).maybeSingle();
-      if (error) throw error;
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (raw) setHistorique(JSON.parse(raw));
+    } catch {}
+  };
 
+  const saveLocalDrafts = (items: any[]) => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
+    } catch {}
+  };
+
+  // 🟢 VÉRIFICATION MULTI-TABLES DU STATUT (PROFILES + CONTENU_QUOTAS + WORLD_QUOTAS)
+  const verifierStatutUser = async (uid: string) => {
+    try {
+      // 1. Vérification table profiles globale
+      const { data: pData } = await supabase
+        .from("profiles")
+        .select("user_tier")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (pData?.user_tier && pData.user_tier !== "free" && pData.user_tier !== "connected_free") {
+        setUserTier(pData.user_tier);
+        setAvailableQuota(9999);
+        return;
+      }
+
+      // 2. Vérification table contenu_quotas
+      const { data: cData } = await supabase
+        .from("contenu_quotas")
+        .select("*")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
+        setUserTier(cData.tier);
+        setAvailableQuota(9999);
+        return;
+      }
+
+      // 3. Vérification table world_quotas
+      const { data: wData } = await supabase
+        .from("world_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
+        setUserTier(wData.tier);
+        setAvailableQuota(9999);
+        return;
+      }
+
+      // Quota gratuit par défaut
       const now = Date.now();
-      if (data) {
-        const tier = (data.tier || "free") as "free" | "advantage" | "premium";
-        setUserTier(tier);
-        if (tier === "advantage" || tier === "premium") {
-          setAvailableQuota(999);
-          return;
-        }
-        const lastRegen = new Date(data.last_regen || data.created_at).getTime();
+      if (cData) {
+        const lastRegen = new Date(cData.last_regen_at || cData.created_at).getTime();
         const elapsed = now - lastRegen;
         const recovered = Math.floor(elapsed / REGEN_3H_MS);
-        const available = Math.min(MAX_FREE_CREDITS, (data.available ?? MAX_FREE_CREDITS) + recovered);
+        const available = Math.min(MAX_FREE_CREDITS, (cData.available_credits ?? MAX_FREE_CREDITS) + recovered);
+
         setAvailableQuota(available);
         if (available < MAX_FREE_CREDITS) {
           setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
         }
+      } else {
+        await supabase.from("contenu_quotas").insert({
+          user_id: uid,
+          available_credits: MAX_FREE_CREDITS,
+          tier: "free",
+          last_regen_at: new Date().toISOString(),
+        });
+        setAvailableQuota(MAX_FREE_CREDITS);
       }
+
+      setUserTier("free");
+    } catch {
+      setAvailableQuota(MAX_FREE_CREDITS);
+      setUserTier("free");
+    }
+  };
+
+  const verifierQuotaAnonyme = () => {
+    try {
+      const savedAnon = parseInt(localStorage.getItem("contenu_anon_used") || "0");
+      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - savedAnon));
     } catch {
       setAvailableQuota(MAX_FREE_CREDITS);
     }
   };
 
-  const consumeQuota = async (): Promise<boolean> => {
-    if (userTier === "premium" || userTier === "advantage") return true;
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
 
+  const consommerUnCredit = async (): Promise<boolean> => {
+    // 🟢 SÉCURITÉ : CONNEXION OBLIGATOIRE POUR FABRIQUER
     if (!user) {
-      const newAnon = anonQuestions + 1;
-      if (anonQuestions >= MAX_FREE_CREDITS) {
-        setShowAuthInPopup(true);
-        setShowQuotaPopup(true);
-        return false;
-      }
-      setAnonQuestions(newAnon);
-      setAvailableQuota(Math.max(0, MAX_FREE_CREDITS - newAnon));
-      try { localStorage.setItem("solution_anon_questions", String(newAnon)); } catch {}
-      return true;
+      setShowAuthModal(true);
+      return false;
     }
 
-    try {
-      const { data } = await supabase.from("solution_quotas").select("*").eq("user_id", user.id).maybeSingle();
-      let avail = data?.available ?? availableQuota;
-      if (avail < 1) {
-        setShowQuotaPopup(true);
-        return false;
-      }
-      const newVal = avail - 1;
-      setAvailableQuota(newVal);
-      await supabase.from("solution_quotas").upsert({
-        user_id: user.id,
-        available: newVal,
-        tier: userTier,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id" });
-      return true;
-    } catch {
-      setAvailableQuota(p => Math.max(0, p - 1));
-      return true;
+    if (isPaidTier) return true;
+
+    const now = Date.now();
+    const { data } = await supabase
+      .from("contenu_quotas")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let avail = data?.available_credits ?? MAX_FREE_CREDITS;
+    let lastRegen = data ? new Date(data.last_regen_at).getTime() : now;
+
+    if (data && userTier === "free") {
+      const elapsed = now - lastRegen;
+      const recovered = Math.floor(elapsed / REGEN_3H_MS);
+      avail = Math.min(MAX_FREE_CREDITS, avail + recovered);
+      if (recovered > 0) lastRegen = now;
     }
+
+    if (avail < 1) {
+      const elapsed = now - lastRegen;
+      setNextRegenIn(REGEN_3H_MS - (elapsed % REGEN_3H_MS));
+      setShowPremiumModal(true);
+      return false;
+    }
+
+    const newAvail = avail - 1;
+    setAvailableQuota(newAvail);
+
+    await supabase.from("contenu_quotas").upsert({
+      user_id: user.id,
+      available_credits: newAvail,
+      tier: userTier,
+      last_regen_at: new Date(lastRegen).toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+    return true;
   };
 
-  // ── ACTIONS D'AUTHENTIFICATION ──
-  const handleGoogle = async () => {
-    setAuthLoading(true);
-    try {
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: `${window.location.origin}/solution` },
-      });
-    } catch (e: any) {
-      setAuthError(e?.message || "Erreur Google");
-      setAuthLoading(false);
-    }
+  const formatRegenTime = (ms: number) => {
+    const minutes = Math.ceil(ms / 60000);
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
   };
 
-  const handleMicrosoft = async () => {
-    setAuthLoading(true);
-    try {
-      await supabase.auth.signInWithOAuth({
-        provider: "azure",
-        options: { redirectTo: `${window.location.origin}/solution`, scopes: "openid profile email User.Read" },
-      });
-    } catch (e: any) {
-      setAuthError(e?.message || "Erreur Microsoft");
-      setAuthLoading(false);
-    }
-  };
-
-  const handleEmailSignIn = async () => {
-    setAuthError(null);
-    if (!authEmail.trim() || !authPassword.trim()) {
-      setAuthError(lang === "fr" ? "Courriel et mot de passe requis" : "Email and password required");
+  const chargerHistorique = async (userId?: string) => {
+    const uid = userId || user?.id;
+    if (!uid) {
+      loadLocalDrafts();
       return;
     }
-    setAuthLoading2(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword });
-    setAuthLoading2(false);
-    if (error) setAuthError(error.message);
+    setLoadingHistorique(true);
+    const { data } = await supabase
+      .from("contenu_historique")
+      .select("*")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false });
+
+    if (data) setHistorique(data);
+    setLoadingHistorique(false);
   };
 
-  const handleEmailSignUp = async () => {
-    setAuthError(null);
-    if (!authEmail.trim() || !authPassword.trim()) {
-      setAuthError(lang === "fr" ? "Courriel et mot de passe requis" : "Email and password required");
-      return;
-    }
-    setAuthLoading2(true);
-    const { error } = await supabase.auth.signUp({
-      email: authEmail.trim(), password: authPassword,
-      options: { emailRedirectTo: `${window.location.origin}/solution` },
-    });
-    setAuthLoading2(false);
-    if (error) {
-      setAuthError(error.message);
+  const nouveauProjet = () => {
+    setCurrentId(null);
+    setSujet("");
+    setPromptMaitre("");
+    setListePoints("");
+    setTexteFinal("");
+    setNbMots(null);
+    setError(null);
+    setRunningStep(0);
+    setProgressPercent(0);
+    setStatusMessage("");
+    setFormKey((p) => p + 1);
+    if (editorRef.current) editorRef.current.innerHTML = "";
+  };
+
+  const chargerOuvrageHistorique = (item: any) => {
+    setCurrentId(item.id);
+    setSujet(item.sujet_depart || "");
+    setPromptMaitre(item.prompt_maitre || "");
+    setListePoints(item.liste_500_points || "");
+    const text = item.texte_final || "";
+    setTexteFinal(text);
+    setNbMots(text ? text.split(/\s+/).filter(Boolean).length : null);
+  };
+
+  const supprimerProjet = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(fr ? "Supprimer cet ouvrage définitivement ?" : "Delete this manuscript permanently?")) return;
+
+    if (user) {
+      await supabase.from("contenu_historique").delete().eq("id", id).eq("user_id", user.id);
+      chargerHistorique(user.id);
     } else {
-      setAuthSuccess(lang === "fr" ? "Lien de confirmation expédié !" : "Confirmation link sent!");
+      const updated = historique.filter(h => h.id !== id);
+      setHistorique(updated);
+      saveLocalDrafts(updated);
     }
+
+    if (currentId === id) nouveauProjet();
   };
 
-  // ── PIPELINE MULTI-AGENTS ──
-  const handleResolve = async () => {
-    if (!problem.trim() || isLoading) return;
-    const allowed = await consumeQuota();
-    if (!allowed) return;
+  const handleGoogleConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/contenu`, scopes: "openid profile email" },
+    });
+  };
 
-    setIsLoading(true);
-    const q = problem.trim();
-    setProblem("");
+  const handleMicrosoftConnect = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: { redirectTo: `${window.location.origin}/contenu`, scopes: "openid profile email User.Read" },
+    });
+  };
 
-    setAgent1({ title: t.agent1Title, badge: t.agent1Badge, source: "Official Documentation", text: "", loading: true, done: false });
-    setAgent2({ title: t.agent2Title, badge: t.agent2Badge, source: "Reddit & GitHub Issues", text: "", loading: true, done: false });
-    setAgent3({ title: t.agent3Title, badge: t.agent3Badge, source: "Arbiter Engine", text: "", loading: true, done: false });
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      setShowPremiumModal(false);
+      setShowAuthModal(true);
+      return;
+    }
 
-    setStatusBanner(t.step1Status);
-
+    setIsCheckoutLoading(true);
     try {
-      const res = await fetch("/api/solution/resolve", {
+      const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q, lang, userId: user?.id }),
+        body: JSON.stringify({
+          plan: "world_advantage",
+          currency: currency.toUpperCase(),
+          userId: user.id,
+          userEmail: user.email,
+        }),
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        setAgent1({ title: t.agent1Title, badge: t.agent1Badge, source: "Documentation & Guides", text: data.docResponse, loading: false, done: true });
-        setAgent2({ title: t.agent2Title, badge: t.agent2Badge, source: "Reddit & Forums", text: data.forumResponse, loading: false, done: true });
-        setAgent3({ title: t.agent3Title, badge: t.agent3Badge, source: "Arbitrage Final", text: data.finalSolution, loading: false, done: true });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
       } else {
-        throw new Error("API Route backend non connectée");
+        alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
       }
     } catch {
-      // Simulation pour tester immédiatement l'affichage complet en local
-      await new Promise(r => setTimeout(r, 900));
-      setAgent1({
-        title: t.agent1Title,
-        badge: t.agent1Badge,
-        source: "Documentation officielle",
-        text: lang === "fr"
-          ? `La méthode standard documentée préconise de suivre le protocole classique : réinitialisation des paramètres par défaut, vérification des autorisations et redémarrage des services dépendants. Aucune anomalie critique n'est signalée sur le portail constructeur.`
-          : `Standard documentation states to follow official protocol: reset default parameters, verify permissions, and restart dependent services. No critical defects are listed in official vendor advisories.`,
-        loading: false,
-        done: true,
-      });
-
-      setStatusBanner(t.step2Status);
-      await new Promise(r => setTimeout(r, 1100));
-      setAgent2({
-        title: t.agent2Title,
-        badge: t.agent2Badge,
-        source: "Reddit (r/techsupport) & GitHub",
-        text: lang === "fr"
-          ? `Le 5ᵉ commentaire d'un fil Reddit récent confirme que la méthode officielle échoue depuis la dernière mise à jour. Un contournement éprouvé consiste à désactiver manuellement le module incriminé directement via la configuration système, évitant ainsi le blocage silencieux.`
-          : `The 5th comment in a recent Reddit thread confirms the official fix fails after the latest update. The real working workaround is to bypass the subsystem flag directly in system configuration, resolving the silent freeze immediately.`,
-        loading: false,
-        done: true,
-      });
-
-      setStatusBanner(t.step3Status);
-      await new Promise(r => setTimeout(r, 1200));
-      setAgent3({
-        title: t.agent3Title,
-        badge: t.agent3Badge,
-        source: "Arbitre Sans Filtre",
-        text: lang === "fr"
-          ? `PLAN D'ACTION DIRECT :
-1. Ignorez la réinitialisation recommandée par la documentation officielle (elle ne règle pas le bogue actuel).
-2. Appliquez le correctif du terrain : modifiez le paramètre de contournement directement dans votre configuration.
-3. Si le problème persiste selon votre version d'OS, relancez le service en mode isolé. Solution validée par les retours récents.`
-          : `ACTION PLAN:
-1. Ignore the official reset advice (it does not address the recent silent failure).
-2. Apply the community workaround: toggle the bypass flag directly within your config.
-3. If issue persists due to OS version differences, restart the service in isolated mode. Confirmed by recent users.`,
-        loading: false,
-        done: true,
-      });
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
+    } finally {
+      setIsCheckoutLoading(false);
     }
-
-    setStatusBanner(null);
-    setIsLoading(false);
   };
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER: SÉLECTION DE LA LANGUE
-  // ══════════════════════════════════════════════════════════════════════════════
-  if (stage === "language") {
-    return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-6 select-none">
-        <div className="relative z-10 flex flex-col items-center gap-8 max-w-md w-full text-center">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">⚡</span>
-            <span className="text-white font-black font-mono text-3xl tracking-widest">SOLUTION</span>
-          </div>
-          <p className="text-zinc-400 text-sm">{t.langTitle}</p>
-          <div className="flex flex-col sm:flex-row gap-3 w-full">
-            {LANGS.map(({ code, label, sub }) => (
-              <button
-                key={code}
-                onClick={() => { setLang(code); setStage("app"); }}
-                className="flex-1 rounded-2xl border-2 border-zinc-800 hover:border-cyan-500 bg-zinc-950/80 p-5 text-center transition-all duration-200"
-              >
-                <div className="text-white text-lg font-bold">{label}</div>
-                <div className="text-zinc-500 text-xs font-mono mt-1">{sub}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+  const lancerFabrication = async () => {
+    setError(null);
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    if (!sujet.trim()) {
+      setError(fr ? "Veuillez saisir votre sujet d'ouvrage." : "Please enter your book topic.");
+      return;
+    }
+
+    const autorise = await consommerUnCredit();
+    if (!autorise) return;
+
+    setPromptMaitre("");
+    setListePoints("");
+    setTexteFinal("");
+    setNbMots(null);
+    if (editorRef.current) editorRef.current.innerText = "";
+
+    try {
+      setRunningStep(1);
+      setProgressPercent(10);
+      setStatusMessage(fr ? "Phase 1/3 — Analyse de la vision et rédaction du brief maître..." : "Phase 1/3 — Vision analysis and master brief creation...");
+      const res1 = await fetch(`${API_BASE}/api/contenu/prompt-maitre`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sujet, type_contenu: formatSelectionne.id }),
+      });
+      const data1 = await res1.json();
+      if (!res1.ok || data1.error) throw new Error(data1.error || "Erreur lors de la formulation.");
+
+      const pMaitre = data1.prompt_maitre;
+      setPromptMaitre(pMaitre);
+
+      setRunningStep(2);
+      setProgressPercent(25);
+      setStatusMessage(fr ? `Phase 2/3 — Cartographie des ${formatSelectionne.nbPoints} points d'ancrage...` : `Phase 2/3 — Mapping ${formatSelectionne.nbPoints} anchor points...`);
+      const res2 = await fetch(`${API_BASE}/api/contenu/decoupage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt_maitre: pMaitre, nb_points: formatSelectionne.nbPoints }),
+      });
+      const data2 = await res2.json();
+      if (!res2.ok || data2.error) throw new Error(data2.error || "Erreur lors du découpage.");
+
+      const lPoints = data2.liste_points;
+      setListePoints(lPoints);
+
+      setRunningStep(3);
+      const lignes = lPoints.split("\n").filter((l: string) => l.trim() !== "");
+      const tailleTranche = Math.max(1, Math.floor(lignes.length / formatSelectionne.nbBlocs));
+
+      const tranches: string[] = [];
+      for (let b = 0; b < formatSelectionne.nbBlocs; b++) {
+        if (b === formatSelectionne.nbBlocs - 1) {
+          tranches.push(lignes.slice(b * tailleTranche).join("\n"));
+        } else {
+          tranches.push(lignes.slice(b * tailleTranche, (b + 1) * tailleTranche).join("\n"));
+        }
+      }
+
+      const blocsBruts: string[] = [];
+      let cumulMotsActuel = 0;
+
+      for (let i = 0; i < tranches.length; i++) {
+        const stepPct = Math.round(25 + ((i + 1) / tranches.length) * 65);
+        setProgressPercent(stepPct);
+        setStatusMessage(
+          fr
+            ? `Phase 3/3 — Rédaction du Volume ${i + 1}/${formatSelectionne.nbBlocs} [Cumul : ~${cumulMotsActuel.toLocaleString()} mots]...`
+            : `Phase 3/3 — Writing Volume ${i + 1}/${formatSelectionne.nbBlocs} [Total: ~${cumulMotsActuel.toLocaleString()} words]...`
+        );
+        const resBloc = await fetch(`${API_BASE}/api/contenu/generer-bloc`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt_maitre: pMaitre,
+            tranche: tranches[i],
+            numero: i + 1,
+            total: formatSelectionne.nbBlocs,
+            type_contenu: formatSelectionne.id,
+          }),
+        });
+        const dataBloc = await resBloc.json();
+        if (!resBloc.ok || dataBloc.error) throw new Error(dataBloc.error || `Erreur sur le volume ${i + 1}`);
+
+        blocsBruts.push(dataBloc.texte_bloc);
+        cumulMotsActuel += dataBloc.texte_bloc.split(/\s+/).filter(Boolean).length;
+      }
+
+      setProgressPercent(95);
+      let tFinal = "";
+      if (blocsBruts.length === 1) {
+        tFinal = blocsBruts[0];
+      } else {
+        const livreAssemble: string[] = [];
+        const motsB1 = blocsBruts[0].split(/\s+/);
+        livreAssemble.push(motsB1.slice(0, -300).join(" "));
+
+        for (let i = 0; i < blocsBruts.length - 1; i++) {
+          setStatusMessage(
+            fr
+              ? `Phase Finalisation — Soudure de la jonction ${i + 1}/${blocsBruts.length - 1}...`
+              : `Finalization — Smoothing transition ${i + 1}/${blocsBruts.length - 1}...`
+          );
+          const finA = blocsBruts[i].split(/\s+/).slice(-300).join(" ");
+          const debutB = blocsBruts[i + 1].split(/\s+/).slice(0, 300).join(" ");
+
+          const resRaccord = await fetch(`${API_BASE}/api/contenu/generer-raccord`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fin_a: finA, debut_b: debutB }),
+          });
+          const dataRaccord = await resRaccord.json();
+          if (!resRaccord.ok || dataRaccord.error) throw new Error(dataRaccord.error);
+
+          livreAssemble.push(dataRaccord.texte_raccord);
+
+          const motsSuiv = blocsBruts[i + 1].split(/\s+/);
+          if (i + 1 < blocsBruts.length - 1) {
+            livreAssemble.push(motsSuiv.slice(300, -300).join(" "));
+          } else {
+            livreAssemble.push(motsSuiv.slice(300).join(" "));
+          }
+        }
+        tFinal = livreAssemble.join("\n\n");
+      }
+
+      setProgressPercent(100);
+      setTexteFinal(tFinal);
+      setNbMots(tFinal.split(/\s+/).filter(Boolean).length);
+
+      const record = {
+        titre: sujet.slice(0, 40) || "Sans titre",
+        sujet_depart: sujet,
+        prompt_maitre: pMaitre,
+        liste_500_points: lPoints,
+        texte_final: tFinal,
+        created_at: new Date().toISOString(),
+      };
+
+      if (user) {
+        const { data: newRow } = await supabase.from("contenu_historique").insert({
+          user_id: user.id,
+          ...record,
+        }).select("id").single();
+
+        if (newRow?.id) setCurrentId(newRow.id);
+        chargerHistorique(user.id);
+      }
+
+    } catch (e: any) {
+      setError(e.message || (fr ? "Un obstacle est survenu lors de la confection." : "An error occurred during generation."));
+    } finally {
+      setRunningStep(0);
+      setStatusMessage("");
+    }
+  };
+
+  const copierTexte = (texte: string, stepName: string) => {
+    if (stepName === "step3" && editorRef.current) {
+      const range = document.createRange();
+      range.selectNodeContents(editorRef.current);
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.execCommand("copy");
+        selection.removeAllRanges();
+      }
+    } else {
+      navigator.clipboard.writeText(texte);
+    }
+    setCopiedStep(stepName);
+    setTimeout(() => setCopiedStep(null), 2000);
+  };
+
+  const handleNettoyageComplet = () => {
+    const rawText = editorRef.current ? editorRef.current.innerText : texteFinal;
+    if (!rawText) return;
+
+    let text = rawText;
+
+    text = text.replace(/^(LE CONSTAT|L'ACTION CONCRÈTE|L'INVITATION|À RETENIR)\s*:\s*/gim, "");
+
+    text = text.replace(
+      /(^|[.\?!:]\s+|\n)\s*([A-ZÀ-ÖØ-ß0-9\s'’\-,:!\.]{4,120}?)(?=\s+[A-ZÀ-ÖØ-ß]?[a-zà-öø-ÿ]|\n|$)/g,
+      (match, prefix, possibleTitle) => {
+        const title = possibleTitle.trim();
+        const isUpper = title === title.toUpperCase() && /[A-ZÀ-ÖØ-ß]{3,}/.test(title);
+        if (isUpper && title.length >= 4) {
+          return `${prefix}\n\n${title}\n\n`;
+        }
+        return match;
+      }
     );
-  }
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER: CONNEXION AUTH
-  // ══════════════════════════════════════════════════════════════════════════════
-  if (stage === "auth") {
-    return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-white font-bold text-lg">{t.authTitle}</h2>
-            <button onClick={() => setStage("app")} className="text-zinc-500 hover:text-white text-sm">✕</button>
-          </div>
-          <p className="text-zinc-500 text-xs">{t.authSub}</p>
+    const lines = text.split("\n");
+    const finalHtml: string[] = [];
 
-          <button onClick={handleGoogle} disabled={authLoading}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl transition-all">
-            <GoogleLogo />
-            <span className="text-white text-sm font-medium">{t.google}</span>
-          </button>
+    lines.forEach((line) => {
+      const stripped = line.trim();
+      if (!stripped) return;
 
-          <button onClick={handleMicrosoft} disabled={authLoading}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl transition-all">
-            <MicrosoftLogo />
-            <span className="text-white text-sm font-medium">{t.microsoft}</span>
-          </button>
+      const isTitle = stripped === stripped.toUpperCase() && /[A-ZÀ-ÖØ-ß]{3,}/.test(stripped) && stripped.length <= 120;
 
-          {authMode === "none" && (
-            <div className="flex gap-2 pt-2">
-              <button onClick={() => setAuthMode("signin")}
-                className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-300">
-                {t.email}
-              </button>
-              <button onClick={() => setAuthMode("signup")}
-                className="flex-1 py-2.5 bg-cyan-950/50 hover:bg-cyan-900/50 border border-cyan-500/40 rounded-xl text-xs text-cyan-300 font-bold">
-                {t.signup}
-              </button>
-            </div>
-          )}
+      if (isTitle) {
+        finalHtml.push(`<p><b>${stripped}</b></p>`);
+      } else {
+        finalHtml.push(`<p>${stripped}</p>`);
+      }
+    });
 
-          {authMode !== "none" && (
-            <div className="space-y-2 pt-2">
-              <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)}
-                placeholder="Courriel" className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white outline-none" />
-              <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)}
-                placeholder="Mot de passe" className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-white outline-none" />
-              {authError && <p className="text-red-400 text-xs">{authError}</p>}
-              {authSuccess && <p className="text-emerald-400 text-xs">{authSuccess}</p>}
-              <button onClick={authMode === "signin" ? handleEmailSignIn : handleEmailSignUp}
-                disabled={authLoading2}
-                className="w-full py-2.5 rounded-xl text-xs font-bold text-black bg-cyan-400 hover:bg-cyan-300">
-                {authLoading2 ? "..." : (authMode === "signin" ? "Connexion" : "Créer le compte")}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+    const htmlFormatted = finalHtml.join("<br/>");
 
-  // ══════════════════════════════════════════════════════════════════════════════
-  // RENDER: APPLICATION (STRUCTURE 3 BLOCS)
-  // ══════════════════════════════════════════════════════════════════════════════
+    if (editorRef.current) {
+      editorRef.current.innerHTML = htmlFormatted;
+    }
+
+    setTexteFinal(htmlFormatted);
+    setNbMots(rawText.split(/\s+/).filter(Boolean).length);
+  };
+
   return (
-    <div className="fixed inset-0 bg-black flex flex-col overflow-hidden text-zinc-100 font-sans">
+    <main className="min-h-screen bg-zinc-950 text-zinc-50 font-sans selection:bg-cyan-500/20 antialiased relative overflow-x-hidden">
+      
+      {/* HEADER */}
+      <section className="bg-white text-zinc-900 relative z-30">
+        <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative">
+            
+            <div className="flex items-center gap-6">
+              <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-zinc-900 uppercase">
+                ECHOSAI
+              </Link>
+              
+              <Link
+                href="/outil"
+                className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all hover:scale-105 active:scale-95"
+              >
+                <span>⚡</span>
+                <span>{fr ? "RETOUR AUX OUTILS" : "BACK TO TOOLS"}</span>
+              </Link>
+            </div>
+            
+            <div className="flex items-center gap-4 text-xs font-mono relative">
+              <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
+                {CURRENCIES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCurrency(c)}
+                    className={`px-2 py-1 font-bold transition-colors ${currency === c ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"}`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
 
-      {/* HEADER DE L'ÉCOSYSTÈME */}
-      <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md px-4 py-2 shrink-0 z-40">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/outil"
-              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black text-[11px] uppercase tracking-wider transition-all shadow-[0_0_12px_rgba(6,182,212,0.4)]"
-            >
-              ⚡ {lang === "fr" ? "OUTILS" : "TOOLS"}
-            </Link>
-            <span className="text-xs font-mono font-black tracking-[0.2em] text-white uppercase">
-              ECHOSAI SOLUTION
-            </span>
+              {/* 🟢 AFFICHAGE FIDÈLE DU PLAN EN LIGNE COMME SUR LA PAGE TOTEM */}
+              {isPaidTier ? (
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                  <span className="font-bold text-[11px] uppercase tracking-wider">
+                    {fr ? "✓ PLAN PREMIUM ACTIF (∞ ILLIMITÉ)" : "✓ PREMIUM ACTIVE (∞ UNLIMITED)"}
+                  </span>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setShowPremiumModal(true)} 
+                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+                >
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase">{fr ? "Livres :" : "Books:"}</span>
+                  <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
+                    {`${availableQuota}/${MAX_FREE_CREDITS} ${fr ? "disponibles" : "available"}`}
+                  </span>
+                  <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                    ★ {fr ? "ILLIMITÉ" : "UNLIMITED"} ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  </span>
+                </div>
+              )}
+
+              <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
+                <button onClick={() => setLang("fr")} className={`px-2 py-1 ${lang === "fr" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>FR</button>
+                <button onClick={() => setLang("en")} className={`px-2 py-1 ${lang === "en" ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}>EN</button>
+              </div>
+
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200 font-mono">
+                    🟢 {user.email}
+                  </span>
+                  <button
+                    onClick={() => supabase.auth.signOut()}
+                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold cursor-pointer"
+                  >
+                    [ {fr ? "Déconnexion" : "Sign Out"} ]
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm cursor-pointer"
+                >
+                  {fr ? "Connexion" : "Sign In"}
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* HERO BANNER */}
+        <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div className="lg:col-span-8">
+            <div className="inline-block text-[10px] font-mono tracking-widest text-cyan-600 font-bold uppercase mb-2 border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 rounded">
+              {fr ? "MODULE 01 // CRÉATION D'OUVRAGE & IMPRESSION" : "MODULE 01 // MANUSCRIPT CREATION & PRINT"}
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 leading-[1.0] mb-3 uppercase">
+              {fr ? "Studio Éditorial" : "Editorial Studio"}
+            </h1>
+            <p className="text-zinc-500 max-w-xl text-xs md:text-sm font-sans leading-relaxed">
+              {fr
+                ? "Concevez des manuscrits prêts pour l'impression. L'intelligence artificielle gère le plan, le découpage et la rédaction haute densité."
+                : "Design print-ready manuscripts. Artificial intelligence handles outlining, mapping, and high-density writing."}
+            </p>
+          </div>
+          <div className="lg:col-span-4 flex justify-center lg:justify-end">
+            <img src="/echo1.png" alt="Echo AI System" className="w-full max-w-[180px] h-auto object-contain drop-shadow-[0_10px_25px_rgba(6,182,212,0.15)]" />
+          </div>
+        </div>
+      </section>
+
+      {/* SÉPARATEUR */}
+      <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
+        <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
+        </svg>
+
+        <svg className="absolute top-0 left-0 w-full h-full text-transparent fill-none pointer-events-none z-22" viewBox="0 0 1440 100" preserveAspectRatio="none">
+          <path d="M0,60 Q360,0 720,50 Q1080,90 1440,30" stroke="#06b6d4" strokeWidth="6" className="drop-shadow-[0_0_12px_#06b6d4]" />
+        </svg>
+      </div>
+
+      {/* SECTION PRINCIPALE */}
+      <section className="bg-zinc-950 text-zinc-50 pb-16 pt-0 relative z-10 -mt-6">
+        <div className="max-w-7xl mx-auto px-6 space-y-8">
+
+          <div className="flex flex-col lg:flex-row gap-8 items-start">
+            {/* BIBLIOTHÈQUE DU STUDIO */}
+            <aside className="w-full lg:w-80 border-2 border-cyan-500/30 bg-black/90 rounded-2xl p-5 shrink-0 space-y-4 shadow-[0_0_25px_rgba(6,182,212,0.1)]">
+              <button
+                onClick={nouveauProjet}
+                className="w-full py-3 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] cursor-pointer"
+              >
+                + {fr ? "NOUVEL OUVRAGE" : "NEW MANUSCRIPT"}
+              </button>
+
+              <div className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest font-bold border-b border-zinc-800 pb-2 flex justify-between items-center">
+                <span>{fr ? "BIBLIOTHÈQUE DU STUDIO" : "STUDIO LIBRARY"}</span>
+                <span className="text-[9px] text-zinc-500">({historique.length})</span>
+              </div>
+
+              <div className="max-h-[280px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                {loadingHistorique ? (
+                  <div className="p-3 font-mono text-xs text-zinc-500 animate-pulse">{fr ? "Chargement..." : "Loading..."}</div>
+                ) : historique.length === 0 ? (
+                  <div className="p-3 font-mono text-xs text-zinc-600 italic">{fr ? "Aucun ouvrage sauvegardé." : "No saved works."}</div>
+                ) : (
+                  historique.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => chargerOuvrageHistorique(item)}
+                      className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer flex justify-between items-center group ${
+                        currentId === item.id
+                          ? "bg-cyan-950/60 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                          : "bg-zinc-900/60 border-zinc-800 hover:border-zinc-700 text-zinc-400"
+                      }`}
+                    >
+                      <div className="truncate flex-1 pr-2">
+                        <span className="block text-xs font-bold truncate">📖 {item.titre || (fr ? "Ouvrage" : "Manuscript")}</span>
+                        <span className="block text-[9px] font-mono text-zinc-500 mt-0.5">
+                          {new Date(item.created_at).toLocaleDateString(fr ? "fr-CA" : "en-US")}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={(e) => supprimerProjet(item.id, e)}
+                        title={fr ? "Supprimer l'ouvrage" : "Delete manuscript"}
+                        className="text-zinc-600 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-mono cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </aside>
+
+            {/* SELECTION FORMATS */}
+            <div className="flex-1 space-y-3 w-full">
+              <span className="font-mono text-xs text-cyan-400 font-extrabold tracking-wider uppercase block">
+                01. {fr ? "CHOISISSEZ LE FORMAT ET LE VOLUME DU MANUSCRIT" : "CHOOSE MANUSCRIPT FORMAT & VOLUME"}
+              </span>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {FORMATS.map((f) => {
+                  const isSelected = formatSelectionne.id === f.id;
+                  return (
+                    <div
+                      key={f.id}
+                      onClick={() => !runningStep && setFormatSelectionne(f)}
+                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                        isSelected
+                          ? "bg-cyan-950/40 border-cyan-400 shadow-[0_0_25px_rgba(6,182,212,0.4)] scale-[1.02]"
+                          : "bg-black/80 border-zinc-800 hover:border-zinc-700 opacity-75 hover:opacity-100"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="text-3xl">{f.icon}</span>
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-100">{fr ? f.titre : f.titreEn}</h3>
+                          <p className="text-xs text-zinc-400 mt-1 leading-relaxed">{fr ? f.sousTitre : f.sousTitreEn}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 pt-3 border-t border-zinc-800/80 flex items-center justify-between font-mono text-xs">
+                        <span className="text-amber-400 font-bold">{f.pagesEstimees}</span>
+                        <span className="text-cyan-400 font-bold">{f.motsCible}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs font-mono">
-            {/* SÉLECTEUR DE DEVISE (CAD / USD / EUR) */}
-            <div className="flex border border-zinc-800 rounded-lg overflow-hidden text-[10px] bg-zinc-900">
+          {/* FORMULAIRE & ACTIONS */}
+          <div key={formKey} className="w-full space-y-8">
+            <div className="bg-black/90 border-2 border-cyan-500/40 rounded-3xl p-6 shadow-[0_0_30px_rgba(6,182,212,0.15)] space-y-4 w-full">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-cyan-400 font-extrabold tracking-wider uppercase block">
+                  02. {fr ? "VISION & THÉMATIQUE DE L'OUVRAGE" : "MANUSCRIPT VISION & SUBJECT"}
+                </span>
+                
+                <span className="text-xs font-mono text-zinc-400">
+                  {fr ? "Crédits disponibles : " : "Available credits: "}
+                  <strong className={availableQuota === 0 ? "text-red-400" : "text-cyan-400"}>
+                    {isPaidTier ? (fr ? "∞ Illimité" : "∞ Unlimited") : `${availableQuota}/${MAX_FREE_CREDITS}`}
+                  </strong>
+                </span>
+              </div>
+
+              <textarea
+                value={sujet}
+                onChange={(e) => setSujet(e.target.value)}
+                disabled={runningStep > 0}
+                placeholder={
+                  fr
+                    ? "Ex: Manuel complet sur la création de livre avec l'IA et publication sur Draft2Digital..."
+                    : "Ex: Complete guide on AI book creation and publishing on Draft2Digital..."
+                }
+                rows={3}
+                className="w-full bg-zinc-900/90 border border-zinc-800 focus:border-cyan-400 rounded-2xl p-4 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none resize-none transition-colors"
+              />
+
+              {runningStep > 0 && (
+                <div className="space-y-2 pt-2 border-t border-zinc-800/80 animate-in fade-in duration-300">
+                  <div className="flex justify-between items-center text-xs font-mono font-bold text-cyan-400">
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                      <span>{statusMessage}</span>
+                    </span>
+                    <span>{progressPercent}%</span>
+                  </div>
+                  <div className="w-full h-3 bg-zinc-900 rounded-full overflow-hidden border border-cyan-500/30 p-0.5">
+                    <div
+                      className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-cyan-300 rounded-full transition-all duration-500 shadow-[0_0_15px_#06b6d4]"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={lancerFabrication}
+                disabled={runningStep > 0 || !sujet.trim()}
+                className="w-full py-4 rounded-2xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-black font-black uppercase text-xs tracking-widest transition-all shadow-[0_0_25px_rgba(6,182,212,0.4)] cursor-pointer"
+              >
+                {runningStep > 0
+                  ? `▶ ${statusMessage}`
+                  : `▶ ${fr ? "LANCER LA FABRICATION" : "START GENERATION"} (${formatSelectionne.pagesEstimees.toUpperCase()} / ${formatSelectionne.motsCible})`}
+              </button>
+            </div>
+
+            {error && (
+              <div className="bg-red-950/50 border border-red-500/50 rounded-2xl p-4 font-mono text-xs text-red-400">
+                ⚠️ {error}
+              </div>
+            )}
+
+            {/* BRIEF MAÎTRE */}
+            {(promptMaitre || runningStep === 1) && (
+              <div className="bg-black/90 border border-zinc-800 rounded-2xl p-6 space-y-3 w-full shadow-lg">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-cyan-400 font-bold flex items-center gap-2">
+                    <span>{fr ? "DESIGN — MASTER BOOK BRIEF" : "DESIGN — MASTER BOOK BRIEF"}</span>
+                    {runningStep === 1 && <span className="text-[10px] text-cyan-400 animate-pulse">[{fr ? "En cours..." : "In progress..."}]</span>}
+                  </span>
+                  {promptMaitre && (
+                    <button
+                      onClick={() => copierTexte(promptMaitre, "step1")}
+                      className="text-[10px] px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-700 hover:border-cyan-400 text-zinc-300 font-mono cursor-pointer"
+                    >
+                      {copiedStep === "step1" ? (fr ? "✓ Copié !" : "✓ Copied!") : (fr ? "📋 Copier" : "📋 Copy")}
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={promptMaitre || (fr ? "Formulation du brief en cours..." : "Generating brief...")}
+                  readOnly
+                  rows={4}
+                  className="w-full bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 text-xs font-mono text-zinc-300 outline-none resize-y"
+                />
+              </div>
+            )}
+
+            {/* CARTOGRAPHIE */}
+            {(listePoints || runningStep === 2) && (
+              <div className="bg-black/90 border border-zinc-800 rounded-2xl p-6 space-y-3 w-full shadow-lg">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-amber-400 font-bold flex items-center gap-2">
+                    <span>{fr ? `ARCHITECTURE — ${formatSelectionne.nbPoints} ANCHOR POINTS` : `ARCHITECTURE — ${formatSelectionne.nbPoints} ANCHOR POINTS`}</span>
+                    {runningStep === 2 && <span className="text-[10px] text-amber-400 animate-pulse">[{fr ? "En cours..." : "In progress..."}]</span>}
+                  </span>
+                  {listePoints && (
+                    <button
+                      onClick={() => copierTexte(listePoints, "step2")}
+                      className="text-[10px] px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-700 hover:border-amber-400 text-zinc-300 font-mono cursor-pointer"
+                    >
+                      {copiedStep === "step2" ? (fr ? "✓ Copié !" : "✓ Copied!") : (fr ? "📋 Copier" : "📋 Copy")}
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={listePoints || (fr ? "Découpage des points d'ancrage en cours..." : "Mapping anchor points...")}
+                  readOnly
+                  rows={6}
+                  className="w-full bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 text-xs font-mono text-zinc-300 outline-none resize-y"
+                />
+              </div>
+            )}
+
+            {/* MANUSCRIT FINAL */}
+            {(texteFinal || runningStep === 3) && (
+              <div className="bg-black/90 border-2 border-emerald-500/40 rounded-3xl p-8 space-y-5 shadow-[0_0_40px_rgba(16,185,129,0.15)] w-full">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-sm text-emerald-400 font-extrabold uppercase">
+                      {fr ? "MANUSCRIT FINAL" : "FINAL MANUSCRIPT"}
+                    </span>
+                    {nbMots && (
+                      <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
+                        {nbMots.toLocaleString()} {fr ? "mots" : "words"} (~{Math.round(nbMots / 500)} {fr ? "pages" : "pages"})
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {texteFinal && (
+                      <button
+                        onClick={handleNettoyageComplet}
+                        className="text-xs px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-mono font-bold uppercase transition-all"
+                      >
+                        🧹 {fr ? "NETTOYER LE TEXTE (SAUTS + TITRES EN GRAS)" : "CLEAN TEXT (SPACES + BOLD TITLES)"}
+                      </button>
+                    )}
+
+                    {texteFinal && (
+                      <button
+                        onClick={() => copierTexte(texteFinal, "step3")}
+                        className="text-xs px-4 py-2 rounded-xl bg-emerald-950 border border-emerald-500 hover:bg-emerald-900 text-emerald-300 font-mono font-black cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all"
+                      >
+                        {copiedStep === "step3" ? (fr ? "✓ Copié !" : "✓ Copied!") : (fr ? "📋 Copier Tout" : "📋 Copy All")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {runningStep === 3 && (
+                  <div className="w-full py-4 bg-zinc-900/60 border border-emerald-800/40 rounded-2xl text-sm text-zinc-400 italic animate-pulse font-mono flex flex-col items-center justify-center gap-2 text-center">
+                    <span className="text-emerald-400 font-bold text-base">{statusMessage}</span>
+                    <span className="text-xs text-zinc-500 font-mono">{fr ? "Génération longue en cours... veuillez ne pas fermer la page." : "High density writing in progress... please hold."}</span>
+                  </div>
+                )}
+
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  className="w-full h-[600px] bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-sm font-sans text-zinc-200 focus:outline-none focus:border-cyan-500 leading-relaxed overflow-y-auto whitespace-pre-wrap"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* MODALE D'ABONNEMENT */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
+            <button type="button" onClick={() => setShowPremiumModal(false)} className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Quota Gratuit Épuisé" : "Free Quota Reached"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
+              {fr
+                ? `Prochain crédit disponible dans environ ${formatRegenTime(nextRegenIn)}. Ou débloquez l'accès illimité.`
+                : `Next credit available in about ${formatRegenTime(nextRegenIn)}. Or unlock unlimited access now.`}
+            </p>
+
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
               {CURRENCIES.map((c) => (
                 <button
                   key={c}
                   onClick={() => setCurrency(c)}
-                  className={`px-2 py-0.5 font-bold transition-colors ${currency === c ? "bg-white text-zinc-950" : "text-zinc-400 hover:text-white"}`}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c
+                      ? "bg-amber-500 text-zinc-950 border-amber-400"
+                      : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
                 >
-                  {c}
+                  {c} ({PRICES[c].symbol})
                 </button>
               ))}
             </div>
 
-            {/* QUOTAS */}
-            <div
-              onClick={() => !isPaidTier && setShowQuotaPopup(true)}
-              className="cursor-pointer flex items-center gap-2 px-3 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 transition-all"
-            >
-              <span className="text-[10px] text-zinc-400 font-bold uppercase">{lang === "fr" ? "Analyses :" : "Queries:"}</span>
-              <span className={`font-bold font-mono ${availableQuota === 0 ? "text-red-400" : "text-cyan-400"}`}>
-                {isPaidTier ? "∞ ILLIMITÉ" : `${availableQuota}/${MAX_FREE_CREDITS}`}
-              </span>
-              {!isPaidTier && (
-                <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
-                  ★ ILLIMITÉ ({PRICES[currency].symbol}{PRICES[currency].amount})
-                </span>
-              )}
-            </div>
-
-            {/* LANGUE */}
-            <div className="flex border border-zinc-800 rounded-lg overflow-hidden text-[10px]">
-              <button onClick={() => setLang("fr")} className={`px-2 py-0.5 ${lang === "fr" ? "bg-white text-zinc-950 font-bold" : "bg-zinc-900 text-zinc-400"}`}>FR</button>
-              <button onClick={() => setLang("en")} className={`px-2 py-0.5 ${lang === "en" ? "bg-white text-zinc-950 font-bold" : "bg-zinc-900 text-zinc-400"}`}>EN</button>
-            </div>
-
-            {/* AUTH */}
-            {user ? (
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-md border border-zinc-800">
-                  🟢 {user.email}
-                </span>
-                <button onClick={() => supabase.auth.signOut()} className="text-[10px] text-red-500 hover:text-red-400 font-bold uppercase">
-                  [ {lang === "fr" ? "Déconnexion" : "Sign Out"} ]
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setStage("auth")} className="px-2.5 py-1 bg-white text-zinc-950 rounded-lg font-bold text-[10px]">
-                {lang === "fr" ? "Connexion" : "Sign In"}
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* BANDEAU DE CONFIRMATION DE PAIEMENT STRIPE */}
-      {successBanner && (
-        <div className="bg-emerald-950 border-b border-emerald-500/50 py-2 px-4 text-center text-xs font-mono text-emerald-300">
-          {successBanner}
-        </div>
-      )}
-
-      {/* BANDEAU DE STATUT DU PIPELINE */}
-      {statusBanner && (
-        <div className="bg-cyan-950/90 border-b border-cyan-500/40 py-2 px-4 text-center text-xs font-mono text-cyan-300 animate-pulse">
-          {statusBanner}
-        </div>
-      )}
-
-      {/* CONTENU CENTRAL : 3 BLOCS */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 max-w-7xl w-full mx-auto flex flex-col gap-5">
-        
-        {/* LIGNE SUPÉRIEURE : 2 COLONNES (IA 1 GAUCHE + IA 2 DROITE) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 min-h-[260px]">
-          
-          {/* BLOC 1 : IA 1 - LA DOCUMENTATION / THÉORIE (HAUT GAUCHE) */}
-          <div className="rounded-2xl border border-blue-500/40 bg-zinc-950/70 p-5 flex flex-col justify-between shadow-[0_0_25px_rgba(59,130,246,0.15)] relative overflow-hidden backdrop-blur-md">
-            <div className="absolute top-0 inset-x-0 h-1 bg-blue-500/80" />
-            <div>
-              <div className="flex items-center justify-between mb-3 border-b border-zinc-800/80 pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-blue-400 text-lg">📘</span>
-                  <h3 className="font-mono text-xs font-black uppercase tracking-wider text-blue-300">
-                    {t.agent1Title}
-                  </h3>
-                </div>
-                <span className="text-[10px] font-mono font-bold bg-blue-950/80 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30">
-                  {t.agent1Badge}
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ {fr ? "ACCÈS ILLIMITÉ" : "UNLIMITED ACCESS"}</span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
                 </span>
               </div>
-              <div className="text-xs text-zinc-300 leading-relaxed min-h-[120px]">
-                {agent1.loading ? (
-                  <div className="flex items-center gap-2 text-blue-400 font-mono py-8 justify-center">
-                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-                    <span>Analyse des dépôts et manuels officiels...</span>
-                  </div>
-                ) : agent1.done ? (
-                  <p className="whitespace-pre-line">{agent1.text}</p>
-                ) : (
-                  <p className="text-zinc-600 italic font-mono pt-4">{t.agent1Waiting}</p>
-                )}
-              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">✓ <strong>{fr ? "Accès Illimité" : "Unlimited Access"}</strong> {fr ? "sur les 12 outils" : "on all 12 tools"}</li>
+                <li className="flex items-center gap-2 text-emerald-400">✓ {fr ? "Vitesse maximale prioritaire" : "Priority maximum speed"}</li>
+                <li className="flex items-center gap-2 text-zinc-400">✓ {fr ? "Historique et sauvegardes" : "History & Cloud Backups"}</li>
+              </ul>
             </div>
-            <div className="pt-3 border-t border-zinc-900 text-[10px] font-mono text-zinc-500 flex justify-between">
-              <span>Source : Manuels / Docs techniques</span>
-              <span>{agent1.done ? "✓ Synchronisé" : "En attente"}</span>
-            </div>
-          </div>
 
-          {/* BLOC 2 : IA 2 - LE TERRAIN & FORUMS (HAUT DROITE) */}
-          <div className="rounded-2xl border border-emerald-500/40 bg-zinc-950/70 p-5 flex flex-col justify-between shadow-[0_0_25px_rgba(16,185,129,0.15)] relative overflow-hidden backdrop-blur-md">
-            <div className="absolute top-0 inset-x-0 h-1 bg-emerald-500/80" />
-            <div>
-              <div className="flex items-center justify-between mb-3 border-b border-zinc-800/80 pb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 text-lg">🛠️</span>
-                  <h3 className="font-mono text-xs font-black uppercase tracking-wider text-emerald-300">
-                    {t.agent2Title}
-                  </h3>
-                </div>
-                <span className="text-[10px] font-mono font-bold bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
-                  {t.agent2Badge}
-                </span>
-              </div>
-              <div className="text-xs text-zinc-300 leading-relaxed min-h-[120px]">
-                {agent2.loading ? (
-                  <div className="flex items-center gap-2 text-emerald-400 font-mono py-8 justify-center">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span>Fouille des commentaires Reddit & Issues GitHub...</span>
-                  </div>
-                ) : agent2.done ? (
-                  <p className="whitespace-pre-line">{agent2.text}</p>
-                ) : (
-                  <p className="text-zinc-600 italic font-mono pt-4">{t.agent2Waiting}</p>
-                )}
-              </div>
-            </div>
-            <div className="pt-3 border-t border-zinc-900 text-[10px] font-mono text-zinc-500 flex justify-between">
-              <span>Source : Reddit / Forums / Retours usagers</span>
-              <span>{agent2.done ? "✓ Synchronisé" : "En attente"}</span>
-            </div>
-          </div>
-
-        </div>
-
-        {/* BLOC 3 : IA 3 - L'ARBITRE & SOLUTION CASH (BAS PLEINE LARGEUR) */}
-        <div className="rounded-2xl border-2 border-amber-500/50 bg-zinc-950/90 p-5 sm:p-6 flex-1 flex flex-col justify-between shadow-[0_0_35px_rgba(245,158,11,0.2)] relative overflow-hidden backdrop-blur-xl">
-          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500" />
-          <div>
-            <div className="flex items-center justify-between mb-3 border-b border-zinc-800 pb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-amber-400 text-xl">⚡</span>
-                <h2 className="font-mono text-xs sm:text-sm font-black uppercase tracking-widest text-amber-300">
-                  {t.agent3Title}
-                </h2>
-              </div>
-              <span className="text-[10px] font-mono font-black bg-amber-500 text-zinc-950 px-2.5 py-0.5 rounded uppercase tracking-wider shadow">
-                {t.agent3Badge}
-              </span>
-            </div>
-            <div className="text-sm text-zinc-100 leading-relaxed min-h-[140px] pt-1">
-              {agent3.loading ? (
-                <div className="flex items-center gap-3 text-amber-400 font-mono py-12 justify-center">
-                  <div className="w-5 h-5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
-                  <span>Confrontation en direct de la doc et du terrain...</span>
-                </div>
-              ) : agent3.done ? (
-                <div className="space-y-2">
-                  <p className="whitespace-pre-line font-medium">{agent3.text}</p>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-zinc-500 font-mono text-xs">{t.agent3Waiting}</p>
-                  <p className="text-zinc-700 font-mono text-[11px] mt-1">L'IA élimine le bla-bla marketing pour ne retenir que l'action concrète qui fonctionne.</p>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="pt-3 border-t border-zinc-800 text-[11px] font-mono text-zinc-400 flex items-center justify-between">
-            <span className="text-amber-400">★ Filtre anti-bullshit activé</span>
-            <span>EchosAI Solution Engine v1.0</span>
-          </div>
-        </div>
-
-      </main>
-
-      {/* BARRE D'ENTRÉE (FIXÉE EN BAS) */}
-      <footer className="border-t border-zinc-900 bg-black/80 backdrop-blur-md p-3 sm:p-4 shrink-0">
-        <div className="max-w-4xl mx-auto flex gap-3">
-          <textarea
-            ref={textareaRef}
-            value={problem}
-            onChange={e => setProblem(e.target.value.slice(0, 600))}
-            onKeyDown={e => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleResolve();
-              }
-            }}
-            placeholder={t.inputPlaceholder}
-            rows={2}
-            disabled={isLoading}
-            className="flex-1 bg-zinc-900/80 border border-zinc-800 focus:border-amber-500/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 resize-none outline-none transition-all"
-          />
-          <button
-            onClick={handleResolve}
-            disabled={!problem.trim() || isLoading}
-            className="px-6 rounded-xl font-bold text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all disabled:opacity-30 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.3)] shrink-0"
-          >
-            {isLoading ? t.btnSubmitting : t.btnSubmit}
-          </button>
-        </div>
-      </footer>
-
-      {/* ── POP-UP QUOTA & PAIEMENT STRIPE ── */}
-      {showQuotaPopup && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[999999]">
-          <div className="relative w-full max-w-sm bg-zinc-950 border border-amber-500/50 rounded-2xl p-6 shadow-2xl text-center">
             <button
-              type="button"
-              onClick={() => { setShowQuotaPopup(false); setShowAuthInPopup(false); }}
-              className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer"
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
             >
-              ✕
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
+                : (fr ? `Passer en Illimité (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)` : `Unlock Unlimited (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
-
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <span className="text-2xl">⚡</span>
-              <span className="text-zinc-400 text-xs font-mono uppercase tracking-widest font-black">
-                ECHOSAI SOLUTION
-              </span>
-            </div>
-
-            {showAuthInPopup ? (
-              <div className="space-y-3">
-                <div className="text-center mb-3">
-                  <h3 className="text-white font-black text-base mb-1">
-                    {lang === "fr" ? "Connexion Requise" : "Sign In Required"}
-                  </h3>
-                  <p className="text-zinc-400 text-xs">
-                    {lang === "fr"
-                      ? "Connectez-vous pour associer votre abonnement ou utiliser vos crédits gratuits."
-                      : "Sign in to attach your subscription or use your free credits."}
-                  </p>
-                </div>
-                <button
-                  onClick={handleGoogle}
-                  disabled={authLoading}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl transition-all"
-                >
-                  <GoogleLogo />
-                  <span className="text-white text-sm font-medium flex-1 text-left">{t.google}</span>
-                </button>
-                <button
-                  onClick={handleMicrosoft}
-                  disabled={authLoading}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl transition-all"
-                >
-                  <MicrosoftLogo />
-                  <span className="text-white text-sm font-medium flex-1 text-left">{t.microsoft}</span>
-                </button>
-              </div>
-            ) : (
-              <div>
-                <h3 className="text-white font-black text-base mb-1">
-                  {lang === "fr" ? "Quota Gratuit Atteint" : "Free Quota Reached"}
-                </h3>
-                <p className="text-zinc-400 text-xs mb-4">
-                  {lang === "fr"
-                    ? `Prochain crédit dans environ ${nextRegenIn > 0 ? Math.ceil(nextRegenIn / 60000) + " min" : "quelques heures"}. Ou débloquez l'accès illimité.`
-                    : `Next credit in about ${nextRegenIn > 0 ? Math.ceil(nextRegenIn / 60000) + " min" : "a few hours"}. Or unlock unlimited access.`}
-                </p>
-
-                {/* SÉLECTEUR DE DEVISE DANS LA POPUP */}
-                <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
-                  {CURRENCIES.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setCurrency(c)}
-                      className={`px-3 py-1 rounded-lg font-bold border transition-all ${
-                        currency === c
-                          ? "bg-amber-500 text-zinc-950 border-amber-400"
-                          : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
-                      }`}
-                    >
-                      {c} ({PRICES[c].symbol})
-                    </button>
-                  ))}
-                </div>
-
-                {/* CARTE D'OFFRE */}
-                <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-4 mb-5 text-left space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-amber-400 font-bold text-xs font-mono uppercase">★ SOLUTION ILLIMITÉE</span>
-                    <span className="text-white font-black text-sm font-mono">
-                      {PRICES[currency].symbol}{PRICES[currency].amount}/{lang === "fr" ? "mois" : "mo"}
-                    </span>
-                  </div>
-                  <ul className="text-zinc-300 text-[11px] space-y-1.5 font-mono">
-                    <li className="flex items-center gap-2 text-emerald-400">
-                      ✓ <strong>Analyses illimitées</strong> (sans temps d'attente)
-                    </li>
-                    <li className="flex items-center gap-2 text-emerald-400">
-                      ✓ Détection prioritaire du 5ᵉ commentaire Reddit
-                    </li>
-                    <li className="flex items-center gap-2 text-emerald-400">
-                      ✓ Arbitrage sans filtre complet
-                    </li>
-                  </ul>
-                </div>
-
-                {/* BOUTON D'ACTION STRIPE */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!user) {
-                      setShowAuthInPopup(true);
-                      return;
-                    }
-                    try {
-                      const res = await fetch("/api/stripe/create-checkout", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          plan: "solution_advantage",
-                          currency,
-                          userId: user.id,
-                          userEmail: user.email,
-                        }),
-                      });
-                      const d = await res.json();
-                      if (d.url) {
-                        window.location.href = d.url;
-                      } else {
-                        alert(d.message || d.error || "Erreur Stripe");
-                      }
-                    } catch (err) {
-                      console.error("[STRIPE CHECKOUT ERROR]", err);
-                      alert("Impossible de joindre la passerelle de paiement.");
-                    }
-                  }}
-                  className="w-full py-3.5 rounded-xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_20px_rgba(245,158,11,0.3)] cursor-pointer"
-                >
-                  {lang === "fr"
-                    ? `Passer en Illimité (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)`
-                    : `Unlock Unlimited (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
 
-    </div>
+      {/* MODALE CONNEXION */}
+      {showAuthModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-4">
+              <div>
+                <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                  {fr ? "Connectez-vous pour utiliser le studio éditorial." : "Sign in to use the editorial studio."}
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowAuthModal(false)} className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer">✕</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button type="button" onClick={handleGoogleConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                <GoogleLogo /><span className="text-white text-[9px] font-bold">GOOGLE</span>
+              </button>
+              <button type="button" onClick={handleMicrosoftConnect} className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer">
+                <MicrosoftLogo /><span className="text-white text-[9px] font-bold">MICROSOFT</span>
+              </button>
+            </div>
+
+            <div className="h-px bg-zinc-900 my-3" />
+
+            <div className="space-y-3">
+              <input
+                type="email"
+                placeholder="name@domain.com"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+              />
+              <input
+                type="password"
+                placeholder="••••••••••••"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+              />
+              {authError && <p className="text-red-400 text-xs font-mono">⚠️ {authError}</p>}
+
+              <button
+                onClick={async () => {
+                  setAuthError(null);
+                  const { error } = await supabase.auth.signInWithPassword({
+                    email: authEmail,
+                    password: authPassword,
+                  });
+                  if (error) setAuthError(error.message);
+                }}
+                className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                {fr ? "Se connecter" : "Log in"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </main>
   );
 }
 
-export default function SolutionPage() {
+export default function ContenuPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-amber-400 font-mono text-xs">Chargement Solution...</div>}>
-      <SolutionContent />
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-cyan-400 font-mono text-xs">Chargement du Studio Éditorial...</div>}>
+      <ContenuContent />
     </Suspense>
   );
 }
