@@ -357,7 +357,7 @@ main > aside + div {
 }
 
 @media (max-width: 900px) {
-  main {
+  main:not(.solution-main) {
     height: 100dvh !important;
     min-height: 100dvh !important;
     overflow-y: auto !important;
@@ -481,7 +481,7 @@ main > aside + div {
 }
 
 @media (max-height: 760px) and (min-width: 901px) {
-  main {
+  main:not(.solution-main) {
     min-height: 100dvh !important;
   }
 
