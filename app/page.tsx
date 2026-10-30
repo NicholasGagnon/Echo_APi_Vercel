@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "./lib/supabase";
 
@@ -19,9 +20,26 @@ interface Book {
   imageCouverture: string;
   epubUrl: string;
   badge?: string;
-  isTestFree?: boolean;
   description: string;
 }
+
+const MicrosoftLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
+    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
+  </svg>
+);
+
+const GoogleLogo = () => (
+  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+  </svg>
+);
 
 const CURRENCIES: CurrencyCode[] = ["CAD", "USD", "EUR"];
 
@@ -31,7 +49,7 @@ const PRICES: Record<CurrencyCode, { amount: string; symbol: string; cents: numb
   EUR: { amount: "3.99", symbol: "€", cents: 399 },
 };
 
-// ── CATALOGUE OFFICIEL AVEC TOUS LES VRAIS SYNOPSIS COMPLETS ──
+// ── CATALOGUE OFFICIEL 100% EPUB ──
 const CATALOGUE_LIVRES: Book[] = [
   // ── OUVRAGES EN FRANÇAIS ──
   {
@@ -43,8 +61,6 @@ const CATALOGUE_LIVRES: Book[] = [
     pages: 260,
     imageCouverture: "/livres/lesangdufauve.png",
     epubUrl: "/livres/Le-Sang-du-Fauve.epub",
-    badge: "LIVRE TEST (GRATUIT)",
-    isTestFree: true,
     description: `Laissée pour morte sur les hauteurs par l'homme qui jurait de la protéger, une femme se retrouve précipitée au fond d'un goulet de calcaire impitoyable. Dépossédée de tous ses repères, ignorant si elle verra le prochain crépuscule, elle n'a que quelques heures pour réapprendre à respirer, à saigner et à se battre.
 
 C'est au cœur de cet abîme que survient le choc : la collision de deux résistances farouches. Dans cet affrontement sans merci où la douleur se partage à parts égales, la frontière entre la peur et la reconnaissance vacille. La violence brute s'efface alors devant une résonance intime et inespérée — une épiphanie fulgurante qui mue un combat à mort en un lien aussi improbable qu'indestructible.
@@ -174,7 +190,7 @@ De victime à prédateur, Niko se relève. À chaque coup porté, à chaque insu
 
 Son parcours le mène dans les coins les plus sombres de la société, où les monstres ne sont pas seulement des créatures, mais des hommes. Dans un monde où l'intimidation, la trahison et la violence sont des armes aussi tranchantes que des lames, Niko découvre peu à peu la puissance cachée en lui. Il apprend à se battre, à survivre, mais plus encore : à dominer. Chaque affrontement le transforme, chaque adversaire vaincu le rend plus fort, plus dangereux.
 
-Ce n'est pas un simple combat pour la survie. C'est une évolution brutale de l'âme et du corps, une montée en puissance dans le feu de la lutte. De l'ombre à la lumière, Niko se forge en guerrier. Un homme fait pour détruire, pour rétablir l'équilibre dans un monde de chaos. Mais à quel prix ? Chaque victoire l'éloigne un peu plus de son humanité. Dans cette quête de rétribution, Niko devra se confronter à ses démons intérieurs, à la rage qui le consume, et à la vérité qu'il redoute : peut-il encore se regarder dans le miroir après être devenu la créature qu'il a combattue ?
+Ce n'est pas un simple combat pour la survivre. C'est une évolution brutale de l'âme et du corps, une montée en puissance dans le feu de la lutte. De l'ombre à la lumière, Niko se forge en guerrier. Un homme fait pour détruire, pour rétablir l'équilibre dans un monde de chaos. Mais à quel prix ? Chaque victoire l'éloigne un peu plus de son humanité. Dans cette quête de rétribution, Niko devra se confronter à ses démons intérieurs, à la rage qui le consume, et à la vérité qu'il redoute : peut-il encore se regarder dans le miroir après être devenu la créature qu'il a combattue ?
 
 Dans ce thriller psychologique haletant, les frontières entre le bien et le mal se brouillent, et Niko devra faire face à ses propres limites. Quand la peur devient une arme, quand la violence se transforme en force absolue, l'homme qui émerge n'a plus rien d'humain.`,
   },
@@ -411,16 +427,24 @@ function LibrairieContent() {
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [currency, setCurrency] = useState<CurrencyCode>("CAD");
   const [user, setUser] = useState<any>(null);
-  const [isPaidTier, setIsPaidTier] = useState<boolean>(false);
-  const [unlockedBooks, setUnlockedBooks] = useState<string[]>([]);
+  const [userTier, setUserTier] = useState<string>("free");
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  
+  // États de lecture : livre et mode (complet vs extrait découverte 3-4 pages)
   const [readingBook, setReadingBook] = useState<Book | null>(null);
+  const [isExcerptMode, setIsExcerptMode] = useState<boolean>(false);
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  
+  // Modales d'auth et d'abonnement
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
-  const [showContactModal, setShowContactModal] = useState<boolean>(false);
-  const [isCheckingOut, setIsCheckingOut] = useState<boolean>(false);
+  const [authEmail, setAuthEmail] = useState<string>("");
+  const [authPassword, setAuthPassword] = useState<string>("");
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const [showPremiumModal, setShowPremiumModal] = useState<boolean>(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState<boolean>(false);
 
   const searchParams = useSearchParams();
   const fr = lang === "fr";
@@ -432,92 +456,112 @@ function LibrairieContent() {
     setSearchQuery("");
   };
 
+  // 🟢 VÉRIFICATION STRICTE DE SESSION IDENTIQUE AU MODULE CONTENU
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user);
-        verifierStatut(session.user.id);
+        verifierStatutUser(session.user.id);
+      } else {
+        setUser(null);
+        setUserTier("free");
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) verifierStatut(session.user.id);
-      else setIsPaidTier(false);
+      if (session?.user) {
+        setUser(session.user);
+        setShowAuthModal(false);
+        verifierStatutUser(session.user.id);
+      } else {
+        setUser(null);
+        setUserTier("free");
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
+  // 🟢 DÉTECTION DU RETOUR DE PAIEMENT STRIPE (IDENTIQUE À CONTENU)
   useEffect(() => {
     if (searchParams.get("premium") === "success" && user) {
-      verifierStatut(user.id);
+      const timer = setTimeout(() => {
+        verifierStatutUser(user.id);
+      }, 1500);
+      return () => clearTimeout(timer);
     }
   }, [searchParams, user]);
 
-  const verifierStatut = async (uid: string) => {
+  // 🟢 VÉRIFICATION MULTI-TABLES DU STATUT
+  const verifierStatutUser = async (uid: string) => {
     try {
-      const { data: pData } = await supabase.from("profiles").select("user_tier").eq("id", uid).maybeSingle();
+      const { data: pData } = await supabase
+        .from("profiles")
+        .select("user_tier")
+        .eq("id", uid)
+        .maybeSingle();
+
       if (pData?.user_tier && pData.user_tier !== "free" && pData.user_tier !== "connected_free") {
-        setIsPaidTier(true);
+        setUserTier(pData.user_tier);
         return;
       }
-      const { data: cData } = await supabase.from("contenu_quotas").select("tier").eq("user_id", uid).maybeSingle();
+
+      const { data: cData } = await supabase
+        .from("contenu_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
       if (cData?.tier && cData.tier !== "free" && cData.tier !== "connected_free") {
-        setIsPaidTier(true);
+        setUserTier(cData.tier);
         return;
       }
-      const { data: wData } = await supabase.from("world_quotas").select("tier").eq("user_id", uid).maybeSingle();
+
+      const { data: wData } = await supabase
+        .from("world_quotas")
+        .select("tier")
+        .eq("user_id", uid)
+        .maybeSingle();
+
       if (wData?.tier && wData.tier !== "free" && wData.tier !== "connected_free") {
-        setIsPaidTier(true);
+        setUserTier(wData.tier);
         return;
       }
-      setIsPaidTier(false);
+
+      setUserTier("free");
     } catch {
-      setIsPaidTier(false);
+      setUserTier("free");
     }
   };
 
+  const isPaidTier = userTier && userTier !== "free" && userTier !== "connected_free";
+
+  // 🟢 AUTH OAUTH PROPRE (ÉVITE AADSTS90015 EN UTILISANT L'ORIGIN PROPRE SANS HASH)
   const handleGoogleConnect = async () => {
+    const cleanOrigin = window.location.origin + window.location.pathname;
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.href, scopes: "openid profile email" },
+      options: { redirectTo: cleanOrigin, scopes: "openid profile email" },
     });
   };
 
   const handleMicrosoftConnect = async () => {
+    const cleanOrigin = window.location.origin + window.location.pathname;
     await supabase.auth.signInWithOAuth({
       provider: "azure",
-      options: { redirectTo: window.location.href, scopes: "openid profile email User.Read" },
+      options: { redirectTo: cleanOrigin, scopes: "openid profile email User.Read" },
     });
   };
 
-  // VÉRIFICATION D'AUTH LORS D'UN CLIC SUR UNE CARTE OU UN BOUTON D'APERÇU
-  const handleInspecterLivre = (book: Book) => {
-    if (!user && !book.isTestFree) {
-      setShowAuthModal(true);
-      return;
-    }
-    setSelectedBook(book);
-  };
-
-  // GESTION DU FLUX DE COMMANDE OU DÉBLOCAGE
-  const handleAcheterLivre = async (book: Book) => {
-    if (book.isTestFree) {
-      if (!unlockedBooks.includes(book.id)) {
-        setUnlockedBooks((prev) => [...prev, book.id]);
-      }
-      setReadingBook(book);
-      setSelectedBook(null);
-      return;
-    }
-
+  // 🟢 DÉCLENCHEMENT DE PAIEMENT STRIPE (COPIÉ DEPUIS CONTENU)
+  const handleStripeCheckout = async () => {
     if (!user) {
+      setShowPremiumModal(false);
       setShowAuthModal(true);
       return;
     }
 
-    setIsCheckingOut(true);
+    setIsCheckoutLoading(true);
     try {
       const res = await fetch("/api/stripe/create-checkout", {
         method: "POST",
@@ -536,9 +580,9 @@ function LibrairieContent() {
         alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
       }
     } catch {
-      alert(fr ? "Impossible d'initier la commande." : "Unable to initiate purchase.");
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
     } finally {
-      setIsCheckingOut(false);
+      setIsCheckoutLoading(false);
     }
   };
 
@@ -560,29 +604,26 @@ function LibrairieContent() {
         isDark ? "bg-[#050505] text-[#e8e8e8]" : "bg-zinc-50 text-zinc-900"
       }`}
     >
-      {/* ── HEADER BLANC ── */}
+      {/* ── HEADER BLANC IDENTIQUE AU STUDIO ÉDITORIAL ── */}
       <section className="bg-white text-zinc-900 relative z-30">
-        <header className="border-b border-zinc-100 bg-white/90 backdrop-blur-md sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center relative flex-wrap gap-4">
+        <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative flex-wrap gap-4">
             
-            {/* BRANDING LIBRAIRIE ÉDITORIALE */}
-            <div className="flex items-center gap-3">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shadow-[0_0_8px_#06b6d4]" />
-              <span className="text-xs sm:text-sm font-mono font-black tracking-[0.2em] text-zinc-900 uppercase">
-                {fr ? "LIBRAIRIE ÉDITORIALE" : "EDITORIAL BOOKSTORE"}
-              </span>
+            <div className="flex items-center gap-6">
+              <Link href="/outil" className="text-sm font-mono font-black tracking-[0.25em] text-zinc-900 uppercase">
+                ECHOSAI
+              </Link>
+
+              <Link
+                href="/outil"
+                className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-mono text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all hover:scale-105 active:scale-95"
+              >
+                <span>⚡</span>
+                <span>{fr ? "RETOUR AUX OUTILS" : "BACK TO TOOLS"}</span>
+              </Link>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3 text-xs font-mono flex-wrap">
-              {/* BOUTON CONTACT */}
-              <button
-                onClick={() => setShowContactModal(true)}
-                className="px-2.5 py-1 rounded-lg border border-zinc-300 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                <span>✉️</span>
-                <span>{fr ? "Contact" : "Contact"}</span>
-              </button>
-
+            <div className="flex items-center gap-4 text-xs font-mono relative flex-wrap">
               {/* TOGGLE DARK / LIGHT */}
               <button
                 onClick={() => setTheme(isDark ? "light" : "dark")}
@@ -593,7 +634,7 @@ function LibrairieContent() {
               </button>
 
               {/* SÉLECTEUR DE DEVISES */}
-              <div className="flex border border-zinc-300 rounded-lg overflow-hidden bg-zinc-100 text-[10px]">
+              <div className="flex border border-zinc-300 rounded-lg overflow-hidden font-mono text-[10px] bg-zinc-100">
                 {CURRENCIES.map((c) => (
                   <button
                     key={c}
@@ -607,53 +648,58 @@ function LibrairieContent() {
                 ))}
               </div>
 
-              {/* ACCÈS ILLIMITÉ OU TARIF UNITAIRE */}
+              {/* STATUT PREMIUM OU DÉCLENCHEUR MODALE ABONNEMENT */}
               {isPaidTier ? (
-                <div className="flex items-center gap-2 px-3 py-1 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="font-bold text-[10px] uppercase tracking-wider">
-                    {fr ? "✓ ACCÈS ILLIMITÉ" : "✓ UNLIMITED"}
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-emerald-500/50 bg-black text-emerald-400 font-mono shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" />
+                  <span className="font-bold text-[11px] uppercase tracking-wider">
+                    {fr ? "✓ ACCÈS ILLIMITÉ ACTIF" : "✓ UNLIMITED ACTIVE"}
                   </span>
                 </div>
               ) : (
-                <div className="px-2.5 py-1 rounded-xl border border-amber-500/40 bg-zinc-900 text-white text-[10px] font-bold">
-                  ★ {PRICES[currency].symbol}{PRICES[currency].amount}
+                <div
+                  onClick={() => setShowPremiumModal(true)}
+                  className="cursor-pointer flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border border-amber-500/40 bg-zinc-900 text-white shadow-lg hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+                >
+                  <span className="text-[9px] bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black px-2 py-0.5 rounded-md uppercase tracking-wider shadow-sm animate-pulse">
+                    ★ {fr ? "ILLIMITÉ" : "UNLIMITED"} ({PRICES[currency].symbol}{PRICES[currency].amount})
+                  </span>
                 </div>
               )}
 
-              {/* SÉPARATION STRICTE DES LANGUES FR / EN */}
-              <div className="flex border border-zinc-300 rounded-lg overflow-hidden text-[10px]">
+              {/* SÉPARATEUR DE LANGUES */}
+              <div className="flex border border-zinc-200 rounded-lg overflow-hidden font-mono text-[10px]">
                 <button
                   onClick={() => handleChangerLangue("fr")}
-                  className={`px-2.5 py-1 ${fr ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-500"}`}
+                  className={`px-2 py-1 ${fr ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}
                 >
                   FR
                 </button>
                 <button
                   onClick={() => handleChangerLangue("en")}
-                  className={`px-2.5 py-1 ${!fr ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-500"}`}
+                  className={`px-2 py-1 ${!fr ? "bg-zinc-900 text-white font-bold" : "bg-zinc-50 text-zinc-400 hover:text-zinc-600"}`}
                 >
                   EN
                 </button>
               </div>
 
-              {/* AUTH COMPTE */}
+              {/* SESSION UTILISATEUR */}
               {user ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-zinc-600 bg-zinc-100 border border-zinc-200 px-2 py-1 rounded max-w-[120px] truncate">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200 font-mono">
                     🟢 {user.email}
                   </span>
                   <button
                     onClick={() => supabase.auth.signOut()}
-                    className="text-[10px] text-red-500 hover:text-red-700 uppercase font-bold cursor-pointer"
+                    className="text-[11px] text-red-500 hover:text-red-700 transition-colors uppercase font-bold cursor-pointer"
                   >
-                    [ {fr ? "Sortir" : "Exit"} ]
+                    [ {fr ? "Déconnexion" : "Sign Out"} ]
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="px-3 py-1.5 border border-zinc-900 text-zinc-900 hover:bg-zinc-900 hover:text-white rounded-xl font-bold tracking-tight text-[11px] transition-all cursor-pointer"
+                  className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm cursor-pointer"
                 >
                   {fr ? "Connexion" : "Sign In"}
                 </button>
@@ -663,28 +709,28 @@ function LibrairieContent() {
         </header>
 
         {/* HERO BANNER */}
-        <div className="max-w-7xl mx-auto px-6 py-10 sm:py-14 grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-          <div className="md:col-span-8">
+        <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div className="lg:col-span-8">
             <div className="inline-block text-[10px] font-mono tracking-widest text-cyan-600 font-bold uppercase mb-2 border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 rounded">
               {fr ? "COLLECTION D'AUTEUR & ÉDITION NUMÉRIQUE" : "AUTHOR COLLECTION & DIGITAL EDITION"}
             </div>
-            <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-zinc-900 leading-[1.05] mb-3 uppercase">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 leading-[1.0] mb-3 uppercase">
               {fr ? "La Librairie d'Auteur" : "Author's Bookstore"}
             </h1>
-            <p className="text-zinc-600 max-w-xl text-xs sm:text-sm leading-relaxed">
+            <p className="text-zinc-500 max-w-xl text-xs md:text-sm font-sans leading-relaxed">
               {fr
-                ? "Découvrez l'ensemble des romans, drames psychologiques, pièces de théâtre et essais. Débloquez chaque manuscrit individuellement ou lisez et téléchargez au format EPUB sans restriction."
-                : "Explore complete novels, psychological dramas, plays, and essays. Unlock each manuscript individually or read and download in EPUB format without restrictions."}
+                ? "Découvrez l'ensemble des romans, thrillers et sagas au format EPUB. Lisez un extrait représentatif au cœur de chaque livre ou débloquez l'accès complet illimité."
+                : "Explore complete novels, thrillers, and sagas in EPUB format. Read a live excerpt from the core of each book or unlock full unlimited access."}
             </p>
           </div>
-          <div className="md:col-span-4 flex justify-center md:justify-end">
-            <img src="/echo1.png" alt="Echo System" className="w-full max-w-[140px] sm:max-w-[160px] h-auto object-contain drop-shadow-[0_10px_25px_rgba(6,182,212,0.15)]" />
+          <div className="lg:col-span-4 flex justify-center lg:justify-end">
+            <img src="/echo1.png" alt="Echo AI System" className="w-full max-w-[180px] h-auto object-contain drop-shadow-[0_10px_25px_rgba(6,182,212,0.15)]" />
           </div>
         </div>
       </section>
 
-      {/* ── COURBE DE SÉPARATION BLANCHE / CYAN ── */}
-      <div className={`relative w-full h-16 sm:h-20 overflow-hidden -mt-1 z-20 ${isDark ? "bg-[#050505]" : "bg-zinc-50"}`}>
+      {/* SÉPARATEUR DE SECTION */}
+      <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
         <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
         </svg>
@@ -693,8 +739,8 @@ function LibrairieContent() {
         </svg>
       </div>
 
-      {/* ── BARRE DE RECHERCHE CENTRÉE SEULE SOUS LA COURBE ── */}
-      <section className="max-w-xl mx-auto px-6 pt-8 pb-4 text-center relative z-10">
+      {/* BARRE DE RECHERCHE */}
+      <section className="max-w-xl mx-auto px-6 pt-6 pb-2 text-center relative z-10">
         <input
           type="text"
           value={searchQuery}
@@ -715,7 +761,7 @@ function LibrairieContent() {
         />
       </section>
 
-      {/* ── SECTION CATALOGUE & LIVRES ── */}
+      {/* SECTION DU CATALOGUE */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-24 pt-4 relative z-10">
         <div className="flex justify-between items-center mb-8 border-b border-zinc-800/20 pb-3">
           <span className={`font-mono text-xs font-bold uppercase tracking-wider ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
@@ -734,21 +780,36 @@ function LibrairieContent() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {livresAffiches.map((book) => {
-              const isUnlocked = isPaidTier || unlockedBooks.includes(book.id);
-
               return (
                 <div
                   key={book.id}
-                  className={`rounded-3xl p-5 sm:p-6 transition-all duration-300 flex flex-col sm:flex-row gap-6 border ${
+                  className={`relative group rounded-3xl p-5 sm:p-6 transition-all duration-300 flex flex-col sm:flex-row gap-6 border ${
                     isDark
                       ? "bg-black/85 border-zinc-800 hover:border-cyan-500/50 shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
                       : "bg-white border-zinc-200 hover:border-cyan-500/50 shadow-lg"
                   }`}
                 >
+                  {/* TOOLTIP POP-UP AU SURVOL : SYNOPSIS COMPLET */}
+                  <div className="pointer-events-none absolute bottom-[102%] left-1/2 -translate-x-1/2 w-[92%] sm:w-[480px] bg-zinc-950/95 border border-cyan-500/50 text-zinc-200 text-xs p-5 rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] opacity-0 group-hover:opacity-100 transition-all duration-300 z-40 backdrop-blur-md hidden sm:block">
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-2 mb-2 font-mono text-[10px] text-cyan-400 uppercase font-bold">
+                      <span>📖 {book.titre}</span>
+                      <span>{fr ? "Synopsis complet" : "Full synopsis"}</span>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto whitespace-pre-line leading-relaxed pr-1 font-sans text-[11px] text-zinc-300">
+                      {book.description}
+                    </div>
+                  </div>
+
                   {/* COUVERTURE AVANT-PLAN */}
                   <div
-                    onClick={() => handleInspecterLivre(book)}
-                    className="relative w-full sm:w-48 h-72 rounded-2xl overflow-hidden shrink-0 bg-zinc-950 border border-zinc-800 shadow-xl cursor-pointer hover:scale-[1.02] transition-transform flex items-center justify-center group"
+                    onClick={() => {
+                      if (!user && !isPaidTier) {
+                        setShowAuthModal(true);
+                      } else {
+                        setSelectedBook(book);
+                      }
+                    }}
+                    className="relative w-full sm:w-48 h-72 rounded-2xl overflow-hidden shrink-0 bg-zinc-950 border border-zinc-800 shadow-xl cursor-pointer hover:scale-[1.02] transition-transform flex items-center justify-center"
                   >
                     <img
                       src={book.imageCouverture}
@@ -757,7 +818,7 @@ function LibrairieContent() {
                     />
                   </div>
 
-                  {/* DESCRIPTIF & COMMANDES */}
+                  {/* DÉTAILS ET COMMANDES */}
                   <div className="flex-1 flex flex-col justify-between py-1">
                     <div className="space-y-2.5">
                       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -771,7 +832,7 @@ function LibrairieContent() {
                               {book.badge}
                             </span>
                           )}
-                          {isUnlocked && (
+                          {isPaidTier && (
                             <span className="text-[10px] font-mono text-emerald-500 font-bold">
                               ✓ {fr ? "DÉBLOQUÉ" : "UNLOCKED"}
                             </span>
@@ -780,7 +841,10 @@ function LibrairieContent() {
                       </div>
 
                       <h2
-                        onClick={() => handleInspecterLivre(book)}
+                        onClick={() => {
+                          if (!user && !isPaidTier) setShowAuthModal(true);
+                          else setSelectedBook(book);
+                        }}
                         className={`text-lg font-black uppercase cursor-pointer hover:text-cyan-500 transition-colors line-clamp-2 ${
                           isDark ? "text-white" : "text-zinc-900"
                         }`}
@@ -803,19 +867,20 @@ function LibrairieContent() {
                           {fr ? "Tarif :" : "Price:"}
                         </span>
                         <span className={`font-bold text-sm ${isDark ? "text-white" : "text-zinc-900"}`}>
-                          {book.isTestFree
-                            ? (fr ? "GRATUIT (TEST)" : "FREE (TEST)")
-                            : `${PRICES[currency].symbol}${PRICES[currency].amount}`}
+                          {isPaidTier ? (fr ? "INCLUS" : "INCLUDED") : `${PRICES[currency].symbol}${PRICES[currency].amount}`}
                         </span>
                       </div>
 
-                      {isUnlocked ? (
+                      {isPaidTier ? (
                         <div className="space-y-2">
                           <button
-                            onClick={() => setReadingBook(book)}
+                            onClick={() => {
+                              setIsExcerptMode(false);
+                              setReadingBook(book);
+                            }}
                             className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black uppercase text-xs font-mono rounded-xl tracking-wider transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] cursor-pointer"
                           >
-                            📖 {fr ? "OUVRIR LA LISEUSE" : "OPEN READER"}
+                            📖 {fr ? "OUVRIR LA LISEUSE (COMPLET)" : "OPEN READER (FULL)"}
                           </button>
 
                           <a
@@ -828,21 +893,38 @@ function LibrairieContent() {
                           </a>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => handleAcheterLivre(book)}
-                          disabled={isCheckingOut}
-                          className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black uppercase text-xs font-mono rounded-xl tracking-wider transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] cursor-pointer disabled:opacity-50"
-                        >
-                          {book.isTestFree
-                            ? (fr ? "DÉBLOQUER DIRECTEMENT (TEST)" : "INSTANT UNLOCK (TEST)")
-                            : (fr
-                                ? `COMMANDER (${PRICES[currency].symbol}${PRICES[currency].amount})`
-                                : `BUY (${PRICES[currency].symbol}${PRICES[currency].amount})`)}
-                        </button>
+                        <div className="space-y-2">
+                          {/* LISEUSE D'EXTRAIT GRATUITE AU MILIEU DU LIVRE */}
+                          <button
+                            onClick={() => {
+                              setIsExcerptMode(true);
+                              setReadingBook(book);
+                            }}
+                            className="w-full py-2.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 font-mono font-bold uppercase text-xs rounded-xl tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <span>👀</span>
+                            <span>{fr ? "LIRE UN EXTRAIT (3-4 PAGES)" : "READ EXCERPT (3-4 PAGES)"}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (!user) setShowAuthModal(true);
+                              else setShowPremiumModal(true);
+                            }}
+                            className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black uppercase text-xs font-mono rounded-xl tracking-wider transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] cursor-pointer"
+                          >
+                            {fr
+                              ? `DÉBLOQUER TOUT (${PRICES[currency].symbol}${PRICES[currency].amount})`
+                              : `UNLOCK ALL (${PRICES[currency].symbol}${PRICES[currency].amount})`}
+                          </button>
+                        </div>
                       )}
 
                       <button
-                        onClick={() => handleInspecterLivre(book)}
+                        onClick={() => {
+                          if (!user && !isPaidTier) setShowAuthModal(true);
+                          else setSelectedBook(book);
+                        }}
                         className={`w-full py-2 font-mono text-[10px] uppercase rounded-lg transition-colors border cursor-pointer ${
                           isDark
                             ? "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800"
@@ -901,7 +983,7 @@ function LibrairieContent() {
         )}
       </main>
 
-      {/* ── MODALE APERÇU RAPIDE AVEC SYNOPSIS INTÉGRAL ── */}
+      {/* ── MODALE APERÇU RAPIDE AVEC SYNOPSIS ── */}
       {selectedBook && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-4 sm:p-6 flex items-center justify-center animate-in fade-in">
           <div
@@ -939,88 +1021,195 @@ function LibrairieContent() {
               </div>
             </div>
 
-            <button
-              onClick={() => handleAcheterLivre(selectedBook)}
-              disabled={isCheckingOut}
-              className="w-full py-4 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black uppercase text-xs font-mono rounded-xl tracking-wider transition-all cursor-pointer shadow-lg"
-            >
-              {selectedBook.isTestFree
-                ? (fr ? "DÉBLOQUER CE LIVRE TEST" : "UNLOCK THIS TEST BOOK")
-                : (fr
-                    ? `CONFIRMER L'ACHAT (${PRICES[currency].symbol}${PRICES[currency].amount})`
-                    : `CONFIRM PURCHASE (${PRICES[currency].symbol}${PRICES[currency].amount})`)}
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  const b = selectedBook;
+                  setSelectedBook(null);
+                  setIsExcerptMode(true);
+                  setReadingBook(b);
+                }}
+                className="w-1/2 py-3 bg-zinc-900 border border-zinc-700 text-cyan-400 font-mono font-bold text-xs rounded-xl uppercase transition-colors"
+              >
+                👀 {fr ? "Lire un extrait" : "Read excerpt"}
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedBook(null);
+                  if (!user) setShowAuthModal(true);
+                  else setShowPremiumModal(true);
+                }}
+                className="w-1/2 py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black uppercase text-xs font-mono rounded-xl tracking-wider transition-all"
+              >
+                {fr ? "Débloquer en Illimité" : "Unlock Unlimited"}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── LISEUSE EPUB RÉELLE BRANCHÉE SUR LE FICHIER ── */}
+      {/* ── LISEUSE EPUB (MODE ENTIER OU EXTRAIT 3-4 PAGES AU CENTRE) ── */}
       {readingBook && (
         <LecteurKobo
           book={readingBook}
           onClose={() => setReadingBook(null)}
           lang={lang}
           isPaidTier={isPaidTier}
+          isExcerptMode={isExcerptMode}
+          onUnlock={() => {
+            setReadingBook(null);
+            if (!user) setShowAuthModal(true);
+            else setShowPremiumModal(true);
+          }}
         />
       )}
 
-      {/* ── MODALE CONTACT SUR MESURE BILINGUE ── */}
-      <ContactModal
-        isOpen={showContactModal}
-        onClose={() => setShowContactModal(false)}
-        lang={lang}
-        isDark={isDark}
-      />
-
-      {/* ── MODALE CONNEXION ── */}
-      {showAuthModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-6 flex items-center justify-center animate-in fade-in">
-          <div
-            className={`rounded-3xl p-8 max-w-sm w-full text-center relative shadow-2xl border ${
-              isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"
-            }`}
-          >
+      {/* ── MODALE STRIPE PREMIUM FIDÈLE À CONTENU ── */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
             <button
-              onClick={() => setShowAuthModal(false)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 text-sm cursor-pointer"
+              type="button"
+              onClick={() => setShowPremiumModal(false)}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-white text-sm p-1 cursor-pointer"
             >
               ✕
             </button>
-            <div className="text-3xl mb-3">📚</div>
-            <h3 className="text-base font-bold uppercase font-mono mb-1">
-              {fr ? "Connexion Requise" : "Sign In Required"}
-            </h3>
-            <p className="text-xs text-zinc-400 mb-6 font-sans leading-relaxed">
+
+            <div className="text-4xl mb-3">⚡</div>
+            <h2 className="text-lg font-black text-white uppercase font-mono mb-1">
+              {fr ? "Accès Illimité à la Bibliothèque" : "Unlimited Library Access"}
+            </h2>
+            <p className="text-xs text-zinc-400 mb-4 font-sans">
               {fr
-                ? "Veuillez vous connecter pour consulter les détails, débloquer vos livres et conserver votre bibliothèque."
-                : "Please sign in to view details, unlock books, and manage your personal library."}
+                ? "Lisez tous les livres en entier et téléchargez tous les EPUB sans restriction."
+                : "Read all complete manuscripts and download all EPUB files without limits."}
             </p>
 
-            <div className="space-y-3">
+            <div className="flex justify-center gap-2 mb-4 font-mono text-xs">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
+                    currency === c
+                      ? "bg-amber-500 text-zinc-950 border-amber-400"
+                      : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
+                  }`}
+                >
+                  {c} ({PRICES[c].symbol})
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-gradient-to-b from-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-5 mb-6 text-left space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold text-xs font-mono uppercase">
+                  ★ {fr ? "ACCÈS ILLIMITÉ" : "UNLIMITED ACCESS"}
+                </span>
+                <span className="text-white font-black text-sm font-mono">
+                  {PRICES[currency].symbol}{PRICES[currency].amount}/{fr ? "mois" : "mo"}
+                </span>
+              </div>
+              <ul className="text-zinc-300 text-xs space-y-2 font-mono">
+                <li className="flex items-center gap-2 text-emerald-400">
+                  ✓ <strong>{fr ? "Accès Illimité" : "Unlimited Access"}</strong> {fr ? "sur les 12 outils et manuscrits" : "on all 12 tools and manuscripts"}
+                </li>
+                <li className="flex items-center gap-2 text-emerald-400">
+                  ✓ {fr ? "Lecture intégrale sans coupure" : "Full unhindered reading"}
+                </li>
+                <li className="flex items-center gap-2 text-zinc-400">
+                  ✓ {fr ? "Téléchargements directs des .EPUB" : "Direct .EPUB downloads"}
+                </li>
+              </ul>
+            </div>
+
+            <button
+              onClick={handleStripeCheckout}
+              disabled={isCheckoutLoading}
+              className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
+            >
+              {isCheckoutLoading
+                ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
+                : (fr
+                    ? `Passer en Illimité (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)`
+                    : `Unlock Unlimited (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE DE CONNEXION IDENTIQUE AU MODULE CONTENU ── */}
+      {showAuthModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-4">
+              <div>
+                <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                  {fr ? "Connectez-vous pour accéder à votre bibliothèque." : "Sign in to access your library."}
+                </p>
+              </div>
               <button
-                onClick={handleGoogleConnect}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-white text-zinc-900 border border-zinc-300 font-bold text-xs rounded-xl hover:bg-zinc-100 transition-colors cursor-pointer"
+                type="button"
+                onClick={() => setShowAuthModal(false)}
+                className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer"
               >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-                </svg>
-                Google
+                ✕
               </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                type="button"
+                onClick={handleGoogleConnect}
+                className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer"
+              >
+                <GoogleLogo />
+                <span className="text-white text-[9px] font-bold">GOOGLE</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleMicrosoftConnect}
+                className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer"
+              >
+                <MicrosoftLogo />
+                <span className="text-white text-[9px] font-bold">MICROSOFT</span>
+              </button>
+            </div>
+
+            <div className="h-px bg-zinc-900 my-3" />
+
+            <div className="space-y-3">
+              <input
+                type="email"
+                placeholder="name@domain.com"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+              />
+              <input
+                type="password"
+                placeholder="••••••••••••"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+              />
+              {authError && <p className="text-red-400 text-xs font-mono">⚠️ {authError}</p>}
 
               <button
-                onClick={handleMicrosoftConnect}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-zinc-900 text-white font-bold text-xs rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
+                onClick={async () => {
+                  setAuthError(null);
+                  const { error } = await supabase.auth.signInWithPassword({
+                    email: authEmail,
+                    password: authPassword,
+                  });
+                  if (error) setAuthError(error.message);
+                }}
+                className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer"
               >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
-                  <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
-                  <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
-                  <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
-                  <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
-                </svg>
-                Microsoft
+                {fr ? "Se connecter" : "Log in"}
               </button>
             </div>
           </div>
@@ -1030,146 +1219,24 @@ function LibrairieContent() {
   );
 }
 
-// ── COMPOSANT CONTACT SUR MESURE BILINGUE ──
-function ContactModal({
-  isOpen,
-  onClose,
-  lang,
-  isDark,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  lang: Lang;
-  isDark: boolean;
-}) {
-  const [email, setEmail] = useState("");
-  const [sujet, setSujet] = useState("");
-  const [message, setMessage] = useState("");
-  const [envoye, setEnvoye] = useState(false);
-
-  const fr = lang === "fr";
-
-  if (!isOpen) return null;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const mailtoUrl = `mailto:lafailleestouverte@gmail.com?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(
-      `Expéditeur: ${email}\n\n${message}`
-    )}`;
-    window.location.href = mailtoUrl;
-    setEnvoye(true);
-    setTimeout(() => {
-      setEnvoye(false);
-      onClose();
-    }, 2000);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-4 sm:p-6 flex items-center justify-center animate-in fade-in">
-      <div
-        className={`rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl border ${
-          isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"
-        }`}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 text-sm cursor-pointer"
-        >
-          ✕
-        </button>
-
-        <div className="text-2xl mb-2">✉️</div>
-        <h3 className="text-lg font-bold uppercase font-mono mb-1">
-          {fr ? "Contacter l'Auteur" : "Contact the Author"}
-        </h3>
-        <p className="text-xs text-zinc-400 mb-6 font-sans">
-          {fr
-            ? "Une question sur un manuscrit, une commande ou un projet ? Envoyez un message directement."
-            : "Questions regarding manuscripts, orders, or inquiries? Send a message directly."}
-        </p>
-
-        {envoye ? (
-          <div className="p-6 text-center rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono text-xs font-bold">
-            ✓ {fr ? "Ouverture de votre messagerie..." : "Opening your email client..."}
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 font-mono text-xs">
-            <div>
-              <label className="block text-zinc-400 text-[10px] uppercase mb-1">
-                {fr ? "Votre adresse courriel" : "Your email address"}
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nom@exemple.com"
-                className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-colors ${
-                  isDark
-                    ? "bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-cyan-400"
-                    : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-cyan-500"
-                }`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-zinc-400 text-[10px] uppercase mb-1">
-                {fr ? "Titre / Objet" : "Subject"}
-              </label>
-              <input
-                type="text"
-                required
-                value={sujet}
-                onChange={(e) => setSujet(e.target.value)}
-                placeholder={fr ? "Question sur Le Sang du Fauve..." : "Inquiry about The Untouchable Child..."}
-                className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-colors ${
-                  isDark
-                    ? "bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-cyan-400"
-                    : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-cyan-500"
-                }`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-zinc-400 text-[10px] uppercase mb-1">
-                {fr ? "Message" : "Message"}
-              </label>
-              <textarea
-                required
-                rows={4}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={fr ? "Écrivez votre message ici..." : "Write your message here..."}
-                className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-colors font-sans text-xs ${
-                  isDark
-                    ? "bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-cyan-400"
-                    : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-cyan-500"
-                }`}
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black uppercase text-xs font-mono rounded-xl tracking-wider transition-all cursor-pointer shadow-lg"
-            >
-              {fr ? "Envoyer le message" : "Send message"}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── COMPOSANT DU LECTEUR EPUB RÉEL (EPUB.JS) ──
+// ── COMPOSANT DU LECTEUR EPUB RÉEL (EPUB.JS) AVEC EXTRAIT DÉCOUVERTE AU CŒUR DU LIVRE ──
 interface LecteurKoboProps {
   book: Book;
   onClose: () => void;
   lang: Lang;
   isPaidTier: boolean;
+  isExcerptMode?: boolean;
+  onUnlock?: () => void;
 }
 
-function LecteurKobo({ book, onClose, lang, isPaidTier }: LecteurKoboProps) {
+function LecteurKobo({
+  book,
+  onClose,
+  lang,
+  isPaidTier,
+  isExcerptMode = false,
+  onUnlock,
+}: LecteurKoboProps) {
   const fr = lang === "fr";
   const viewerRef = useRef<HTMLDivElement>(null);
   const renditionRef = useRef<any>(null);
@@ -1180,6 +1247,10 @@ function LecteurKobo({ book, onClose, lang, isPaidTier }: LecteurKoboProps) {
   const [progress, setProgress] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<boolean>(false);
+
+  // Compteur de pages parcourues en mode extrait (bloqué à 4 pages)
+  const [pagesTournees, setPagesTournees] = useState<number>(0);
+  const [limiteExtraitAtteinte, setLimiteExtraitAtteinte] = useState<boolean>(false);
 
   const stylesTheme = {
     sepia: "bg-[#f4ecd8] text-[#2c2222] border-[#e2d5b8]",
@@ -1200,6 +1271,8 @@ function LecteurKobo({ book, onClose, lang, isPaidTier }: LecteurKoboProps) {
       try {
         setLoading(true);
         setError(false);
+        setPagesTournees(0);
+        setLimiteExtraitAtteinte(false);
 
         const ePub = (await import("epubjs")).default;
         const res = await fetch(encodeURI(book.epubUrl));
@@ -1226,17 +1299,27 @@ function LecteurKobo({ book, onClose, lang, isPaidTier }: LecteurKoboProps) {
           }
         });
 
+        // En mode extrait gratuit, démarrer à 35% au cœur de l'intrigue
         await rendition.display();
         if (cancelled) return;
-        setLoading(false);
 
         await epub.ready;
         await epub.locations.generate(1500);
+
+        if (isExcerptMode && epub.locations?.length()) {
+          const middleCfi = epub.locations.cfiFromPercentage(0.35);
+          if (middleCfi) {
+            await rendition.display(middleCfi);
+          }
+        }
+
         const currentLocation = rendition.currentLocation() as any;
         const cfi = currentLocation?.start?.cfi;
         if (cfi && epub.locations) {
-        setProgress(Math.round((epub.locations.percentageFromCfi(cfi) || 0) * 100));
-}
+          setProgress(Math.round((epub.locations.percentageFromCfi(cfi) || 0) * 100));
+        }
+
+        setLoading(false);
       } catch (e) {
         console.error(e);
         if (!cancelled) {
@@ -1253,7 +1336,7 @@ function LecteurKobo({ book, onClose, lang, isPaidTier }: LecteurKoboProps) {
       renditionRef.current = null;
       epubRef.current = null;
     };
-  }, [book]);
+  }, [book, isExcerptMode]);
 
   useEffect(() => {
     const r = renditionRef.current;
@@ -1264,31 +1347,49 @@ function LecteurKobo({ book, onClose, lang, isPaidTier }: LecteurKoboProps) {
     r.themes.fontSize(`${fontSize}px`);
   }, [themeLiseuse, fontSize, loading]);
 
+  const handleNextPage = () => {
+    if (isExcerptMode && pagesTournees >= 4) {
+      setLimiteExtraitAtteinte(true);
+      return;
+    }
+    renditionRef.current?.next();
+    if (isExcerptMode) setPagesTournees((p) => p + 1);
+  };
+
+  const handlePrevPage = () => {
+    renditionRef.current?.prev();
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") renditionRef.current?.next();
-      if (e.key === "ArrowLeft") renditionRef.current?.prev();
+      if (e.key === "ArrowRight") handleNextPage();
+      if (e.key === "ArrowLeft") handlePrevPage();
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, pagesTournees, isExcerptMode]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in">
       <div
-        className={`w-full max-w-5xl h-[95dvh] sm:h-[90vh] rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border transition-colors duration-300 ${stylesTheme[themeLiseuse]}`}
+        className={`w-full max-w-5xl h-[95dvh] sm:h-[90vh] rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden border transition-colors duration-300 relative ${stylesTheme[themeLiseuse]}`}
       >
         {/* BARRE D'OUTILS KOBO */}
         <div className="px-4 sm:px-6 py-2.5 sm:py-3 border-b border-inherit flex items-center justify-between text-xs font-mono select-none opacity-90 flex-wrap gap-2">
-          <div className="flex items-center gap-2 max-w-[200px] sm:max-w-xs truncate">
+          <div className="flex items-center gap-2 max-w-[240px] sm:max-w-xs truncate">
             <span className="font-bold uppercase tracking-wider truncate">
               {book.titre}
             </span>
+            {isExcerptMode && (
+              <span className="text-[9px] bg-amber-500/20 text-amber-500 border border-amber-500/40 px-2 py-0.5 rounded font-black shrink-0">
+                {fr ? "EXTRAIT (CŒUR DU LIVRE)" : "EXCERPT"}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            {(isPaidTier || book.isTestFree) && (
+            {isPaidTier && (
               <a
                 href={encodeURI(book.epubUrl)}
                 download
@@ -1354,13 +1455,13 @@ function LecteurKobo({ book, onClose, lang, isPaidTier }: LecteurKoboProps) {
           </div>
         </div>
 
-        {/* ZONE DE LECTURE FLUIDE (INJECTION EPUBJS) */}
+        {/* ZONE DE LECTURE FLUIDE (EPUB.JS) */}
         <div className="flex-1 min-h-0 relative px-2 sm:px-10 py-4">
           <div ref={viewerRef} className="w-full h-full" />
 
           {loading && !error && (
             <div className="absolute inset-0 flex items-center justify-center text-xs font-mono opacity-70">
-              {fr ? "Chargement du livre…" : "Loading book…"}
+              {fr ? "Ouverture de l'ouvrage…" : "Loading book…"}
             </div>
           )}
 
@@ -1371,23 +1472,56 @@ function LecteurKobo({ book, onClose, lang, isPaidTier }: LecteurKoboProps) {
                 : "Unable to open this EPUB. Verify the filename matches in /public/livres/."}
             </div>
           )}
+
+          {/* POP-UP FIN D'EXTRAIT (3-4 PAGES ATTEINTES) */}
+          {limiteExtraitAtteinte && (
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-6 z-30 animate-in fade-in">
+              <div className="max-w-md w-full bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 text-center text-zinc-100 shadow-2xl">
+                <div className="text-3xl mb-2">✨</div>
+                <h3 className="font-mono font-black text-sm uppercase text-amber-400 mb-2">
+                  {fr ? "Fin de l'échantillon découverte" : "End of sample excerpt"}
+                </h3>
+                <p className="text-xs text-zinc-400 font-sans leading-relaxed mb-6">
+                  {fr
+                    ? "Vous avez lu les 4 pages d'extrait de ce livre. Débloquez l'accès illimité pour poursuivre votre lecture jusqu'au dénouement."
+                    : "You have completed the 4-page excerpt. Unlock unlimited access to continue reading to the very end."}
+                </p>
+                <div className="space-y-3">
+                  <button
+                    onClick={onUnlock}
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-400 to-amber-500 text-zinc-950 font-black text-xs font-mono uppercase rounded-xl tracking-wider shadow-lg hover:brightness-110 cursor-pointer"
+                  >
+                    ★ {fr ? "Passer en Illimité" : "Unlock Unlimited"}
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="w-full py-2.5 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white font-mono text-xs rounded-xl cursor-pointer"
+                  >
+                    {fr ? "Retour à la bibliothèque" : "Back to library"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* NAVIGATION INFÉRIEURE */}
         <div className="px-4 sm:px-6 py-2.5 sm:py-3 border-t border-inherit flex items-center justify-between text-xs font-mono select-none opacity-80">
           <button
-            onClick={() => renditionRef.current?.prev()}
+            onClick={handlePrevPage}
             className="px-3 py-1.5 rounded-lg border border-inherit hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-colors"
           >
             ← {fr ? "Précédent" : "Previous"}
           </button>
 
           <span className="text-[11px] font-bold">
-            {progress}%
+            {isExcerptMode
+              ? `${fr ? "Extrait :" : "Excerpt:"} ${pagesTournees}/4 ${fr ? "pages" : "pages"}`
+              : `${progress}%`}
           </span>
 
           <button
-            onClick={() => renditionRef.current?.next()}
+            onClick={handleNextPage}
             className="px-3 py-1.5 rounded-lg border border-inherit hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-colors"
           >
             {fr ? "Suivant" : "Next"} →
