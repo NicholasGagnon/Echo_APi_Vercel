@@ -985,7 +985,7 @@ function LibrairieContent() {
                           className="w-full py-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 font-mono font-bold uppercase text-xs rounded-xl tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
                         >
                           <span>👀</span>
-                          <span>{fr ? "LIRE UN EXTRAIT (3-4 PAGES)" : "READ EXCERPT (3-4 PAGES)"}</span>
+                          <span>{fr ? "LIRE UN EXTRAIT" : "READ EXCERPT"}</span>
                         </button>
                       )}
 
@@ -1716,7 +1716,7 @@ function LecteurKobo({
   }, [themeLiseuse, fontSize, loading]);
 
   const handleNextPage = () => {
-    if (isExcerptMode && pagesTournees >= 4) {
+    if (isExcerptMode && pagesTournees >= 8) {
       setLimiteExtraitAtteinte(true);
       return;
     }
@@ -1840,8 +1840,8 @@ function LecteurKobo({
                 </h3>
                 <p className="text-xs text-zinc-400 font-sans leading-relaxed mb-6">
                   {fr
-                    ? "Vous avez lu les 4 pages d'extrait de ce livre. Débloquez l'accès illimité pour poursuivre votre lecture jusqu'au dénouement."
-                    : "You have completed the 4-page excerpt. Unlock unlimited access to continue reading to the very end."}
+                    ? "Vous avez lu les 4-5 pages d'extrait de ce livre. Débloquez l'accès illimité pour poursuivre votre lecture jusqu'au dénouement."
+                    : "You have completed the 4-5 page excerpt. Unlock unlimited access to continue reading to the very end."}
                 </p>
                 <div className="space-y-3">
                   <button
@@ -1873,7 +1873,7 @@ function LecteurKobo({
 
           <span className="text-[11px] font-bold">
             {isExcerptMode
-              ? `${fr ? "Extrait :" : "Excerpt:"} ${pagesTournees}/4 ${fr ? "pages" : "pages"}`
+              ? `${fr ? "Extrait :" : "Excerpt:"} ${pagesTournees}/8 ${fr ? "pages" : "pages"}`
               : `${progress}%`}
           </span>
 
