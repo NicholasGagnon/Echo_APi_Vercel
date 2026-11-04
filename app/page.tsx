@@ -504,6 +504,17 @@ function LibrairieContent() {
   const fr = lang === "fr";
   const isDark = theme === "dark";
 
+  // Défilement automatique d'accueil léger (smooth peek)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Défile doucement de 140px seulement si l'utilisateur est encore tout en haut
+      if (window.scrollY < 20) {
+        window.scrollBy({ top: 140, behavior: "smooth" });
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleChangerLangue = (nouvelleLangue: Lang) => {
     setLang(nouvelleLangue);
     setCurrentPage(1);
@@ -700,21 +711,23 @@ function LibrairieContent() {
         setSignUpError(error.message);
       }
     } else {
-      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
-        setSignUpError(fr ? "Un compte avec ce courriel existe déjà." : "An account with this email already exists.");
-        return;
+      if (data?.session) {
+        setUser(data.session.user);
+        setShowSignUpModal(false);
+        clearAuthInputs();
+      } else {
+        setResendEmail(trimmedEmail);
+        setSignUpSuccess(
+          fr
+            ? "Compte créé ! Vous êtes maintenant inscrit sur EchoAI."
+            : "Account created! You are now registered on EchoAI."
+        );
+        startResendCountdown();
       }
-      setResendEmail(trimmedEmail);
-      setSignUpSuccess(
-        fr
-          ? "Lien de confirmation envoyé ! Veuillez vérifier votre boîte de réception ainsi que votre dossier de courriels indésirables (spam)."
-          : "Confirmation link sent! Please check your inbox and your spam/junk folder."
-      );
-      startResendCountdown();
     }
   };
 
-  // Renvoi du courriel de confirmation
+  // Renvoi du courriel
   const handleResendEmail = async () => {
     if (resendCountdown > 0 || !resendEmail) return;
     setSignUpError(null);
@@ -729,8 +742,8 @@ function LibrairieContent() {
     } else {
       setSignUpSuccess(
         fr
-          ? "Un nouveau lien a été envoyé. Pensez à vérifier votre dossier de courriels indésirables (spam)."
-          : "A new link has been sent. Remember to check your spam/junk folder."
+          ? "Lien envoyé. Pensez à vérifier votre dossier de courriels indésirables."
+          : "Link sent. Please check your spam folder."
       );
       startResendCountdown();
     }
@@ -792,7 +805,7 @@ function LibrairieContent() {
     }
   };
 
-  // Achat ponctuel d'un livre précis (2,50 $CA)
+  // Achat ponctuel d'un livre précis
   const handleBuySingleBook = async (book: Book) => {
     if (!user) {
       setBookToBuy(null);
@@ -836,6 +849,10 @@ function LibrairieContent() {
     document.body.removeChild(link);
   };
 
+  const scrollToCatalog = () => {
+    document.getElementById("catalogue-livres")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   const livresFiltres = CATALOGUE_LIVRES.filter((b) => {
     if (b.langue !== lang) return false;
     const q = searchQuery.toLowerCase();
@@ -857,10 +874,16 @@ function LibrairieContent() {
       {/* ── HEADER BLANC ── */}
       <section className="bg-white text-zinc-900 relative z-30">
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative flex-wrap gap-4">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center relative flex-wrap gap-4">
             
+            <div className="flex items-center gap-2">
+              <Link href="/" className="text-sm font-mono font-black tracking-widest text-zinc-900 uppercase hover:text-cyan-600 transition-colors">
+                ECHOSAI
+              </Link>
+            </div>
+
             <div className="flex items-center gap-4 text-xs font-mono relative flex-wrap">
-              {/* BOUTON CONTACT SUR MESURE */}
+              {/* BOUTON CONTACT */}
               <button
                 onClick={() => setShowContactModal(true)}
                 className="px-2.5 py-1 rounded-lg border border-zinc-300 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition-all cursor-pointer flex items-center gap-1.5"
@@ -928,7 +951,7 @@ function LibrairieContent() {
                 </button>
               </div>
 
-              {/* SESSION UTILISATEUR OU BOUTONS CONNEXION / INSCRIPTION */}
+              {/* IDENTIFIANT OU CONNEXION / INSCRIPTION */}
               {user ? (
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200 font-mono">
@@ -967,28 +990,48 @@ function LibrairieContent() {
           </div>
         </header>
 
-        {/* HERO BANNER */}
-        <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        {/* HERO BANNER AVEC MASCOTTE ORIGINALE & BOUTON VISIBLE */}
+        <div className="max-w-7xl mx-auto px-6 py-8 md:py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-8">
             <div className="inline-block text-[10px] font-mono tracking-widest text-cyan-600 font-bold uppercase mb-2 border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 rounded">
               {fr ? "COLLECTION D'AUTEUR & ÉDITION NUMÉRIQUE" : "AUTHOR COLLECTION & DIGITAL EDITION"}
             </div>
-            <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-zinc-900 leading-[1.0] mb-3 uppercase">
-              {fr ? "La Librairie d'Auteur" : "Author's Bookstore"}
-            </h1>
-            <p className="text-zinc-500 max-w-xl text-xs md:text-sm font-sans leading-relaxed">
+            <h1 className="text-3xl md:text-5xl font-red tracking-tighter leading-[1.05] mb-3 uppercase bg-gradient-to-r from-zinc-950 via-cyan-900 to-cyan-600 bg-clip-text text-transparent drop-shadow-sm">
+  {fr ? "La Librairie d'Auteur" : "Author's Bookstore"}
+</h1>
+            <p className="text-zinc-500 max-w-xl text-xs md:text-sm font-sans leading-relaxed mb-6">
               {fr
-                ? "Découvrez l'ensemble des romans, thrillers et sagas au format EPUB. Lisez un extrait au cœur de chaque livre ou achetez votre fichier EPUB définitif."
-                : "Explore complete novels, thrillers, and sagas in EPUB format. Read a live excerpt from the core of each book or purchase your permanent EPUB file."}
+                ? "Découvrez l'ensemble des romans, thrillers et sagas au format EPUB sans DRM. Lisez un extrait au cœur de chaque livre ou achetez votre fichier définitif."
+                : "Explore complete novels, thrillers, and sagas in DRM-free EPUB format. Read a live excerpt from the core of each book or purchase your permanent file."}
             </p>
+
+            {/* GROS BOUTON TRÈS VISIBLE AVEC DÉFILEMENT DIRECT */}
+            <div className="flex items-center gap-3">
+              <button
+  onClick={scrollToCatalog}
+  className="px-5 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-mono text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-[0_4px_20px_rgba(6,182,212,0.35)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)] hover:scale-[1.02] flex items-center gap-2 cursor-pointer group"
+>
+  <span>{fr ? "Consulter le catalogue" : "Browse the catalog"}</span>
+  <span className="transform group-hover:translate-y-1 transition-transform text-sm">↓</span>
+</button>
+
+              <span className="text-[11px] font-mono text-zinc-400 hidden sm:inline">
+                {CATALOGUE_LIVRES.filter((b) => b.langue === lang).length} {fr ? "ouvrages disponibles" : "books available"}
+              </span>
+            </div>
           </div>
+
           <div className="lg:col-span-4 flex justify-center lg:justify-end">
-            <img src="/echo10.png" alt="Echo AI System" className="w-full max-w-[180px] h-auto object-contain drop-shadow-[0_10px_25px_rgba(6,182,212,0.15)]" />
+            <img
+              src="/echo10.png"
+              alt="Echo AI System"
+              className="w-full max-w-[170px] md:max-w-[190px] h-auto object-contain drop-shadow-[0_10px_25px_rgba(6,182,212,0.15)]"
+            />
           </div>
         </div>
       </section>
 
-      {/* SÉPARATEUR DE SECTION */}
+      {/* SÉPARATEUR DE SECTION AVEC FLÈCHE ANIMÉE AU MILIEU */}
       <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
         <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
@@ -996,10 +1039,23 @@ function LibrairieContent() {
         <svg className="absolute top-0 left-0 w-full h-full text-transparent fill-none pointer-events-none z-22" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,60 Q360,0 720,50 Q1080,90 1440,30" stroke="#06b6d4" strokeWidth="6" className="drop-shadow-[0_0_12px_#06b6d4]" />
         </svg>
+
+        {/* FLÈCHE BLANCHE/CYAN ANIMÉE AU MILIEU DE LA VAGUE */}
+        <button
+          onClick={scrollToCatalog}
+          className="absolute left-1/2 -translate-x-1/2 bottom-3 z-30 flex flex-col items-center group cursor-pointer"
+          title={fr ? "Faire défiler vers le catalogue" : "Scroll to catalog"}
+        >
+          <div className="w-8 h-8 rounded-full bg-black/60 border border-cyan-400/60 flex items-center justify-center animate-bounce shadow-[0_0_15px_rgba(6,182,212,0.6)] group-hover:border-cyan-300">
+            <svg className="w-4 h-4 text-cyan-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </div>
+        </button>
       </div>
 
       {/* BARRE DE RECHERCHE */}
-      <section className="max-w-xl mx-auto px-6 pt-6 pb-2 text-center relative z-10">
+      <section className="max-w-xl mx-auto px-6 pt-5 pb-2 text-center relative z-10">
         <input
           type="text"
           value={searchQuery}
@@ -1020,8 +1076,8 @@ function LibrairieContent() {
         />
       </section>
 
-      {/* SECTION DU CATALOGUE */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-24 pt-4 relative z-10">
+      {/* SECTION DU CATALOGUE AVEC ID D'ANCRAGE */}
+      <main id="catalogue-livres" className="max-w-7xl mx-auto px-4 sm:px-6 pb-24 pt-4 relative z-10 scroll-mt-6">
         <div className="flex justify-between items-center mb-8 border-b border-zinc-800/20 pb-3">
           <span className={`font-mono text-xs font-bold uppercase tracking-wider ${isDark ? "text-zinc-400" : "text-zinc-600"}`}>
             {fr ? "Catalogue actif :" : "Active catalog:"}{" "}
@@ -1116,7 +1172,7 @@ function LibrairieContent() {
                         </span>
                       </div>
 
-                      {/* 1. SECTION LECTURE (LISEUSE) */}
+                      {/* LECTURE LISEUSE */}
                       {isPaidTier ? (
                         <button
                           onClick={() => {
@@ -1140,7 +1196,7 @@ function LibrairieContent() {
                         </button>
                       )}
 
-                      {/* 2. SECTION TÉLÉCHARGEMENT DÉFINITIF LIÉ À L'ACHAT UNITAIRE */}
+                      {/* TÉLÉCHARGEMENT OU ACHAT UNITAIRE */}
                       {isOwned ? (
                         <button
                           onClick={() => handleDownloadFile(book)}
@@ -1305,7 +1361,7 @@ function LibrairieContent() {
         </div>
       )}
 
-      {/* ── MODALE D'ACHAT UNITAIRE DE LIVRE (STRIPE) ── */}
+      {/* ── MODALE D'ACHAT STRIPE UNITAIRE ── */}
       {bookToBuy && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-[99999] p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-cyan-500/50 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100 text-center relative">
@@ -1363,7 +1419,7 @@ function LibrairieContent() {
         </div>
       )}
 
-      {/* ── LISEUSE EPUB (MODE ENTIER OU EXTRAIT) ── */}
+      {/* ── LISEUSE EPUB KOBO ── */}
       {readingBook && (
         <LecteurKobo
           book={readingBook}
@@ -1379,7 +1435,7 @@ function LibrairieContent() {
         />
       )}
 
-      {/* ── MODALE CONTACT BRANCHÉE SUR RESEND ── */}
+      {/* ── MODALE CONTACT RESEND ── */}
       <ContactModal
         isOpen={showContactModal}
         onClose={() => setShowContactModal(false)}
@@ -1572,7 +1628,7 @@ function LibrairieContent() {
         </div>
       )}
 
-      {/* ── MODALE DE CRÉATION DE COMPTE (SIGN UP AVEC COMPTE À REBOURS) ── */}
+      {/* ── MODALE DE CRÉATION DE COMPTE (SIGN UP) ── */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
@@ -1623,20 +1679,9 @@ function LibrairieContent() {
                 </div>
               )}
 
-              {/* ENCADRÉ VERT IDENTIQUE AVEC COMPTE À REBOURS */}
               {signUpSuccess && (
                 <div className="bg-emerald-950/50 border border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-400 space-y-3 font-mono">
                   <p>✓ {signUpSuccess}</p>
-                  <button
-                    type="button"
-                    onClick={handleResendEmail}
-                    disabled={resendCountdown > 0}
-                    className="w-full py-2 rounded-lg text-xs font-bold transition-all border disabled:opacity-50 disabled:cursor-not-allowed border-emerald-500/50 text-emerald-400 hover:bg-emerald-950/40 cursor-pointer"
-                  >
-                    {resendCountdown > 0
-                      ? (fr ? `Renvoyer dans ${resendCountdown}s` : `Resend in ${resendCountdown}s`)
-                      : (fr ? "↺ Renvoyer le lien de confirmation" : "↺ Resend confirmation link")}
-                  </button>
                 </div>
               )}
 
@@ -2125,7 +2170,7 @@ function LecteurKobo({
             </div>
           )}
 
-          {/* POP-UP FIN D'EXTRAIT (8 PAGES ATTEINTES) */}
+          {/* POP-UP FIN D'EXTRAIT (8 PAGES) */}
           {limiteExtraitAtteinte && (
             <div className="absolute inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-6 z-30 animate-in fade-in">
               <div className="max-w-md w-full bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 text-center text-zinc-100 shadow-2xl">
