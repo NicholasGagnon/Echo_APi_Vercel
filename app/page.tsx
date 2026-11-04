@@ -504,10 +504,34 @@ function LibrairieContent() {
   const fr = lang === "fr";
   const isDark = theme === "dark";
 
+  // ── FONCTIONS D'ÉVÉNEMENTS X ADS ──
+  const triggerLoginClickEvent = () => {
+    if (typeof window !== "undefined" && (window as any).twq) {
+      (window as any).twq("event", "tw-rhzsa-rih5l", {});
+    }
+  };
+
+  const triggerPurchaseButtonClickEvent = (bookTitle?: string) => {
+    if (typeof window !== "undefined" && (window as any).twq) {
+      (window as any).twq("event", "tw-rhzsa-rih5p", {
+        content_name: bookTitle || "Abonnement Illimite",
+      });
+    }
+  };
+
+  const triggerCheckoutStartedEvent = (planOrBook: string, value: string) => {
+    if (typeof window !== "undefined" && (window as any).twq) {
+      (window as any).twq("event", "tw-rhzsa-rih5s", {
+        content_name: planOrBook,
+        value: value,
+        currency: currency,
+      });
+    }
+  };
+
   // Défilement automatique d'accueil léger
   useEffect(() => {
     const timer = setTimeout(() => {
-      // Défile doucement de 140px seulement si l'utilisateur est encore tout en haut
       if (window.scrollY < 20) {
         window.scrollBy({ top: 140, behavior: "smooth" });
       }
@@ -524,6 +548,7 @@ function LibrairieContent() {
       });
     }
   }, [selectedBook]);
+
   const handleChangerLangue = (nouvelleLangue: Lang) => {
     setLang(nouvelleLangue);
     setCurrentPage(1);
@@ -680,7 +705,6 @@ function LibrairieContent() {
     }
   };
 
-  // Compte à rebours de 120s pour le renvoi
   const startResendCountdown = () => {
     setResendCountdown(120);
     const interval = setInterval(() => {
@@ -736,7 +760,6 @@ function LibrairieContent() {
     }
   };
 
-  // Renvoi du courriel
   const handleResendEmail = async () => {
     if (resendCountdown > 0 || !resendEmail) return;
     setSignUpError(null);
@@ -758,7 +781,6 @@ function LibrairieContent() {
     }
   };
 
-  // Mot de passe oublié
   const handleForgotPassword = async () => {
     setSignInError(null);
     setSignInSuccess(null);
@@ -784,10 +806,14 @@ function LibrairieContent() {
   // Abonnement global illimité
   const handleStripeCheckout = async () => {
     if (!user) {
+      triggerLoginClickEvent();
       setShowPremiumModal(false);
       setShowSignInModal(true);
       return;
     }
+
+    // Déclenchement de Checkout Started pour l'abonnement
+    triggerCheckoutStartedEvent("Abonnement Illimite", PRICES[currency].amount);
 
     setIsCheckoutLoading(true);
     try {
@@ -817,10 +843,14 @@ function LibrairieContent() {
   // Achat ponctuel d'un livre précis
   const handleBuySingleBook = async (book: Book) => {
     if (!user) {
+      triggerLoginClickEvent();
       setBookToBuy(null);
       setShowSignInModal(true);
       return;
     }
+
+    // Déclenchement de Checkout Started pour l'achat de livre
+    triggerCheckoutStartedEvent(book.titre, PRICES[currency].bookAmount);
 
     setIsBuyingBook(true);
     try {
@@ -848,7 +878,6 @@ function LibrairieContent() {
     }
   };
 
-  // Téléchargement direct du fichier EPUB
   const handleDownloadFile = (book: Book) => {
     const link = document.createElement("a");
     link.href = encodeURI(book.epubUrl);
@@ -977,6 +1006,7 @@ function LibrairieContent() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
+                      triggerLoginClickEvent();
                       clearAuthInputs();
                       setShowSignInModal(true);
                     }}
@@ -1006,8 +1036,8 @@ function LibrairieContent() {
               {fr ? "COLLECTION D'AUTEUR & ÉDITION NUMÉRIQUE" : "AUTHOR COLLECTION & DIGITAL EDITION"}
             </div>
             <h1 className="text-3xl md:text-5xl font-red tracking-tighter leading-[1.05] mb-3 uppercase bg-gradient-to-r from-zinc-950 via-cyan-900 to-cyan-600 bg-clip-text text-transparent drop-shadow-sm">
-  {fr ? "La Librairie d'Auteur" : "Author's Bookstore"}
-</h1>
+              {fr ? "La Librairie d'Auteur" : "Author's Bookstore"}
+            </h1>
             <p className="text-zinc-500 max-w-xl text-xs md:text-sm font-sans leading-relaxed mb-6">
               {fr
                 ? "Découvrez l'ensemble des romans, thrillers et sagas au format EPUB sans DRM. Lisez un extrait au cœur de chaque livre ou achetez votre fichier définitif."
@@ -1017,12 +1047,12 @@ function LibrairieContent() {
             {/* GROS BOUTON TRÈS VISIBLE AVEC DÉFILEMENT DIRECT */}
             <div className="flex items-center gap-3">
               <button
-  onClick={scrollToCatalog}
-  className="px-5 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-mono text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-[0_4px_20px_rgba(6,182,212,0.35)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)] hover:scale-[1.02] flex items-center gap-2 cursor-pointer group"
->
-  <span>{fr ? "Consulter le catalogue" : "Browse the catalog"}</span>
-  <span className="transform group-hover:translate-y-1 transition-transform text-sm">↓</span>
-</button>
+                onClick={scrollToCatalog}
+                className="px-5 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-mono text-xs font-black uppercase tracking-wider transition-all duration-300 shadow-[0_4px_20px_rgba(6,182,212,0.35)] hover:shadow-[0_0_25px_rgba(6,182,212,0.6)] hover:scale-[1.02] flex items-center gap-2 cursor-pointer group"
+              >
+                <span>{fr ? "Consulter le catalogue" : "Browse the catalog"}</span>
+                <span className="transform group-hover:translate-y-1 transition-transform text-sm">↓</span>
+              </button>
 
               <span className="text-[11px] font-mono text-zinc-400 hidden sm:inline">
                 {CATALOGUE_LIVRES.filter((b) => b.langue === lang).length} {fr ? "ouvrages disponibles" : "books available"}
@@ -1217,8 +1247,13 @@ function LibrairieContent() {
                       ) : (
                         <button
                           onClick={() => {
-                            if (!user) setShowSignInModal(true);
-                            else setBookToBuy(book);
+                            triggerPurchaseButtonClickEvent(book.titre);
+                            if (!user) {
+                              triggerLoginClickEvent();
+                              setShowSignInModal(true);
+                            } else {
+                              setBookToBuy(book);
+                            }
                           }}
                           className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 font-mono font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer hover:border-cyan-400"
                         >
@@ -1357,8 +1392,13 @@ function LibrairieContent() {
                   onClick={() => {
                     const b = selectedBook;
                     setSelectedBook(null);
-                    if (!user) setShowSignInModal(true);
-                    else setBookToBuy(b);
+                    triggerPurchaseButtonClickEvent(b.titre);
+                    if (!user) {
+                      triggerLoginClickEvent();
+                      setShowSignInModal(true);
+                    } else {
+                      setBookToBuy(b);
+                    }
                   }}
                   className="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black uppercase text-xs font-mono rounded-xl tracking-wider transition-all"
                 >
@@ -1438,8 +1478,12 @@ function LibrairieContent() {
           isExcerptMode={isExcerptMode}
           onUnlock={() => {
             setReadingBook(null);
-            if (!user) setShowSignInModal(true);
-            else setShowPremiumModal(true);
+            if (!user) {
+              triggerLoginClickEvent();
+              setShowSignInModal(true);
+            } else {
+              setShowPremiumModal(true);
+            }
           }}
         />
       )}
@@ -1517,7 +1561,10 @@ function LibrairieContent() {
             </div>
 
             <button
-              onClick={handleStripeCheckout}
+              onClick={() => {
+                triggerPurchaseButtonClickEvent("Abonnement Illimite");
+                handleStripeCheckout();
+              }}
               disabled={isCheckoutLoading}
               className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-amber-400 to-amber-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(245,158,11,0.3)] cursor-pointer disabled:opacity-50"
             >
