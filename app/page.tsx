@@ -519,7 +519,31 @@ function LibrairieContent() {
     }, 1200);
     return () => clearTimeout(timer);
   }, []);
+// Défilement automatique et déclenchement du pixel X
+  useEffect(() => {
+    // Déclenchement explicite de la visite pour X Ads
+    if (typeof window !== "undefined" && (window as any).twq) {
+      (window as any).twq("event", "tw-rhzsa-sitevisit", {});
+    }
 
+    const timer = setTimeout(() => {
+      // Défile doucement de 140px seulement si l'utilisateur est encore tout en haut
+      if (window.scrollY < 20) {
+        window.scrollBy({ top: 140, behavior: "smooth" });
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // ── SUIVI X ADS : OUVERTURE DE LA FICHE DÉTAIL D'UN LIVRE ──
+  useEffect(() => {
+    if (selectedBook && typeof window !== "undefined" && (window as any).twq) {
+      (window as any).twq("event", "tw-rhzsa-rih44", {
+        content_name: selectedBook.titre,
+        content_id: selectedBook.id,
+      });
+    }
+  }, [selectedBook]);
   const handleChangerLangue = (nouvelleLangue: Lang) => {
     setLang(nouvelleLangue);
     setCurrentPage(1);
