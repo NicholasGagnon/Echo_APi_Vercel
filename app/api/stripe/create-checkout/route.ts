@@ -15,35 +15,32 @@ export async function POST(req: Request) {
       );
     }
 
-    const normalizedCurrency = currency.toLowerCase().trim();
+    const normalizedCurrency = (currency || "cad").toLowerCase().trim();
     const origin = req.headers.get("origin") ?? "https://echosai.ca";
     const referer = req.headers.get("referer");
     const returnUrl = referer || origin;
 
     // ── CAS 1 : ACHAT UNITAIRE D'UN LIVRE (TÉLÉCHARGEMENT DÉFINITIF) ──
     if (bookId) {
-      const bookPriceId = process.env.STRIPE_ACHAT_DE_LIVRE_PRICE_ID;
-
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         mode: "payment",
         customer_email: userEmail,
+        currency: normalizedCurrency, // Force la session Stripe dans la devise choisie
         allow_promotion_codes: true,
-        line_items: bookPriceId
-          ? [{ price: bookPriceId, quantity: 1 }]
-          : [
-              {
-                price_data: {
-                  currency: normalizedCurrency,
-                  product_data: {
-                    name: bookTitle ? `Livre : ${bookTitle}` : "Achat de livre",
-                    description: "Accès et téléchargement EPUB définitif",
-                  },
-                  unit_amount: 250, // 2.50 $CA
-                },
-                quantity: 1,
+        line_items: [
+          {
+            price_data: {
+              currency: normalizedCurrency, // 'cad', 'usd', ou 'eur'
+              product_data: {
+                name: bookTitle ? `Livre : ${bookTitle}` : "Achat de livre",
+                description: "Accès et téléchargement EPUB définitif",
               },
-            ],
+              unit_amount: 250, // 2.50 dans la devise sélectionnée
+            },
+            quantity: 1,
+          },
+        ],
         success_url: `${returnUrl}?book_purchase=success&book_id=${encodeURIComponent(bookId)}`,
         cancel_url: `${returnUrl}?book_purchase=canceled`,
         metadata: {
@@ -61,6 +58,7 @@ export async function POST(req: Request) {
       payment_method_types: ["card"],
       mode: "subscription",
       customer_email: userEmail,
+      currency: normalizedCurrency,
       allow_promotion_codes: true,
       line_items: [
         {
