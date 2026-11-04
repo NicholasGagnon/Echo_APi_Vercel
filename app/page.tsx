@@ -483,10 +483,18 @@ function LibrairieContent() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+  // Modales et formulaires d'authentification (Connexion / Inscription)
+  const [showSignInModal, setShowSignInModal] = useState<boolean>(false);
+  const [showSignUpModal, setShowSignUpModal] = useState<boolean>(false);
   const [authEmail, setAuthEmail] = useState<string>("");
   const [authPassword, setAuthPassword] = useState<string>("");
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const [signInSuccess, setSignInSuccess] = useState<string | null>(null);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
+  const [signUpSuccess, setSignUpSuccess] = useState<string | null>(null);
+
+  const [resendCountdown, setResendCountdown] = useState<number>(0);
+  const [resendEmail, setResendEmail] = useState<string>("");
 
   const [showContactModal, setShowContactModal] = useState<boolean>(false);
   const [showPremiumModal, setShowPremiumModal] = useState<boolean>(false);
@@ -500,6 +508,15 @@ function LibrairieContent() {
     setLang(nouvelleLangue);
     setCurrentPage(1);
     setSearchQuery("");
+  };
+
+  const clearAuthInputs = () => {
+    setAuthEmail("");
+    setAuthPassword("");
+    setSignInError(null);
+    setSignInSuccess(null);
+    setSignUpError(null);
+    setSignUpSuccess(null);
   };
 
   const chargerLivresAchetes = async (uid: string) => {
@@ -532,7 +549,9 @@ function LibrairieContent() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session?.user) {
         setUser(session.user);
-        setShowAuthModal(false);
+        setShowSignInModal(false);
+        setShowSignUpModal(false);
+        clearAuthInputs();
         verifierStatutUser(session.user.id);
         chargerLivresAchetes(session.user.id);
       } else {
@@ -608,7 +627,7 @@ function LibrairieContent() {
     const cleanOrigin = window.location.origin + window.location.pathname;
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: cleanOrigin, scopes: "openid profile email" },
+      options: { redirectTo: cleanOrigin, scopes: "openid profile email", queryParams: { prompt: "select_account" } },
     });
   };
 
@@ -620,11 +639,131 @@ function LibrairieContent() {
     });
   };
 
+  // Connexion par courriel & mot de passe
+  const handleEmailSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSignInError(null);
+    setSignInSuccess(null);
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setSignInError(fr ? "Veuillez entrer vos identifiants." : "Please enter your credentials.");
+      return;
+    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail.trim(),
+      password: authPassword,
+    });
+    if (error) {
+      setSignInError(error.message);
+    } else {
+      setShowSignInModal(false);
+      clearAuthInputs();
+    }
+  };
+
+  // Compte à rebours de 120s pour le renvoi
+  const startResendCountdown = () => {
+    setResendCountdown(120);
+    const interval = setInterval(() => {
+      setResendCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Création de compte (Sign Up)
+  const handleEmailSignUp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSignUpError(null);
+    setSignUpSuccess(null);
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setSignUpError(fr ? "Veuillez entrer un courriel et un mot de passe." : "Please enter an email and password.");
+      return;
+    }
+    const trimmedEmail = authEmail.trim();
+    const cleanOrigin = window.location.origin + window.location.pathname;
+    const { data, error } = await supabase.auth.signUp({
+      email: trimmedEmail,
+      password: authPassword,
+      options: { emailRedirectTo: cleanOrigin },
+    });
+
+    if (error) {
+      if (error.message.includes("rate") || (error as any).status === 429) {
+        setSignUpError(fr ? "Trop de tentatives. Veuillez patienter." : "Too many attempts. Please wait.");
+      } else if (error.message.includes("already") || error.message.includes("registered")) {
+        setSignUpError(fr ? "Un compte avec ce courriel existe déjà. Connectez-vous." : "An account with this email already exists. Sign in instead.");
+      } else {
+        setSignUpError(error.message);
+      }
+    } else {
+      if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+        setSignUpError(fr ? "Un compte avec ce courriel existe déjà." : "An account with this email already exists.");
+        return;
+      }
+      setResendEmail(trimmedEmail);
+      setSignUpSuccess(
+        fr
+          ? "Lien de confirmation envoyé ! Veuillez vérifier votre boîte de réception ainsi que votre dossier de courriels indésirables (spam)."
+          : "Confirmation link sent! Please check your inbox and your spam/junk folder."
+      );
+      startResendCountdown();
+    }
+  };
+
+  // Renvoi du courriel de confirmation
+  const handleResendEmail = async () => {
+    if (resendCountdown > 0 || !resendEmail) return;
+    setSignUpError(null);
+    const cleanOrigin = window.location.origin + window.location.pathname;
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: resendEmail,
+      options: { emailRedirectTo: cleanOrigin },
+    });
+    if (error) {
+      setSignUpError(error.message);
+    } else {
+      setSignUpSuccess(
+        fr
+          ? "Un nouveau lien a été envoyé. Pensez à vérifier votre dossier de courriels indésirables (spam)."
+          : "A new link has been sent. Remember to check your spam/junk folder."
+      );
+      startResendCountdown();
+    }
+  };
+
+  // Mot de passe oublié
+  const handleForgotPassword = async () => {
+    setSignInError(null);
+    setSignInSuccess(null);
+    if (!authEmail.trim()) {
+      setSignInError(fr ? "Veuillez entrer votre courriel d'abord." : "Please enter your email address first.");
+      return;
+    }
+    const cleanOrigin = window.location.origin + window.location.pathname;
+    const { error } = await supabase.auth.resetPasswordForEmail(authEmail.trim(), {
+      redirectTo: cleanOrigin,
+    });
+    if (error) {
+      setSignInError(error.message);
+    } else {
+      setSignInSuccess(
+        fr
+          ? "Lien de réinitialisation envoyé ! Pensez à vérifier vos indésirables."
+          : "Reset link sent! Please check your spam folder."
+      );
+    }
+  };
+
   // Abonnement global illimité
   const handleStripeCheckout = async () => {
     if (!user) {
       setShowPremiumModal(false);
-      setShowAuthModal(true);
+      setShowSignInModal(true);
       return;
     }
 
@@ -657,7 +796,7 @@ function LibrairieContent() {
   const handleBuySingleBook = async (book: Book) => {
     if (!user) {
       setBookToBuy(null);
-      setShowAuthModal(true);
+      setShowSignInModal(true);
       return;
     }
 
@@ -720,8 +859,6 @@ function LibrairieContent() {
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center relative flex-wrap gap-4">
             
-            
-
             <div className="flex items-center gap-4 text-xs font-mono relative flex-wrap">
               {/* BOUTON CONTACT SUR MESURE */}
               <button
@@ -791,7 +928,7 @@ function LibrairieContent() {
                 </button>
               </div>
 
-              {/* SESSION UTILISATEUR */}
+              {/* SESSION UTILISATEUR OU BOUTONS CONNEXION / INSCRIPTION */}
               {user ? (
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-md border border-zinc-200 font-mono">
@@ -805,12 +942,26 @@ function LibrairieContent() {
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm cursor-pointer"
-                >
-                  {fr ? "Connexion" : "Sign In"}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      clearAuthInputs();
+                      setShowSignInModal(true);
+                    }}
+                    className="px-4 py-2 border border-zinc-900 text-zinc-900 rounded-xl hover:bg-zinc-900 hover:text-white transition-all font-bold tracking-tight shadow-sm cursor-pointer"
+                  >
+                    {fr ? "Connexion" : "Sign In"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearAuthInputs();
+                      setShowSignUpModal(true);
+                    }}
+                    className="px-4 py-2 bg-zinc-900 text-white rounded-xl hover:bg-zinc-800 transition-all font-bold tracking-tight shadow-sm cursor-pointer"
+                  >
+                    {fr ? "S'inscrire" : "Sign Up"}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1001,7 +1152,7 @@ function LibrairieContent() {
                       ) : (
                         <button
                           onClick={() => {
-                            if (!user) setShowAuthModal(true);
+                            if (!user) setShowSignInModal(true);
                             else setBookToBuy(book);
                           }}
                           className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 font-mono font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer hover:border-cyan-400"
@@ -1141,7 +1292,7 @@ function LibrairieContent() {
                   onClick={() => {
                     const b = selectedBook;
                     setSelectedBook(null);
-                    if (!user) setShowAuthModal(true);
+                    if (!user) setShowSignInModal(true);
                     else setBookToBuy(b);
                   }}
                   className="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-black uppercase text-xs font-mono rounded-xl tracking-wider transition-all"
@@ -1222,7 +1373,7 @@ function LibrairieContent() {
           isExcerptMode={isExcerptMode}
           onUnlock={() => {
             setReadingBook(null);
-            if (!user) setShowAuthModal(true);
+            if (!user) setShowSignInModal(true);
             else setShowPremiumModal(true);
           }}
         />
@@ -1315,78 +1466,222 @@ function LibrairieContent() {
         </div>
       )}
 
-      {/* ── MODALE DE CONNEXION ── */}
-      {showAuthModal && (
+      {/* ── MODALE DE CONNEXION (SIGN IN) ── */}
+      {showSignInModal && (
         <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
-            <div className="flex justify-between items-center border-b border-zinc-800 pb-4 mb-4">
-              <div>
-                <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
-                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
-                  {fr ? "Connectez-vous pour accéder à votre bibliothèque." : "Sign in to access your library."}
-                </p>
+            <form onSubmit={handleEmailSignIn} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Connexion Requise" : "Authentication Required"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Connectez-vous pour accéder à votre bibliothèque." : "Sign in to access your library."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSignInModal(false);
+                    clearAuthInputs();
+                  }}
+                  className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAuthModal(false)}
-                className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
 
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <button
-                type="button"
-                onClick={handleGoogleConnect}
-                className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer"
-              >
-                <GoogleLogo />
-                <span className="text-white text-[9px] font-bold">GOOGLE</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleMicrosoftConnect}
-                className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer"
-              >
-                <MicrosoftLogo />
-                <span className="text-white text-[9px] font-bold">MICROSOFT</span>
-              </button>
-            </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleGoogleConnect}
+                  className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer"
+                >
+                  <GoogleLogo />
+                  <span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMicrosoftConnect}
+                  className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer"
+                >
+                  <MicrosoftLogo />
+                  <span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
 
-            <div className="h-px bg-zinc-900 my-3" />
+              <div className="h-px bg-zinc-900 my-2" />
 
-            <div className="space-y-3">
-              <input
-                type="email"
-                placeholder="name@domain.com"
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
-              />
-              <input
-                type="password"
-                placeholder="••••••••••••"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
-              />
-              {authError && <p className="text-red-400 text-xs font-mono">⚠️ {authError}</p>}
+              {signInError && (
+                <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400 font-mono">
+                  ⚠️ {signInError}
+                </div>
+              )}
+              {signInSuccess && (
+                <div className="bg-emerald-950/50 border border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-400 font-mono">
+                  ✓ {signInSuccess}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  placeholder="name@domain.com"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                />
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                />
+                <button
+                  onClick={handleForgotPassword}
+                  type="button"
+                  className="text-xs text-zinc-500 hover:text-cyan-400 transition-colors cursor-pointer"
+                >
+                  {fr ? "Mot de passe oublié ?" : "Forgot password?"}
+                </button>
+              </div>
 
               <button
-                onClick={async () => {
-                  setAuthError(null);
-                  const { error } = await supabase.auth.signInWithPassword({
-                    email: authEmail,
-                    password: authPassword,
-                  });
-                  if (error) setAuthError(error.message);
-                }}
+                type="submit"
                 className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer"
               >
                 {fr ? "Se connecter" : "Log in"}
               </button>
-            </div>
+
+              <p className="text-center text-zinc-500 text-xs pt-1">
+                {fr ? "Pas encore de compte ? " : "Don't have an account? "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSignInModal(false);
+                    clearAuthInputs();
+                    setShowSignUpModal(true);
+                  }}
+                  className="text-cyan-400 underline font-bold cursor-pointer"
+                >
+                  {fr ? "S'inscrire" : "Sign up"}
+                </button>
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALE DE CRÉATION DE COMPTE (SIGN UP AVEC COMPTE À REBOURS) ── */}
+      {showSignUpModal && (
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center z-50 p-6 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200 text-zinc-100">
+            <form onSubmit={handleEmailSignUp} className="space-y-5">
+              <div className="flex justify-between items-center border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-base font-bold">{fr ? "Créer un compte" : "Create account"}</h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                    {fr ? "Inscrivez-vous pour débloquer votre accès." : "Sign up to unlock your access."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSignUpModal(false);
+                    clearAuthInputs();
+                  }}
+                  className="text-zinc-400 hover:text-white text-sm p-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleGoogleConnect}
+                  className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer"
+                >
+                  <GoogleLogo />
+                  <span className="text-white text-[9px] font-bold">GOOGLE</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMicrosoftConnect}
+                  className="flex items-center justify-center gap-2 px-2 py-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 cursor-pointer"
+                >
+                  <MicrosoftLogo />
+                  <span className="text-white text-[9px] font-bold">MICROSOFT</span>
+                </button>
+              </div>
+
+              <div className="h-px bg-zinc-900 my-2" />
+
+              {signUpError && (
+                <div className="bg-red-950/50 border border-red-500/50 rounded-xl p-3 text-xs text-red-400 font-mono">
+                  ⚠️ {signUpError}
+                </div>
+              )}
+
+              {/* ENCADRÉ VERT IDENTIQUE AVEC COMPTE À REBOURS */}
+              {signUpSuccess && (
+                <div className="bg-emerald-950/50 border border-emerald-500/50 rounded-xl p-3 text-xs text-emerald-400 space-y-3 font-mono">
+                  <p>✓ {signUpSuccess}</p>
+                  <button
+                    type="button"
+                    onClick={handleResendEmail}
+                    disabled={resendCountdown > 0}
+                    className="w-full py-2 rounded-lg text-xs font-bold transition-all border disabled:opacity-50 disabled:cursor-not-allowed border-emerald-500/50 text-emerald-400 hover:bg-emerald-950/40 cursor-pointer"
+                  >
+                    {resendCountdown > 0
+                      ? (fr ? `Renvoyer dans ${resendCountdown}s` : `Resend in ${resendCountdown}s`)
+                      : (fr ? "↺ Renvoyer le lien de confirmation" : "↺ Resend confirmation link")}
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  placeholder="name@domain.com"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                />
+                <div>
+                  <input
+                    type="password"
+                    placeholder="••••••••••••"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500"
+                  />
+                  <p className="text-zinc-500 text-[10px] mt-1">{fr ? "Minimum 6 caractères." : "Minimum 6 characters."}</p>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold py-3.5 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                {fr ? "Créer mon compte" : "Create my account"}
+              </button>
+
+              <p className="text-center text-zinc-500 text-xs pt-1">
+                {fr ? "Déjà un compte ? " : "Already have an account? "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSignUpModal(false);
+                    clearAuthInputs();
+                    setShowSignInModal(true);
+                  }}
+                  className="text-cyan-400 underline font-bold cursor-pointer"
+                >
+                  {fr ? "Se connecter" : "Sign in"}
+                </button>
+              </p>
+            </form>
           </div>
         </div>
       )}
@@ -1830,7 +2125,7 @@ function LecteurKobo({
             </div>
           )}
 
-          {/* POP-UP FIN D'EXTRAIT (3-4 PAGES ATTEINTES) */}
+          {/* POP-UP FIN D'EXTRAIT (8 PAGES ATTEINTES) */}
           {limiteExtraitAtteinte && (
             <div className="absolute inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-6 z-30 animate-in fade-in">
               <div className="max-w-md w-full bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 text-center text-zinc-100 shadow-2xl">
@@ -1840,8 +2135,8 @@ function LecteurKobo({
                 </h3>
                 <p className="text-xs text-zinc-400 font-sans leading-relaxed mb-6">
                   {fr
-                    ? "Vous avez lu les 4-5 pages d'extrait de ce livre. Débloquez l'accès illimité pour poursuivre votre lecture jusqu'au dénouement."
-                    : "You have completed the 4-5 page excerpt. Unlock unlimited access to continue reading to the very end."}
+                    ? "Vous avez lu les 8 pages d'extrait de ce livre. Débloquez l'accès illimité pour poursuivre votre lecture jusqu'au dénouement."
+                    : "You have completed the 8 page excerpt. Unlock unlimited access to continue reading to the very end."}
                 </p>
                 <div className="space-y-3">
                   <button
