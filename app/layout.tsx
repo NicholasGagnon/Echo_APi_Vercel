@@ -4,35 +4,45 @@ import { AppProvider } from "../context/AppContext";
 import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
-  title: "Echo AI | Affinité de projets",
+  metadataBase: new URL("https://echosai.ca"),
+  title: "EchoAI | La Librairie d'Auteur - Romans, Thrillers & IA",
   description:
-    "Découvrez de nouvelles façons de propulser vos idées, d'explorer des projets complémentaires, d'obtenir les avis de la communauté ou de l'IA et de réaliser des auditions de sites web.",
+    "Découvrez les romans, thrillers psychologiques et œuvres sur la conscience artificielle de Nicholas Gagnon. Lecture intégrale en ligne et téléchargement d'EPUB.",
   
   verification: {
     pinterest: "b8c6e3722e58cd63a982307875f72ea7",
   },
 
   openGraph: {
-    title: "Echo AI | Affinité de projets",
-    description: "Découvrez de nouvelles façons de propulser vos idées, d'explorer des projets complémentaires et de collaborer avec la communauté.",
+    title: "EchoAI | La Librairie d'Auteur - Romans & Thrillers",
+    description:
+      "Plongez dans les romans, sagas et thrillers de Nicholas Gagnon au format EPUB. Extrait gratuit en ligne et achat immédiat.",
     url: "https://echosai.ca",
-    siteName: "Echo AI",
+    siteName: "EchoAI Librairie",
     images: [
       {
-        url: "https://echosai.ca/affinity.jpg",
+        url: "https://echosai.ca/jojo.png",
         width: 1200,
         height: 630,
-        alt: "Affinité de projets",
+        alt: "La Librairie d'Auteur EchoAI",
       },
     ],
     locale: "fr_CA",
     type: "website",
   },
 
+  twitter: {
+    card: "summary_large_image",
+    title: "EchoAI | La Librairie d'Auteur",
+    description:
+      "Romans, thrillers psychologiques et récits sur l'IA par Nicholas Gagnon.",
+    images: ["https://echosai.ca/jojo.png"],
+  },
+
   keywords: [
-    "Echo AI", "Affinité de projets", "gestion de projets", "collaboration", "entraide informatique", 
-    "audition de site web", "avis de la communauté", "analyse IA", "partenariat", "co-creation", "projets", 
-    "pinterest", "facebook", "fb", "communauté informatique"
+    "EchoAI", "Librairie d'auteur", "Nicholas Gagnon", "La Proposition", "Le Sang du Fauve", 
+    "Les Enfants Rois", "L'enfant intouchable", "thriller psychologique", "roman policier", 
+    "livre EPUB", "science-fiction", "intelligence artificielle", "lecture en ligne"
   ]
 };
 
