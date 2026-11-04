@@ -22,15 +22,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "JSON Invalide" }, { status: 400 });
   }
 
-  // On écoute à la fois la fin du checkout et le succès des factures d'abonnement
   if (event.type === "checkout.session.completed" || event.type === "invoice.payment_succeeded") {
     const sessionOrInvoice = event.data.object as any;
-    
-    // Récupération de l'email et du userId selon le type d'événement Stripe
+
     const customerEmail = sessionOrInvoice.customer_email || sessionOrInvoice.customer_details?.email;
     const userId = sessionOrInvoice.metadata?.userId || sessionOrInvoice.metadata?.user_id;
+    const paymentType = sessionOrInvoice.metadata?.type;
+    const bookId = sessionOrInvoice.metadata?.bookId;
 
-    console.log(`⚡ Traitement paiement pour userId: ${userId} / email: ${customerEmail}`);
+    console.log(`⚡ Traitement paiement (${paymentType || "abonnement"}) pour userId: ${userId} / email: ${customerEmail}`);
 
     try {
       let targetUserId = userId;
@@ -41,60 +41,80 @@ export async function POST(req: Request) {
         if (matched) targetUserId = matched.id;
       }
 
-      if (targetUserId) {
-        // 1. SOURCE DE VÉRITÉ GLOBALE (Corrigé sans le doublon erroné)
-        await supabaseAdmin.from("profiles").upsert({
-          id: targetUserId,
-          user_tier: "premium",
-          updated_at: new Date().toISOString()
-        }, { onConflict: "id" });
+      if (!targetUserId) {
+        console.warn(`⚠️ Aucun utilisateur Supabase trouvé pour ce paiement (email: ${customerEmail})`);
+        return NextResponse.json({ received: true }, { status: 200 });
+      }
 
-        // 2. MISE À JOUR DES TABLES DE QUOTAS (Sécurisée table par table)
-        const quotaTables = [
-          "world_quotas",
-          "contenu_quotas",
-          "chat_quotas",
-          "idea_quotas",
-          "horizon_quotas",
-          "correcteur_quotas",
-          "budget_quotas",
-          "vitality_quotas",
-          "calendar_quotas",
-          "avis_quotas",
-          "fastbilling_quotas",
-          "books_quotas"
-        ];
+      // ── CAS 1 : ACHAT PONCTUEL D'UN LIVRE (TÉLÉCHARGEMENT DÉFINITIF) ──
+      if (paymentType === "book_purchase" && bookId) {
+        const { error: bookInsertErr } = await supabaseAdmin.from("user_books").upsert(
+          {
+            user_id: targetUserId,
+            book_id: bookId,
+          },
+          { onConflict: "user_id, book_id" }
+        );
 
-        for (const table of quotaTables) {
-          try {
-            // Teste d'abord avec available_credits
-            let payload: any = {
-              user_id: targetUserId,
-              available_credits: 9999,
-              tier: "advantage",
-              updated_at: new Date().toISOString()
-            };
-            
-            // Cas particulier pour world_quotas qui utilise "available" dans certaines versions
-            if (table === "world_quotas") {
-              payload = {
-                user_id: targetUserId,
-                available: 9999,
-                tier: "advantage",
-                updated_at: new Date().toISOString()
-              };
-            }
-
-            await supabaseAdmin.from(table).upsert(payload, { onConflict: "user_id" });
-          } catch (tableErr: any) {
-            console.warn(`⚠️ Impossible de mettre à jour la table ${table}:`, tableErr.message);
-          }
+        if (bookInsertErr) {
+          console.error("❌ Erreur insertion user_books:", bookInsertErr.message);
+          return NextResponse.json({ error: "Erreur DB livre" }, { status: 500 });
         }
 
-        console.log(`✅ ABONNEMENT GLOBAL DÉBLOQUÉ SUR TOUS LES OUTILS POUR ${targetUserId}`);
-      } else {
-        console.warn(`⚠️ Aucun utilisateur Supabase trouvé pour lier l'abonnement (email: ${customerEmail})`);
+        console.log(`✅ LIVRE "${bookId}" DÉBLOQUÉ POUR TÉLÉCHARGEMENT DÉFINITIF (User: ${targetUserId})`);
+        return NextResponse.json({ received: true }, { status: 200 });
       }
+
+      // ── CAS 2 : ABONNEMENT GLOBAL (LECTURE ILLIMITÉE EN LIGNE) ──
+      await supabaseAdmin.from("profiles").upsert(
+        {
+          id: targetUserId,
+          user_tier: "premium",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+
+      const quotaTables = [
+        "world_quotas",
+        "contenu_quotas",
+        "chat_quotas",
+        "idea_quotas",
+        "horizon_quotas",
+        "correcteur_quotas",
+        "budget_quotas",
+        "vitality_quotas",
+        "calendar_quotas",
+        "avis_quotas",
+        "fastbilling_quotas",
+        "books_quotas",
+      ];
+
+      for (const table of quotaTables) {
+        try {
+          let payload: any = {
+            user_id: targetUserId,
+            available_credits: 9999,
+            tier: "advantage",
+            updated_at: new Date().toISOString(),
+          };
+
+          if (table === "world_quotas") {
+            payload = {
+              user_id: targetUserId,
+              available: 9999,
+              tier: "advantage",
+              updated_at: new Date().toISOString(),
+            };
+          }
+
+          await supabaseAdmin.from(table).upsert(payload, { onConflict: "user_id" });
+        } catch (tableErr: any) {
+          console.warn(`⚠️ Impossible de mettre à jour la table ${table}:`, tableErr.message);
+        }
+      }
+
+      console.log(`✅ ABONNEMENT GLOBAL DÉBLOQUÉ SUR TOUS LES OUTILS POUR ${targetUserId}`);
     } catch (dbErr: any) {
       console.error("❌ Erreur Supabase Webhook:", dbErr.message);
       return NextResponse.json({ error: "Erreur DB" }, { status: 500 });
