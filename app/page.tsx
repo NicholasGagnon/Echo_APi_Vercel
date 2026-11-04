@@ -504,28 +504,8 @@ function LibrairieContent() {
   const fr = lang === "fr";
   const isDark = theme === "dark";
 
-  // Défilement automatique et déclenchement du pixel X
+  // Défilement automatique d'accueil léger
   useEffect(() => {
-    // Déclenchement explicite de la visite pour X Ads
-    if (typeof window !== "undefined" && (window as any).twq) {
-      (window as any).twq("event", "tw-rhzsa-sitevisit", {});
-    }
-
-    const timer = setTimeout(() => {
-      // Défile doucement de 140px seulement si l'utilisateur est encore tout en haut
-      if (window.scrollY < 20) {
-        window.scrollBy({ top: 140, behavior: "smooth" });
-      }
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, []);
-// Défilement automatique et déclenchement du pixel X
-  useEffect(() => {
-    // Déclenchement explicite de la visite pour X Ads
-    if (typeof window !== "undefined" && (window as any).twq) {
-      (window as any).twq("event", "tw-rhzsa-sitevisit", {});
-    }
-
     const timer = setTimeout(() => {
       // Défile doucement de 140px seulement si l'utilisateur est encore tout en haut
       if (window.scrollY < 20) {
