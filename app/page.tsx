@@ -25,19 +25,19 @@ interface Book {
 
 const MicrosoftLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23" fill="none">
-    <path d="M0 0H11V11H0V0Z" fill="#F25022"/>
-    <path d="M12 0H23V11H12V0Z" fill="#7FBA00"/>
-    <path d="M0 12H11V23H0V12Z" fill="#00A4EF"/>
-    <path d="M12 12H23V23H12V12Z" fill="#FFB900"/>
+    <path d="M0 0H11V11H0V0Z" fill="#F25022" />
+    <path d="M12 0H23V11H12V0Z" fill="#7FBA00" />
+    <path d="M0 12H11V23H0V12Z" fill="#00A4EF" />
+    <path d="M12 12H23V23H12V12Z" fill="#FFB900" />
   </svg>
 );
 
 const GoogleLogo = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05" />
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 2.18 2.18 4.94l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335" />
   </svg>
 );
 
@@ -511,10 +511,12 @@ function LibrairieContent() {
     }
   };
 
-  const triggerPurchaseButtonClickEvent = (bookTitle?: string) => {
+  const triggerPurchaseButtonClickEvent = (title?: string, value?: string) => {
     if (typeof window !== "undefined" && (window as any).twq) {
       (window as any).twq("event", "tw-rhzsa-rih5p", {
-        content_name: bookTitle || "Abonnement Illimite",
+        content_name: title || "Abonnement Illimite",
+        value: value || PRICES[currency].amount,
+        currency: currency,
       });
     }
   };
@@ -539,13 +541,19 @@ function LibrairieContent() {
     return () => clearTimeout(timer);
   }, []);
 
+  const triggerBookDetailEvent = (book: Book) => {
+    if (typeof window !== "undefined" && (window as any).twq) {
+      (window as any).twq("event", "tw-rhzsa-rih44", {
+        content_name: book.titre,
+        content_id: book.id,
+      });
+    }
+  };
+
   // ── SUIVI X ADS : OUVERTURE DE LA FICHE DÉTAIL D'UN LIVRE ──
   useEffect(() => {
-    if (selectedBook && typeof window !== "undefined" && (window as any).twq) {
-      (window as any).twq("event", "tw-rhzsa-rih44", {
-        content_name: selectedBook.titre,
-        content_id: selectedBook.id,
-      });
+    if (selectedBook) {
+      triggerBookDetailEvent(selectedBook);
     }
   }, [selectedBook]);
 
@@ -812,9 +820,6 @@ function LibrairieContent() {
       return;
     }
 
-    // Déclenchement de Checkout Started pour l'abonnement
-    triggerCheckoutStartedEvent("Abonnement Illimite", PRICES[currency].amount);
-
     setIsCheckoutLoading(true);
     try {
       const res = await fetch("/api/stripe/create-checkout", {
@@ -828,15 +833,20 @@ function LibrairieContent() {
         }),
       });
       const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
+      if (data && typeof data.url === "string" && data.url.startsWith("https://")) {
+        // Déclenchement de Checkout Started UNIQUEMENT après confirmation Stripe
+        triggerCheckoutStartedEvent("Abonnement Illimite", PRICES[currency].amount);
+        // Délai de 300ms pour garantir la transmission du beacon X avant le changement de domaine
+        setTimeout(() => {
+          window.location.href = data.url;
+        }, 300);
       } else {
+        setIsCheckoutLoading(false);
         alert(fr ? "Erreur de redirection vers la caisse." : "Checkout redirection error.");
       }
     } catch {
-      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
-    } finally {
       setIsCheckoutLoading(false);
+      alert(fr ? "Impossible d'initier le paiement." : "Unable to initiate payment.");
     }
   };
 
@@ -848,9 +858,6 @@ function LibrairieContent() {
       setShowSignInModal(true);
       return;
     }
-
-    // Déclenchement de Checkout Started pour l'achat de livre
-    triggerCheckoutStartedEvent(book.titre, PRICES[currency].bookAmount);
 
     setIsBuyingBook(true);
     try {
@@ -866,15 +873,20 @@ function LibrairieContent() {
         }),
       });
       const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
+      if (data && typeof data.url === "string" && data.url.startsWith("https://")) {
+        // Déclenchement de Checkout Started UNIQUEMENT après confirmation Stripe
+        triggerCheckoutStartedEvent(book.titre, PRICES[currency].bookAmount);
+        // Délai de 300ms pour garantir la transmission du beacon X avant le changement de domaine
+        setTimeout(() => {
+          window.location.href = data.url;
+        }, 300);
       } else {
+        setIsBuyingBook(false);
         alert(fr ? "Erreur lors de la création de la session d'achat." : "Error creating purchase session.");
       }
     } catch {
-      alert(fr ? "Impossible d'initier l'achat du livre." : "Unable to initiate book purchase.");
-    } finally {
       setIsBuyingBook(false);
+      alert(fr ? "Impossible d'initier l'achat du livre." : "Unable to initiate book purchase.");
     }
   };
 
@@ -905,15 +917,14 @@ function LibrairieContent() {
 
   return (
     <div
-      className={`min-h-screen font-sans selection:bg-cyan-500/20 antialiased transition-colors duration-300 ${
-        isDark ? "bg-[#050505] text-[#e8e8e8]" : "bg-zinc-50 text-zinc-900"
-      }`}
+      className={`min-h-screen font-sans selection:bg-cyan-500/20 antialiased transition-colors duration-300 ${isDark ? "bg-[#050505] text-[#e8e8e8]" : "bg-zinc-50 text-zinc-900"
+        }`}
     >
       {/* ── HEADER BLANC ── */}
       <section className="bg-white text-zinc-900 relative z-30">
         <header className="border-b border-zinc-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center relative flex-wrap gap-4">
-            
+
             <div className="flex items-center gap-2">
               <Link href="/" className="text-sm font-mono font-black tracking-widest text-zinc-900 uppercase hover:text-cyan-600 transition-colors">
                 ECHOSAI
@@ -945,9 +956,8 @@ function LibrairieContent() {
                   <button
                     key={c}
                     onClick={() => setCurrency(c)}
-                    className={`px-2 py-1 font-bold transition-colors ${
-                      currency === c ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
-                    }`}
+                    className={`px-2 py-1 font-bold transition-colors ${currency === c ? "bg-zinc-900 text-white" : "text-zinc-600 hover:text-zinc-900"
+                      }`}
                   >
                     {c}
                   </button>
@@ -1107,11 +1117,10 @@ function LibrairieContent() {
               ? `Rechercher dans les ouvrages ${lang.toUpperCase()}...`
               : `Search within ${lang.toUpperCase()} manuscripts...`
           }
-          className={`w-full rounded-2xl px-6 py-3.5 text-xs text-center outline-none transition-all border shadow-lg ${
-            isDark
+          className={`w-full rounded-2xl px-6 py-3.5 text-xs text-center outline-none transition-all border shadow-lg ${isDark
               ? "bg-zinc-900/90 border-zinc-800 text-zinc-100 placeholder:text-zinc-500 focus:border-cyan-400"
               : "bg-white border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus:border-cyan-500"
-          }`}
+            }`}
         />
       </section>
 
@@ -1139,11 +1148,10 @@ function LibrairieContent() {
               return (
                 <div
                   key={book.id}
-                  className={`relative group rounded-3xl p-5 sm:p-6 transition-all duration-300 flex flex-col sm:flex-row gap-6 border ${
-                    isDark
+                  className={`relative group rounded-3xl p-5 sm:p-6 transition-all duration-300 flex flex-col sm:flex-row gap-6 border ${isDark
                       ? "bg-black/85 border-zinc-800 hover:border-cyan-500/50 shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
                       : "bg-white border-zinc-200 hover:border-cyan-500/50 shadow-lg"
-                  }`}
+                    }`}
                 >
                   {/* COUVERTURE AVANT-PLAN */}
                   <div
@@ -1181,9 +1189,8 @@ function LibrairieContent() {
 
                       <h2
                         onClick={() => setSelectedBook(book)}
-                        className={`text-lg font-black uppercase cursor-pointer hover:text-cyan-500 transition-colors line-clamp-2 ${
-                          isDark ? "text-white" : "text-zinc-900"
-                        }`}
+                        className={`text-lg font-black uppercase cursor-pointer hover:text-cyan-500 transition-colors line-clamp-2 ${isDark ? "text-white" : "text-zinc-900"
+                          }`}
                       >
                         {book.titre}
                       </h2>
@@ -1215,6 +1222,7 @@ function LibrairieContent() {
                       {isPaidTier ? (
                         <button
                           onClick={() => {
+                            triggerBookDetailEvent(book);
                             setIsExcerptMode(false);
                             setReadingBook(book);
                           }}
@@ -1225,6 +1233,7 @@ function LibrairieContent() {
                       ) : (
                         <button
                           onClick={() => {
+                            triggerBookDetailEvent(book);
                             setIsExcerptMode(true);
                             setReadingBook(book);
                           }}
@@ -1247,7 +1256,7 @@ function LibrairieContent() {
                       ) : (
                         <button
                           onClick={() => {
-                            triggerPurchaseButtonClickEvent(book.titre);
+                            triggerPurchaseButtonClickEvent(book.titre, PRICES[currency].bookAmount);
                             if (!user) {
                               triggerLoginClickEvent();
                               setShowSignInModal(true);
@@ -1268,11 +1277,10 @@ function LibrairieContent() {
 
                       <button
                         onClick={() => setSelectedBook(book)}
-                        className={`w-full py-1.5 font-mono text-[10px] uppercase rounded-lg transition-colors border cursor-pointer ${
-                          isDark
+                        className={`w-full py-1.5 font-mono text-[10px] uppercase rounded-lg transition-colors border cursor-pointer ${isDark
                             ? "bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 border-zinc-800"
                             : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-200"
-                        }`}
+                          }`}
                       >
                         {fr ? "Aperçu & Détails" : "Preview & Details"}
                       </button>
@@ -1290,9 +1298,8 @@ function LibrairieContent() {
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className={`px-3 sm:px-4 py-2 border rounded-xl disabled:opacity-30 disabled:pointer-events-none transition-colors ${
-                isDark ? "border-zinc-800 hover:border-cyan-400" : "border-zinc-300 hover:border-cyan-500 bg-white"
-              }`}
+              className={`px-3 sm:px-4 py-2 border rounded-xl disabled:opacity-30 disabled:pointer-events-none transition-colors ${isDark ? "border-zinc-800 hover:border-cyan-400" : "border-zinc-300 hover:border-cyan-500 bg-white"
+                }`}
             >
               ← {fr ? "Précédent" : "Previous"}
             </button>
@@ -1301,13 +1308,12 @@ function LibrairieContent() {
                 <button
                   key={i + 1}
                   onClick={() => setCurrentPage(i + 1)}
-                  className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all ${
-                    currentPage === i + 1
+                  className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all ${currentPage === i + 1
                       ? "bg-cyan-500 text-zinc-950 shadow-[0_0_15px_rgba(6,182,212,0.4)]"
                       : isDark
-                      ? "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white"
-                      : "bg-white border border-zinc-300 text-zinc-600 hover:text-zinc-900"
-                  }`}
+                        ? "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white"
+                        : "bg-white border border-zinc-300 text-zinc-600 hover:text-zinc-900"
+                    }`}
                 >
                   {i + 1}
                 </button>
@@ -1316,9 +1322,8 @@ function LibrairieContent() {
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className={`px-3 sm:px-4 py-2 border rounded-xl disabled:opacity-30 disabled:pointer-events-none transition-colors ${
-                isDark ? "border-zinc-800 hover:border-cyan-400" : "border-zinc-300 hover:border-cyan-500 bg-white"
-              }`}
+              className={`px-3 sm:px-4 py-2 border rounded-xl disabled:opacity-30 disabled:pointer-events-none transition-colors ${isDark ? "border-zinc-800 hover:border-cyan-400" : "border-zinc-300 hover:border-cyan-500 bg-white"
+                }`}
             >
               {fr ? "Suivant" : "Next"} →
             </button>
@@ -1330,9 +1335,8 @@ function LibrairieContent() {
       {selectedBook && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-4 sm:p-6 flex items-center justify-center animate-in fade-in">
           <div
-            className={`max-w-2xl w-full rounded-3xl p-6 sm:p-8 relative max-h-[90vh] overflow-y-auto space-y-6 border ${
-              isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"
-            }`}
+            className={`max-w-2xl w-full rounded-3xl p-6 sm:p-8 relative max-h-[90vh] overflow-y-auto space-y-6 border ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"
+              }`}
           >
             <button
               onClick={() => setSelectedBook(null)}
@@ -1392,7 +1396,7 @@ function LibrairieContent() {
                   onClick={() => {
                     const b = selectedBook;
                     setSelectedBook(null);
-                    triggerPurchaseButtonClickEvent(b.titre);
+                    triggerPurchaseButtonClickEvent(b.titre, PRICES[currency].bookAmount);
                     if (!user) {
                       triggerLoginClickEvent();
                       setShowSignInModal(true);
@@ -1454,15 +1458,18 @@ function LibrairieContent() {
             </div>
 
             <button
-              onClick={() => handleBuySingleBook(bookToBuy)}
+              onClick={() => {
+                triggerPurchaseButtonClickEvent(bookToBuy.titre, PRICES[currency].bookAmount);
+                handleBuySingleBook(bookToBuy);
+              }}
               disabled={isBuyingBook}
               className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider text-black bg-gradient-to-r from-cyan-400 to-cyan-500 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(6,182,212,0.3)] cursor-pointer disabled:opacity-50"
             >
               {isBuyingBook
                 ? (fr ? "REDIRECTION VERS STRIPE..." : "REDIRECTING TO STRIPE...")
                 : (fr
-                    ? `Payer ${PRICES[currency].symbol}${PRICES[currency].bookAmount} et Débloquer`
-                    : `Pay ${PRICES[currency].symbol}${PRICES[currency].bookAmount} & Unlock`)}
+                  ? `Payer ${PRICES[currency].symbol}${PRICES[currency].bookAmount} et Débloquer`
+                  : `Pay ${PRICES[currency].symbol}${PRICES[currency].bookAmount} & Unlock`)}
             </button>
           </div>
         </div>
@@ -1478,6 +1485,7 @@ function LibrairieContent() {
           isExcerptMode={isExcerptMode}
           onUnlock={() => {
             setReadingBook(null);
+            triggerPurchaseButtonClickEvent("Abonnement Illimite", PRICES[currency].amount);
             if (!user) {
               triggerLoginClickEvent();
               setShowSignInModal(true);
@@ -1523,11 +1531,10 @@ function LibrairieContent() {
                 <button
                   key={c}
                   onClick={() => setCurrency(c)}
-                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${
-                    currency === c
+                  className={`px-3 py-1 rounded-lg font-bold border transition-all ${currency === c
                       ? "bg-amber-500 text-zinc-950 border-amber-400"
                       : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white"
-                  }`}
+                    }`}
                 >
                   {c} ({PRICES[c].symbol})
                 </button>
@@ -1562,7 +1569,7 @@ function LibrairieContent() {
 
             <button
               onClick={() => {
-                triggerPurchaseButtonClickEvent("Abonnement Illimite");
+                triggerPurchaseButtonClickEvent("Abonnement Illimite", PRICES[currency].amount);
                 handleStripeCheckout();
               }}
               disabled={isCheckoutLoading}
@@ -1571,8 +1578,8 @@ function LibrairieContent() {
               {isCheckoutLoading
                 ? (fr ? "CHARGEMENT DE STRIPE..." : "LOADING STRIPE...")
                 : (fr
-                    ? `Passer en Illimité (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)`
-                    : `Unlock Unlimited (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
+                  ? `Passer en Illimité (${PRICES[currency].symbol}${PRICES[currency].amount}/mois)`
+                  : `Unlock Unlimited (${PRICES[currency].symbol}${PRICES[currency].amount}/mo)`)}
             </button>
           </div>
         </div>
@@ -1858,9 +1865,8 @@ function ContactModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-4 sm:p-6 flex items-center justify-center animate-in fade-in">
       <div
-        className={`rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl border ${
-          isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"
-        }`}
+        className={`rounded-3xl p-6 sm:p-8 max-w-lg w-full relative shadow-2xl border ${isDark ? "bg-zinc-950 border-zinc-800 text-zinc-100" : "bg-white border-zinc-200 text-zinc-900"
+          }`}
       >
         <button
           onClick={onClose}
@@ -1904,11 +1910,10 @@ function ContactModal({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="nom@exemple.com"
-                className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-colors ${
-                  isDark
+                className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-colors ${isDark
                     ? "bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-cyan-400"
                     : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-cyan-500"
-                }`}
+                  }`}
               />
             </div>
 
@@ -1920,11 +1925,10 @@ function ContactModal({
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className={`w-full px-3 py-2.5 rounded-xl border outline-none transition-colors ${
-                    isDark
+                  className={`w-full px-3 py-2.5 rounded-xl border outline-none transition-colors ${isDark
                       ? "bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-cyan-400"
                       : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-cyan-500"
-                  }`}
+                    }`}
                 >
                   <option value="Librairie">{fr ? "Librairie / EPUB" : "Bookstore / EPUB"}</option>
                   <option value="Commande">{fr ? "Commande & Accès" : "Orders & Access"}</option>
@@ -1942,11 +1946,10 @@ function ContactModal({
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   placeholder={fr ? "Question sur Les Enfants Rois..." : "Inquiry about The Untouchable Child..."}
-                  className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-colors ${
-                    isDark
+                  className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-colors ${isDark
                       ? "bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-cyan-400"
                       : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-cyan-500"
-                  }`}
+                    }`}
                 />
               </div>
             </div>
@@ -1961,11 +1964,10 @@ function ContactModal({
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={fr ? "Écrivez votre message ici..." : "Write your message here..."}
-                className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-colors font-sans text-xs ${
-                  isDark
+                className={`w-full px-4 py-2.5 rounded-xl border outline-none transition-colors font-sans text-xs ${isDark
                     ? "bg-zinc-900 border-zinc-800 text-zinc-100 focus:border-cyan-400"
                     : "bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-cyan-500"
-                }`}
+                  }`}
               />
             </div>
 
@@ -2095,8 +2097,8 @@ function LecteurKobo({
 
     return () => {
       cancelled = true;
-      try { renditionRef.current?.destroy(); } catch {}
-      try { epubRef.current?.destroy(); } catch {}
+      try { renditionRef.current?.destroy(); } catch { }
+      try { epubRef.current?.destroy(); } catch { }
       renditionRef.current = null;
       epubRef.current = null;
     };
@@ -2156,27 +2158,24 @@ function LecteurKobo({
             <div className="flex items-center gap-1 bg-black/10 dark:bg-white/10 p-1 rounded-xl">
               <button
                 onClick={() => setThemeLiseuse("light")}
-                className={`w-6 h-6 rounded-lg text-xs flex items-center justify-center cursor-pointer ${
-                  themeLiseuse === "light" ? "bg-white text-black shadow" : ""
-                }`}
+                className={`w-6 h-6 rounded-lg text-xs flex items-center justify-center cursor-pointer ${themeLiseuse === "light" ? "bg-white text-black shadow" : ""
+                  }`}
                 title="Blanc Papier"
               >
                 A
               </button>
               <button
                 onClick={() => setThemeLiseuse("sepia")}
-                className={`w-6 h-6 rounded-lg text-xs bg-[#e8dcbe] text-[#3c2f2f] flex items-center justify-center cursor-pointer ${
-                  themeLiseuse === "sepia" ? "ring-2 ring-amber-700/50 shadow" : ""
-                }`}
+                className={`w-6 h-6 rounded-lg text-xs bg-[#e8dcbe] text-[#3c2f2f] flex items-center justify-center cursor-pointer ${themeLiseuse === "sepia" ? "ring-2 ring-amber-700/50 shadow" : ""
+                  }`}
                 title="Sépia Confort"
               >
                 A
               </button>
               <button
                 onClick={() => setThemeLiseuse("dark")}
-                className={`w-6 h-6 rounded-lg text-xs bg-zinc-900 text-white flex items-center justify-center cursor-pointer ${
-                  themeLiseuse === "dark" ? "ring-2 ring-cyan-400 shadow" : ""
-                }`}
+                className={`w-6 h-6 rounded-lg text-xs bg-zinc-900 text-white flex items-center justify-center cursor-pointer ${themeLiseuse === "dark" ? "ring-2 ring-cyan-400 shadow" : ""
+                  }`}
                 title="Nuit Feutrée"
               >
                 A
