@@ -2062,7 +2062,7 @@ function LecteurKobo({
   }, [themeLiseuse, fontSize, loading]);
 
   const handleNextPage = () => {
-    if (isExcerptMode && pagesTournees >= 8) {
+    if (isExcerptMode && pagesTournees >= 15) {
       setLimiteExtraitAtteinte(true);
       return;
     }
@@ -2182,10 +2182,10 @@ function LecteurKobo({
                   {fr ? "Fin de l'échantillon découverte" : "End of sample excerpt"}
                 </h3>
                 <p className="text-xs text-zinc-400 font-sans leading-relaxed mb-6">
-                  {fr
-                    ? "Vous avez lu les 8 pages d'extrait de ce livre. Débloquez l'accès illimité pour poursuivre votre lecture jusqu'au dénouement."
-                    : "You have completed the 8 page excerpt. Unlock unlimited access to continue reading to the very end."}
-                </p>
+  {fr
+    ? "Vous avez atteint la fin de l'extrait gratuit de ce livre. Débloquez l'accès illimité pour poursuivre votre lecture jusqu'au dénouement."
+    : "You have reached the end of the free preview for this book. Unlock unlimited access to continue reading to the very end."}
+</p>
                 <div className="space-y-3">
                   <button
                     onClick={onUnlock}
@@ -2216,7 +2216,7 @@ function LecteurKobo({
 
           <span className="text-[11px] font-bold">
             {isExcerptMode
-              ? `${fr ? "Extrait :" : "Excerpt:"} ${pagesTournees}/8 ${fr ? "pages" : "pages"}`
+              ? `${fr ? "Extrait :" : "Excerpt:"} ${pagesTournees}/16 ${fr ? "pages" : "pages"}`
               : `${progress}%`}
           </span>
 

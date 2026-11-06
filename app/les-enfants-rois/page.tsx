@@ -773,7 +773,7 @@ export default function BookLandingPage() {
   );
 }
 
-// ── COMPOSANT LISEUSE EPUB UNIFIÉ (EXTRAIT OU INTÉGRALITÉ) ──
+// ── COMPOSANT LISEUSE EPUB D'EXTRAIT (16 PAGES) ──
 function SimpleReaderModal({
   epubUrl,
   titre,
@@ -826,7 +826,8 @@ function SimpleReaderModal({
   }, [epubUrl]);
 
   const next = () => {
-    if (!isFullVersion && pages >= 6) {
+    // Limite fixée à 16 pages pour les extraits (indices 0 à 15)
+    if (!isFullVersion && pages >= 15) {
       setLimit(true);
       return;
     }
@@ -835,7 +836,10 @@ function SimpleReaderModal({
   };
 
   const prev = () => {
-    renditionRef.current?.prev();
+    if (pages > 0) {
+      renditionRef.current?.prev();
+      setPages((p) => p - 1);
+    }
   };
 
   return (
@@ -860,7 +864,7 @@ function SimpleReaderModal({
               <div className="max-w-md space-y-4">
                 <h3 className="text-base font-bold font-mono text-cyan-400 uppercase">Fin de l'échantillon gratuit</h3>
                 <p className="text-xs text-zinc-300">
-                  Débloquez le livre complet pour continuer votre lecture sans aucune interruption.
+                  Débloquez le livre complet en format .EPUB pour continuer votre lecture sans interruption.
                 </p>
                 <button
                   onClick={onBuy}
@@ -878,7 +882,7 @@ function SimpleReaderModal({
           <span>
             {isFullVersion
               ? `Page lue : ${pages + 1}`
-              : `Page extrait ${pages + 1} / 7`}
+              : `Page extrait ${pages + 1} / 16`}
           </span>
           <button onClick={next} className="px-3 py-1 rounded border border-zinc-400 cursor-pointer hover:bg-black/5">Suivant →</button>
         </div>
