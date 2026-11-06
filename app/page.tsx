@@ -148,7 +148,7 @@ Dans un espace clos où chaque parole résonne comme un aveu, les protagonistes 
     auteur: "Nicholas Gagnon",
     categorie: "Thriller",
     pages: 280,
-    imageCouverture: "/livres/couverture1vraicouverture2.jpg",
+    imageCouverture: "/livres/enfant couverture reel 1.png",
     epubUrl: "/livres/Lenfant-intouchable.epub",
     description: `Une maison d'un blanc immaculé. Une lumière aveuglante. Et au milieu, une petite fille de onze ans au sourire d'ange que le monde entier veut protéger... à ses propres dépens.
 
@@ -169,7 +169,7 @@ L'Enfant Intouchable est un thriller psychologique domestique d'une tension inso
     auteur: "Nicholas Gagnon",
     categorie: "Thriller, #2",
     pages: 295,
-    imageCouverture: "/livres/enfantintouchable2vrai2.png",
+    imageCouverture: "/livres/Enfant Intouchable 2.png",
     epubUrl: "/livres/Lenfant-intouchable-2.epub",
     description: `Le mal a le visage de l'innocence.
 
