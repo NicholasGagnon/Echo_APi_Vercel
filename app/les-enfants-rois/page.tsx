@@ -42,16 +42,14 @@ const AUTRES_LIVRES_RECOMMANDES = [
   {
     titre: "L'enfant intouchable",
     categorie: "Thriller",
-    // Nom exact du fichier dans /public/livres/
     couverture: "/livres/enfant%20couverture%20reel%201.png",
-    lien: "https://echosai.ca",
+    lien: "/trilogie-enfant-intouchable",
   },
   {
     titre: "L'enfant intouchable 2",
     categorie: "Thriller, #2",
-    // Nom exact du fichier dans /public/livres/
     couverture: "/livres/Enfant%20Intouchable%202.png",
-    lien: "https://echosai.ca",
+    lien: "/trilogie-enfant-intouchable",
   },
   {
     titre: "Fracture Cognitive",
@@ -361,7 +359,7 @@ export default function BookLandingPage() {
       <main className="max-w-[1700px] mx-auto px-6 lg:px-12 py-10 lg:py-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 xl:gap-14 items-start">
           
-          {/* ── COLONNE GAUCHE ÉLARGIE (lg:col-span-4 / xl:col-span-3) ── */}
+          {/* ── COLONNE GAUCHE ÉLARGIE ── */}
           <aside className="lg:col-span-4 xl:col-span-3 bg-zinc-950/80 border border-zinc-800/80 rounded-3xl p-6 space-y-5 shadow-2xl">
             <div className="border-b border-zinc-800/80 pb-4">
               <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest font-black block">
@@ -379,7 +377,6 @@ export default function BookLandingPage() {
                   href={autre.lien}
                   className="group flex gap-4 items-center p-3 rounded-2xl bg-zinc-900/70 hover:bg-zinc-900 border border-zinc-800/80 hover:border-cyan-500/60 transition-all shadow-md"
                 >
-                  {/* Vignette élargie */}
                   <div className="w-16 h-22 rounded-xl overflow-hidden shrink-0 bg-zinc-950 border border-zinc-800 shadow-md">
                     <img
                       src={autre.couverture}
@@ -396,7 +393,7 @@ export default function BookLandingPage() {
                     </h3>
                     <div className="flex items-center gap-1.5 mt-1.5">
                       <span className="text-xs font-mono text-zinc-400 group-hover:text-cyan-400 font-semibold">
-                        Voir dans la librairie
+                        Voir la fiche
                       </span>
                       <span className="text-xs text-zinc-500 group-hover:translate-x-1 transition-transform">→</span>
                     </div>
@@ -415,7 +412,7 @@ export default function BookLandingPage() {
             </div>
           </aside>
 
-          {/* ── ZONE CENTRALE ET DROITE DU LIVRE EN VEDETTE ── */}
+          {/* ── ZONE CENTRALE & DROITE DU LIVRE EN VEDETTE ── */}
           <div className="lg:col-span-8 xl:col-span-9 grid grid-cols-1 md:grid-cols-12 gap-10 xl:gap-14 items-start">
             
             {/* GRANDE COUVERTURE IMPACTANTE */}
@@ -440,7 +437,7 @@ export default function BookLandingPage() {
               </div>
             </div>
 
-            {/* DÉTAILS, PRIX EN GROS ET BOUTONS MASSIFS */}
+            {/* DÉTAILS, PRIX ET ACTIONS D'ACHAT / LECTURE */}
             <div className="md:col-span-7 space-y-7">
               <div>
                 <span className="text-xs font-mono font-black uppercase tracking-widest text-cyan-400 mb-2 block">
@@ -480,35 +477,51 @@ export default function BookLandingPage() {
                 </div>
 
                 {isOwned ? (
-                  <button
-                    onClick={handleDownload}
-                    className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black font-mono text-sm uppercase tracking-wider transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <span>📥</span>
-                    <span>TÉLÉCHARGER MON LIVRE .EPUB (ACHETÉ)</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleBuy}
-                    disabled={isBuying}
-                    className="w-full py-5 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-black font-mono text-base uppercase tracking-wider transition-all shadow-[0_0_30px_rgba(6,182,212,0.45)] hover:scale-[1.01] flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
-                  >
-                    <span className="text-xl">🛒</span>
-                    <span>
-                      {isBuying
-                        ? "PRÉPARATION DU PAIEMENT..."
-                        : `ACHETER MAINTENANT (${PRICES[currency].amount} ${PRICES[currency].symbol})`}
-                    </span>
-                  </button>
-                )}
+                  <div className="space-y-3">
+                    {/* BOUTON 1 : LISEUSE INTÉGRALE DÉBLOQUÉE */}
+                    <button
+                      onClick={() => setShowReader(true)}
+                      className="w-full py-4.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black font-mono text-sm uppercase tracking-wider transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>📖</span>
+                      <span>LIRE EN LIGNE (INTÉGRALITÉ)</span>
+                    </button>
 
-                <button
-                  onClick={() => setShowReader(true)}
-                  className="w-full py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-cyan-300 font-mono text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer border border-zinc-700 shadow-md"
-                >
-                  <span>📖</span>
-                  <span>LIRE UN EXTRAIT GRATUIT</span>
-                </button>
+                    {/* BOUTON 2 : TÉLÉCHARGEMENT DIRECT EPUB */}
+                    <button
+                      onClick={handleDownload}
+                      className="w-full py-3.5 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-emerald-400 border border-emerald-500/40 font-mono text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>📥</span>
+                      <span>TÉLÉCHARGER LE FICHIER .EPUB (ACHETÉ)</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* BOUTON ACHAT STRIPE */}
+                    <button
+                      onClick={handleBuy}
+                      disabled={isBuying}
+                      className="w-full py-5 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-black font-mono text-base uppercase tracking-wider transition-all shadow-[0_0_30px_rgba(6,182,212,0.45)] hover:scale-[1.01] flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
+                    >
+                      <span className="text-xl">🛒</span>
+                      <span>
+                        {isBuying
+                          ? "PRÉPARATION DU PAIEMENT..."
+                          : `ACHETER MAINTENANT (${PRICES[currency].amount} ${PRICES[currency].symbol})`}
+                      </span>
+                    </button>
+
+                    {/* BOUTON EXTRAIT */}
+                    <button
+                      onClick={() => setShowReader(true)}
+                      className="w-full py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-cyan-300 font-mono text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer border border-zinc-700 shadow-md"
+                    >
+                      <span>📖</span>
+                      <span>LIRE UN EXTRAIT GRATUIT</span>
+                    </button>
+                  </div>
+                )}
 
                 <div className="text-xs text-center font-mono text-zinc-400 pt-1 space-y-1">
                   <p>Compatible immédiatement avec liseuses Kobo, Kindle, iPhone, iPad, Android et ordinateurs.</p>
@@ -744,11 +757,12 @@ export default function BookLandingPage() {
         </div>
       )}
 
-      {/* ── LISEUSE EXTRAIT GRATUIT ── */}
+      {/* ── LISEUSE EPUB (EXTRAIT OU VERSION INTÉGRALE DÉBLOQUÉE) ── */}
       {showReader && (
         <SimpleReaderModal
           epubUrl={BOOK_INFO.epubUrl}
           titre={BOOK_INFO.titre}
+          isFullVersion={isOwned}
           onClose={() => setShowReader(false)}
           onBuy={handleBuy}
           prix={`${PRICES[currency].amount} ${PRICES[currency].symbol}`}
@@ -759,16 +773,18 @@ export default function BookLandingPage() {
   );
 }
 
-// ── COMPOSANT LISEUSE EPUB D'EXTRAIT ──
+// ── COMPOSANT LISEUSE EPUB UNIFIÉ (EXTRAIT OU INTÉGRALITÉ) ──
 function SimpleReaderModal({
   epubUrl,
   titre,
+  isFullVersion = false,
   onClose,
   onBuy,
   prix,
 }: {
   epubUrl: string;
   titre: string;
+  isFullVersion?: boolean;
   onClose: () => void;
   onBuy: () => void;
   prix: string;
@@ -810,7 +826,7 @@ function SimpleReaderModal({
   }, [epubUrl]);
 
   const next = () => {
-    if (pages >= 6) {
+    if (!isFullVersion && pages >= 6) {
       setLimit(true);
       return;
     }
@@ -826,18 +842,25 @@ function SimpleReaderModal({
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
       <div className="w-full max-w-3xl h-[85vh] bg-[#f4ecd8] text-[#2c2222] rounded-3xl overflow-hidden flex flex-col relative shadow-2xl">
         <div className="px-6 py-3 border-b border-[#e2d5b8] flex justify-between items-center text-xs font-mono font-bold">
-          <span>EXTRAIT : {titre}</span>
+          <div className="flex items-center gap-2">
+            <span>{isFullVersion ? "LECTURE INTÉGRALE :" : "EXTRAIT :"} {titre}</span>
+            {isFullVersion && (
+              <span className="bg-emerald-600 text-white text-[9px] px-2 py-0.5 rounded-full uppercase">
+                ✓ Version Complète
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="text-sm cursor-pointer hover:opacity-60">✕ Fermer</button>
         </div>
 
         <div className="flex-1 relative p-4">
           <div ref={viewerRef} className="w-full h-full" />
-          {limit && (
+          {limit && !isFullVersion && (
             <div className="absolute inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-6 text-center text-white z-10">
               <div className="max-w-md space-y-4">
                 <h3 className="text-base font-bold font-mono text-cyan-400 uppercase">Fin de l'échantillon gratuit</h3>
                 <p className="text-xs text-zinc-300">
-                  Débloquez le livre complet en format .EPUB pour continuer votre lecture sans interruption.
+                  Débloquez le livre complet pour continuer votre lecture sans aucune interruption.
                 </p>
                 <button
                   onClick={onBuy}
@@ -852,7 +875,11 @@ function SimpleReaderModal({
 
         <div className="px-6 py-3 border-t border-[#e2d5b8] flex justify-between items-center text-xs font-mono">
           <button onClick={prev} className="px-3 py-1 rounded border border-zinc-400 cursor-pointer hover:bg-black/5">← Précédent</button>
-          <span>Page extrait {pages + 1} / 7</span>
+          <span>
+            {isFullVersion
+              ? `Page lue : ${pages + 1}`
+              : `Page extrait ${pages + 1} / 7`}
+          </span>
           <button onClick={next} className="px-3 py-1 rounded border border-zinc-400 cursor-pointer hover:bg-black/5">Suivant →</button>
         </div>
       </div>
