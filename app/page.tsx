@@ -60,6 +60,22 @@ const PRICES: Record<CurrencyCode, { amount: string; symbol: string; cents: numb
 const CATALOGUE_LIVRES: Book[] = [
   // ── OUVRAGES EN FRANÇAIS ──
   {
+    id: "alcatraz-fr",
+    langue: "fr",
+    titre: "La Cité d'Alcatraz",
+    auteur: "Nicholas Gagnon",
+    categorie: "Thriller & Suspense Romantique",
+    pages: 260,
+    imageCouverture: "/livres/alcatraz.png",
+    epubUrl: "/livres/la-cite-dAlcatraz.epub",
+    badge: "NOUVEAUTÉ",
+    description: `Drapée dans une robe de satin émeraude froissée par les fers, Sina n'a rien d'une proie docile.
+Arrachée brutalement à sa vie sur le continent pour être jetée au fond d'un convoi clandestin, elle refuse catégoriquement de courber l'échine devant ses ravisseurs. Débarquée dans les entrailles d’une forteresse où les faibles sont brisés sans remords, elle découvre un univers régenté par le crime et l'opulence. Face aux fusils d'assaut, aux sentinelles armées et à l'autorité écrasante de Jack Lansky, Sina n'offre ni larmes ni supplications. Elle lui oppose un mépris tranchant, un aplomb insolent et un courage viscéral qui déstabilisent l'ordre établi. Entre ce maître des lieux calculateur et cette captive blessée mais indomptable, le choc est immédiat, brutal… et d'une intensité fiévreuse que ni l'un ni l'autre ne parvient à étouffer.
+Car sur Alcatraz, rocher imprenable où la moindre faiblesse équivaut à un arrêt de mort, Jack règne en prédateur absolu. Formé dès l'enfance dans le sang et la survie, il gère son domaine d’une main de fer, ne tolérant aucune insoumission. Froid, méthodique et détaché de toute humanité, il ne voit en ses captives que des cargaisons à négocier au prix fort. Pourtant, devant la flamme farouche de cette femme qui ose le défier les yeux dans les yeux sous son propre toit, son masque d'airain commence à se fissurer.
+Au même moment, les faux-semblants s’effondrent sur la colline. La corruption ronge le Conseil mafieux, les détournements de fonds éclatent au grand jour et les familles rivales s'apprêtent à plonger la cité dans une guerre totale. Pris en étau entre la cupidité des patriarches et ses propres règles d'honneur, Jack réalise que cette captive enragée pourrait bien être son alliée la plus redoutable. Mais dans un milieu sauvage où chaque vie se monnaie et où l'affection se paie en cadavres, succomber à la passion devient le plus fatal des pièges.
+Pouvoir absolu, manipulation, tension charnelle explosive et haine viscérale : bienvenue dans l'antichambre du cartel.`,
+  },
+  {
     id: "la-proposition",
     langue: "fr",
     titre: "La Proposition",
@@ -993,7 +1009,7 @@ function LibrairieContent() {
                 </button>
               </div>
 
-              {/* IDENTIFIANT OU CONNEXION / INSCRIPTION GROSSIS x3 */}
+              {/* IDENTIFIANT OU CONNEXION / INSCRIPTION */}
               {user ? (
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-zinc-600 bg-zinc-100 px-3 py-2 rounded-xl border border-zinc-200 font-mono font-bold">
@@ -1033,7 +1049,7 @@ function LibrairieContent() {
           </div>
         </header>
 
-        {/* HERO BANNER AVEC MASCOTTE ORIGINALE & BOUTON VISIBLE */}
+        {/* HERO BANNER AVEC MASCOTTE ORIGINALE */}
         <div className="max-w-7xl mx-auto px-6 py-8 md:py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-8">
             <div className="inline-block text-[11px] font-mono tracking-widest text-cyan-600 font-black uppercase mb-2 border border-cyan-200 bg-cyan-50 px-3 py-1 rounded-lg">
@@ -1073,7 +1089,7 @@ function LibrairieContent() {
         </div>
       </section>
 
-      {/* SÉPARATEUR DE SECTION AVEC FLÈCHE ANIMÉE AU MILIEU */}
+      {/* SÉPARATEUR DE SECTION */}
       <div className="relative w-full h-20 bg-zinc-950 overflow-hidden -mt-1 z-20">
         <svg className="absolute top-0 left-0 w-full h-full text-white fill-current" viewBox="0 0 1440 100" preserveAspectRatio="none">
           <path d="M0,0 L1440,0 L1440,30 Q1080,90 720,50 Q360,0 0,60 Z" />
@@ -1145,7 +1161,7 @@ function LibrairieContent() {
                       : "bg-white border-zinc-200 hover:border-cyan-500/50 shadow-lg"
                     }`}
                 >
-                  {/* COUVERTURE AVANT-PLAN AVEC PRIX AFFICHÉ EN GRAND */}
+                  {/* COUVERTURE AVEC PRIX */}
                   <div
                     onClick={() => setSelectedBook(book)}
                     className="relative w-full sm:w-48 h-72 rounded-2xl overflow-hidden shrink-0 bg-zinc-950 border border-zinc-800 shadow-xl cursor-pointer hover:scale-[1.02] transition-transform flex items-center justify-center"
@@ -1200,7 +1216,6 @@ function LibrairieContent() {
                     </div>
 
                     <div className="pt-4 space-y-2.5">
-                      {/* LECTURE LISEUSE OU EXTRAIT */}
                       {isPaidTier ? (
                         <button
                           onClick={() => {
@@ -1226,7 +1241,6 @@ function LibrairieContent() {
                         </button>
                       )}
 
-                      {/* TÉLÉCHARGEMENT OU ACHAT DIRECT (GROS BOUTON x3) */}
                       {isOwned ? (
                         <button
                           onClick={() => handleDownloadFile(book)}
@@ -1306,7 +1320,7 @@ function LibrairieContent() {
         )}
       </main>
 
-      {/* ── MODALE APERÇU RAPIDE : ACHAT DIRECT SANS FENÊTRE SECONDAIRE ── */}
+      {/* ── MODALE APERÇU RAPIDE ── */}
       {selectedBook && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md p-4 sm:p-6 flex items-center justify-center animate-in fade-in">
           <div
@@ -1352,7 +1366,7 @@ function LibrairieContent() {
               </div>
             </div>
 
-            {/* BOUTONS D'ACTION DIRECTS DANS LA MODALE */}
+            {/* BOUTONS D'ACTION DANS LA MODALE */}
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <button
                 onClick={() => {
@@ -1511,7 +1525,7 @@ function LibrairieContent() {
         </div>
       )}
 
-      {/* ── MODALE CONNEXION AGRANDIE x3 ── */}
+      {/* ── MODALE CONNEXION ── */}
       {showSignInModal && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4 sm:p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 sm:p-12 max-w-xl w-full shadow-2xl text-zinc-100 relative space-y-6">
@@ -1630,7 +1644,7 @@ function LibrairieContent() {
         </div>
       )}
 
-      {/* ── MODALE CRÉATION DE COMPTE AGRANDIE x3 ── */}
+      {/* ── MODALE CRÉATION DE COMPTE ── */}
       {showSignUpModal && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4 sm:p-6 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 sm:p-12 max-w-xl w-full shadow-2xl text-zinc-100 relative space-y-6">
@@ -1745,7 +1759,7 @@ function LibrairieContent() {
   );
 }
 
-// ── COMPOSANT CONTACT SUR MESURE BRANCHÉ SUR RESEND (/api/contact) ──
+// ── COMPOSANT CONTACT RESEND ──
 function ContactModal({
   isOpen,
   onClose,
@@ -2155,7 +2169,7 @@ function LecteurKobo({
           </div>
         </div>
 
-        {/* ZONE DE LECTURE FLUIDE (EPUB.JS) */}
+        {/* ZONE DE LECTURE FLUIDE */}
         <div className="flex-1 min-h-0 relative px-2 sm:px-10 py-4">
           <div ref={viewerRef} className="w-full h-full" />
 
@@ -2173,7 +2187,7 @@ function LecteurKobo({
             </div>
           )}
 
-          {/* POP-UP FIN D'EXTRAIT (8 PAGES) */}
+          {/* POP-UP FIN D'EXTRAIT */}
           {limiteExtraitAtteinte && (
             <div className="absolute inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-6 z-30 animate-in fade-in">
               <div className="max-w-md w-full bg-zinc-950 border border-amber-500/50 rounded-3xl p-8 text-center text-zinc-100 shadow-2xl">
@@ -2182,10 +2196,10 @@ function LecteurKobo({
                   {fr ? "Fin de l'échantillon découverte" : "End of sample excerpt"}
                 </h3>
                 <p className="text-xs text-zinc-400 font-sans leading-relaxed mb-6">
-  {fr
-    ? "Vous avez atteint la fin de l'extrait gratuit de ce livre. Débloquez l'accès illimité pour poursuivre votre lecture jusqu'au dénouement."
-    : "You have reached the end of the free preview for this book. Unlock unlimited access to continue reading to the very end."}
-</p>
+                  {fr
+                    ? "Vous avez atteint la fin de l'extrait gratuit de ce livre. Débloquez l'accès illimité pour poursuivre votre lecture jusqu'au dénouement."
+                    : "You have reached the end of the free preview for this book. Unlock unlimited access to continue reading to the very end."}
+                </p>
                 <div className="space-y-3">
                   <button
                     onClick={onUnlock}
